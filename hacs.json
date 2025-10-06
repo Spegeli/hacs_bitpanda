@@ -1,0 +1,8 @@
+{
+  "name": "Bitpanda",
+  "url": "https://github.com/spegeli/hacs_bitpanda",
+  "homeassistant": "2025.01.0",
+  "country": "DE",
+  "domains": ["bitpanda"],
+  "iot_class": "Local Polling"
+}

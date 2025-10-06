@@ -1,0 +1,51 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bitpanda Einrichtung",
+        "description": "Gib deinen Bitpanda API-Schlüssel ein",
+        "data": {
+          "api_key": "API-Schlüssel"
+        }
+      },
+      "currency": {
+        "title": "Währung auswählen",
+        "description": "Wähle deine bevorzugte Währung für das Tracking",
+        "data": {
+          "currency": "Währung"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ungültiger API-Schlüssel",
+      "cannot_connect": "Verbindung fehlgeschlagen",
+      "unknown": "Unerwarteter Fehler"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Bitpanda Optionen",
+        "description": "Konfiguriere deine Bitpanda Integration",
+        "menu_options": {
+          "price_tracker": "Preis-Tracker",
+          "wallets": "Wallets"
+        }
+      },
+      "price_tracker": {
+        "title": "Preis-Tracker",
+        "description": "Wähle Assets aus, um deren Preise zu verfolgen",
+        "data": {
+          "tracked_assets": "Verfolgte Assets"
+        }
+      },
+      "wallets": {
+        "title": "Wallets",
+        "description": "Wähle Wallets zur Überwachung aus",
+        "data": {
+          "tracked_wallets": "Verfolgte Wallets"
+        }
+      }
+    }
+  }
+}

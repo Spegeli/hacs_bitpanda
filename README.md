@@ -26,7 +26,7 @@ Eine inoffizielle Home Assistant Integration für [Bitpanda](https://www.bitpand
 ✅ **Multi-Währung Support**
 - EUR, USD, CHF, GBP und alle anderen von Bitpanda unterstützten Währungen
 
-> ℹ️ **Hinweis:** Aktien, ETFs und andere Securities werden derzeit nicht unterstützt, da diese nicht in der öffentlichen Bitpanda Price-Ticker API verfügbar sind.
+> ℹ️ **Hinweis:** Aktien, ETFs, Rohstoffe (Commodities) und andere Securities werden derzeit nicht unterstützt, da diese nicht in der öffentlichen Bitpanda Price-Ticker API verfügbar sind.
 
 ## Screenshots
 
@@ -59,8 +59,9 @@ Eine inoffizielle Home Assistant Integration für [Bitpanda](https://www.bitpand
 1. Logge dich in dein [Bitpanda-Konto](https://www.bitpanda.com) ein
 2. Gehe zu **Einstellungen** → **API**
 3. Erstelle einen neuen API-Key
-4. Wähle unter **Scope** nur **"Guthaben"** aus (Read-only Zugriff)
-   - ⚠️ **Wichtig:** Aktiviere NICHT "Trading" oder "Transaktionen" - dies ist nicht notwendig und unsicherer!
+4. Wähle unter **Scope** mindestens **"Guthaben"** aus
+   - ℹ️ Der "Guthaben" Scope hat nur Lese-Rechte und ist sicher - damit können keine Trades oder Transaktionen durchgeführt werden
+   - Optional: "Trading" und "Transaktionen" können zusätzlich aktiviert werden (sind ebenfalls nur Read-only), werden aber für diese Integration nicht benötigt
 5. Kopiere den API-Key (du siehst ihn nur einmal!)
 
 ### 2. Integration in Home Assistant hinzufügen
@@ -71,7 +72,7 @@ Eine inoffizielle Home Assistant Integration für [Bitpanda](https://www.bitpand
 4. Wähle deine bevorzugte Währung (z.B. EUR)
 5. Klicke auf **Absenden**
 
-> ℹ️ **Hinweis:** Du kannst nur eine Instanz der Integration hinzufügen. Um mehrere Währungen zu tracken, verwende die Multi-Währungs-Preise in den Sensor-Attributen.
+> ℹ️ **Hinweis:** Du kannst nur eine Instanz der Integration hinzufügen. Um die Währung zu ändern, musst du die Integration entfernen und neu hinzufügen.
 
 ### 3. Assets und Wallets konfigurieren
 
@@ -139,8 +140,9 @@ entities:
 | 💶 **Fiat** | Fiat-Währungen | EUR, USD, CHF, GBP, etc. | ❌ | ✅ |
 | 📈 **Stocks** | Aktien | AAPL, MSFT, TSLA, etc. | ❌ | ❌ |
 | 🏦 **ETFs** | Exchange Traded Funds | S&P500, NASDAQ100, DAX, etc. | ❌ | ❌ |
+| 🛢️ **Commodities** | Rohstoffe | Öl, Gas, Weizen, etc. | ❌ | ❌ |
 
-> ℹ️ **Warum werden Stocks und ETFs nicht unterstützt?** Die öffentliche Bitpanda Price-Ticker API (`/v1/ticker`) enthält keine Preisdaten für Aktien und ETFs. Daher können diese Assets nicht getrackt werden.
+> ℹ️ **Warum werden Stocks, ETFs und Commodities nicht unterstützt?** Die öffentliche Bitpanda Price-Ticker API (`/v1/ticker`) enthält keine Preisdaten für Aktien, ETFs und Rohstoffe. Daher können diese Assets nicht getrackt werden.
 
 ## Häufige Fragen
 
@@ -152,22 +154,22 @@ entities:
 Du kannst nur eine Haupt-Währung pro Integration wählen. Alle Preis-Sensoren enthalten jedoch Multi-Währungs-Daten in den Attributen, die du in Templates verwenden kannst.
 
 ### Kann ich mehrere Bitpanda-Konten gleichzeitig nutzen?
-Nein, Home Assistant erlaubt nur eine Instanz dieser Integration. Du kannst jedoch mehrere API-Keys im selben Bitpanda-Konto erstellen.
+Nein, Home Assistant erlaubt nur eine Instanz dieser Integration.
 
 ### Werden Trading-Funktionen unterstützt?
 Nein, diese Integration ist nur zum **Lesen** von Daten gedacht. Du kannst keine Trades durchführen.
 
 ### Sind meine API-Keys sicher?
-Ja, die API-Keys werden verschlüsselt in der Home Assistant Datenbank gespeichert. Stelle sicher, dass du nur den **"Guthaben"** Scope aktivierst (keine Trading- oder Transaktions-Berechtigungen)!
+Ja, die API-Keys werden verschlüsselt in der Home Assistant Datenbank gespeichert.
 
-### Warum kann ich meine Aktien und ETFs nicht tracken?
-Die öffentliche Bitpanda Price-Ticker API stellt keine Preise für Aktien, ETFs und andere Securities bereit. Diese Daten sind nur über die private Trading-API verfügbar, die diese Integration nicht nutzt.
+### Warum kann ich meine Aktien, ETFs und Rohstoffe nicht tracken?
+Die öffentliche Bitpanda Price-Ticker API stellt keine Preise für Aktien, ETFs und Rohstoffe (Commodities) bereit. Diese Daten sind nur über die private Trading-API verfügbar, die diese Integration nicht nutzt.
 
 ## Fehlerbehebung
 
 ### Integration lädt nicht
 1. Überprüfe, ob der API-Key korrekt ist
-2. Stelle sicher, dass der API-Key den **"Guthaben"** Scope hat
+2. Stelle sicher, dass der API-Key mindestens den **"Guthaben"** Scope hat
 3. Prüfe die Logs: **Einstellungen** → **System** → **Protokolle**
 
 ### Sensoren zeigen "Unavailable"
@@ -180,8 +182,8 @@ Die öffentliche Bitpanda Price-Ticker API stellt keine Preise für Aktien, ETFs
 2. Prüfe die Logs auf Fehler
 3. Reload die Integration: **Einstellungen** → **Geräte & Dienste** → Bitpanda → **Neu laden**
 
-### Meine Aktien/ETFs werden nicht angezeigt
-Das ist korrekt. Aktien und ETFs werden nicht unterstützt, da sie nicht in der öffentlichen Bitpanda Price-Ticker API enthalten sind. Siehe [Unterstützte Asset-Typen](#unterstützte-asset-typen).
+### Meine Aktien/ETFs/Rohstoffe werden nicht angezeigt
+Das ist korrekt. Aktien, ETFs und Rohstoffe werden nicht unterstützt, da sie nicht in der öffentlichen Bitpanda Price-Ticker API enthalten sind. Siehe [Unterstützte Asset-Typen](#unterstützte-asset-typen).
 
 ## Entwicklung
 

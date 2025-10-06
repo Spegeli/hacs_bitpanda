@@ -154,7 +154,7 @@ Diese Integration ist ein **inoffizielles Community-Projekt** und steht in keine
 
 ## Credits
 
-Entwickelt von [DEIN_NAME](https://github.com/Spegeli)
+Entwickelt von [Spegeli](https://github.com/Spegeli)
 
 Vielen Dank an die Home Assistant Community für die Unterstützung!
 

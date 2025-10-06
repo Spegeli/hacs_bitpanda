@@ -1,8 +1,8 @@
 # Bitpanda Integration for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![GitHub Release](https://img.shields.io/github/release/Spegeli/bitpanda.svg)](https://github.com/Spegeli/bitpanda/releases)
-[![License](https://img.shields.io/github/license/Spegeli/bitpanda.svg)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/release/Spegeli/hacs_bitpanda.svg)](https://github.com/Spegeli/hacs_bitpanda/releases)
+[![License](https://img.shields.io/github/license/Spegeli/hacs_bitpanda.svg)](LICENSE)
 
 Eine inoffizielle Home Assistant Integration für [Bitpanda](https://www.bitpanda.com), mit der du deine Krypto-, Edelmetall- und Index-Portfolios direkt in Home Assistant überwachen kannst.
 
@@ -11,9 +11,9 @@ Eine inoffizielle Home Assistant Integration für [Bitpanda](https://www.bitpand
 ## Features
 
 ✅ **Preis-Tracker**
-- Verfolge Live-Preise von Kryptowährungen, Edelmetallen und Indizes
+- Verfolge Live-Preise von Kryptowährungen, Edelmetallen und Indizen
 - Unterstützung für alle auf Bitpanda verfügbaren Assets
-- Automatische Aktualisierung jede Minuten
+- Automatische Aktualisierung jede Minute
 - Dynamische Nachkommastellen (zeigt präzise Werte auch für günstige Coins)
 
 ✅ **Wallet-Tracking**
@@ -81,14 +81,47 @@ Eine inoffizielle Home Assistant Integration für [Bitpanda](https://www.bitpand
 Die Integration erstellt automatisch Sensoren für alle ausgewählten Assets und Wallets:
 
 **Preis-Tracker Sensoren:**
+```
 sensor.bitpanda_price_tracker_btc_eur
 sensor.bitpanda_price_tracker_eth_eur
 sensor.bitpanda_price_tracker_xau_eur
+```
 
 **Wallet Sensoren:**
+```
 sensor.bitpanda_btc_wallet
 sensor.bitpanda_eth_wallet
 sensor.bitpanda_xau_wallet
+```
+
+### Beispiel Automation
+
+```yaml
+automation:
+  - alias: "Bitcoin Preis Alert"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.bitpanda_price_tracker_btc_eur
+        above: 100000
+    action:
+      - service: notify.mobile_app
+        data:
+          message: "🚀 Bitcoin hat 100.000 EUR erreicht!"
+```
+
+### Beispiel Lovelace Card
+
+```yaml
+type: entities
+title: Mein Bitpanda Portfolio
+entities:
+  - entity: sensor.bitpanda_btc_wallet
+    name: Bitcoin
+  - entity: sensor.bitpanda_eth_wallet
+    name: Ethereum
+  - entity: sensor.bitpanda_xau_wallet
+    name: Gold
+```
 
 ## Unterstützte Asset-Typen
 
@@ -102,11 +135,11 @@ sensor.bitpanda_xau_wallet
 ## Häufige Fragen
 
 ### Wie oft werden die Daten aktualisiert?
-- **Preise:** Jede Minuten
+- **Preise:** Jede Minute
 - **Wallets:** Alle 5 Minuten
 
 ### Kann ich mehrere Währungen gleichzeitig tracken?
-Nein, du musst dich für eine Haupt-Währung entscheiden.
+Nein, du musst dich für eine Haupt-Währung entscheiden. Du kannst aber mehrere Instanzen der Integration mit verschiedenen Währungen einrichten.
 
 ### Werden Trading-Funktionen unterstützt?
 Nein, diese Integration ist nur zum **Lesen** von Daten gedacht. Du kannst keine Trades durchführen.
@@ -127,10 +160,22 @@ Ja, die API-Keys werden verschlüsselt in der Home Assistant Datenbank gespeiche
 3. Starte Home Assistant neu
 
 ### Preise werden nicht aktualisiert
-1. Warte mindestens 1 Minute (Update-Interval)
+1. Warte mindestens 1 Minute (Update-Interval für Preise)
 2. Prüfe die Logs auf Fehler
 3. Reload die Integration: **Einstellungen** → **Geräte & Dienste** → Bitpanda → **Neu laden**
 
+## Entwicklung
+
+### Debugging aktivieren
+
+Füge zu deiner `configuration.yaml` hinzu:
+
+```yaml
+logger:
+  default: info
+  logs:
+    custom_components.bitpanda: debug
+```
 
 ## Changelog
 
@@ -161,3 +206,4 @@ Vielen Dank an die Home Assistant Community für die Unterstützung!
 ---
 
 ⭐ Wenn dir diese Integration gefällt, gib dem Projekt einen Stern auf GitHub!
+"""

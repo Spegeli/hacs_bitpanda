@@ -37,7 +37,7 @@ Eine inoffizielle Home Assistant Integration für [Bitpanda](https://www.bitpand
 1. Stelle sicher, dass [HACS](https://hacs.xyz/) installiert ist
 2. Gehe zu HACS → Integrationen
 3. Klicke auf die drei Punkte oben rechts → **Benutzerdefinierte Repositories**
-4. Füge folgende URL hinzu: `https://github.com/DEIN_USERNAME/ha-bitpanda-integration`
+4. Füge folgende URL hinzu: `https://github.com/Spegeli/hacs_bitpanda`
 5. Wähle als Kategorie: **Integration**
 6. Klicke auf **Hinzufügen**
 7. Suche nach "Bitpanda" in HACS und installiere die Integration
@@ -45,7 +45,7 @@ Eine inoffizielle Home Assistant Integration für [Bitpanda](https://www.bitpand
 
 ### Manuelle Installation
 
-1. Lade die neueste Version aus den [Releases](https://github.com/DEIN_USERNAME/ha-bitpanda-integration/releases) herunter
+1. Lade die neueste Version aus den [Releases](https://github.com/Spegeli/hacs_bitpanda/releases) herunter
 2. Entpacke das Archiv
 3. Kopiere den `custom_components/bitpanda` Ordner in dein Home Assistant `custom_components` Verzeichnis
 4. Starte Home Assistant neu

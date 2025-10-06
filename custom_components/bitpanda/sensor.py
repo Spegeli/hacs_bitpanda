@@ -187,8 +187,15 @@ class BitpandaWalletSensor(CoordinatorEntity, SensorEntity):
         balance = self._get_balance()
         if balance is None:
             return None
+        
+        # Für Fiat-Wallets: Balance = Wert (kein Preis nötig)
+        if self._category == "fiat":
+            try:
+                return float(balance)
+            except (ValueError, TypeError):
+                return None
             
-        # Get price from price coordinator
+        # Für andere Wallets: Balance * Preis
         price = self._get_price()
         if price is None:
             return balance  # Return balance without price conversion
@@ -255,11 +262,16 @@ class BitpandaWalletSensor(CoordinatorEntity, SensorEntity):
         balance = self._get_balance()
         price = self._get_price()
         
-        return {
+        attributes = {
             "wallet_id": self._wallet_id,
             "asset": self._symbol,
             "category": self._category,
             "balance": balance,
-            "price": price,
             "currency": self._currency,
         }
+        
+        # Füge "price" nur hinzu wenn es KEIN Fiat-Wallet ist
+        if self._category != "fiat":
+            attributes["price"] = price
+        
+        return attributes

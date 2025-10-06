@@ -54,4 +54,30 @@ Eine inoffizielle Home Assistant Integration für [Bitpanda](https://www.bitpand
 
 ### 1. Bitpanda API-Key erstellen
 
-1. Logge dich in dein [Bitpanda-Konto](https://www.bit
+1. Logge dich in dein [Bitpanda-Konto](https://www.bitpanda.com) ein
+2. Gehe zu **Einstellungen** → **API**
+3. Erstelle einen neuen API-Key mit **Lese-Berechtigung**
+4. Kopiere den API-Key (du siehst ihn nur einmal!)
+
+### 2. Integration in Home Assistant hinzufügen
+
+1. Gehe zu **Einstellungen** → **Geräte & Dienste** → **Integration hinzufügen**
+2. Suche nach "Bitpanda"
+3. Gib deinen API-Key ein
+4. Wähle deine bevorzugte Währung (z.B. EUR)
+5. Klicke auf **Absenden**
+
+### 3. Assets und Wallets konfigurieren
+
+1. Gehe zur Bitpanda Integration
+2. Klicke auf **Konfigurieren**
+3. Wähle **Preis-Tracker** um Assets zu tracken
+4. Wähle **Wallets** um deine Wallet-Bestände zu überwachen
+
+## Verwendung
+
+### Sensoren
+
+Die Integration erstellt automatisch Sensoren für alle ausgewählten Assets und Wallets:
+
+**Preis-Tracker Sensoren:**

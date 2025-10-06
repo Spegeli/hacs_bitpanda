@@ -1,6 +1,6 @@
 {
   "name": "Bitpanda",
-  "url": "https://github.com/spegeli/hacs_bitpanda",
+  "url": "https://github.com/Spegeli/hacs_bitpanda",
   "homeassistant": "2025.01.0",
   "country": "DE",
   "domains": ["bitpanda"],

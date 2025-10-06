@@ -139,7 +139,7 @@ entities:
 - **Wallets:** Alle 5 Minuten
 
 ### Kann ich mehrere Währungen gleichzeitig tracken?
-Nein, du musst dich für eine Haupt-Währung entscheiden. Du kannst aber mehrere Instanzen der Integration mit verschiedenen Währungen einrichten.
+Nein, du musst dich für eine Haupt-Währung entscheiden.
 
 ### Werden Trading-Funktionen unterstützt?
 Nein, diese Integration ist nur zum **Lesen** von Daten gedacht. Du kannst keine Trades durchführen.

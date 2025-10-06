@@ -127,12 +127,37 @@ Ja, die API-Keys werden verschlüsselt in der Home Assistant Datenbank gespeiche
 3. Starte Home Assistant neu
 
 ### Preise werden nicht aktualisiert
-1. Warte mindestens 5 Minuten (Update-Interval)
+1. Warte mindestens 1 Minute (Update-Interval)
 2. Prüfe die Logs auf Fehler
 3. Reload die Integration: **Einstellungen** → **Geräte & Dienste** → Bitpanda → **Neu laden**
 
-## Entwicklung
 
-### Debugging aktivieren
+## Changelog
 
-Füge zu deiner `configuration.yaml` hinzu:
+Siehe [CHANGELOG.md](CHANGELOG.md) für alle Änderungen.
+
+## Lizenz
+
+Dieses Projekt ist unter der MIT-Lizenz lizenziert - siehe [LICENSE](LICENSE) für Details.
+
+## Disclaimer
+
+Diese Integration ist ein **inoffizielles Community-Projekt** und steht in keiner Verbindung zu Bitpanda GmbH. Die Nutzung erfolgt auf eigene Gefahr. Die Entwickler übernehmen keine Haftung für finanzielle Verluste oder Datenverluste.
+
+**Bitpanda® ist eine eingetragene Marke der Bitpanda GmbH.**
+
+## Support
+
+- 🐛 **Bug Reports:** [GitHub Issues](https://github.com/Spegeli/hacs_bitpanda/issues)
+- 💡 **Feature Requests:** [GitHub Issues](https://github.com/Spegeli/hacs_bitpanda/issues)
+- 💬 **Diskussionen:** [GitHub Discussions](https://github.com/Spegeli/hacs_bitpanda/discussions)
+
+## Credits
+
+Entwickelt von [DEIN_NAME](https://github.com/Spegeli)
+
+Vielen Dank an die Home Assistant Community für die Unterstützung!
+
+---
+
+⭐ Wenn dir diese Integration gefällt, gib dem Projekt einen Stern auf GitHub!

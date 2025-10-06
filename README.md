@@ -13,7 +13,7 @@ Eine inoffizielle Home Assistant Integration für [Bitpanda](https://www.bitpand
 ✅ **Preis-Tracker**
 - Verfolge Live-Preise von Kryptowährungen, Edelmetallen und Indizes
 - Unterstützung für alle auf Bitpanda verfügbaren Assets
-- Automatische Aktualisierung alle 5 Minuten
+- Automatische Aktualisierung jede Minuten
 - Dynamische Nachkommastellen (zeigt präzise Werte auch für günstige Coins)
 
 ✅ **Wallet-Tracking**
@@ -21,7 +21,7 @@ Eine inoffizielle Home Assistant Integration für [Bitpanda](https://www.bitpand
 - Verfolge Edelmetall-Bestände (Gold/XAU, Silber/XAG, Platin/XPT, Palladium/XPD)
 - Tracke Bitpanda Index-Investments (BCI5, BCI10, etc.)
 - Zeigt sowohl Menge als auch Wert in deiner gewählten Währung
-- Automatische Aktualisierung alle 10 Minuten
+- Automatische Aktualisierung alle 5 Minuten
 
 ✅ **Multi-Währung Support**
 - EUR, USD, CHF, GBP und alle anderen von Bitpanda unterstützten Währungen

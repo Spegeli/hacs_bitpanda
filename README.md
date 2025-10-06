@@ -1,8 +1,8 @@
 # Bitpanda Integration for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![GitHub Release](https://img.shields.io/github/release/DEIN_USERNAME/ha-bitpanda-integration.svg)](https://github.com/DEIN_USERNAME/ha-bitpanda-integration/releases)
-[![License](https://img.shields.io/github/license/DEIN_USERNAME/ha-bitpanda-integration.svg)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/release/Spegeli/bitpanda.svg)](https://github.com/Spegeli/bitpanda/releases)
+[![License](https://img.shields.io/github/license/Spegeli/bitpanda.svg)](LICENSE)
 
 Eine inoffizielle Home Assistant Integration für [Bitpanda](https://www.bitpanda.com), mit der du deine Krypto-, Edelmetall- und Index-Portfolios direkt in Home Assistant überwachen kannst.
 

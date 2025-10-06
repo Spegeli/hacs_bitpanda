@@ -81,3 +81,58 @@ Eine inoffizielle Home Assistant Integration für [Bitpanda](https://www.bitpand
 Die Integration erstellt automatisch Sensoren für alle ausgewählten Assets und Wallets:
 
 **Preis-Tracker Sensoren:**
+sensor.bitpanda_price_tracker_btc_eur
+sensor.bitpanda_price_tracker_eth_eur
+sensor.bitpanda_price_tracker_xau_eur
+
+**Wallet Sensoren:**
+sensor.bitpanda_btc_wallet
+sensor.bitpanda_eth_wallet
+sensor.bitpanda_xau_wallet
+
+## Unterstützte Asset-Typen
+
+| Typ | Beschreibung | Beispiele |
+|-----|--------------|-----------|
+| 🪙 **Cryptocurrencies** | Alle auf Bitpanda verfügbaren Kryptowährungen | BTC, ETH, ADA, SOL, XRP, etc. |
+| 🥇 **Metals** | Tokenisierte Edelmetalle | XAU (Gold), XAG (Silber), XPT (Platin), XPD (Palladium) |
+| 📊 **Indices** | Bitpanda Crypto Indizes | BCI5, BCI10, BCI25, BCISL, etc. |
+| 💶 **Fiat** | Fiat-Währungen | EUR, USD, CHF, GBP, etc. |
+
+## Häufige Fragen
+
+### Wie oft werden die Daten aktualisiert?
+- **Preise:** Jede Minuten
+- **Wallets:** Alle 5 Minuten
+
+### Kann ich mehrere Währungen gleichzeitig tracken?
+Nein, du musst dich für eine Haupt-Währung entscheiden.
+
+### Werden Trading-Funktionen unterstützt?
+Nein, diese Integration ist nur zum **Lesen** von Daten gedacht. Du kannst keine Trades durchführen.
+
+### Sind meine API-Keys sicher?
+Ja, die API-Keys werden verschlüsselt in der Home Assistant Datenbank gespeichert. Stelle sicher, dass du nur **Lese-Berechtigung** vergibst!
+
+## Fehlerbehebung
+
+### Integration lädt nicht
+1. Überprüfe, ob der API-Key korrekt ist
+2. Stelle sicher, dass der API-Key **Lese-Berechtigung** hat
+3. Prüfe die Logs: **Einstellungen** → **System** → **Protokolle**
+
+### Sensoren zeigen "Unavailable"
+1. Überprüfe deine Internetverbindung
+2. Prüfe ob Bitpanda API erreichbar ist: https://api.bitpanda.com/v1/ticker
+3. Starte Home Assistant neu
+
+### Preise werden nicht aktualisiert
+1. Warte mindestens 5 Minuten (Update-Interval)
+2. Prüfe die Logs auf Fehler
+3. Reload die Integration: **Einstellungen** → **Geräte & Dienste** → Bitpanda → **Neu laden**
+
+## Entwicklung
+
+### Debugging aktivieren
+
+Füge zu deiner `configuration.yaml` hinzu:

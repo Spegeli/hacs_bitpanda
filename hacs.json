@@ -2,7 +2,7 @@
   "name": "Bitpanda",
   "url": "https://github.com/Spegeli/hacs_bitpanda",
   "render_readme": true,
-  "homeassistant": "2025.01.0",
+  "homeassistant": "2024.04.0",
   "domains": ["bitpanda"],
   "iot_class": "cloud_polling"
 }

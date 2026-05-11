@@ -1,13 +1,17 @@
 """Sensor platform for Bitpanda."""
+from __future__ import annotations
+
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceEntryType
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -15,8 +19,6 @@ from .const import (
     CONF_TRACKED_ASSETS,
     CONF_TRACKED_WALLETS,
     DOMAIN,
-    SENSOR_TYPE_PRICE,
-    SENSOR_TYPE_WALLET,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,7 +37,6 @@ async def async_setup_entry(
 
     entities = []
 
-    # Add price sensors for tracked assets
     tracked_assets = config_entry.options.get(CONF_TRACKED_ASSETS, [])
     for asset in tracked_assets:
         entities.append(
@@ -47,9 +48,7 @@ async def async_setup_entry(
             )
         )
 
-    # Add wallet sensors
     tracked_wallets = config_entry.options.get(CONF_TRACKED_WALLETS, [])
-    
     if tracked_wallets:
         for wallet_id in tracked_wallets:
             entities.append(
@@ -65,6 +64,28 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
+def _price_tracker_device_info(config_entry: ConfigEntry) -> DeviceInfo:
+    return DeviceInfo(
+        identifiers={(DOMAIN, f"{config_entry.entry_id}_price_tracker")},
+        name="Bitpanda Price Tracker",
+        manufacturer="Bitpanda",
+        model="Price Tracker",
+        entry_type=DeviceEntryType.SERVICE,
+        configuration_url="https://www.bitpanda.com",
+    )
+
+
+def _wallet_device_info(config_entry: ConfigEntry) -> DeviceInfo:
+    return DeviceInfo(
+        identifiers={(DOMAIN, f"{config_entry.entry_id}_wallets")},
+        name="Bitpanda Wallets",
+        manufacturer="Bitpanda",
+        model="Wallet Monitor",
+        entry_type=DeviceEntryType.SERVICE,
+        configuration_url="https://www.bitpanda.com",
+    )
+
+
 class BitpandaPriceSensor(CoordinatorEntity, SensorEntity):
     """Representation of a Bitpanda price sensor."""
 
@@ -75,14 +96,15 @@ class BitpandaPriceSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
         self._asset = asset
         self._currency = currency
-        self._attr_name = f"Bitpanda Price Tracker {asset}/{currency}"
+        self._attr_name = f"{asset}/{currency}"
         self._attr_unique_id = f"{config_entry.entry_id}_{asset}_price_{currency}"
         self._attr_device_class = SensorDeviceClass.MONETARY
         self._attr_native_unit_of_measurement = currency
         self._attr_icon = "mdi:chart-line"
+        self._attr_device_info = _price_tracker_device_info(config_entry)
 
     @property
-    def native_value(self) -> Optional[float]:
+    def native_value(self) -> float | None:
         """Return the state of the sensor."""
         if self.coordinator.data and self._asset in self.coordinator.data:
             price_data = self.coordinator.data[self._asset]
@@ -99,29 +121,20 @@ class BitpandaPriceSensor(CoordinatorEntity, SensorEntity):
         value = self.native_value
         if value is None or value == 0:
             return 2
-        
-        # Hole den Original-String-Wert aus der API
+
         if self.coordinator.data and self._asset in self.coordinator.data:
             price_data = self.coordinator.data[self._asset]
             if self._currency in price_data:
                 original_value = str(price_data[self._currency])
-                
-                # Zähle die tatsächlichen Dezimalstellen
                 if '.' in original_value:
                     decimal_places = len(original_value.split('.')[1])
-                    # Maximal 8 Dezimalstellen für sehr kleine Werte
                     return min(decimal_places, 8)
-        
-        # Fallback: Berechne basierend auf dem Wertbereich
-        if value >= 1000:
-            return 2
-        elif value >= 10:
+
+        if value >= 10:
             return 2
         elif value >= 1:
             return 4
         elif value >= 0.1:
-            return 5
-        elif value >= 0.01:
             return 5
         elif value >= 0.001:
             return 6
@@ -131,14 +144,13 @@ class BitpandaPriceSensor(CoordinatorEntity, SensorEntity):
             return 8
 
     @property
-    def extra_state_attributes(self) -> Dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Return additional attributes."""
         if self.coordinator.data and self._asset in self.coordinator.data:
             return {
                 "asset": self._asset,
                 "currency": self._currency,
                 "trading_pair": f"{self._asset}/{self._currency}",
-                "sensor_type": "price_tracker",
                 "all_prices": self.coordinator.data[self._asset],
             }
         return {}
@@ -162,55 +174,60 @@ class BitpandaWalletSensor(CoordinatorEntity, SensorEntity):
         self._price_coordinator = price_coordinator
         self._wallet_id = wallet_id
         self._currency = currency
-        
-        # Parse wallet_id (könnte "commodity_metal_XAU" oder "cryptocoin_BTC" sein)
+
         parts = wallet_id.split("_")
         if len(parts) >= 3:
-            # Verschachtelte Kategorie (z.B. commodity_metal_XAU)
             self._category = f"{parts[0]}_{parts[1]}"
             self._symbol = "_".join(parts[2:])
         else:
-            # Einfache Kategorie (z.B. cryptocoin_BTC)
             self._category = parts[0]
             self._symbol = "_".join(parts[1:])
-        
-        self._attr_name = f"Bitpanda {self._symbol} Wallet"
+
+        self._attr_name = f"{self._symbol} Wallet"
         self._attr_unique_id = f"{config_entry.entry_id}_wallet_{wallet_id}"
         self._attr_device_class = SensorDeviceClass.MONETARY
         self._attr_native_unit_of_measurement = currency
         self._attr_icon = "mdi:wallet"
         self._attr_suggested_display_precision = 2
+        self._attr_device_info = _wallet_device_info(config_entry)
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to wallet coordinator and price coordinator."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            self._price_coordinator.async_add_listener(
+                self._handle_coordinator_update,
+                None,
+            )
+        )
 
     @property
-    def native_value(self) -> Optional[float]:
+    def native_value(self) -> float | None:
         """Return the state of the sensor."""
         balance = self._get_balance()
         if balance is None:
             return None
-        
-        # Für Fiat-Wallets: Balance = Wert (kein Preis nötig)
+
         if self._category == "fiat":
             try:
                 return float(balance)
             except (ValueError, TypeError):
                 return None
-            
-        # Für andere Wallets: Balance * Preis
+
         price = self._get_price()
         if price is None:
-            return balance  # Return balance without price conversion
-            
+            return balance
+
         try:
             return float(balance) * float(price)
         except (ValueError, TypeError):
             return None
 
-    def _get_balance(self) -> Optional[str]:
+    def _get_balance(self) -> str | None:
         """Get balance from wallet data."""
         if not self.coordinator.data:
             return None
 
-        # Check fiat wallets
         if self._category == "fiat":
             fiat_data = self.coordinator.data.get("fiat_wallets", {})
             if "data" in fiat_data:
@@ -218,27 +235,22 @@ class BitpandaWalletSensor(CoordinatorEntity, SensorEntity):
                     if wallet["attributes"].get("fiat_symbol") == self._symbol:
                         return wallet["attributes"].get("balance")
 
-        # Check asset wallets
         asset_data = self.coordinator.data.get("asset_wallets", {})
         if "data" in asset_data and "attributes" in asset_data["data"]:
-            # Parse category (könnte "commodity_metal" oder "cryptocoin" sein)
             parts = self._category.split("_", 1)
             parent_category = parts[0]
             sub_category = parts[1] if len(parts) > 1 else None
-            
-            # Hole die Kategorie-Daten
+
             category_data = asset_data["data"]["attributes"].get(parent_category)
-            
+
             if category_data:
-                # Verschachtelte Struktur (z.B. commodity.metal, index.index)
                 if sub_category and isinstance(category_data, dict):
                     sub_data = category_data.get(sub_category)
                     if sub_data and "attributes" in sub_data and "wallets" in sub_data["attributes"]:
                         for wallet in sub_data["attributes"]["wallets"]:
                             if wallet["attributes"].get("cryptocoin_symbol") == self._symbol:
                                 return wallet["attributes"].get("balance")
-                
-                # Direkte Struktur (z.B. cryptocoin)
+
                 elif isinstance(category_data, dict) and "attributes" in category_data and "wallets" in category_data["attributes"]:
                     for wallet in category_data["attributes"]["wallets"]:
                         if wallet["attributes"].get("cryptocoin_symbol") == self._symbol:
@@ -246,7 +258,7 @@ class BitpandaWalletSensor(CoordinatorEntity, SensorEntity):
 
         return None
 
-    def _get_price(self) -> Optional[str]:
+    def _get_price(self) -> str | None:
         """Get price from price coordinator."""
         if (
             self._price_coordinator.data
@@ -257,11 +269,11 @@ class BitpandaWalletSensor(CoordinatorEntity, SensorEntity):
         return None
 
     @property
-    def extra_state_attributes(self) -> Dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Return additional attributes."""
         balance = self._get_balance()
         price = self._get_price()
-        
+
         attributes = {
             "wallet_id": self._wallet_id,
             "asset": self._symbol,
@@ -269,9 +281,8 @@ class BitpandaWalletSensor(CoordinatorEntity, SensorEntity):
             "balance": balance,
             "currency": self._currency,
         }
-        
-        # Füge "price" nur hinzu wenn es KEIN Fiat-Wallet ist
+
         if self._category != "fiat":
             attributes["price"] = price
-        
+
         return attributes

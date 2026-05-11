@@ -1,7 +1,7 @@
 {
   "domain": "bitpanda",
   "name": "Bitpanda", 
-  "version": "2025.10.06",
+  "version": "2026.5.1",
   "documentation": "https://github.com/Spegeli/hacs_bitpanda",
   "issue_tracker": "https://github.com/Spegeli/hacs_bitpanda/issues",
   "dependencies": [],  
@@ -10,5 +10,5 @@
   "config_flow": true,
   "single_config_entry": true,
   "integration_type": "service",
-  "iot_class": "cloud_polling",
+  "iot_class": "cloud_polling"
 }

@@ -1,9 +1,8 @@
 """API client for Bitpanda."""
 import asyncio
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 import aiohttp
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import API_BASE_URL, API_TICKER_URL
 
@@ -14,71 +13,35 @@ class BitpandaApiClient:
     """Bitpanda API Client."""
 
     def __init__(self, api_key: str, session: aiohttp.ClientSession) -> None:
-        """Initialize the API client."""
         self._api_key = api_key
         self._session = session
         self._headers = {"X-Api-Key": api_key}
 
-    async def async_get_ticker(self) -> Dict[str, Any]:
+    async def _request(self, url: str, headers: dict | None = None) -> Any:
+        try:
+            async with self._session.get(
+                url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)
+            ) as response:
+                response.raise_for_status()
+                return await response.json()
+        except aiohttp.ClientError as err:
+            _LOGGER.error("Error during request to %s: %s", url, err)
+            raise
+        except asyncio.TimeoutError:
+            _LOGGER.error("Timeout during request to %s", url)
+            raise
+
+    async def async_get_ticker(self) -> dict[str, Any]:
         """Get price ticker data."""
-        try:
-            async with self._session.get(API_TICKER_URL, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                response.raise_for_status()
-                return await response.json()
-        except aiohttp.ClientError as err:
-            _LOGGER.error("Error fetching ticker data: %s", err)
-            raise
-        except asyncio.TimeoutError as err:
-            _LOGGER.error("Timeout fetching ticker data: %s", err)
-            raise
+        return await self._request(API_TICKER_URL)
 
-    async def async_get_asset_wallets(self) -> Dict[str, Any]:
+    async def async_get_asset_wallets(self) -> dict[str, Any]:
         """Get asset wallets."""
-        try:
-            url = f"{API_BASE_URL}/asset-wallets"
-            async with self._session.get(
-                url, headers=self._headers, timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
-                response.raise_for_status()
-                return await response.json()
-        except aiohttp.ClientError as err:
-            _LOGGER.error("Error fetching asset wallets: %s", err)
-            raise
-        except asyncio.TimeoutError as err:
-            _LOGGER.error("Timeout fetching asset wallets: %s", err)
-            raise
+        return await self._request(f"{API_BASE_URL}/asset-wallets", headers=self._headers)
 
-    async def async_get_fiat_wallets(self) -> Dict[str, Any]:
+    async def async_get_fiat_wallets(self) -> dict[str, Any]:
         """Get fiat wallets."""
-        try:
-            url = f"{API_BASE_URL}/fiatwallets"
-            async with self._session.get(
-                url, headers=self._headers, timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
-                response.raise_for_status()
-                return await response.json()
-        except aiohttp.ClientError as err:
-            _LOGGER.error("Error fetching fiat wallets: %s", err)
-            raise
-        except asyncio.TimeoutError as err:
-            _LOGGER.error("Timeout fetching fiat wallets: %s", err)
-            raise
-
-    async def async_get_crypto_wallets(self) -> Dict[str, Any]:
-        """Get crypto wallets."""
-        try:
-            url = f"{API_BASE_URL}/wallets"
-            async with self._session.get(
-                url, headers=self._headers, timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
-                response.raise_for_status()
-                return await response.json()
-        except aiohttp.ClientError as err:
-            _LOGGER.error("Error fetching crypto wallets: %s", err)
-            raise
-        except asyncio.TimeoutError as err:
-            _LOGGER.error("Timeout fetching crypto wallets: %s", err)
-            raise
+        return await self._request(f"{API_BASE_URL}/fiatwallets", headers=self._headers)
 
     async def async_test_connection(self) -> bool:
         """Test the API connection."""
@@ -93,7 +56,6 @@ class BitpandaApiClient:
         try:
             ticker = await self.async_get_ticker()
             if ticker:
-                # Get first asset to find available currencies
                 first_asset = next(iter(ticker.values()))
                 return list(first_asset.keys())
             return ["EUR", "USD", "CHF", "GBP"]

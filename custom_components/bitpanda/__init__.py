@@ -3,7 +3,6 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -42,12 +41,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         try:
             asset_wallets = await client.async_get_asset_wallets()
             fiat_wallets = await client.async_get_fiat_wallets()
-            crypto_wallets = await client.async_get_crypto_wallets()
-            
             return {
                 "asset_wallets": asset_wallets,
                 "fiat_wallets": fiat_wallets,
-                "crypto_wallets": crypto_wallets,
             }
         except Exception as err:
             raise UpdateFailed(f"Error communicating with API: {err}")
@@ -70,15 +66,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         config_entry=entry,
     )
 
-    # Fetch initial data
-    await price_coordinator.async_refresh()
-    await wallet_coordinator.async_refresh()
-    
-    # Check if first refresh was successful
-    if price_coordinator.last_update_success is False:
-        raise ConfigEntryNotReady("Failed to fetch initial price data")
-    if wallet_coordinator.last_update_success is False:
-        raise ConfigEntryNotReady("Failed to fetch initial wallet data")
+    await price_coordinator.async_config_entry_first_refresh()
+    await wallet_coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
@@ -90,7 +79,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # GEÄNDERT: Verwende async_update_options statt async_reload_entry
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
     return True
@@ -105,6 +93,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle options update."""
-    # GEÄNDERT: Reload nur die Sensor-Plattform, nicht die ganze Integration
+    """Handle options update by reloading the integration."""
     await hass.config_entries.async_reload(entry.entry_id)

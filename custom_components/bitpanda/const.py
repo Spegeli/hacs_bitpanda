@@ -25,15 +25,5 @@ ASSET_CATEGORIES = {
     "etf": "ETFs",
 }
 
-# Wallet grouping options
-WALLET_GROUPING_INDIVIDUAL = "individual"
-WALLET_GROUPING_CATEGORY = "category"
-
 # Default values
 DEFAULT_CURRENCY = "EUR"
-DEFAULT_WALLET_GROUPING = WALLET_GROUPING_CATEGORY
-
-# Sensor types
-SENSOR_TYPE_PRICE = "price"
-SENSOR_TYPE_WALLET = "wallet"
-SENSOR_TYPE_WALLET_TOTAL = "wallet_total"

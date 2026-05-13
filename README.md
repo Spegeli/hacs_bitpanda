@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/License-MIT-green.svg">
 </p>
 
-A custom Home Assistant integration to monitor your **Bitpanda portfolio** directly from your dashboard — track live asset prices and your wallet balances in one place.
+A custom <a href="https://www.home-assistant.io/">Home Assistant</a> integration to monitor your **Bitpanda portfolio** directly from your dashboard — track live asset prices and your wallet balances in one place.
 
 ---
 
@@ -25,19 +25,25 @@ A custom Home Assistant integration to monitor your **Bitpanda portfolio** direc
 - Raw coin/token balance always available as entity attribute
 
 ### Supported Assets
-| Type | Price Tracker | Wallet Monitor |
-|---|---|---|
-| Cryptocurrencies (BTC, ETH, …) | ✅ | ✅ |
-| Metals (XAU, XAG, XPT, XPD) | ✅ | ✅ |
-| Indices (BCI5, BCI10, …) | ✅ | ✅ |
-| Fiat (EUR, USD, …) | ❌ | ✅ |
-| Stocks / ETFs | ❌ | ❌ |
+| Type | Description | Examples | Price Tracker | Wallet Monitor |
+|------|-------------|----------|---------------|----------------|
+| 🪙 **Cryptocurrencies** | All cryptocurrencies available on Bitpanda | BTC, ETH, ADA, SOL, XRP, etc. | ✅ | ✅ |
+| 🥇 **Metals** | Tokenized precious metals | XAU (Gold), XAG (Silver), XPT (Platinum), XPD (Palladium) | ✅ | ✅ |
+| 📊 **Indices** | Bitpanda Crypto Indices | BCI5, BCI10, BCI25, BCISL, etc. | ✅ | ✅ |
+| 💶 **Fiat** | Fiat currencies | EUR, USD, CHF, GBP, etc. | ❌ | ✅ |
+| 📈 **Stocks** | Stocks & shares | AAPL, MSFT, TSLA, etc. | ❌ | ❌ |
+| 🏦 **ETFs** | Exchange Traded Funds | S&P 500, NASDAQ 100, DAX, etc. | ❌ | ❌ |
+| 🛢️ **Commodities** | Commodities | Oil, Gas, Wheat, etc. | ❌ | ❌ |
+
+> **My stocks, ETFs or commodities are not showing up?**
+> 
+> This is expected. Stocks, ETFs and commodities are not supported as they are not included in the public Bitpanda Price Ticker API.
 
 ---
 
 ## 📋 Requirements
 
-- Home Assistant **2025.1.0** or newer
+- Home Assistant **2025.1** or newer
 - A [Bitpanda](https://www.bitpanda.com) account
 - A Bitpanda API key ([create one here](https://web.bitpanda.com/apikey))
 
@@ -69,15 +75,28 @@ Or add it manually:
 
 ## ⚙️ Configuration
 
+### 1. Create a Bitpanda API Key
+
+1. Go to your [Bitpanda API settings](https://web.bitpanda.com/apikey) and create a new API key
+2. Under **Scope**, select at least **"Balance"**
+   - ℹ️ The "Balance" scope is read-only and safe — it cannot be used to place trades or initiate transactions
+   - Optional: "Trading" and "Transactions" can also be enabled (both are read-only as well) but are not required for this integration
+3. Copy your API key — **you will only see it once!**
+
+### 2. Add the Integration to Home Assistant
+
 1. Go to **Settings → Devices & Services → Add Integration**
 2. Search for **Bitpanda**
 3. Enter your **API key** and select your **currency**
    > ⚠️ The currency can only be selected during initial setup. To change it, remove and re-add the integration.
 4. Optionally select **wallets** and **assets** to track right away — you can always adjust this later
 
-### Updating your configuration
+### 3. Configure Assets and Wallets
 
-Go to **Settings → Devices & Services → Bitpanda → Configure** to add or remove tracked assets and wallets at any time. After making your changes, click **Save** to apply them.
+1. Go to **Settings → Devices & Services → Bitpanda → Configure**
+   - Select **Price Tracker** to add or remove tracked assets
+   - Select **Wallets** to add or remove monitored wallets
+2. When finished, click **Save** to apply all changes
 
 ---
 

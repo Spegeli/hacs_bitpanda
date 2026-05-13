@@ -3,16 +3,30 @@
     "step": {
       "user": {
         "title": "Bitpanda Einrichtung",
-        "description": "Gib deinen Bitpanda API-Schlüssel ein",
+        "description": "Gib deinen Bitpanda API-Schlüssel ein. Du kannst einen in den [Bitpanda Kontoeinstellungen](https://web.bitpanda.com/apikey) erstellen.",
         "data": {
           "api_key": "API-Schlüssel"
         }
       },
       "currency": {
         "title": "Währung auswählen",
-        "description": "Wähle deine bevorzugte Währung für das Tracking",
+        "description": "Wähle die Währung, die für alle Preise und Wallet-Werte verwendet wird.\n\n⚠️ Diese Einstellung kann später nicht geändert werden. Um eine andere Währung zu verwenden, muss die Integration neu eingerichtet werden.",
         "data": {
           "currency": "Währung"
+        }
+      },
+      "wallets": {
+        "title": "Wallets",
+        "description": "Wähle die Wallets, die du überwachen möchtest. Leer lassen zum Überspringen — du kannst dies später in den Integrationsoptionen konfigurieren.",
+        "data": {
+          "tracked_wallets": "Verfolgte Wallets"
+        }
+      },
+      "price_tracker": {
+        "title": "Preis-Tracker",
+        "description": "Wähle die Assets, deren Preise du verfolgen möchtest. Leer lassen zum Überspringen — du kannst dies später in den Integrationsoptionen konfigurieren.",
+        "data": {
+          "tracked_assets": "Verfolgte Assets"
         }
       }
     },
@@ -29,19 +43,20 @@
         "description": "Konfiguriere deine Bitpanda Integration",
         "menu_options": {
           "price_tracker": "Preis-Tracker",
-          "wallets": "Wallets"
+          "wallets": "Wallets",
+          "save": "Speichern"
         }
       },
       "price_tracker": {
         "title": "Preis-Tracker",
-        "description": "Wähle Assets aus, um deren Preise zu verfolgen",
+        "description": "Assets hinzufügen oder entfernen, um deren Live-Preise zu verfolgen.",
         "data": {
           "tracked_assets": "Verfolgte Assets"
         }
       },
       "wallets": {
         "title": "Wallets",
-        "description": "Wähle Wallets zur Überwachung aus",
+        "description": "Wallets hinzufügen oder entfernen, um deren aktuellen Wert zu überwachen.",
         "data": {
           "tracked_wallets": "Verfolgte Wallets"
         }

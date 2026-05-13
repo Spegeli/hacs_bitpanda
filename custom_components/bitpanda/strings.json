@@ -3,16 +3,30 @@
     "step": {
       "user": {
         "title": "Bitpanda Setup",
-        "description": "Enter your Bitpanda API key",
+        "description": "Enter your Bitpanda API key. You can create one in your [Bitpanda account settings](https://web.bitpanda.com/apikey).",
         "data": {
           "api_key": "API Key"
         }
       },
       "currency": {
         "title": "Select Currency",
-        "description": "Select your preferred currency for tracking",
+        "description": "Select the currency used for all prices and wallet values.\n\n⚠️ This setting cannot be changed later. To use a different currency, you will need to remove and re-add the integration.",
         "data": {
           "currency": "Currency"
+        }
+      },
+      "wallets": {
+        "title": "Wallets",
+        "description": "Select the wallets you want to monitor. Leave empty to skip — you can configure this later in the integration options.",
+        "data": {
+          "tracked_wallets": "Tracked Wallets"
+        }
+      },
+      "price_tracker": {
+        "title": "Price Tracker",
+        "description": "Select the assets you want to track. Leave empty to skip — you can configure this later in the integration options.",
+        "data": {
+          "tracked_assets": "Tracked Assets"
         }
       }
     },
@@ -29,19 +43,20 @@
         "description": "Configure your Bitpanda integration",
         "menu_options": {
           "price_tracker": "Price Tracker",
-          "wallets": "Wallets"
+          "wallets": "Wallets",
+          "save": "Save"
         }
       },
       "price_tracker": {
         "title": "Price Tracker",
-        "description": "Select assets to track their prices",
+        "description": "Add or remove assets to track their live prices.",
         "data": {
           "tracked_assets": "Tracked Assets"
         }
       },
       "wallets": {
         "title": "Wallets",
-        "description": "Select wallets to monitor",
+        "description": "Add or remove wallets to monitor their current value.",
         "data": {
           "tracked_wallets": "Tracked Wallets"
         }

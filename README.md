@@ -1,4 +1,4 @@
-# 🎉 Bitpanda – Home Assistant Integration
+# 🚀 Bitpanda – Home Assistant Integration
 
 <p align="center">
   <a href="https://github.com/hacs/integration"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg"></a>

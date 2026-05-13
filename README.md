@@ -77,13 +77,11 @@ Or add it manually:
 
 ### 1. Create a Bitpanda API Key
 
-1. Log in to your [Bitpanda account](https://www.bitpanda.com)
-2. Go to **Settings** → **API**
-3. Create a new API key
-4. Under **Scope**, select at least **"Balance"**
+1. Go to your [Bitpanda API settings](https://web.bitpanda.com/apikey) and create a new API key
+2. Under **Scope**, select at least **"Balance"**
    - ℹ️ The "Balance" scope is read-only and safe — it cannot be used to place trades or initiate transactions
    - Optional: "Trading" and "Transactions" can also be enabled (both are read-only as well) but are not required for this integration
-5. Copy your API key — **you will only see it once!**
+3. Copy your API key — **you will only see it once!**
 
 ### 2. Add the Integration to Home Assistant
 

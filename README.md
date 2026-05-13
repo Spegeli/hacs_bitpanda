@@ -25,13 +25,15 @@ A custom <a href="https://www.home-assistant.io/">Home Assistant</a> integration
 - Raw coin/token balance always available as entity attribute
 
 ### Supported Assets
-| Type | Price Tracker | Wallet Monitor |
-|---|---|---|
-| Cryptocurrencies (BTC, ETH, …) | ✅ | ✅ |
-| Metals (XAU, XAG, XPT, XPD) | ✅ | ✅ |
-| Indices (BCI5, BCI10, …) | ✅ | ✅ |
-| Fiat (EUR, USD, …) | ❌ | ✅ |
-| Stocks / ETFs | ❌ | ❌ |
+| Type | Description | Examples | Price Tracker | Wallet Monitor |
+|------|-------------|----------|---------------|----------------|
+| 🪙 **Cryptocurrencies** | All cryptocurrencies available on Bitpanda | BTC, ETH, ADA, SOL, XRP, etc. | ✅ | ✅ |
+| 🥇 **Metals** | Tokenized precious metals | XAU (Gold), XAG (Silver), XPT (Platinum), XPD (Palladium) | ✅ | ✅ |
+| 📊 **Indices** | Bitpanda Crypto Indices | BCI5, BCI10, BCI25, BCISL, etc. | ✅ | ✅ |
+| 💶 **Fiat** | Fiat currencies | EUR, USD, CHF, GBP, etc. | ❌ | ✅ |
+| 📈 **Stocks** | Stocks & shares | AAPL, MSFT, TSLA, etc. | ❌ | ❌ |
+| 🏦 **ETFs** | Exchange Traded Funds | S&P 500, NASDAQ 100, DAX, etc. | ❌ | ❌ |
+| 🛢️ **Commodities** | Commodities | Oil, Gas, Wheat, etc. | ❌ | ❌ |
 
 > **My stocks, ETFs or commodities are not showing up?**
 > 

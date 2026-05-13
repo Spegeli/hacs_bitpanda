@@ -34,6 +34,7 @@ A custom <a href="https://www.home-assistant.io/">Home Assistant</a> integration
 | Stocks / ETFs | ❌ | ❌ |
 
 > **My stocks, ETFs or commodities are not showing up?**
+> 
 > This is expected. Stocks, ETFs and commodities are not supported as they are not included in the public Bitpanda Price Ticker API.
 
 ---

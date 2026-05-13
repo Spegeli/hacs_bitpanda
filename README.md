@@ -41,7 +41,7 @@ A custom <a href="https://www.home-assistant.io/">Home Assistant</a> integration
 
 ## 📋 Requirements
 
-- Home Assistant **2025.1.0** or newer
+- Home Assistant **2025.1** or newer
 - A [Bitpanda](https://www.bitpanda.com) account
 - A Bitpanda API key ([create one here](https://web.bitpanda.com/apikey))
 

@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/License-MIT-green.svg">
 </p>
 
-A custom Home Assistant integration to monitor your **Bitpanda portfolio** directly from your dashboard — track live asset prices and your wallet balances in one place.
+A custom <a href="https://www.home-assistant.io/">Home Assistant</a> integration to monitor your **Bitpanda portfolio** directly from your dashboard — track live asset prices and your wallet balances in one place.
 
 ---
 

@@ -75,14 +75,24 @@ Or add it manually:
 
 ## ⚙️ Configuration
 
+### 1. Create a Bitpanda API Key
+
+1. Log in to your [Bitpanda account](https://www.bitpanda.com)
+2. Go to **Settings** → **API**
+3. Create a new API key
+4. Under **Scope**, select at least **"Balance"**
+   - ℹ️ The "Balance" scope is read-only and safe — it cannot be used to place trades or initiate transactions
+   - Optional: "Trading" and "Transactions" can also be enabled (both are read-only as well) but are not required for this integration
+5. Copy your API key — **you will only see it once!**
+
+### 2. Add the Integration to Home Assistant
 1. Go to **Settings → Devices & Services → Add Integration**
 2. Search for **Bitpanda**
 3. Enter your **API key** and select your **currency**
    > ⚠️ The currency can only be selected during initial setup. To change it, remove and re-add the integration.
 4. Optionally select **wallets** and **assets** to track right away — you can always adjust this later
 
-### Updating your configuration
-
+### 3. Configure Assets and Wallets
 Go to **Settings → Devices & Services → Bitpanda → Configure** to add or remove tracked assets and wallets at any time. After making your changes, click **Save** to apply them.
 
 ---

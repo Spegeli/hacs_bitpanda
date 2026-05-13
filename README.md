@@ -86,6 +86,7 @@ Or add it manually:
 5. Copy your API key — **you will only see it once!**
 
 ### 2. Add the Integration to Home Assistant
+
 1. Go to **Settings → Devices & Services → Add Integration**
 2. Search for **Bitpanda**
 3. Enter your **API key** and select your **currency**
@@ -93,7 +94,11 @@ Or add it manually:
 4. Optionally select **wallets** and **assets** to track right away — you can always adjust this later
 
 ### 3. Configure Assets and Wallets
-Go to **Settings → Devices & Services → Bitpanda → Configure** to add or remove tracked assets and wallets at any time. After making your changes, click **Save** to apply them.
+
+1. Go to **Settings → Devices & Services → Bitpanda → Configure**
+   - Select **Price Tracker** to add or remove tracked assets
+   - Select **Wallets** to add or remove monitored wallets
+2. When finished, click **Save** to apply all changes
 
 ---
 

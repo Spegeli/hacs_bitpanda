@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Spegeli/hacs_bitpanda/main/logo.png" alt="Bitpanda Logo" width="300">
+</p>
+
 # 🚀 Bitpanda – Home Assistant Integration
 
 <p align="center">

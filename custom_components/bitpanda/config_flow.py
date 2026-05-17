@@ -126,6 +126,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema({vol.Required(CONF_API_KEY): cv.string}),
             errors=errors,
+            description_placeholders={"api_key_url": "https://web.bitpanda.com/apikey"},
         )
 
     async def async_step_currency(

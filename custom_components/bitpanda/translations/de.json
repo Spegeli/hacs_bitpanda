@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Bitpanda Einrichtung",
-        "description": "Gib deinen Bitpanda API-Schlüssel ein. Du kannst einen in den [Bitpanda Kontoeinstellungen](https://web.bitpanda.com/apikey) erstellen.",
+        "description": "Gib deinen Bitpanda API-Schlüssel ein. Du kannst einen in den [Bitpanda Kontoeinstellungen]({api_key_url}) erstellen.",
         "data": {
           "api_key": "API-Schlüssel"
         }

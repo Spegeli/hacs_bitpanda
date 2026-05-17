@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Bitpanda Setup",
-        "description": "Enter your Bitpanda API key. You can create one in your [Bitpanda account settings](https://web.bitpanda.com/apikey).",
+        "description": "Enter your Bitpanda API key. You can create one in your [Bitpanda account settings]({api_key_url}).",
         "data": {
           "api_key": "API Key"
         }

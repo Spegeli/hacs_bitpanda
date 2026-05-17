@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png?raw=true" alt="Bitpanda Logo" width="300">
+</p>
+
 # 🚀 Bitpanda – Home Assistant Integration
 
 <p align="center">

@@ -25,7 +25,15 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-async def _async_build_wallet_options(client: BitpandaApiClient) -> list[dict]:
+_CATEGORY_PREFIXES: dict[str, str] = {
+    "crypto": "cryptocoin_",
+    "fiat": "fiat_",
+    "metal": "commodity_metal_",
+    "index": "index_",
+}
+
+
+async def _async_build_wallet_options(client: BitpandaApiClient, category: str | None = None) -> list[dict]:
     """Build wallet options list from Bitpanda API."""
     wallet_options = []
 
@@ -50,41 +58,42 @@ async def _async_build_wallet_options(client: BitpandaApiClient) -> list[dict]:
                     "XPT": "Platinum (XPT)",
                     "XPD": "Palladium (XPD)",
                 }
-                label = f"Metal: {metal_names.get(symbol, symbol)}"
-            elif parent_category == "index":
-                label = f"Index: {symbol}"
-            elif parent_category == "cryptocoin":
-                label = f"Crypto: {symbol}"
+                label = metal_names.get(symbol, symbol)
             else:
-                label = f"{parent_category.title()}: {symbol}"
+                label = symbol
             wallet_options.append({"value": f"{full_category}_{symbol}", "label": label})
 
     try:
         asset_wallets = await client.async_get_asset_wallets()
         if "data" in asset_wallets and "attributes" in asset_wallets["data"]:
-            for category, data in asset_wallets["data"]["attributes"].items():
-                if category in ("security", "equity_security"):
-                    _LOGGER.debug("Skipping category: %s (no prices available)", category)
+            for cat, data in asset_wallets["data"]["attributes"].items():
+                if cat in ("security", "equity_security"):
+                    _LOGGER.debug("Skipping category: %s (no prices available)", cat)
                     continue
                 if isinstance(data, dict) and "attributes" in data and "wallets" in data["attributes"]:
-                    process_wallet_collection(category, None, data["attributes"]["wallets"])
+                    process_wallet_collection(cat, None, data["attributes"]["wallets"])
                 elif isinstance(data, dict):
                     for sub_category, sub_data in data.items():
                         if isinstance(sub_data, dict) and "attributes" in sub_data and "wallets" in sub_data["attributes"]:
-                            process_wallet_collection(category, sub_category, sub_data["attributes"]["wallets"])
+                            process_wallet_collection(cat, sub_category, sub_data["attributes"]["wallets"])
 
         fiat_wallets = await client.async_get_fiat_wallets()
         if "data" in fiat_wallets:
             for wallet in fiat_wallets["data"]:
                 symbol = wallet["attributes"].get("fiat_symbol", "")
                 if symbol:
-                    wallet_options.append({"value": f"fiat_{symbol}", "label": f"Fiat: {symbol}"})
+                    wallet_options.append({"value": f"fiat_{symbol}", "label": symbol})
 
     except Exception as err:
         _LOGGER.error("Error fetching wallets: %s", err, exc_info=True)
 
     wallet_options.sort(key=lambda x: x["label"])
-    _LOGGER.info("Found %s wallet options", len(wallet_options))
+
+    if category is not None:
+        prefix = _CATEGORY_PREFIXES.get(category, "")
+        wallet_options = [o for o in wallet_options if o["value"].startswith(prefix)]
+
+    _LOGGER.debug("Found %s wallet options (category: %s)", len(wallet_options), category or "all")
     return wallet_options
 
 
@@ -98,10 +107,6 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._api_key: str | None = None
         self._currency: str | None = None
         self._available_currencies: list[str] = []
-        self._available_assets: list[str] = []
-        self._tracked_assets: list[str] = []
-        self._tracked_wallets: list[str] = []
-        self._client: BitpandaApiClient | None = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -116,8 +121,6 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if await client.async_test_connection():
                 self._available_currencies = await client.get_available_currencies()
-                self._available_assets = await client.get_available_assets()
-                self._client = client
                 return await self.async_step_currency()
             else:
                 errors["base"] = "invalid_auth"
@@ -135,49 +138,6 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle currency selection."""
         if user_input is not None:
             self._currency = user_input[CONF_CURRENCY]
-            return await self.async_step_wallets()
-
-        return self.async_show_form(
-            step_id="currency",
-            data_schema=vol.Schema({
-                vol.Required(CONF_CURRENCY, default=DEFAULT_CURRENCY): SelectSelector(
-                    SelectSelectorConfig(
-                        options=self._available_currencies,
-                        mode="dropdown",
-                    )
-                ),
-            }),
-        )
-
-    async def async_step_wallets(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Handle wallet selection."""
-        if user_input is not None:
-            self._tracked_wallets = user_input.get(CONF_TRACKED_WALLETS, [])
-            return await self.async_step_price_tracker()
-
-        wallet_options = await _async_build_wallet_options(self._client)
-
-        return self.async_show_form(
-            step_id="wallets",
-            data_schema=vol.Schema({
-                vol.Optional(CONF_TRACKED_WALLETS, default=[]): SelectSelector(
-                    SelectSelectorConfig(
-                        options=wallet_options,
-                        multiple=True,
-                        mode="dropdown",
-                    )
-                ),
-            }),
-        )
-
-    async def async_step_price_tracker(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Handle price tracker selection."""
-        if user_input is not None:
-            self._tracked_assets = user_input.get(CONF_TRACKED_ASSETS, [])
             return self.async_create_entry(
                 title=f"Bitpanda ({self._currency})",
                 data={
@@ -185,18 +145,17 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_CURRENCY: self._currency,
                 },
                 options={
-                    CONF_TRACKED_ASSETS: self._tracked_assets,
-                    CONF_TRACKED_WALLETS: self._tracked_wallets,
+                    CONF_TRACKED_ASSETS: [],
+                    CONF_TRACKED_WALLETS: [],
                 },
             )
 
         return self.async_show_form(
-            step_id="price_tracker",
+            step_id="currency",
             data_schema=vol.Schema({
-                vol.Optional(CONF_TRACKED_ASSETS, default=[]): SelectSelector(
+                vol.Required(CONF_CURRENCY, default=DEFAULT_CURRENCY): SelectSelector(
                     SelectSelectorConfig(
-                        options=self._available_assets,
-                        multiple=True,
+                        options=self._available_currencies,
                         mode="dropdown",
                     )
                 ),
@@ -217,7 +176,6 @@ class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
 
     def __init__(self) -> None:
         """Initialize options flow."""
-        self._available_assets: list[str] = []
         self._tracked_assets: list[str] | None = None
         self._tracked_wallets: list[str] | None = None
 
@@ -231,7 +189,7 @@ class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
 
         return self.async_show_menu(
             step_id="init",
-            menu_options=["price_tracker", "wallets", "save"],
+            menu_options=["price_tracker", "crypto_wallets", "fiat_wallets", "metal_wallets", "index_wallets", "save"],
         )
 
     async def async_step_price_tracker(
@@ -246,17 +204,17 @@ class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
         client = BitpandaApiClient(self.config_entry.data[CONF_API_KEY], session)
 
         try:
-            self._available_assets = await client.get_available_assets()
+            available_assets = await client.get_available_assets()
         except Exception as err:
             _LOGGER.error("Error fetching assets: %s", err)
-            self._available_assets = []
+            available_assets = []
 
         return self.async_show_form(
             step_id="price_tracker",
             data_schema=vol.Schema({
                 vol.Optional(CONF_TRACKED_ASSETS, default=self._tracked_assets): SelectSelector(
                     SelectSelectorConfig(
-                        options=self._available_assets,
+                        options=available_assets,
                         multiple=True,
                         mode="dropdown",
                     )
@@ -264,22 +222,28 @@ class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
             }),
         )
 
-    async def async_step_wallets(
-        self, user_input: dict[str, Any] | None = None
+    async def _async_wallet_step(
+        self,
+        step_id: str,
+        category: str,
+        user_input: dict[str, Any] | None,
     ) -> ConfigFlowResult:
-        """Handle wallet options."""
+        """Generic handler for per-category wallet steps."""
+        prefix = _CATEGORY_PREFIXES.get(category, "")
         if user_input is not None:
-            self._tracked_wallets = user_input.get(CONF_TRACKED_WALLETS, [])
+            other = [w for w in self._tracked_wallets if not w.startswith(prefix)]
+            self._tracked_wallets = other + user_input.get(CONF_TRACKED_WALLETS, [])
             return await self.async_step_init()
 
         session = async_get_clientsession(self.hass)
         client = BitpandaApiClient(self.config_entry.data[CONF_API_KEY], session)
-        wallet_options = await _async_build_wallet_options(client)
+        wallet_options = await _async_build_wallet_options(client, category)
+        current = [w for w in self._tracked_wallets if w.startswith(prefix)]
 
         return self.async_show_form(
-            step_id="wallets",
+            step_id=step_id,
             data_schema=vol.Schema({
-                vol.Optional(CONF_TRACKED_WALLETS, default=self._tracked_wallets): SelectSelector(
+                vol.Optional(CONF_TRACKED_WALLETS, default=current): SelectSelector(
                     SelectSelectorConfig(
                         options=wallet_options,
                         multiple=True,
@@ -288,6 +252,30 @@ class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
                 ),
             }),
         )
+
+    async def async_step_crypto_wallets(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle crypto wallet options."""
+        return await self._async_wallet_step("crypto_wallets", "crypto", user_input)
+
+    async def async_step_fiat_wallets(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle fiat wallet options."""
+        return await self._async_wallet_step("fiat_wallets", "fiat", user_input)
+
+    async def async_step_metal_wallets(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle metal wallet options."""
+        return await self._async_wallet_step("metal_wallets", "metal", user_input)
+
+    async def async_step_index_wallets(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle index wallet options."""
+        return await self._async_wallet_step("index_wallets", "index", user_input)
 
     async def async_step_save(
         self, user_input: dict[str, Any] | None = None

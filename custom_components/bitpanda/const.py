@@ -9,20 +9,17 @@ CONF_TRACKED_WALLETS = "tracked_wallets"
 
 # API URLs
 API_BASE_URL = "https://api.bitpanda.com/v1"
-API_TICKER_URL = "https://api.bitpanda.com/v1/ticker"
 
 # Update intervals
 PRICE_UPDATE_INTERVAL = timedelta(seconds=60)
 WALLET_UPDATE_INTERVAL = timedelta(minutes=5)
+CHANGE_24H_UPDATE_INTERVAL = timedelta(minutes=15)
 
 # Asset categories
 ASSET_CATEGORIES = {
     "cryptocoin": "Crypto",
     "metal": "Metals",
-    "commodity": "Commodities",
     "index": "Crypto Indices",
-    "stock": "Stocks",
-    "etf": "ETFs",
 }
 
 # Default values

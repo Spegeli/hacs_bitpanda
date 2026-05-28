@@ -21,12 +21,20 @@ A custom <a href="https://www.home-assistant.io/">Home Assistant</a> integration
 - Supports multiple currencies (EUR, USD, CHF, GBP, and more)
 - Updates every 60 seconds
 - Automatic decimal precision based on actual API values
+- 24h price change (`change_24h_pct`) available as entity attribute, powered by the Home Assistant recorder
 
 ### Wallet Monitor
 - Displays the current value of your Bitpanda wallets in your selected currency
 - Supports crypto wallets, metal wallets, commodity wallets, index wallets and fiat wallets
 - Wallet values update automatically whenever the price changes
 - Raw coin/token balance always available as entity attribute
+
+### Portfolio Total
+- A single sensor showing the combined value of all tracked wallets
+- Includes a per-asset value breakdown as an entity attribute
+
+### Manual Refresh
+- Call the `bitpanda.refresh` service to trigger an immediate update of all price and wallet data outside of the regular update intervals
 
 ### Supported Assets
 | Type | Description | Examples | Price Tracker | Wallet Monitor |
@@ -93,14 +101,16 @@ Or add it manually:
 2. Search for **Bitpanda**
 3. Enter your **API key** and select your **currency**
    > ⚠️ The currency can only be selected during initial setup. To change it, remove and re-add the integration.
-4. Optionally select **wallets** and **assets** to track right away — you can always adjust this later
 
 ### 3. Configure Assets and Wallets
 
 1. Go to **Settings → Devices & Services → Bitpanda → Configure**
-   - Select **Price Tracker** to add or remove tracked assets
-   - Select **Wallets** to add or remove monitored wallets
-2. When finished, click **Save** to apply all changes
+   - **📈 Price Tracker** — add or remove assets to track their live prices
+   - **🪙 Crypto Wallets** — add or remove crypto wallets to monitor
+   - **💶 Fiat Wallets** — add or remove fiat wallets to monitor
+   - **🪨 Metal Wallets** — add or remove metal wallets to monitor
+   - **📊 Index Wallets** — add or remove index wallets to monitor
+2. When finished, click **💾 Save** to apply all changes
 
 ---
 

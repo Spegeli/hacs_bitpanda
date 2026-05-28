@@ -4,7 +4,7 @@ import logging
 from typing import Any
 import aiohttp
 
-from .const import API_BASE_URL, API_TICKER_URL
+from .const import API_BASE_URL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class BitpandaApiClient:
 
     async def async_get_ticker(self) -> dict[str, Any]:
         """Get price ticker data."""
-        return await self._request(API_TICKER_URL)
+        return await self._request(f"{API_BASE_URL}/ticker")
 
     async def async_get_asset_wallets(self) -> dict[str, Any]:
         """Get asset wallets."""

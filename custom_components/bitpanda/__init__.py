@@ -2,7 +2,7 @@
 import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -71,7 +71,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
-        "client": client,
         "price_coordinator": price_coordinator,
         "wallet_coordinator": wallet_coordinator,
         "currency": currency,
@@ -81,6 +80,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
+    # Register refresh service (only once, even if entry is reloaded)
+    if not hass.services.has_service(DOMAIN, "refresh"):
+        async def handle_refresh(call: ServiceCall) -> None:
+            """Trigger a manual refresh of all Bitpanda data."""
+            for entry_data in hass.data[DOMAIN].values():
+                await entry_data["price_coordinator"].async_request_refresh()
+                await entry_data["wallet_coordinator"].async_request_refresh()
+
+        hass.services.async_register(DOMAIN, "refresh", handle_refresh)
+
     return True
 
 
@@ -88,6 +97,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)
+
+        # Remove service when no entries remain
+        if not hass.data[DOMAIN]:
+            hass.services.async_remove(DOMAIN, "refresh")
 
     return unload_ok
 

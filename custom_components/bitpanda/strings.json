@@ -10,23 +10,9 @@
       },
       "currency": {
         "title": "Select Currency",
-        "description": "Select the currency used for all prices and wallet values.\n\n⚠️ This setting cannot be changed later. To use a different currency, you will need to remove and re-add the integration.",
+        "description": "Select the currency used for all prices and wallet values.\n\n⚠️ This setting cannot be changed later. To use a different currency, you will need to remove and re-add the integration.\n\nAfter setup, you can configure wallets and price tracking via the integration options.",
         "data": {
           "currency": "Currency"
-        }
-      },
-      "wallets": {
-        "title": "Wallets",
-        "description": "Select the wallets you want to monitor. Leave empty to skip — you can configure this later in the integration options.",
-        "data": {
-          "tracked_wallets": "Tracked Wallets"
-        }
-      },
-      "price_tracker": {
-        "title": "Price Tracker",
-        "description": "Select the assets you want to track. Leave empty to skip — you can configure this later in the integration options.",
-        "data": {
-          "tracked_assets": "Tracked Assets"
         }
       }
     },
@@ -42,9 +28,12 @@
         "title": "Bitpanda Options",
         "description": "Configure your Bitpanda integration",
         "menu_options": {
-          "price_tracker": "Price Tracker",
-          "wallets": "Wallets",
-          "save": "Save"
+          "price_tracker": "📈 Price Tracker",
+          "crypto_wallets": "🪙 Crypto Wallets",
+          "fiat_wallets": "💶 Fiat Wallets",
+          "metal_wallets": "🪨 Metal Wallets",
+          "index_wallets": "📊 Index Wallets",
+          "save": "💾 Save"
         }
       },
       "price_tracker": {
@@ -54,9 +43,30 @@
           "tracked_assets": "Tracked Assets"
         }
       },
-      "wallets": {
-        "title": "Wallets",
-        "description": "Add or remove wallets to monitor their current value.",
+      "crypto_wallets": {
+        "title": "Crypto Wallets",
+        "description": "Add or remove crypto wallets to monitor their current value.",
+        "data": {
+          "tracked_wallets": "Tracked Wallets"
+        }
+      },
+      "fiat_wallets": {
+        "title": "Fiat Wallets",
+        "description": "Add or remove fiat wallets to monitor their current value.",
+        "data": {
+          "tracked_wallets": "Tracked Wallets"
+        }
+      },
+      "metal_wallets": {
+        "title": "Metal Wallets",
+        "description": "Add or remove metal wallets to monitor their current value.",
+        "data": {
+          "tracked_wallets": "Tracked Wallets"
+        }
+      },
+      "index_wallets": {
+        "title": "Index Wallets",
+        "description": "Add or remove index wallets to monitor their current value.",
         "data": {
           "tracked_wallets": "Tracked Wallets"
         }

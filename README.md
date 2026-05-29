@@ -114,6 +114,34 @@ Or add it manually:
 
 ---
 
+## 🔧 Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| Integration doesn't load | Restart Home Assistant and clear the HACS cache |
+| Sensor shows `unavailable` | Check your API key and review the HA logs |
+| 24h price change missing | The Recorder integration must be active and have at least 24 hours of history |
+| Wallet not visible | Add it via the integration's options menu |
+| Portfolio sensor missing | Add at least one wallet first — the portfolio sensor only appears when wallets are tracked |
+
+---
+
+## ❓ FAQ
+
+**Why are stocks, ETFs, and commodities not supported?**  
+The Bitpanda public API only exposes cryptocurrency prices. Stock, ETF, and commodity prices are not available via the public API.
+
+**Can I track multiple currencies at the same time?**  
+Not within a single integration instance. Add a second integration entry for each additional currency you want to track.
+
+**How do I change the display currency?**  
+Remove the integration and re-add it — you can choose the currency during setup.
+
+**Is my API key safe?**  
+Yes. The integration only requires a read-only API key with the "Balance" scope. Your key is stored locally in Home Assistant and is never transmitted to third parties.
+
+---
+
 ## ⚖️ Disclaimer
 
 This integration is **not officially developed or supported by Bitpanda**. It is an independent community project using the public [Bitpanda API](https://developers.bitpanda.com/platform). Use it at your own risk.

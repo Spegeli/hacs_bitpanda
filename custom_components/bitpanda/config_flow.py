@@ -1,9 +1,11 @@
 """Config flow for Bitpanda integration."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
+import aiohttp
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
@@ -24,6 +26,13 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+
+_METAL_NAMES: dict[str, str] = {
+    "XAU": "Gold (XAU)",
+    "XAG": "Silver (XAG)",
+    "XPT": "Platinum (XPT)",
+    "XPD": "Palladium (XPD)",
+}
 
 _CATEGORY_PREFIXES: dict[str, str] = {
     "crypto": "cryptocoin_",
@@ -52,13 +61,7 @@ async def _async_build_wallet_options(client: BitpandaApiClient, category: str |
                 f"{parent_category}_{sub_category}" if sub_category else parent_category
             )
             if parent_category == "commodity" and sub_category == "metal":
-                metal_names = {
-                    "XAU": "Gold (XAU)",
-                    "XAG": "Silver (XAG)",
-                    "XPT": "Platinum (XPT)",
-                    "XPD": "Palladium (XPD)",
-                }
-                label = metal_names.get(symbol, symbol)
+                label = _METAL_NAMES.get(symbol, symbol)
             else:
                 label = symbol
             wallet_options.append({"value": f"{full_category}_{symbol}", "label": label})
@@ -80,12 +83,14 @@ async def _async_build_wallet_options(client: BitpandaApiClient, category: str |
         fiat_wallets = await client.async_get_fiat_wallets()
         if "data" in fiat_wallets:
             for wallet in fiat_wallets["data"]:
+                if "attributes" not in wallet:
+                    continue
                 symbol = wallet["attributes"].get("fiat_symbol", "")
                 if symbol:
                     wallet_options.append({"value": f"fiat_{symbol}", "label": symbol})
 
     except Exception as err:
-        _LOGGER.error("Error fetching wallets: %s", err, exc_info=True)
+        _LOGGER.error("Error fetching wallets: %s", err)
 
     wallet_options.sort(key=lambda x: x["label"])
 
@@ -119,11 +124,16 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             session = async_get_clientsession(self.hass)
             client = BitpandaApiClient(self._api_key, session)
 
-            if await client.async_test_connection():
+            try:
+                await client.async_get_fiat_wallets()
                 self._available_currencies = await client.get_available_currencies()
                 return await self.async_step_currency()
-            else:
-                errors["base"] = "invalid_auth"
+            except aiohttp.ClientResponseError as err:
+                errors["base"] = "invalid_auth" if err.status in (401, 403) else "cannot_connect"
+            except (aiohttp.ClientError, asyncio.TimeoutError):
+                errors["base"] = "cannot_connect"
+            except Exception:  # noqa: BLE001
+                errors["base"] = "unknown"
 
         return self.async_show_form(
             step_id="user",
@@ -229,6 +239,8 @@ class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
         user_input: dict[str, Any] | None,
     ) -> ConfigFlowResult:
         """Generic handler for per-category wallet steps."""
+        if self._tracked_wallets is None:
+            self._tracked_wallets = list(self.config_entry.options.get(CONF_TRACKED_WALLETS, []))
         prefix = _CATEGORY_PREFIXES.get(category, "")
         if user_input is not None:
             other = [w for w in self._tracked_wallets if not w.startswith(prefix)]
@@ -284,7 +296,7 @@ class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_create_entry(
             title="",
             data={
-                CONF_TRACKED_ASSETS: self._tracked_assets,
-                CONF_TRACKED_WALLETS: self._tracked_wallets,
+                CONF_TRACKED_ASSETS: self._tracked_assets or [],
+                CONF_TRACKED_WALLETS: self._tracked_wallets or [],
             },
         )

@@ -15,7 +15,7 @@ from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -45,6 +45,8 @@ def _get_wallet_balance(coordinator_data: dict, category: str, symbol: str) -> s
         fiat_data = coordinator_data.get("fiat_wallets", {})
         if "data" in fiat_data:
             for wallet in fiat_data["data"]:
+                if "attributes" not in wallet:
+                    continue
                 if wallet["attributes"].get("fiat_symbol") == symbol:
                     return wallet["attributes"].get("balance")
         return None
@@ -65,10 +67,14 @@ def _get_wallet_balance(coordinator_data: dict, category: str, symbol: str) -> s
         sub_data = category_data.get(sub_category)
         if sub_data and "attributes" in sub_data and "wallets" in sub_data["attributes"]:
             for wallet in sub_data["attributes"]["wallets"]:
+                if "attributes" not in wallet:
+                    continue
                 if wallet["attributes"].get("cryptocoin_symbol") == symbol:
                     return wallet["attributes"].get("balance")
     elif isinstance(category_data, dict) and "attributes" in category_data:
         for wallet in category_data["attributes"].get("wallets", []):
+            if "attributes" not in wallet:
+                continue
             if wallet["attributes"].get("cryptocoin_symbol") == symbol:
                 return wallet["attributes"].get("balance")
 
@@ -146,7 +152,13 @@ class BitpandaPriceSensor(CoordinatorEntity, SensorEntity):
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator, config_entry, asset, currency):
+    def __init__(
+        self,
+        coordinator: DataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        asset: str,
+        currency: str,
+    ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._asset = asset
@@ -162,9 +174,7 @@ class BitpandaPriceSensor(CoordinatorEntity, SensorEntity):
     async def async_added_to_hass(self) -> None:
         """Start 24h change tracking after entity is added."""
         await super().async_added_to_hass()
-        # Initial query
         await self._async_update_24h_change()
-        # Schedule recurring update every 15 minutes
         self.async_on_remove(
             async_track_time_interval(
                 self.hass,
@@ -214,17 +224,24 @@ class BitpandaPriceSensor(CoordinatorEntity, SensorEntity):
     @property
     def suggested_display_precision(self) -> int:
         """Return the suggested display precision based on actual decimal places."""
-        value = self.native_value
-        if value is None or value == 0:
+        if not (self.coordinator.data and self._asset in self.coordinator.data):
             return 2
 
-        if self.coordinator.data and self._asset in self.coordinator.data:
-            price_data = self.coordinator.data[self._asset]
-            if self._currency in price_data:
-                original_value = str(price_data[self._currency])
-                if '.' in original_value:
-                    decimal_places = len(original_value.split('.')[1])
-                    return min(decimal_places, 8)
+        price_data = self.coordinator.data[self._asset]
+        if self._currency not in price_data:
+            return 2
+
+        raw = str(price_data[self._currency])
+        try:
+            value = float(raw)
+        except (ValueError, TypeError):
+            return 2
+
+        if value == 0:
+            return 2
+
+        if "." in raw:
+            return min(len(raw.split(".")[1]), 8)
 
         if value >= 10:
             return 2
@@ -269,12 +286,12 @@ class BitpandaWalletSensor(CoordinatorEntity, SensorEntity):
 
     def __init__(
         self,
-        wallet_coordinator,
-        price_coordinator,
-        config_entry,
-        wallet_id,
-        currency,
-    ):
+        wallet_coordinator: DataUpdateCoordinator,
+        price_coordinator: DataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        wallet_id: str,
+        currency: str,
+    ) -> None:
         """Initialize the sensor."""
         super().__init__(wallet_coordinator)
         self._price_coordinator = price_coordinator
@@ -312,7 +329,7 @@ class BitpandaWalletSensor(CoordinatorEntity, SensorEntity):
 
         price = _get_asset_price(self._price_coordinator.data, self._symbol, self._currency)
         if price is None:
-            return balance
+            return None
 
         try:
             return float(balance) * float(price)
@@ -343,12 +360,12 @@ class BitpandaPortfolioSensor(CoordinatorEntity, SensorEntity):
 
     def __init__(
         self,
-        wallet_coordinator,
-        price_coordinator,
-        config_entry,
+        wallet_coordinator: DataUpdateCoordinator,
+        price_coordinator: DataUpdateCoordinator,
+        config_entry: ConfigEntry,
         tracked_wallets: list[str],
         currency: str,
-    ):
+    ) -> None:
         """Initialize the portfolio sensor."""
         super().__init__(wallet_coordinator)
         self._price_coordinator = price_coordinator

@@ -43,14 +43,6 @@ class BitpandaApiClient:
         """Get fiat wallets."""
         return await self._request(f"{API_BASE_URL}/fiatwallets", headers=self._headers)
 
-    async def async_test_connection(self) -> bool:
-        """Test the API connection."""
-        try:
-            await self.async_get_fiat_wallets()
-            return True
-        except Exception:
-            return False
-
     async def get_available_currencies(self) -> list[str]:
         """Get available currencies from ticker."""
         try:

@@ -1,5 +1,7 @@
 """The Bitpanda integration."""
 import logging
+import time
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -24,11 +26,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Bitpanda from a config entry."""
     api_key = entry.data[CONF_API_KEY]
     currency = entry.data[CONF_CURRENCY]
-    
     session = async_get_clientsession(hass)
     client = BitpandaApiClient(api_key, session)
 
-    # Create coordinators for different update intervals
     async def async_update_prices():
         """Fetch price data from API."""
         try:
@@ -77,13 +77,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
-    # Register refresh service (only once, even if entry is reloaded)
     if not hass.services.has_service(DOMAIN, "refresh"):
+        _last_refresh: dict[str, float] = {"time": 0.0}
+        _REFRESH_COOLDOWN = 10.0
+
         async def handle_refresh(call: ServiceCall) -> None:
             """Trigger a manual refresh of all Bitpanda data."""
+            now = time.monotonic()
+            if now - _last_refresh["time"] < _REFRESH_COOLDOWN:
+                remaining = _REFRESH_COOLDOWN - (now - _last_refresh["time"])
+                _LOGGER.debug(
+                    "Refresh cooldown active, ignoring call (%.1fs remaining)", remaining
+                )
+                return
+            _last_refresh["time"] = now
             for entry_data in hass.data[DOMAIN].values():
                 await entry_data["price_coordinator"].async_request_refresh()
                 await entry_data["wallet_coordinator"].async_request_refresh()
@@ -97,11 +106,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)
-
-        # Remove service when no entries remain
         if not hass.data[DOMAIN]:
             hass.services.async_remove(DOMAIN, "refresh")
-
     return unload_ok
 
 

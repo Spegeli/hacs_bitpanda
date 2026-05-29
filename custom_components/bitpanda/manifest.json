@@ -1,21 +1,15 @@
 {
   "domain": "bitpanda",
   "name": "Bitpanda",
-  "after_dependencies": [
-    "recorder"
-  ],
-  "codeowners": [
-    "@spegeli"
-  ],
+  "after_dependencies": ["recorder"],
+  "codeowners": ["@spegeli"],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/Spegeli/hacs_bitpanda",
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/Spegeli/hacs_bitpanda/issues",
-  "requirements": [
-    "aiohttp>=3.8.0"
-  ],
+  "requirements": ["aiohttp>=3.8.0"],
   "single_config_entry": true,
-  "version": "2026.05.28"
+  "version": "2026.05.17"
 }

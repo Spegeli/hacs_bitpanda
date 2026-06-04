@@ -174,7 +174,9 @@ class BitpandaPriceSensor(CoordinatorEntity, SensorEntity):
     async def async_added_to_hass(self) -> None:
         """Start 24h change tracking after entity is added."""
         await super().async_added_to_hass()
+        # Initial query
         await self._async_update_24h_change()
+        # Schedule recurring update every 15 minutes
         self.async_on_remove(
             async_track_time_interval(
                 self.hass,
@@ -321,7 +323,8 @@ class BitpandaWalletSensor(CoordinatorEntity, SensorEntity):
         if balance is None:
             return None
 
-        if self._category == "fiat":
+        # Fiat and index wallets: balance is already in the target currency
+        if self._category == "fiat" or self._category.startswith("index"):
             try:
                 return float(balance)
             except (ValueError, TypeError):
@@ -402,7 +405,8 @@ class BitpandaPortfolioSensor(CoordinatorEntity, SensorEntity):
                 continue
 
             try:
-                if category == "fiat":
+                # Fiat and index wallets: balance is already in the target currency
+                if category == "fiat" or category.startswith("index"):
                     total += float(balance)
                     has_value = True
                 else:
@@ -430,7 +434,8 @@ class BitpandaPortfolioSensor(CoordinatorEntity, SensorEntity):
                 continue
 
             try:
-                if category == "fiat":
+                # Fiat and index wallets: balance is already in the target currency
+                if category == "fiat" or category.startswith("index"):
                     breakdown[symbol] = round(float(balance), 2)
                 else:
                     price = _get_asset_price(

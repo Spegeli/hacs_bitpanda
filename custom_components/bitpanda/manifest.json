@@ -11,5 +11,5 @@
   "issue_tracker": "https://github.com/Spegeli/hacs_bitpanda/issues",
   "requirements": ["aiohttp>=3.8.0"],
   "single_config_entry": true,
-  "version": "2026.05.29"
+  "version": "2026.06.04"
 }

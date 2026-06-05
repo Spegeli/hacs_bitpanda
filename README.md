@@ -25,7 +25,7 @@ A custom <a href="https://www.home-assistant.io/">Home Assistant</a> integration
 
 ### Wallet Monitor
 - Displays the current value of your Bitpanda wallets in your selected currency
-- Supports crypto wallets, metal wallets, commodity wallets, index wallets and fiat wallets
+- Supports crypto wallets, metal wallets, index wallets and fiat wallets
 - Wallet values update automatically whenever the price changes
 - Raw coin/token balance always available as entity attribute
 

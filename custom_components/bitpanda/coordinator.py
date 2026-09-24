@@ -9,14 +9,16 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import BitpandaApiClient, BitpandaApiError
+from .api import BitpandaApiClient, BitpandaApiError, BitpandaAuthError
 from .const import (
     DOMAIN,
+    EARN_UPDATE_INTERVAL,
     EUR_CURRENCY_ID,
     HOURLY_READ_BUDGET,
     PORTFOLIO_UPDATE_INTERVAL,
     PRICE_BUDGET_SHARE,
     PRICE_UPDATE_INTERVAL_BASE,
+    REWARDS_UPDATE_INTERVAL,
 )
 from .fx import derive_rate
 
@@ -273,3 +275,129 @@ class PriceCoordinator(DataUpdateCoordinator[dict]):
             )
 
         return prices
+
+
+@dataclass
+class RewardTotals:
+    """Lifetime Earn rewards for one asset, in that asset's own units."""
+
+    gross: float = 0.0
+    fee: float = 0.0
+    net: float = 0.0
+    count: int = 0
+    last_at: str | None = None
+
+
+def map_earn_configs(configs: list[dict]) -> dict[str, float]:
+    """Map asset id to annual percentage rate.
+
+    The rate is a JSON number and a fraction: 0.0544 means 5.44 %. Sold-out
+    products keep their rate — `soldout` and `enabled` are separate flags.
+    """
+    out: dict[str, float] = {}
+    for config in configs:
+        asset_id = config.get("asset_id")
+        rate = config.get("annual_percentage_rate")
+        if asset_id and isinstance(rate, (int, float)):
+            out[asset_id] = float(rate)
+    return out
+
+
+def sum_rewards(operations: list[dict]) -> dict[str, RewardTotals]:
+    """Aggregate staking rewards per asset.
+
+    Only `operation_type == "reward"` with `wallet_owner == "staking-service"`
+    counts. `earn_on_fiat_reward` is Cash Plus interest, a different product.
+    The operation_type enum is open — 29 values were seen in a single account —
+    so anything unrecognised is ignored rather than raising.
+
+    The fee is charged in the reward asset and is not a fixed rate: recent
+    payouts showed exactly 20 % while lifetime aggregates sat near 17 %. Always
+    read `fee_amount`.
+    """
+    totals: dict[str, RewardTotals] = {}
+
+    for operation in operations:
+        if operation.get("operation_type") != "reward":
+            continue
+        for tx in operation.get("transactions", []):
+            if tx.get("wallet_owner") != "staking-service":
+                continue
+            asset_id = tx.get("asset_id")
+            gross = _to_float(tx.get("asset_amount"))
+            if not asset_id or gross is None:
+                continue
+            fee = _to_float(tx.get("fee_amount")) or 0.0
+
+            entry = totals.setdefault(asset_id, RewardTotals())
+            entry.gross += gross
+            entry.fee += fee
+            entry.net += gross - fee
+            entry.count += 1
+
+            credited = tx.get("credited_at")
+            if credited and (entry.last_at is None or credited > entry.last_at):
+                entry.last_at = credited
+
+    return totals
+
+
+class EarnCoordinator(DataUpdateCoordinator[dict]):
+    """Polls the Earn product catalog once a day."""
+
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, client: BitpandaApiClient
+    ) -> None:
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN}_earn",
+            update_interval=EARN_UPDATE_INTERVAL,
+            config_entry=entry,
+        )
+        self._client = client
+
+    async def _async_update_data(self) -> dict[str, float]:
+        try:
+            return map_earn_configs(await self._client.async_get_earn_configs())
+        except BitpandaApiError as err:
+            raise UpdateFailed(str(err)) from None
+
+
+class RewardsCoordinator(DataUpdateCoordinator[dict]):
+    """Aggregates Earn rewards from the operation history.
+
+    Requires a key with all read scopes. A portfolio-capable key returns 401,
+    in which case this coordinator reports no data and sets `unauthorized`,
+    leaving every other part of the integration working.
+    """
+
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, client: BitpandaApiClient
+    ) -> None:
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN}_rewards",
+            update_interval=REWARDS_UPDATE_INTERVAL,
+            config_entry=entry,
+        )
+        self._client = client
+        self.unauthorized = False
+
+    async def _async_update_data(self) -> dict[str, RewardTotals]:
+        if self.unauthorized:
+            return {}
+        try:
+            operations = await self._client.async_get_operations()
+        except BitpandaAuthError:
+            self.unauthorized = True
+            _LOGGER.info(
+                "Earn reward totals unavailable: the API key lacks the scope "
+                "required for operation history. Every other feature is "
+                "unaffected."
+            )
+            return {}
+        except BitpandaApiError as err:
+            raise UpdateFailed(str(err)) from None
+        return sum_rewards(operations)

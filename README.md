@@ -19,7 +19,8 @@ A custom <a href="https://www.home-assistant.io/">Home Assistant</a> integration
 ### Price Tracker
 - Live prices for any of the 14,051 supported assets — crypto, stocks, ETFs, ETCs, Bitpanda Crypto Indices and tokenized precious metals
 - Supports 12 display currencies: CHF, CZK, DKK, EUR, GBP, HUF, NOK, PLN, RON, SEK, TRY, USD
-- Updates every 60 seconds; the interval stretches automatically above 30 tracked assets you do not hold, to stay inside Bitpanda's 3,000-requests-per-hour limit
+- If you hold the asset, its price is derived from your portfolio value and updates every 5 minutes, together with your wallet balances
+- If you don't hold the asset, its price is fetched every 60 seconds; above 30 such tracked assets the interval stretches automatically, to stay inside Bitpanda's 3,000-requests-per-hour limit
 - Every price carries exactly 8 decimals from the API; the sensor's displayed precision is derived from the price's magnitude, not from the raw string
 - 24h price change (`change_24h_pct`) available as entity attribute, powered by the Home Assistant recorder
 
@@ -139,7 +140,7 @@ This release moves to Bitpanda's new Public API and adds Earn data. If you're up
 2. Update the integration through HACS and restart Home Assistant
 3. **Reload the browser tab** (`Ctrl+F5` / `Cmd+Shift+R`) — skipping this can leave the integration's dialogs showing raw translation keys like `missing_scopes` from your browser's cached texts
 4. Home Assistant shows **Reauthentication required** for the Bitpanda integration — open it and paste the new key
-5. What is kept: tracked assets, entity IDs, history, dashboards and automations. What changes: fiat wallet sensors (such as "EUR Wallet") are no longer created — the leftover entity shows as `unavailable` and can be deleted; the balance is now the Portfolio Total sensor's `cash` attribute
+5. What is kept: tracked assets, entity IDs, history, dashboards and automations. What changes: fiat wallet sensors (such as "EUR Wallet") are no longer created — the leftover entity shows as `unavailable` and can be deleted; the balance is now the Portfolio Total sensor's `cash` attribute; and price sensors for assets you hold now update every 5 minutes instead of every 60 seconds, since they are derived from the portfolio rather than a separate ticker call — assets you don't hold are unaffected
 
 ---
 

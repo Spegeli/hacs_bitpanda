@@ -42,15 +42,18 @@ Everything lives in `custom_components/bitpanda/`:
 
 | File | Responsibility |
 |---|---|
-| `__init__.py` | Setup/unload, the two coordinators, the `bitpanda.refresh` service |
+| `__init__.py` | Setup/unload, v1→v2 entity-registry migration, the five coordinators, the `bitpanda.refresh` service |
 | `api.py` | `BitpandaApiClient` — all HTTP calls |
+| `assets.py` | `AssetResolver` — symbol/id resolution, legacy wallet-id lookup for migration |
+| `coordinator.py` | The five `DataUpdateCoordinator`s: Portfolio, Price, Earn, Rewards, History |
+| `fx.py` | Derives the non-EUR conversion rate from the user's own portfolio |
 | `sensor.py` | Price, wallet and portfolio sensors |
 | `config_flow.py` | Setup flow and options flow |
-| `const.py` | Domain, API URL, update intervals, categories |
+| `const.py` | Domain, API URL, required scopes, update intervals, currency defaults |
 | `diagnostics.py` | Config entry diagnostics |
 | `strings.json`, `translations/` | UI strings |
 
-Two `DataUpdateCoordinator` instances handle polling: prices every 60 seconds, wallets every 5 minutes. Add new API reads to an existing coordinator rather than polling from a sensor.
+Five `DataUpdateCoordinator` instances handle polling: Portfolio and History every 5 minutes, Price every 60 seconds for assets you don't hold (an asset you do hold is priced from the Portfolio coordinator's own data, so effectively every 5 minutes — see coordinator.py's PriceCoordinator), Earn every 24 hours, Rewards every hour. Add new API reads to an existing coordinator rather than polling from a sensor.
 
 ## Things that are easy to get wrong
 
@@ -68,7 +71,7 @@ Two `DataUpdateCoordinator` instances handle polling: prices every 60 seconds, w
 
 `strings.json` is the source of truth. `translations/en.json` must mirror it exactly, and every other language file must have the same key structure.
 
-To add a language, copy `translations/en.json` to `translations/<code>.json` and translate the values. Keep the emoji prefixes in the options menu (`📈`, `🪙`, `💶`, `🪨`, `📊`, `💾`) so the menu stays visually consistent.
+To add a language, copy `translations/en.json` to `translations/<code>.json` and translate the values. Keep the emoji prefixes in the options menu (`📈` Add price tracker, `🪙` Add wallet, `🗑️` Remove tracked items, `💾` Save) so the menu stays visually consistent.
 
 ## Code style
 

@@ -2,15 +2,18 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+from .const import CHANGE_24H_UPDATE_INTERVAL, DOMAIN
 from .coordinator import PortfolioData, RewardTotals
 
 _LOGGER = logging.getLogger(__name__)
@@ -154,3 +157,129 @@ class BitpandaWalletSensor(CoordinatorEntity, SensorEntity):
             apr=(self._earn.data or {}).get(self._asset_id),
             rewards=(self._rewards.data or {}).get(self._asset_id),
         )
+
+
+def display_precision(value: float | None) -> int:
+    """Return decimals to display for a price.
+
+    Derived from magnitude, never from the price string. Every price the API
+    returns has exactly 8 decimals — `90.93000000` for a stock, `0.00000032`
+    for a micro-cap — so counting them yields 8 for everything.
+    """
+    if value is None or value == 0:
+        return 2
+    magnitude = abs(value)
+    if magnitude >= 10:
+        return 2
+    if magnitude >= 1:
+        return 4
+    if magnitude >= 0.1:
+        return 5
+    if magnitude >= 0.001:
+        return 6
+    if magnitude >= 0.0001:
+        return 7
+    return 8
+
+
+class BitpandaPriceSensor(CoordinatorEntity, SensorEntity):
+    """Live price of one asset in the display currency."""
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self, price_coordinator, portfolio_coordinator, config_entry,
+        asset: dict, currency: str,
+    ) -> None:
+        super().__init__(price_coordinator)
+        self._portfolio = portfolio_coordinator
+        self._asset = asset
+        self._asset_id = asset["id"]
+        self._currency = currency
+        self._attr_name = f"{asset['symbol']}/{currency}"
+        self._attr_unique_id = (
+            f"{config_entry.entry_id}_{self._asset_id}_price_{currency}"
+        )
+        self._attr_device_class = SensorDeviceClass.MONETARY
+        self._attr_native_unit_of_measurement = currency
+        self._attr_icon = "mdi:chart-line"
+        self._attr_device_info = _price_tracker_device_info(config_entry)
+        self._price_24h_ago: float | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Start 24h change tracking after entity is added."""
+        await super().async_added_to_hass()
+        # Initial query
+        await self._async_update_24h_change()
+        # Schedule recurring update
+        self.async_on_remove(
+            async_track_time_interval(
+                self.hass,
+                self._async_update_24h_change,
+                CHANGE_24H_UPDATE_INTERVAL,
+            )
+        )
+
+    async def _async_update_24h_change(self, _=None) -> None:
+        """Query the recorder for this sensor's value from ~24h ago."""
+        try:
+            from homeassistant.components.recorder import get_instance
+            from homeassistant.components.recorder.history import (
+                get_significant_states,
+            )
+
+            now = dt_util.utcnow()
+            start = now - timedelta(hours=24, minutes=5)
+            end = now - timedelta(hours=23, minutes=55)
+
+            instance = get_instance(self.hass)
+            history = await instance.async_add_executor_job(
+                get_significant_states,
+                self.hass,
+                start,
+                end,
+                [self.entity_id],
+            )
+            entity_states = history.get(self.entity_id, [])
+            if entity_states:
+                self._price_24h_ago = float(entity_states[-1].state)
+        except Exception as err:
+            _LOGGER.debug(
+                "Could not fetch 24h history for %s: %s", self.entity_id, err
+            )
+
+    @property
+    def native_value(self) -> float | None:
+        return (self.coordinator.data or {}).get(self._asset_id)
+
+    @property
+    def suggested_display_precision(self) -> int:
+        return display_precision(self.native_value)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        attrs: dict[str, Any] = {
+            "asset": self._asset.get("symbol"),
+            "asset_name": self._asset.get("name"),
+            "trading_pair": f"{self._asset.get('symbol')}/{self._currency}",
+        }
+        portfolio = self._portfolio.data
+        if portfolio and self._currency != "EUR":
+            if portfolio.rate is None:
+                attrs["conversion"] = (
+                    "unavailable - price shown in EUR because no holding "
+                    "exists to derive a rate from"
+                )
+            else:
+                attrs["conversion_rate"] = round(portfolio.rate, 8)
+                attrs["conversion_source"] = "bitpanda-portfolio"
+
+        if self._price_24h_ago is not None:
+            current = self.native_value
+            if current is not None and self._price_24h_ago > 0:
+                attrs["change_24h_pct"] = round(
+                    (current - self._price_24h_ago) / self._price_24h_ago * 100, 2
+                )
+                attrs["price_24h_ago"] = self._price_24h_ago
+
+        return attrs

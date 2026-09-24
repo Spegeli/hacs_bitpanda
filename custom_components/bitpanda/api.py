@@ -64,6 +64,14 @@ class BitpandaApiClient:
         except asyncio.TimeoutError:
             _LOGGER.error("Timeout for %s", path)
             raise BitpandaApiError(f"Timeout for {path}") from None
+        except ValueError:
+            # json.JSONDecodeError subclasses ValueError. Without this the
+            # exception escapes to Home Assistant's coordinator, whose final
+            # handler calls logger.exception() — exc_info=True through this
+            # integration's own logger, which is exactly what the API-key rule
+            # forbids.
+            _LOGGER.error("Malformed JSON from %s", path)
+            raise BitpandaApiError(f"Malformed JSON from {path}") from None
 
     async def _paginate(self, path: str, params: dict[str, Any]) -> list[dict]:
         """Collect every page of a cursor-paginated endpoint.
@@ -80,7 +88,7 @@ class BitpandaApiClient:
             if cursor:
                 params["cursor"] = cursor
             body = await self._request(path, params)
-            for item in body.get("data", []):
+            for item in body.get("data") or []:
                 key = item.get("id")
                 if key is None:
                     key = item.get("operation_id")
@@ -103,7 +111,7 @@ class BitpandaApiClient:
     async def async_get_currencies(self) -> list[dict]:
         """List all fiat currencies. Not paginated."""
         body = await self._request("/currencies")
-        return body.get("data", [])
+        return body.get("data") or []
 
     async def async_get_assets(
         self,
@@ -131,7 +139,7 @@ class BitpandaApiClient:
         was probed and is silently ignored, so none is sent.
         """
         body = await self._request(f"/tickers/{asset_id}")
-        return body.get("data", {})
+        return body.get("data") or {}
 
     async def async_get_portfolio(
         self, *, equivalent_currency_id: str | None = None
@@ -146,7 +154,7 @@ class BitpandaApiClient:
         if equivalent_currency_id:
             params["equivalent_currency_id"] = equivalent_currency_id
         body = await self._request("/portfolio", params or None)
-        return body.get("data", [])
+        return body.get("data") or []
 
     async def async_get_portfolio_history(
         self,
@@ -164,7 +172,7 @@ class BitpandaApiClient:
         if equivalent_currency_id:
             params["equivalent_currency_id"] = equivalent_currency_id
         body = await self._request("/portfolio-history", params)
-        return body.get("data", {})
+        return body.get("data") or {}
 
     async def async_get_earn_configs(self) -> list[dict]:
         """Available Earn products and their rates.

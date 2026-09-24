@@ -1,8 +1,9 @@
 """Tests for ticker, portfolio and portfolio history."""
 import aiohttp
+import pytest
 from aioresponses import aioresponses
 
-from custom_components.bitpanda.api import BitpandaApiClient
+from custom_components.bitpanda.api import BitpandaApiClient, BitpandaApiError
 from custom_components.bitpanda.const import API_BASE_URL, EUR_CURRENCY_ID
 
 
@@ -81,3 +82,22 @@ async def test_get_portfolio_history_defaults_to_day():
             )
             result = await client.async_get_portfolio_history()
     assert result["return_percentage"] == -0.64
+
+
+async def test_malformed_json_becomes_an_api_error():
+    async with aiohttp.ClientSession() as session:
+        client = BitpandaApiClient("key", session)
+        with aioresponses() as m:
+            m.get(f"{API_BASE_URL}/portfolio", body="not json{",
+                  content_type="application/json")
+            with pytest.raises(BitpandaApiError):
+                await client.async_get_portfolio()
+
+
+async def test_null_data_becomes_an_empty_result():
+    """dict.get's default does not apply to a present-but-null key."""
+    async with aiohttp.ClientSession() as session:
+        client = BitpandaApiClient("key", session)
+        with aioresponses() as m:
+            m.get(f"{API_BASE_URL}/portfolio", payload={"data": None})
+            assert await client.async_get_portfolio() == []

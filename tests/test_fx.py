@@ -37,6 +37,12 @@ def test_derive_rate_uses_available_not_balance():
     assert abs(rate - 11.25987633) < 1e-9
 
 
+def test_derive_rate_uses_available_not_balance_on_base_side():
+    """A base-side bug reading `balance` would halve the rate here."""
+    rate = derive_rate([_fiat("0.02", "0.0125")], [_fiat("0.01", "0.025")])
+    assert abs(rate - 2.0) < 1e-9
+
+
 def test_derive_rate_returns_none_without_fiat_entry():
     assert derive_rate([_asset()], [_asset()]) is None
 
@@ -47,3 +53,14 @@ def test_derive_rate_returns_none_on_zero_base():
 
 def test_derive_rate_returns_none_on_unparsable_value():
     assert derive_rate([_fiat("0.01", "x")], [_fiat("0.01", "0.02")]) is None
+
+
+def test_derive_rate_returns_none_on_non_finite_base():
+    """float() parses "nan" and "inf" happily; they must not reach the division."""
+    for bad in ("nan", "inf", "-inf"):
+        assert derive_rate([_fiat("0.01", bad)], [_fiat("0.01", "0.02")]) is None
+
+
+def test_derive_rate_returns_none_on_non_finite_target():
+    for bad in ("nan", "inf", "-inf"):
+        assert derive_rate([_fiat("0.01", "0.01")], [_fiat("0.01", bad)]) is None

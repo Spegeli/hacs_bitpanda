@@ -10,6 +10,7 @@ non-EUR currencies landed within 0.57 % from a balance of 0.01 EUR.
 from __future__ import annotations
 
 import logging
+import math
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,6 +47,13 @@ def derive_rate(
         target_value = float(target["available_balance"]["value"])
     except (KeyError, TypeError, ValueError):
         _LOGGER.debug("Could not read available_balance for rate derivation")
+        return None
+
+    # float() accepts "nan", "inf" and "-inf" without raising, so the except
+    # above never sees them. Left unguarded they sail past `== 0` and produce
+    # a nan or 0.0 rate that would be published as a sensor value.
+    if not math.isfinite(base_value) or not math.isfinite(target_value):
+        _LOGGER.debug("Non-finite available_balance; cannot derive a rate")
         return None
 
     if base_value == 0:

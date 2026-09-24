@@ -6,7 +6,8 @@ import time
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import (
@@ -68,6 +69,87 @@ def legacy_symbol(wallet_id: str) -> str:
     return wallet_id
 
 
+def v2_unique_id(
+    unique_id: str,
+    entry_id: str,
+    price_map: dict[str, str],
+    wallet_map: dict[str, str],
+) -> str | None:
+    """Map a version 1 entity unique_id to its version 2 form.
+
+    Returns None when the entity needs no change (the portfolio sensor), when
+    it belongs to another config entry, or when its asset did not resolve.
+
+    The wallet check runs before the price check: a wallet unique_id is
+    `f"{entry_id}_wallet_{wallet_id}"`, and `wallet_id` itself can start with
+    "wallet_" (`index_wallet_BCI5`'s stored id is `index_wallet_BCI5`), but it
+    never contains the literal substring "_price_", so there is no ambiguity
+    the other way around.
+    """
+    wallet_prefix = f"{entry_id}_wallet_"
+    if unique_id.startswith(wallet_prefix):
+        raw_wallet_id = unique_id[len(wallet_prefix):]
+        new_id = wallet_map.get(raw_wallet_id)
+        return f"{wallet_prefix}{new_id}" if new_id is not None else None
+
+    # rpartition, not split: the symbol half (the head) can itself contain
+    # underscores ("SOME_TOKEN"), and only the last "_price_" is the real
+    # separator.
+    head, sep, currency = unique_id.rpartition("_price_")
+    entry_prefix = f"{entry_id}_"
+    if sep and head.startswith(entry_prefix):
+        symbol = head[len(entry_prefix):]
+        new_id = price_map.get(symbol)
+        if new_id is not None:
+            return f"{entry_id}_{new_id}_price_{currency}"
+
+    return None
+
+
+async def _migrate_entity_registry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    price_map: dict[str, str],
+    wallet_map: dict[str, str],
+) -> None:
+    """Rewrite this entry's entity registry unique_ids from v1 to v2 form.
+
+    Only unique_id changes; entity_id is untouched by
+    `async_migrate_entries`/`async_update_entity`. That is what keeps
+    recorder history, dashboard cards and automations pointed at the same
+    entity across the upgrade instead of Home Assistant creating an orphaned
+    duplicate (see task-18-fix1-brief.md).
+    """
+    ent_reg = er.async_get(hass)
+
+    @callback
+    def _entry_callback(reg_entry: er.RegistryEntry) -> dict[str, str] | None:
+        new_unique_id = v2_unique_id(
+            reg_entry.unique_id, entry.entry_id, price_map, wallet_map
+        )
+        if new_unique_id is None:
+            return None
+        colliding_entity_id = ent_reg.async_get_entity_id(
+            reg_entry.domain, DOMAIN, new_unique_id
+        )
+        if colliding_entity_id is not None:
+            # Only on a genuine first migration can this not happen -- v2
+            # entities are created by setup, which runs after migration. Log
+            # entity_ids only, never entry.data, and move on rather than
+            # letting async_update_entity's ValueError crash migration for
+            # this one odd installation.
+            _LOGGER.warning(
+                "Skipping unique_id migration for %s: %s already uses the "
+                "target unique_id",
+                reg_entry.entity_id,
+                colliding_entity_id,
+            )
+            return None
+        return {"new_unique_id": new_unique_id}
+
+    await er.async_migrate_entries(hass, entry.entry_id, _entry_callback)
+
+
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate a config entry from version 1 to version 2.
 
@@ -96,8 +178,17 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     resolver = AssetResolver(client, {})
 
-    async def _resolve_all(values: list[str], strip_prefix: bool) -> list[str]:
-        out: list[str] = []
+    async def _resolve_all(values: list[str], strip_prefix: bool) -> dict[str, str]:
+        """Resolve each raw version-1 value to its asset UUID.
+
+        Keyed by the RAW value (the bare symbol for tracked_assets, the whole
+        prefixed wallet id for tracked_wallets) rather than the stripped
+        symbol, because that raw value is exactly what a version-1 entity's
+        unique_id embeds and what the registry migration below looks up.
+        Insertion order is preserved, which is what lets the options lists
+        below be rebuilt with `dict.fromkeys` instead of a second pass.
+        """
+        out: dict[str, str] = {}
         for value in values:
             sym = legacy_symbol(value) if strip_prefix else value
             asset = await resolver.async_resolve(sym)
@@ -108,7 +199,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     sym,
                 )
                 continue
-            out.append(asset["id"])
+            out[value] = asset["id"]
         return out
 
     options = dict(entry.options)
@@ -118,10 +209,10 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         currency_id = next(
             (c["id"] for c in currencies if c["symbol"] == symbol), EUR_CURRENCY_ID
         )
-        new_tracked_assets = await _resolve_all(
+        price_map = await _resolve_all(
             options.get(CONF_TRACKED_ASSETS, []), strip_prefix=False
         )
-        new_tracked_wallets = await _resolve_all(
+        wallet_map = await _resolve_all(
             options.get(CONF_TRACKED_WALLETS, []), strip_prefix=True
         )
     except BitpandaAuthError:
@@ -146,12 +237,21 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         return False
 
+    # Registry before entry, deliberately. If the registry step below raised,
+    # an entry already bumped to version 2 would never see migration run
+    # again, orphaning every entity that had not been rewritten yet. Doing it
+    # first means a partial failure here leaves the entry at version 1 --
+    # migration retries in full on the next start, and is idempotent, because
+    # entities already rewritten to version 2 no longer match `v2_unique_id`'s
+    # version-1 patterns.
+    await _migrate_entity_registry(hass, entry, price_map, wallet_map)
+
     hass.config_entries.async_update_entry(
         entry,
         data={**entry.data, CONF_CURRENCY_ID: currency_id},
         options={
-            CONF_TRACKED_ASSETS: new_tracked_assets,
-            CONF_TRACKED_WALLETS: new_tracked_wallets,
+            CONF_TRACKED_ASSETS: list(dict.fromkeys(price_map.values())),
+            CONF_TRACKED_WALLETS: list(dict.fromkeys(wallet_map.values())),
             CONF_ASSET_CACHE: resolver.as_dict(),
         },
         version=2,

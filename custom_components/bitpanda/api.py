@@ -123,3 +123,45 @@ class BitpandaApiClient:
         if asset_id:
             params["id"] = asset_id
         return await self._paginate("/assets", params)
+
+    async def async_get_ticker(self, asset_id: str) -> dict:
+        """Current price for one asset.
+
+        Always returns EUR. Every currency parameter that could plausibly exist
+        was probed and is silently ignored, so none is sent.
+        """
+        body = await self._request(f"/tickers/{asset_id}")
+        return body.get("data", {})
+
+    async def async_get_portfolio(
+        self, *, equivalent_currency_id: str | None = None
+    ) -> list[dict]:
+        """All non-zero holdings.
+
+        The list mixes two shapes. Asset entries carry `asset_id` and
+        `currency_balance`; fiat entries carry `currency_id` and no
+        `currency_balance`. Branch on the presence of `asset_id`.
+        """
+        params: dict[str, Any] = {}
+        if equivalent_currency_id:
+            params["equivalent_currency_id"] = equivalent_currency_id
+        body = await self._request("/portfolio", params or None)
+        return body.get("data", [])
+
+    async def async_get_portfolio_history(
+        self,
+        *,
+        timeframe: str = "DAY",
+        equivalent_currency_id: str | None = None,
+    ) -> dict:
+        """Portfolio value series and the return over the selected window.
+
+        `timeframe` is one of DAY, WEEK, MONTH, SIX_MONTH, YEAR. It is absent
+        from the published documentation but is validated server-side: an
+        unknown value returns 400.
+        """
+        params: dict[str, Any] = {"timeframe": timeframe}
+        if equivalent_currency_id:
+            params["equivalent_currency_id"] = equivalent_currency_id
+        body = await self._request("/portfolio-history", params)
+        return body.get("data", {})

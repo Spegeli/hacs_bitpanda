@@ -4,3 +4,9 @@ pytest-asyncio>=0.24.0
 # HTTP through homeassistant's own AiohttpClientMocker, which ships inside this
 # package, so there is no separate mocking library to keep in step with aiohttp.
 pytest-homeassistant-custom-component>=0.13.316
+# Declared explicitly although the line above pulls it in today. The
+# stuck-cursor pagination test is guarded by @pytest.mark.timeout, and an
+# undeclared transitive dependency that later disappears would turn that
+# marker into a silent no-op — the test would hang the suite instead of
+# failing. pytest.ini sets --strict-markers so its absence errors loudly.
+pytest-timeout>=2.4.0

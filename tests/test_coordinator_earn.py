@@ -1,6 +1,11 @@
 """Tests for earn APR mapping and reward aggregation."""
+import pytest
+from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.update_coordinator import UpdateFailed
+
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaAuthError
 from custom_components.bitpanda.coordinator import (
+    EarnCoordinator,
     RewardsCoordinator,
     _is_later,
     map_earn_configs,
@@ -161,40 +166,53 @@ async def test_rewards_coordinator_returns_totals_from_operations():
     data = await coordinator._async_update_data()
 
     assert data["vsn"].gross == 1.0
-    assert coordinator.unauthorized is False
 
 
-async def test_rewards_coordinator_latches_unauthorized_on_401():
-    """A 401 must set `unauthorized` and return empty without raising.
-
-    Once latched, a later cycle must return empty without issuing another
-    request — the rest of the integration keeps working for a key that
-    cannot read /operations.
+async def test_rewards_coordinator_raises_config_entry_auth_failed_on_401():
+    """Task 21 requires every scope at setup, so a 401 here means the key
+    expired, was revoked, or predates that requirement (a migrated legacy
+    key). Every case is answered by a new key, so this must raise
+    ConfigEntryAuthFailed and let Home Assistant start the reauth flow --
+    not degrade silently, which is what this coordinator used to do.
     """
     client = _FakeClient(error=BitpandaAuthError("Unauthorized for /operations"))
     coordinator = RewardsCoordinator(hass=None, entry=None, client=client)
 
-    first = await coordinator._async_update_data()
-
-    assert first == {}
-    assert coordinator.unauthorized is True
-    assert client.calls == 1
-
-    second = await coordinator._async_update_data()
-
-    assert second == {}
-    assert client.calls == 1
+    with pytest.raises(ConfigEntryAuthFailed):
+        await coordinator._async_update_data()
 
 
 async def test_rewards_coordinator_raises_update_failed_on_other_errors():
     client = _FakeClient(error=BitpandaApiError("simulated outage"))
     coordinator = RewardsCoordinator(hass=None, entry=None, client=client)
 
-    try:
+    with pytest.raises(UpdateFailed):
         await coordinator._async_update_data()
-    except Exception as err:  # noqa: BLE001 - asserting the HA type below
-        from homeassistant.helpers.update_coordinator import UpdateFailed
 
-        assert isinstance(err, UpdateFailed)
-    else:
-        raise AssertionError("expected UpdateFailed")
+
+# ---------------------------------------------------------------------------
+# EarnCoordinator._async_update_data
+# ---------------------------------------------------------------------------
+
+
+class _FakeEarnClient:
+    """Fake API client with a controllable async_get_earn_configs."""
+
+    def __init__(self, configs=None, error=None):
+        self._configs = configs or []
+        self._error = error
+
+    async def async_get_earn_configs(self):
+        if self._error is not None:
+            raise self._error
+        return self._configs
+
+
+async def test_earn_coordinator_raises_config_entry_auth_failed_on_401():
+    client = _FakeEarnClient(
+        error=BitpandaAuthError("Unauthorized for /earn/configs")
+    )
+    coordinator = EarnCoordinator(hass=None, entry=None, client=client)
+
+    with pytest.raises(ConfigEntryAuthFailed):
+        await coordinator._async_update_data()

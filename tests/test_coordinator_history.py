@@ -3,11 +3,12 @@ import asyncio
 
 import pytest
 from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from custom_components.bitpanda.api import BitpandaApiClient
+from custom_components.bitpanda.api import BitpandaApiClient, BitpandaAuthError
 from custom_components.bitpanda.const import API_BASE_URL, PORTFOLIO_TIMEFRAMES
-from custom_components.bitpanda.coordinator import collect_returns
+from custom_components.bitpanda.coordinator import HistoryCoordinator, collect_returns
 
 
 async def test_collect_returns_one_entry_per_timeframe():
@@ -88,3 +89,58 @@ async def test_collect_returns_is_quiet_when_history_is_genuinely_empty():
             client = BitpandaApiClient("key", session)
             result = await collect_returns(client, None)
     assert result == {}
+
+
+async def test_collect_returns_reraises_auth_error_instead_of_counting_it():
+    """An auth error must propagate immediately, not be treated as one of
+    five failed timeframes -- otherwise a 401 on every timeframe reads as
+    "No portfolio history could be fetched" (UpdateFailed) instead of the
+    BitpandaAuthError the coordinator needs to start reauth.
+
+    Only the first timeframe is registered, with a 401. If the
+    implementation kept looping past it instead of re-raising, the next
+    request would hit an unregistered URL and this test would fail for a
+    different reason, which is exactly the point of leaving it unregistered
+    (see test_api_scopes.py for the same technique).
+    """
+    with mock_aiohttp_client() as mocker:
+        mocker.get(
+            f"{API_BASE_URL}/portfolio-history?"
+            f"timeframe={PORTFOLIO_TIMEFRAMES[0]}",
+            status=401,
+        )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            with pytest.raises(BitpandaAuthError):
+                await collect_returns(client, None)
+
+
+# ---------------------------------------------------------------------------
+# HistoryCoordinator._async_update_data
+#
+# Same construction trick as PriceCoordinator (see test_coordinator_price.py):
+# DataUpdateCoordinator.__init__ only stores `hass`, so hass=None/entry=None
+# is enough to drive _async_update_data() directly.
+# ---------------------------------------------------------------------------
+
+
+class _FakeClient:
+    """Fake API client whose async_get_portfolio_history always fails alike."""
+
+    def __init__(self, error):
+        self._error = error
+
+    async def async_get_portfolio_history(
+        self, *, timeframe, equivalent_currency_id=None
+    ):
+        raise self._error
+
+
+async def test_history_coordinator_raises_config_entry_auth_failed_on_401():
+    client = _FakeClient(BitpandaAuthError("Unauthorized for /portfolio-history"))
+    coordinator = HistoryCoordinator(
+        hass=None, entry=None, client=client, currency_id=None
+    )
+
+    with pytest.raises(ConfigEntryAuthFailed):
+        await coordinator._async_update_data()

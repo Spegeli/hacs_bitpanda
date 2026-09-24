@@ -25,7 +25,6 @@ def build_diagnostics(
     prices,
     earn,
     rewards,
-    rewards_unauthorized: bool,
     history,
 ) -> dict[str, Any]:
     """Assemble the diagnostics payload. The API key never appears."""
@@ -63,7 +62,6 @@ def build_diagnostics(
             "rewards": {
                 "last_update_success": rewards.last_update_success,
                 "assets_with_rewards": len(rewards.data or {}),
-                "unauthorized": rewards_unauthorized,
             },
             "history": {
                 "last_update_success": history.last_update_success,
@@ -85,6 +83,5 @@ async def async_get_config_entry_diagnostics(
         prices=store["price_coordinator"],
         earn=store["earn_coordinator"],
         rewards=store["rewards_coordinator"],
-        rewards_unauthorized=store["rewards_coordinator"].unauthorized,
         history=store["history_coordinator"],
     )

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
@@ -126,6 +127,58 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 }
             ),
+        )
+
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        placeholders: dict[str, str] = {"api_key_url": API_KEY_URL}
+        if user_input is not None:
+            api_key = user_input[CONF_API_KEY].strip()
+            errors, extra = await self._async_validate_key(api_key)
+            placeholders.update(extra)
+            if not errors:
+                return self.async_update_reload_and_abort(
+                    self._get_reauth_entry(), data_updates={CONF_API_KEY: api_key}
+                )
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_API_KEY): cv.string}),
+            errors=errors,
+            description_placeholders=placeholders,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Replace the stored key. The currency is fixed once set.
+
+        Changing it would change every sensor's unit and break long-term
+        statistics, and the currency step already tells the user it cannot be
+        changed after setup.
+        """
+        errors: dict[str, str] = {}
+        placeholders: dict[str, str] = {"api_key_url": API_KEY_URL}
+        if user_input is not None:
+            api_key = user_input[CONF_API_KEY].strip()
+            errors, extra = await self._async_validate_key(api_key)
+            placeholders.update(extra)
+            if not errors:
+                return self.async_update_reload_and_abort(
+                    self._get_reconfigure_entry(),
+                    data_updates={CONF_API_KEY: api_key},
+                )
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema({vol.Required(CONF_API_KEY): cv.string}),
+            errors=errors,
+            description_placeholders=placeholders,
         )
 
     @staticmethod

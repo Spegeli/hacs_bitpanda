@@ -23,25 +23,10 @@ def test_api_key_is_never_included():
         prices=_Coordinator({}),
         earn=_Coordinator({}),
         rewards=_Coordinator({}),
-        rewards_unauthorized=False,
         history=_Coordinator({}),
     )
     assert "super-secret" not in repr(result)
     assert result["config"]["api_key"] == "**REDACTED**"
-
-
-def test_reports_rewards_scope_problem():
-    result = build_diagnostics(
-        entry_data={"api_key": "k", "currency": "EUR"},
-        options={"tracked_assets": [], "tracked_wallets": [], "asset_cache": {}},
-        portfolio=_Coordinator(None),
-        prices=_Coordinator({}),
-        earn=_Coordinator({}),
-        rewards=_Coordinator({}),
-        rewards_unauthorized=True,
-        history=_Coordinator({}),
-    )
-    assert result["coordinators"]["rewards"]["unauthorized"] is True
 
 
 # --- Fix round 1 --------------------------------------------------------
@@ -84,7 +69,6 @@ def test_portfolio_truthy_branches_with_real_dataclasses():
         prices=_Coordinator({}),
         earn=_Coordinator({}),
         rewards=_Coordinator({}),
-        rewards_unauthorized=False,
         history=_Coordinator({}),
     )
     assert result["coordinators"]["portfolio"]["holdings_count"] == 2
@@ -110,7 +94,6 @@ def test_redaction_survives_extra_entry_data_fields():
         prices=_Coordinator({}),
         earn=_Coordinator({}),
         rewards=_Coordinator({}),
-        rewards_unauthorized=False,
         history=_Coordinator({}),
     )
     assert "super-secret" not in repr(result)
@@ -135,7 +118,6 @@ async def test_async_get_config_entry_diagnostics_reads_the_real_store(hass):
         },
     )
     rewards = _Coordinator({})
-    rewards.unauthorized = False
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "portfolio_coordinator": _Coordinator(None),
         "price_coordinator": _Coordinator({}),
@@ -158,4 +140,4 @@ async def test_async_get_config_entry_diagnostics_reads_the_real_store(hass):
         "rewards",
         "history",
     }
-    assert result["coordinators"]["rewards"]["unauthorized"] is False
+    assert "unauthorized" not in result["coordinators"]["rewards"]

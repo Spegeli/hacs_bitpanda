@@ -14,6 +14,20 @@
         "data": {
           "currency": "Währung"
         }
+      },
+      "reauth_confirm": {
+        "title": "Neuer Bitpanda API-Schlüssel nötig",
+        "description": "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen, oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht. Erstelle unter [{api_key_url}]({api_key_url}) einen neuen Schlüssel mit Guthaben, Transaktion und Earn (Read) und füge ihn hier ein. Deine Assets und Sensoren bleiben erhalten.",
+        "data": {
+          "api_key": "API-Schlüssel"
+        }
+      },
+      "reconfigure": {
+        "title": "Bitpanda API-Schlüssel ersetzen",
+        "description": "Füge einen neuen Schlüssel von [{api_key_url}]({api_key_url}) ein. Er braucht Guthaben, Transaktion und Earn (Read). Deine Assets und Sensoren bleiben erhalten.",
+        "data": {
+          "api_key": "API-Schlüssel"
+        }
       }
     },
     "error": {
@@ -22,6 +36,10 @@
       "rate_limited": "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
       "cannot_connect": "Verbindung fehlgeschlagen",
       "unknown": "Unerwarteter Fehler"
+    },
+    "abort": {
+      "reauth_successful": "Der API-Schlüssel wurde aktualisiert.",
+      "reconfigure_successful": "Der API-Schlüssel wurde ersetzt."
     }
   },
   "options": {

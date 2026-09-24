@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import BitpandaApiClient, BitpandaApiError, BitpandaAuthError
@@ -144,6 +145,8 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
                     equivalent_currency_id=EUR_CURRENCY_ID
                 )
                 rate = derive_rate(eur_entries, entries)
+        except BitpandaAuthError:
+            raise ConfigEntryAuthFailed("Bitpanda rejected the API key") from None
         except BitpandaApiError as err:
             raise UpdateFailed(str(err)) from None
         return parse_portfolio(entries, rate=rate)
@@ -384,6 +387,8 @@ class EarnCoordinator(DataUpdateCoordinator[dict]):
     async def _async_update_data(self) -> dict[str, float]:
         try:
             return map_earn_configs(await self._client.async_get_earn_configs())
+        except BitpandaAuthError:
+            raise ConfigEntryAuthFailed("Bitpanda rejected the API key") from None
         except BitpandaApiError as err:
             raise UpdateFailed(str(err)) from None
 
@@ -391,9 +396,11 @@ class EarnCoordinator(DataUpdateCoordinator[dict]):
 class RewardsCoordinator(DataUpdateCoordinator[dict]):
     """Aggregates Earn rewards from the operation history.
 
-    Requires a key with all read scopes. A portfolio-capable key returns 401,
-    in which case this coordinator reports no data and sets `unauthorized`,
-    leaving every other part of the integration working.
+    Requires a key with all read scopes. Task 21 already requires every scope
+    at setup, so a 401 here means the key expired, was revoked, or predates
+    that requirement (a migrated legacy key) -- each case is answered by a new
+    key, so it raises ConfigEntryAuthFailed the same as every other
+    coordinator, instead of degrading silently.
     """
 
     def __init__(
@@ -407,21 +414,12 @@ class RewardsCoordinator(DataUpdateCoordinator[dict]):
             config_entry=entry,
         )
         self._client = client
-        self.unauthorized = False
 
     async def _async_update_data(self) -> dict[str, RewardTotals]:
-        if self.unauthorized:
-            return {}
         try:
             operations = await self._client.async_get_operations()
         except BitpandaAuthError:
-            self.unauthorized = True
-            _LOGGER.info(
-                "Earn reward totals unavailable: the API key lacks the scope "
-                "required for operation history. Every other feature is "
-                "unaffected."
-            )
-            return {}
+            raise ConfigEntryAuthFailed("Bitpanda rejected the API key") from None
         except BitpandaApiError as err:
             raise UpdateFailed(str(err)) from None
         return sum_rewards(operations)
@@ -433,7 +431,12 @@ async def collect_returns(
     """Fetch return_percentage for every timeframe.
 
     One request per timeframe — there is no combined call. A failure on one
-    window is logged and skipped so the others still report.
+    window is logged and skipped so the others still report. An auth error is
+    different: it will not resolve by trying the next timeframe, so it
+    propagates immediately instead of being counted as one of five failures --
+    otherwise five 401s would read as "No portfolio history could be
+    fetched" (an UpdateFailed) and the caller would never see the
+    BitpandaAuthError it needs to start reauth.
     """
     out: dict[str, float] = {}
     failures = 0
@@ -442,6 +445,8 @@ async def collect_returns(
             body = await client.async_get_portfolio_history(
                 timeframe=timeframe, equivalent_currency_id=currency_id
             )
+        except BitpandaAuthError:
+            raise
         except BitpandaApiError:
             failures += 1
             _LOGGER.debug("No history for timeframe %s this cycle", timeframe)
@@ -487,4 +492,7 @@ class HistoryCoordinator(DataUpdateCoordinator[dict]):
         self._currency_id = currency_id
 
     async def _async_update_data(self) -> dict[str, float]:
-        return await collect_returns(self._client, self._currency_id)
+        try:
+            return await collect_returns(self._client, self._currency_id)
+        except BitpandaAuthError:
+            raise ConfigEntryAuthFailed("Bitpanda rejected the API key") from None

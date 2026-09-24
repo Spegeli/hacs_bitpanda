@@ -282,10 +282,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # setup, so they refresh without raising ConfigEntryNotReady -- unlike
     # async_config_entry_first_refresh(), plain async_refresh() never raises
     # it, even on total failure; it only marks last_update_success False. A
-    # rewards key without the required scope is not even a failure here:
-    # RewardsCoordinator catches that itself, latches `unauthorized` and
-    # returns an empty result, so last_update_success stays True and every
-    # other sensor keeps working.
+    # 401 from any of them is different: DataUpdateCoordinator._async_refresh
+    # catches the ConfigEntryAuthFailed each coordinator raises for it and
+    # calls config_entry.async_start_reauth_if_available(hass) itself, so the
+    # reauth prompt appears even though only portfolio and prices went
+    # through async_config_entry_first_refresh() above.
     await earn.async_refresh()
     await rewards.async_refresh()
     await history.async_refresh()

@@ -1,5 +1,13 @@
 """Tests for portfolio normalisation."""
-from custom_components.bitpanda.coordinator import parse_portfolio
+import pytest
+from homeassistant.exceptions import ConfigEntryAuthFailed
+
+from custom_components.bitpanda.api import BitpandaAuthError
+from custom_components.bitpanda.const import EUR_CURRENCY_ID
+from custom_components.bitpanda.coordinator import (
+    PortfolioCoordinator,
+    parse_portfolio,
+)
 
 
 def _asset_entry(asset_id, balance, available, value, ret_pct="10.5"):
@@ -84,3 +92,41 @@ def test_parse_skips_unparsable_entry_without_raising():
            "available_balance": {"value": "1"}}
     data = parse_portfolio([bad, _asset_entry("a2", "1", "1", "3.00")], rate=None)
     assert set(data.holdings) == {"a2"}
+
+
+# ---------------------------------------------------------------------------
+# PortfolioCoordinator._async_update_data
+#
+# Same construction trick as PriceCoordinator (see test_coordinator_price.py):
+# DataUpdateCoordinator.__init__ only stores `hass`, so hass=None/entry=None
+# is enough to drive _async_update_data() directly, without a running Home
+# Assistant instance.
+# ---------------------------------------------------------------------------
+
+
+class _FakeClient:
+    """Fake API client whose async_get_portfolio can be made to fail."""
+
+    def __init__(self, error=None):
+        self._error = error
+
+    async def async_get_portfolio(self, *, equivalent_currency_id=None):
+        if self._error is not None:
+            raise self._error
+        return []
+
+
+async def test_portfolio_coordinator_raises_config_entry_auth_failed_on_401():
+    """A BitpandaAuthError must become ConfigEntryAuthFailed, not UpdateFailed.
+
+    DataUpdateCoordinator._async_refresh only starts the reauth flow for this
+    specific exception type (see homeassistant/helpers/update_coordinator.py,
+    the `except ConfigEntryAuthFailed` branch, and task-22-report.md).
+    """
+    client = _FakeClient(error=BitpandaAuthError("Unauthorized for /portfolio"))
+    coordinator = PortfolioCoordinator(
+        hass=None, entry=None, client=client, currency_id=EUR_CURRENCY_ID
+    )
+
+    with pytest.raises(ConfigEntryAuthFailed):
+        await coordinator._async_update_data()

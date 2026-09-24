@@ -1,5 +1,5 @@
 """Tests for the config and options flow."""
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant import config_entries, data_entry_flow
@@ -327,3 +327,202 @@ async def test_remove_step_can_remove_a_tracked_id_missing_from_cache(hass):
 
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     assert result["data"]["tracked_assets"] == []
+
+
+# --- Reauth flow -------------------------------------------------------
+#
+# Triggered automatically when a coordinator's plain async_refresh() meets
+# ConfigEntryAuthFailed (see coordinator.py and __init__.py). Replaces the
+# key in place -- tracked assets, entity_ids and history all survive, unlike
+# deleting and re-adding the entry.
+#
+# A successful reauth/reconfigure calls async_update_reload_and_abort, which
+# schedules a real config entry reload as a background task
+# (ConfigEntries.async_schedule_reload). Left alone that would exercise this
+# integration's real async_setup_entry -- and a real network call -- from
+# inside a unit test, so it is patched to a no-op for the two "valid key"
+# tests below. What is under test here is this flow's own data mutation and
+# abort reason, not Home Assistant's own already-tested reload mechanism.
+
+_NO_RELOAD = patch(
+    "homeassistant.config_entries.ConfigEntries.async_schedule_reload", MagicMock()
+)
+
+
+async def test_reauth_confirm_initial_form_carries_api_key_url(hass):
+    entry = _mock_entry()
+    entry.add_to_hass(hass)
+
+    result = await entry.start_reauth_flow(hass)
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "reauth_confirm"
+    assert result["description_placeholders"]["api_key_url"] == API_KEY_URL
+
+
+async def test_reauth_confirm_missing_scopes_reshows_form_without_leaking_key(
+    hass, caplog
+):
+    entry = _mock_entry()
+    entry.add_to_hass(hass)
+    result = await entry.start_reauth_flow(hass)
+
+    secret = "totally-secret-reauth-key"
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient."
+        "async_missing_scopes",
+        AsyncMock(return_value=["earn"]),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": secret}
+        )
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "reauth_confirm"
+    assert result["errors"]["base"] == "missing_scopes"
+    assert result["description_placeholders"]["api_key_url"] == API_KEY_URL
+    assert result["description_placeholders"]["missing_scopes"] == "Earn (Read)"
+    # A rejected key must not change what is stored.
+    assert entry.data["api_key"] == "key"
+    assert entry.options == {
+        "tracked_assets": [],
+        "tracked_wallets": [],
+        "asset_cache": {},
+    }
+    # The key must never reach a title, a log line, or a placeholder.
+    assert secret not in entry.title
+    assert secret not in repr(result["description_placeholders"])
+    assert secret not in caplog.text
+
+
+async def test_reauth_confirm_valid_key_updates_entry_and_aborts(hass):
+    entry = _mock_entry()
+    entry.add_to_hass(hass)
+    result = await entry.start_reauth_flow(hass)
+
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient."
+        "async_missing_scopes",
+        AsyncMock(return_value=[]),
+    ), _NO_RELOAD:
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": "  new-key  \n"}
+        )
+
+    assert result["type"] == data_entry_flow.FlowResultType.ABORT
+    assert result["reason"] == "reauth_successful"
+    assert entry.data["api_key"] == "new-key"
+    # Only the key changes.
+    assert entry.data["currency"] == "EUR"
+    assert entry.data["currency_id"] == _EUR_ID
+    assert entry.options == {
+        "tracked_assets": [],
+        "tracked_wallets": [],
+        "asset_cache": {},
+    }
+    assert "new-key" not in entry.title
+
+
+# --- Reconfigure flow ----------------------------------------------------
+#
+# User-initiated from the entry's menu, otherwise the same shape as reauth.
+# The currency step is skipped entirely -- reconfigure only ever replaces
+# the key; the currency step itself already tells the user it cannot be
+# changed after setup.
+
+
+async def test_reconfigure_initial_form_carries_api_key_url(hass):
+    entry = _mock_entry()
+    entry.add_to_hass(hass)
+
+    result = await entry.start_reconfigure_flow(hass)
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+    assert result["description_placeholders"]["api_key_url"] == API_KEY_URL
+
+
+async def test_reconfigure_missing_scopes_reshows_form_without_leaking_key(
+    hass, caplog
+):
+    entry = _mock_entry()
+    entry.add_to_hass(hass)
+    result = await entry.start_reconfigure_flow(hass)
+
+    secret = "totally-secret-reconfigure-key"
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient."
+        "async_missing_scopes",
+        AsyncMock(return_value=["earn"]),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": secret}
+        )
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+    assert result["errors"]["base"] == "missing_scopes"
+    assert result["description_placeholders"]["api_key_url"] == API_KEY_URL
+    assert entry.data["api_key"] == "key"
+    assert entry.options == {
+        "tracked_assets": [],
+        "tracked_wallets": [],
+        "asset_cache": {},
+    }
+    assert secret not in entry.title
+    assert secret not in repr(result["description_placeholders"])
+    assert secret not in caplog.text
+
+
+async def test_reconfigure_valid_key_updates_entry_and_aborts(hass):
+    entry = _mock_entry()
+    entry.add_to_hass(hass)
+    result = await entry.start_reconfigure_flow(hass)
+
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient."
+        "async_missing_scopes",
+        AsyncMock(return_value=[]),
+    ), _NO_RELOAD:
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": "  new-key  \n"}
+        )
+
+    assert result["type"] == data_entry_flow.FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data["api_key"] == "new-key"
+    # The currency is fixed: reconfigure changes only the key.
+    assert entry.data["currency"] == "EUR"
+    assert entry.data["currency_id"] == _EUR_ID
+    assert entry.options == {
+        "tracked_assets": [],
+        "tracked_wallets": [],
+        "asset_cache": {},
+    }
+    assert "new-key" not in entry.title
+
+
+# --- user step: error re-render keeps the api_key_url placeholder --------
+#
+# Home Assistant's frontend substitutes description_placeholders into both
+# a step's description and any shown error string (confirmed in the frontend
+# source -- see task-22-report.md). A step that forgets to carry a
+# placeholder through an error re-render would show the user the literal
+# text "{api_key_url}" instead of a working link.
+
+
+async def test_user_step_error_rerender_keeps_api_key_url_placeholder(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient."
+        "async_missing_scopes",
+        AsyncMock(return_value=["earn"]),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": "partial"}
+        )
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["errors"]["base"] == "missing_scopes"
+    assert result["description_placeholders"]["api_key_url"] == API_KEY_URL

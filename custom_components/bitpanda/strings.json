@@ -14,6 +14,20 @@
         "data": {
           "currency": "Currency"
         }
+      },
+      "reauth_confirm": {
+        "title": "New Bitpanda API key needed",
+        "description": "Bitpanda rejected the stored API key. It may have expired, or it predates the permissions this version needs. Create a new key at [{api_key_url}]({api_key_url}) with Guthaben (Balance), Transaktion (Transaction) and Earn (Read), and paste it here. Your tracked assets and sensors are kept.",
+        "data": {
+          "api_key": "API Key"
+        }
+      },
+      "reconfigure": {
+        "title": "Replace Bitpanda API key",
+        "description": "Paste a new key from [{api_key_url}]({api_key_url}). It needs Guthaben (Balance), Transaktion (Transaction) and Earn (Read). Your tracked assets and sensors are kept.",
+        "data": {
+          "api_key": "API Key"
+        }
       }
     },
     "error": {
@@ -22,6 +36,10 @@
       "rate_limited": "Too many requests. Wait a moment and try again.",
       "cannot_connect": "Failed to connect",
       "unknown": "Unexpected error"
+    },
+    "abort": {
+      "reauth_successful": "The API key was updated.",
+      "reconfigure_successful": "The API key was replaced."
     }
   },
   "options": {

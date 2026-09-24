@@ -1,14 +1,20 @@
 """Tests for the config and options flow."""
 import json
+from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+import voluptuous as vol
 from homeassistant import config_entries, data_entry_flow
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.bitpanda.api import BitpandaAuthError, BitpandaRateLimitError
+from custom_components.bitpanda.api import (
+    BitpandaApiError,
+    BitpandaAuthError,
+    BitpandaRateLimitError,
+)
 from custom_components.bitpanda.const import API_KEY_URL, DOMAIN
 from custom_components.bitpanda.coordinator import Holding, PortfolioData
 
@@ -38,6 +44,22 @@ def _select_options(schema, key: str) -> list[dict]:
     for marker, validator in schema.schema.items():
         if marker == key:
             return validator.config["options"]
+    raise KeyError(key)
+
+
+def _select_mode(schema, key: str) -> str | None:
+    """Pull the `mode` back out of a field's SelectSelector, if any."""
+    for marker, validator in schema.schema.items():
+        if marker == key:
+            return validator.config.get("mode")
+    raise KeyError(key)
+
+
+def _select_marker(schema, key: str):
+    """Return the voluptuous marker (`vol.Required`/`vol.Optional`) itself."""
+    for marker in schema.schema:
+        if marker == key:
+            return marker
     raise KeyError(key)
 
 
@@ -231,6 +253,15 @@ async def test_add_asset_category_step_lists_only_that_categorys_assets_minus_tr
     assert result["step_id"] == "add_asset"
     options = _select_options(result["data_schema"], "assets")
     assert options == [{"value": "uuid-btc", "label": "Bitcoin / BTC"}]
+    # Searchable dropdown, not an unsearchable checkbox list (mode="list"
+    # renders one ha-checkbox per option with no search at all) -- and never
+    # pre-filled with a first option a user might not notice unticking
+    # (task-23-review.md, findings 1 and 2).
+    assert _select_mode(result["data_schema"], "assets") == "dropdown"
+    marker = _select_marker(result["data_schema"], "assets")
+    assert isinstance(marker, vol.Optional)
+    assert not isinstance(marker, vol.Required)
+    assert marker.default() == []
 
 
 async def test_add_asset_submitting_two_ids_appends_both_and_persists_cache(hass):
@@ -386,6 +417,168 @@ async def test_add_asset_rate_limit_maps_to_rate_limited(hass):
     assert result["errors"]["base"] == "rate_limited"
 
 
+async def test_add_asset_plain_api_error_maps_to_cannot_connect(hass):
+    """Only BitpandaAuthError/BitpandaRateLimitError were caught before -- a
+    5xx, timeout or undecodable body raised a plain BitpandaApiError that
+    escaped the step entirely (task-23-review.md, finding 3).
+    """
+    result = await _open_menu_step(hass, _mock_entry(), "add_asset")
+
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_list_assets",
+        AsyncMock(side_effect=BitpandaApiError("HTTP 503")),
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"category": "crypto"}
+        )
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "add_asset"
+    assert result["errors"]["base"] == "cannot_connect"
+
+
+async def test_add_asset_empty_category_shows_no_assets_available(hass):
+    """A category whose every asset is already tracked (four metals, nine
+    indices in the real catalogue) must not be a dead end
+    (task-23-review.md, finding 2).
+    """
+    entry = _mock_entry(tracked_assets=["uuid-btc"])
+    result = await _open_menu_step(hass, entry, "add_asset")
+
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_list_assets",
+        AsyncMock(return_value=[_btc()]),
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"category": "crypto"}
+        )
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "add_asset"
+    assert result["errors"]["base"] == "no_assets_available"
+
+    # The escape hatch: an empty submit from here must still reach the menu.
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"assets": []}
+    )
+    assert result["type"] == data_entry_flow.FlowResultType.MENU
+
+
+async def test_add_asset_empty_submit_after_error_reaches_menu_with_earlier_changes_intact(
+    hass,
+):
+    """Never an escaping exception and never a retry-only dead end: every
+    error re-renders the add_asset form with the same optional, empty
+    field, so submitting it empty always reaches the menu -- without
+    touching the network again, and without discarding what an earlier,
+    successful step in the same session already added (task-23-review.md,
+    finding 3).
+    """
+    entry = _mock_entry(asset_cache={"uuid-btc": _btc()})
+    entry.add_to_hass(hass)
+    _store_with_holdings(
+        hass, entry,
+        {"uuid-btc": Holding(asset_id="uuid-btc", balance=1.0, available=1.0,
+                             staked=0.0, value=100.0)},
+    )
+
+    # A successful add_wallet earlier in this same session.
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "add_wallet"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"wallets": ["uuid-btc"]}
+    )
+    assert result["type"] == data_entry_flow.FlowResultType.MENU
+
+    # Then add_asset hits a persistent error.
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "add_asset"}
+    )
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_list_assets",
+        AsyncMock(side_effect=BitpandaApiError("HTTP 503")),
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"category": "crypto"}
+        )
+    assert result["errors"]["base"] == "cannot_connect"
+
+    # Submitting that error form empty reaches the menu with no further
+    # network access, and the wallet added earlier is still there.
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"assets": []}
+    )
+    assert result["type"] == data_entry_flow.FlowResultType.MENU
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "save"}
+    )
+    assert result["data"]["tracked_wallets"] == ["uuid-btc"]
+    assert result["data"]["tracked_assets"] == []
+
+
+async def test_add_asset_category_listing_refetches_after_24_hours(hass):
+    """Complements test_add_asset_category_listing_is_cached_for_24_hours:
+    that one proves a repeat within the window is free; this one proves the
+    cache actually expires rather than being fresh forever
+    (task-23-review.md, finding 5, mutation d1). Time is moved by editing the
+    cached timestamp directly rather than sleeping or mocking the clock.
+    """
+    entry = _mock_entry()
+    entry.add_to_hass(hass)
+    mock_list = AsyncMock(return_value=[_btc()])
+
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_list_assets",
+        mock_list,
+    ):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"next_step_id": "add_asset"}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"category": "crypto"}
+        )
+        assert mock_list.call_count == 1
+
+        store = hass.data[f"{DOMAIN}_asset_catalogue"]
+        cached_at, cached_assets = store["crypto"]
+        store["crypto"] = (cached_at - timedelta(hours=24, minutes=1), cached_assets)
+
+        result2 = await hass.config_entries.options.async_init(entry.entry_id)
+        result2 = await hass.config_entries.options.async_configure(
+            result2["flow_id"], {"next_step_id": "add_asset"}
+        )
+        result2 = await hass.config_entries.options.async_configure(
+            result2["flow_id"], {"category": "crypto"}
+        )
+
+    assert mock_list.call_count == 2
+
+
+async def test_add_asset_category_cache_lives_outside_hass_data_domain(hass):
+    """The catalogue cache must live under its own hass.data key, never
+    inside hass.data[DOMAIN]: __init__.py's refresh service iterates
+    hass.data[DOMAIN].values() expecting only per-entry stores, and its
+    unload handler treats an empty hass.data[DOMAIN] as "last entry gone"
+    (task-23-review.md, finding 12, mutation x4).
+    """
+    result = await _open_menu_step(hass, _mock_entry(), "add_asset")
+
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_list_assets",
+        AsyncMock(return_value=[_btc()]),
+    ):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"], {"category": "crypto"}
+        )
+
+    assert "crypto" not in hass.data.get(DOMAIN, {})
+    assert "crypto" in hass.data[f"{DOMAIN}_asset_catalogue"]
+
+
 # --- Options flow: add_wallet ------------------------------------------------
 #
 # The list is built from holdings, never typed -- a wallet id is always the
@@ -424,6 +617,13 @@ async def test_add_wallet_lists_holdings_minus_tracked_ids(hass):
     assert result["step_id"] == "add_wallet"
     options = _select_options(result["data_schema"], "wallets")
     assert options == [{"value": "uuid-btc", "label": "Bitcoin / BTC"}]
+    # Searchable dropdown, not an unsearchable checkbox list, and never
+    # pre-filled with a first option (task-23-review.md, findings 1 and 2).
+    assert _select_mode(result["data_schema"], "wallets") == "dropdown"
+    marker = _select_marker(result["data_schema"], "wallets")
+    assert isinstance(marker, vol.Optional)
+    assert not isinstance(marker, vol.Required)
+    assert marker.default() == []
 
 
 async def test_add_wallet_submitting_appends_and_returns_to_menu(hass):
@@ -473,6 +673,41 @@ async def test_add_wallet_looks_up_a_held_id_missing_from_cache_once(hass):
     mock_get_assets.assert_called_once_with(asset_id="uuid-btc")
     options = _select_options(result["data_schema"], "wallets")
     assert options == [{"value": "uuid-btc", "label": "Bitcoin / BTC"}]
+
+
+async def test_add_wallet_persists_a_looked_up_record_to_asset_cache_on_save(hass):
+    """Without this, setup silently skips the new wallet sensor with "no
+    cached record" -- the render looks the record up and remembers it, but
+    that is only useful if it also survives to `save` (task-23-review.md,
+    finding 5, mutations x5/x6).
+    """
+    entry = _mock_entry(asset_cache={})
+    entry.add_to_hass(hass)
+    _store_with_holdings(
+        hass, entry,
+        {"uuid-btc": Holding(asset_id="uuid-btc", balance=1.0, available=1.0,
+                             staked=0.0, value=100.0)},
+    )
+
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_get_assets",
+        AsyncMock(return_value=[_btc()]),
+    ):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"next_step_id": "add_wallet"}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"wallets": ["uuid-btc"]}
+        )
+
+    assert result["type"] == data_entry_flow.FlowResultType.MENU
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "save"}
+    )
+
+    assert result["data"]["tracked_wallets"] == ["uuid-btc"]
+    assert result["data"]["asset_cache"]["uuid-btc"]["id"] == "uuid-btc"
 
 
 async def test_add_wallet_with_everything_tracked_shows_no_wallets_available(hass):
@@ -542,6 +777,32 @@ async def test_add_wallet_rate_limit_maps_to_rate_limited(hass):
     assert result["errors"]["base"] == "rate_limited"
 
 
+async def test_add_wallet_plain_api_error_maps_to_cannot_connect(hass):
+    """Only BitpandaAuthError/BitpandaRateLimitError were caught before -- a
+    5xx, timeout or undecodable body from the /portfolio fallback or an
+    /assets?id= lookup raised a plain BitpandaApiError that escaped the
+    step entirely. From the menu, that made Home Assistant close the whole
+    dialog and discard the session (task-23-review.md, finding 3).
+    """
+    entry = _mock_entry()
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_get_portfolio",
+        AsyncMock(side_effect=BitpandaApiError("HTTP 503")),
+    ):
+        result = await _open_menu_step(hass, entry, "add_wallet")
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "add_wallet"
+    assert result["errors"]["base"] == "cannot_connect"
+
+    # The escape hatch: an empty submit from here must still reach the menu,
+    # with no further network access.
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"wallets": []}
+    )
+    assert result["type"] == data_entry_flow.FlowResultType.MENU
+
+
 # --- No leftover free-text surface -------------------------------------------
 
 
@@ -606,7 +867,33 @@ async def test_remove_step_offers_a_tracked_id_missing_from_cache(hass):
 
     assert result["step_id"] == "remove"
     options = _select_options(result["data_schema"], "tracked_assets")
-    assert {"value": "uuid-ghost", "label": "uuid-ghost (other)"} in options
+    assert {"value": "uuid-ghost", "label": "uuid-ghost"} in options
+
+
+async def test_remove_step_labels_options_with_asset_label(hass):
+    """`remove` used to label every option "SYMBOL (category)", so the two
+    stock families this task deliberately lists side by side (Accenture PLC
+    / Accenture, both ACN) were indistinguishable there too
+    (task-23-review.md, finding 7).
+    """
+    accenture_plc = {
+        "id": "id-equity", "symbol": "ACN", "name": "Accenture PLC",
+        "isin": "IE00B4BNMY34",
+    }
+    accenture = {
+        "id": "id-security", "symbol": "ACN", "name": "Accenture",
+        "isin": "IE00B4BNMY34",
+    }
+    entry = _mock_entry(
+        tracked_assets=["id-equity", "id-security"],
+        asset_cache={"id-equity": accenture_plc, "id-security": accenture},
+    )
+    result = await _open_menu_step(hass, entry, "remove")
+
+    options = _select_options(result["data_schema"], "tracked_assets")
+    labels = {o["value"]: o["label"] for o in options}
+    assert labels["id-equity"] == "Accenture PLC / ACN / IE00B4BNMY34"
+    assert labels["id-security"] == "Accenture / ACN / IE00B4BNMY34"
 
 
 async def test_remove_step_can_remove_a_tracked_id_missing_from_cache(hass):

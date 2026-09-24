@@ -85,8 +85,10 @@
     },
     "error": {
       "no_wallets_available": "Every asset you hold is already tracked.",
+      "no_assets_available": "Every asset in this category is already tracked.",
       "invalid_auth": "Your API key was rejected. Check it in your Bitpanda account settings.",
-      "rate_limited": "Too many requests. Wait a moment and try again."
+      "rate_limited": "Too many requests. Wait a moment and try again.",
+      "cannot_connect": "Could not reach Bitpanda. Try again later."
     }
   },
   "selector": {

@@ -85,8 +85,10 @@
     },
     "error": {
       "no_wallets_available": "Alle Assets, die du besitzt, werden bereits verfolgt.",
+      "no_assets_available": "Alle Assets dieser Kategorie werden bereits verfolgt.",
       "invalid_auth": "Dein API-Key wurde abgelehnt. Prüfe ihn in deinen Bitpanda-Kontoeinstellungen.",
-      "rate_limited": "Zu viele Anfragen. Warte einen Moment und versuche es erneut."
+      "rate_limited": "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
+      "cannot_connect": "Bitpanda nicht erreichbar. Versuche es später erneut."
     }
   },
   "selector": {

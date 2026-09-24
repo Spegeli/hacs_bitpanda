@@ -81,17 +81,24 @@ class BitpandaApiClient:
                 params["cursor"] = cursor
             body = await self._request(path, params)
             for item in body.get("data", []):
-                key = item.get("id") or item.get("operation_id")
-                if key is not None and key in seen:
-                    continue
+                key = item.get("id")
+                if key is None:
+                    key = item.get("operation_id")
                 if key is not None:
+                    if key in seen:
+                        continue
                     seen.add(key)
                 out.append(item)
             if not body.get("has_next_page"):
                 return out
-            cursor = body.get("next_cursor")
-            if not cursor:
+            next_cursor = body.get("next_cursor")
+            # Stop on a missing cursor, and on one that has not moved. The
+            # server is known to emit cursors it then ignores, returning the
+            # same page again; without this guard the loop never terminates
+            # and blocks the event loop.
+            if not next_cursor or next_cursor == cursor:
                 return out
+            cursor = next_cursor
 
     async def async_get_currencies(self) -> list[dict]:
         """List all fiat currencies. Not paginated."""

@@ -61,6 +61,26 @@ async def test_get_assets_follows_pagination():
     assert [a["id"] for a in result] == ["a", "b"]
 
 
+async def test_paginate_stops_when_cursor_does_not_advance():
+    """The server emits cursors it then ignores, re-serving the same page."""
+    async with aiohttp.ClientSession() as session:
+        client = BitpandaApiClient("key", session)
+        with aioresponses() as m:
+            m.get(
+                f"{API_BASE_URL}/assets?page_size=100",
+                payload={"data": [{"id": "a"}], "next_cursor": "STUCK",
+                         "has_next_page": True},
+            )
+            m.get(
+                f"{API_BASE_URL}/assets?cursor=STUCK&page_size=100",
+                payload={"data": [{"id": "a"}], "next_cursor": "STUCK",
+                         "has_next_page": True},
+                repeat=True,
+            )
+            result = await client.async_get_assets()
+    assert [a["id"] for a in result] == ["a"]
+
+
 async def test_401_raises_auth_error():
     async with aiohttp.ClientSession() as session:
         client = BitpandaApiClient("key", session)

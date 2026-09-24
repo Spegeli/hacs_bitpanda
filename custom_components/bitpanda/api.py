@@ -65,13 +65,15 @@ class BitpandaApiClient:
             _LOGGER.error("Timeout for %s", path)
             raise BitpandaApiError(f"Timeout for {path}") from None
         except ValueError:
-            # json.JSONDecodeError subclasses ValueError. Without this the
-            # exception escapes to Home Assistant's coordinator, whose final
-            # handler calls logger.exception() — exc_info=True through this
-            # integration's own logger, which is exactly what the API-key rule
-            # forbids.
-            _LOGGER.error("Malformed JSON from %s", path)
-            raise BitpandaApiError(f"Malformed JSON from {path}") from None
+            # json.JSONDecodeError subclasses ValueError, and a body that
+            # decodes to text but not JSON can also raise UnicodeDecodeError
+            # here, another ValueError subclass — hence the general wording.
+            # Without this the exception escapes to Home Assistant's
+            # coordinator, whose final handler calls logger.exception() —
+            # exc_info=True through this integration's own logger, which is
+            # exactly what the API-key rule forbids.
+            _LOGGER.error("Could not decode response from %s", path)
+            raise BitpandaApiError(f"Could not decode response from {path}") from None
 
     async def _paginate(self, path: str, params: dict[str, Any]) -> list[dict]:
         """Collect every page of a cursor-paginated endpoint.

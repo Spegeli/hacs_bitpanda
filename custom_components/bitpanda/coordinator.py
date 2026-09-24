@@ -15,6 +15,7 @@ from .const import (
     EARN_UPDATE_INTERVAL,
     EUR_CURRENCY_ID,
     HOURLY_READ_BUDGET,
+    PORTFOLIO_TIMEFRAMES,
     PORTFOLIO_UPDATE_INTERVAL,
     PRICE_BUDGET_SHARE,
     PRICE_UPDATE_INTERVAL_BASE,
@@ -424,3 +425,50 @@ class RewardsCoordinator(DataUpdateCoordinator[dict]):
         except BitpandaApiError as err:
             raise UpdateFailed(str(err)) from None
         return sum_rewards(operations)
+
+
+async def collect_returns(
+    client: BitpandaApiClient, currency_id: str | None
+) -> dict[str, float]:
+    """Fetch return_percentage for every timeframe.
+
+    One request per timeframe — there is no combined call. A failure on one
+    window is logged and skipped so the others still report.
+    """
+    out: dict[str, float] = {}
+    for timeframe in PORTFOLIO_TIMEFRAMES:
+        try:
+            body = await client.async_get_portfolio_history(
+                timeframe=timeframe, equivalent_currency_id=currency_id
+            )
+        except BitpandaApiError:
+            _LOGGER.debug("No history for timeframe %s this cycle", timeframe)
+            continue
+        value = body.get("return_percentage")
+        if isinstance(value, (int, float)):
+            out[timeframe] = float(value)
+    return out
+
+
+class HistoryCoordinator(DataUpdateCoordinator[dict]):
+    """Portfolio return over each supported timeframe."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        client: BitpandaApiClient,
+        currency_id: str,
+    ) -> None:
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN}_history",
+            update_interval=PORTFOLIO_UPDATE_INTERVAL,
+            config_entry=entry,
+        )
+        self._client = client
+        self._currency_id = currency_id
+
+    async def _async_update_data(self) -> dict[str, float]:
+        return await collect_returns(self._client, self._currency_id)

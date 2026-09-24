@@ -165,3 +165,29 @@ class BitpandaApiClient:
             params["equivalent_currency_id"] = equivalent_currency_id
         body = await self._request("/portfolio-history", params)
         return body.get("data", {})
+
+    async def async_get_earn_configs(self) -> list[dict]:
+        """Available Earn products and their rates.
+
+        This is a catalog, not user positions. `annual_percentage_rate` is a
+        JSON number and a fraction: 0.0544 means 5.44 %.
+        """
+        return await self._paginate("/earn/configs", {})
+
+    async def async_get_operations(
+        self, *, from_ts: str | None = None, to_ts: str | None = None
+    ) -> list[dict]:
+        """Operation history, optionally windowed by date.
+
+        `from` and `to` are undocumented on the hosted docs but work, and are
+        preferred over cursor paging: the server emits cursors without
+        milliseconds and then ignores them, so a cursor loop can stall on
+        page one. Requires a key with all read scopes; a portfolio-capable key
+        gets 401.
+        """
+        params: dict[str, Any] = {}
+        if from_ts:
+            params["from"] = from_ts
+        if to_ts:
+            params["to"] = to_ts
+        return await self._paginate("/operations", params)

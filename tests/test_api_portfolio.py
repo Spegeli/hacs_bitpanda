@@ -40,6 +40,9 @@ async def test_get_portfolio_passes_equivalent_currency():
                 equivalent_currency_id="uuid-usd"
             )
     assert result == [{"asset_id": "a"}]
+    # Subset matching only proves the currency id was present, not that
+    # nothing else rode along with it.
+    assert mocker.mock_calls[0][1].query_string == "equivalent_currency_id=uuid-usd"
 
 
 async def test_get_portfolio_history_uses_timeframe():
@@ -58,6 +61,9 @@ async def test_get_portfolio_history_uses_timeframe():
             result = await client.async_get_portfolio_history(timeframe="WEEK")
     assert result["return_percentage"] == 6.24
     assert len(result["datapoints"]) == 1
+    # Subset matching only proves timeframe=WEEK was present, not that no
+    # other parameter (e.g. a stray equivalent_currency_id) rode along.
+    assert mocker.mock_calls[0][1].query_string == "timeframe=WEEK"
 
 
 async def test_get_portfolio_sends_no_params_when_no_currency():
@@ -71,6 +77,10 @@ async def test_get_portfolio_sends_no_params_when_no_currency():
             client = BitpandaApiClient("key", session)
             result = await client.async_get_portfolio()
     assert result == [{"asset_id": "a"}]
+    # Subset matching means a mock registered with no query would also accept
+    # a request carrying extra parameters, so `result` alone can't prove the
+    # request was param-free — assert on what was actually sent.
+    assert mocker.mock_calls[0][1].query_string == ""
 
 
 async def test_get_portfolio_history_defaults_to_day():
@@ -83,6 +93,9 @@ async def test_get_portfolio_history_defaults_to_day():
             client = BitpandaApiClient("key", session)
             result = await client.async_get_portfolio_history()
     assert result["return_percentage"] == -0.64
+    # Same subset-matching gap as the no-currency portfolio test: prove the
+    # default is exactly `timeframe=DAY` alone, nothing extra.
+    assert mocker.mock_calls[0][1].query_string == "timeframe=DAY"
 
 
 async def test_malformed_json_becomes_an_api_error():

@@ -62,8 +62,16 @@ async def test_get_assets_follows_pagination():
     assert [a["id"] for a in result] == ["a", "b"]
 
 
+@pytest.mark.timeout(5)
 async def test_paginate_stops_when_cursor_does_not_advance():
-    """The server emits cursors it then ignores, re-serving the same page."""
+    """The server emits cursors it then ignores, re-serving the same page.
+
+    `asyncio.wait_for` alone cannot bound this: the mock never awaits a real
+    unresolved Future (no socket I/O), so a stuck loop never yields to the
+    event loop and cooperative cancellation never gets delivered. Only
+    pytest-timeout's signal-based (preemptive) timeout actually interrupts
+    it, hence the marker.
+    """
     with mock_aiohttp_client() as mocker:
         mocker.get(
             f"{API_BASE_URL}/assets?cursor=STUCK&page_size=100",
@@ -77,7 +85,7 @@ async def test_paginate_stops_when_cursor_does_not_advance():
         )
         async with mocker.create_session(asyncio.get_running_loop()) as session:
             client = BitpandaApiClient("key", session)
-            result = await client.async_get_assets()
+            result = await asyncio.wait_for(client.async_get_assets(), timeout=5)
             assert mocker.call_count == 2
     assert [a["id"] for a in result] == ["a"]
 

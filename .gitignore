@@ -2,6 +2,11 @@
 .claude/
 CLAUDE.md
 
+# Secrets — never commit
+.secrets/
+*.key
+.env
+
 # Python
 __pycache__/
 *.py[cod]

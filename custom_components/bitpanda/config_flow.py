@@ -7,7 +7,7 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlowResult
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig
@@ -129,6 +129,29 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
         )
 
+    def _async_replace_key(
+        self, entry: ConfigEntry, api_key: str, reason: str
+    ) -> ConfigFlowResult:
+        """Store a new key and get it into effect with exactly one reload.
+
+        An entry that finished setup has an update listener that reloads it on
+        any change; Home Assistant wants that listener to do the reloading and
+        warns — breaking in 2026.12 — when async_update_reload_and_abort reloads
+        a second time. An entry whose setup failed, the typical reauth case of a
+        key rejected on the first portfolio refresh, never registered the
+        listener, so there the explicit reload is the only one.
+        async_update_and_abort would express the first branch directly but does
+        not exist in the 2025.1 floor.
+        """
+        if entry.update_listeners:
+            self.hass.config_entries.async_update_entry(
+                entry, data={**entry.data, CONF_API_KEY: api_key}
+            )
+            return self.async_abort(reason=reason)
+        return self.async_update_reload_and_abort(
+            entry, data_updates={CONF_API_KEY: api_key}, reason=reason
+        )
+
     async def async_step_reauth(
         self, entry_data: Mapping[str, Any]
     ) -> ConfigFlowResult:
@@ -144,8 +167,8 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors, extra = await self._async_validate_key(api_key)
             placeholders.update(extra)
             if not errors:
-                return self.async_update_reload_and_abort(
-                    self._get_reauth_entry(), data_updates={CONF_API_KEY: api_key}
+                return self._async_replace_key(
+                    self._get_reauth_entry(), api_key, "reauth_successful"
                 )
         return self.async_show_form(
             step_id="reauth_confirm",
@@ -170,9 +193,8 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors, extra = await self._async_validate_key(api_key)
             placeholders.update(extra)
             if not errors:
-                return self.async_update_reload_and_abort(
-                    self._get_reconfigure_entry(),
-                    data_updates={CONF_API_KEY: api_key},
+                return self._async_replace_key(
+                    self._get_reconfigure_entry(), api_key, "reconfigure_successful"
                 )
         return self.async_show_form(
             step_id="reconfigure",

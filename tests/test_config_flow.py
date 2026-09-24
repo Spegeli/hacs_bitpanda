@@ -1,5 +1,5 @@
 """Tests for the config and options flow."""
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant import config_entries, data_entry_flow
@@ -336,17 +336,18 @@ async def test_remove_step_can_remove_a_tracked_id_missing_from_cache(hass):
 # key in place -- tracked assets, entity_ids and history all survive, unlike
 # deleting and re-adding the entry.
 #
-# A successful reauth/reconfigure calls async_update_reload_and_abort, which
-# schedules a real config entry reload as a background task
-# (ConfigEntries.async_schedule_reload). Left alone that would exercise this
-# integration's real async_setup_entry -- and a real network call -- from
-# inside a unit test, so it is patched to a no-op for the two "valid key"
-# tests below. What is under test here is this flow's own data mutation and
-# abort reason, not Home Assistant's own already-tested reload mechanism.
-
-_NO_RELOAD = patch(
-    "homeassistant.config_entries.ConfigEntries.async_schedule_reload", MagicMock()
-)
+# A successful reauth/reconfigure ends up in _async_replace_key
+# (config_flow.py), which picks exactly one reload path: an entry that
+# finished setup already has the update listener registered at
+# __init__.py's async_setup_entry (`entry.add_update_listener(...)`), which
+# reloads on any entry change -- so that path only updates the entry and
+# lets the listener do the reloading. An entry with no listener (the
+# typical reauth case: setup failed before that line ever ran) falls back
+# to async_update_reload_and_abort, whose own explicit
+# ConfigEntries.async_schedule_reload is then the only reload. Both paths
+# are patched/observed below rather than left to run for real, since a real
+# reload would exercise this integration's actual async_setup_entry -- and a
+# real network call -- from inside a unit test.
 
 
 async def test_reauth_confirm_initial_form_carries_api_key_url(hass):
@@ -395,7 +396,46 @@ async def test_reauth_confirm_missing_scopes_reshows_form_without_leaking_key(
     assert secret not in caplog.text
 
 
-async def test_reauth_confirm_valid_key_updates_entry_and_aborts(hass):
+async def test_reauth_confirm_with_listener_lets_the_listener_reload(hass):
+    """A loaded entry's update listener must be the only thing that reloads
+    it. async_update_reload_and_abort's own async_schedule_reload must not
+    also fire, or the entry would reload twice (see task-22-report.md, Fix
+    round 1).
+    """
+    entry = _mock_entry()
+    entry.add_to_hass(hass)
+    listener = AsyncMock()
+    entry.add_update_listener(listener)
+    result = await entry.start_reauth_flow(hass)
+
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient."
+        "async_missing_scopes",
+        AsyncMock(return_value=[]),
+    ), patch(
+        "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
+    ) as mock_reload:
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": "  new-key  \n"}
+        )
+        # Update listeners are fired via hass.async_create_task (see
+        # ConfigEntries._async_save_and_notify), so the listener has only
+        # been scheduled, not necessarily run, until this is awaited.
+        await hass.async_block_till_done()
+
+    assert result["type"] == data_entry_flow.FlowResultType.ABORT
+    assert result["reason"] == "reauth_successful"
+    assert entry.data["api_key"] == "new-key"
+    listener.assert_called_once()
+    mock_reload.assert_not_called()
+
+
+async def test_reauth_confirm_without_listener_schedules_a_reload(hass):
+    """The typical reauth case: the stored key was rejected on the first
+    portfolio refresh, so async_setup_entry raised before ever reaching the
+    line that registers the update listener. No listener exists to reload
+    the entry, so the explicit reload is the only one there is.
+    """
     entry = _mock_entry()
     entry.add_to_hass(hass)
     result = await entry.start_reauth_flow(hass)
@@ -404,7 +444,9 @@ async def test_reauth_confirm_valid_key_updates_entry_and_aborts(hass):
         "custom_components.bitpanda.config_flow.BitpandaApiClient."
         "async_missing_scopes",
         AsyncMock(return_value=[]),
-    ), _NO_RELOAD:
+    ), patch(
+        "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
+    ) as mock_reload:
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"api_key": "  new-key  \n"}
         )
@@ -421,6 +463,7 @@ async def test_reauth_confirm_valid_key_updates_entry_and_aborts(hass):
         "asset_cache": {},
     }
     assert "new-key" not in entry.title
+    mock_reload.assert_called_once()
 
 
 # --- Reconfigure flow ----------------------------------------------------
@@ -474,7 +517,36 @@ async def test_reconfigure_missing_scopes_reshows_form_without_leaking_key(
     assert secret not in caplog.text
 
 
-async def test_reconfigure_valid_key_updates_entry_and_aborts(hass):
+async def test_reconfigure_with_listener_lets_the_listener_reload(hass):
+    """Same double-reload hazard as reauth: a loaded entry's update listener
+    must be the only thing that reloads it.
+    """
+    entry = _mock_entry()
+    entry.add_to_hass(hass)
+    listener = AsyncMock()
+    entry.add_update_listener(listener)
+    result = await entry.start_reconfigure_flow(hass)
+
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient."
+        "async_missing_scopes",
+        AsyncMock(return_value=[]),
+    ), patch(
+        "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
+    ) as mock_reload:
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": "  new-key  \n"}
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] == data_entry_flow.FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data["api_key"] == "new-key"
+    listener.assert_called_once()
+    mock_reload.assert_not_called()
+
+
+async def test_reconfigure_without_listener_schedules_a_reload(hass):
     entry = _mock_entry()
     entry.add_to_hass(hass)
     result = await entry.start_reconfigure_flow(hass)
@@ -483,7 +555,9 @@ async def test_reconfigure_valid_key_updates_entry_and_aborts(hass):
         "custom_components.bitpanda.config_flow.BitpandaApiClient."
         "async_missing_scopes",
         AsyncMock(return_value=[]),
-    ), _NO_RELOAD:
+    ), patch(
+        "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
+    ) as mock_reload:
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"api_key": "  new-key  \n"}
         )
@@ -500,6 +574,7 @@ async def test_reconfigure_valid_key_updates_entry_and_aborts(hass):
         "asset_cache": {},
     }
     assert "new-key" not in entry.title
+    mock_reload.assert_called_once()
 
 
 # --- user step: error re-render keeps the api_key_url placeholder --------

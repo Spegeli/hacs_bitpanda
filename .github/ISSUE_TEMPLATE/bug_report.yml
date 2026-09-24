@@ -5,34 +5,86 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report a bug! Please fill out as much as possible.
-  - type: input
-    id: ha_version
+        Thanks for taking the time to report a bug.
+
+        The more precise the numbers and logs you give, the faster this gets fixed.
+
+  - type: checkboxes
+    id: preflight
     attributes:
-      label: Home Assistant Version
-      placeholder: e.g. 2025.5.0
+      label: Before you start
+      options:
+        - label: I read the [Troubleshooting](https://github.com/Spegeli/hacs_bitpanda#-troubleshooting) and [FAQ](https://github.com/Spegeli/hacs_bitpanda#-faq) sections.
+          required: true
+        - label: I searched [existing issues](https://github.com/Spegeli/hacs_bitpanda/issues?q=is%3Aissue) and this is not a duplicate.
+          required: true
+        - label: I am running the [latest release](https://github.com/Spegeli/hacs_bitpanda/releases) of this integration.
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Price Tracker (asset price sensor)
+        - Wallet Monitor (wallet balance sensor)
+        - Portfolio Total
+        - Setup / Configuration flow
+        - Manual refresh service
+        - Other / not sure
     validations:
       required: true
+
   - type: input
     id: integration_version
     attributes:
-      label: Integration Version
-      placeholder: e.g. 2026.05.29
+      label: Integration version
+      description: Settings → Devices & Services → Bitpanda, or the `version` field in `manifest.json`.
+      placeholder: e.g. 2026.06.04
     validations:
       required: true
+
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      placeholder: e.g. 2025.9.1
+    validations:
+      required: true
+
+  - type: input
+    id: currency
+    attributes:
+      label: Configured currency
+      placeholder: e.g. EUR
+    validations:
+      required: true
+
+  - type: input
+    id: asset
+    attributes:
+      label: Affected asset or wallet
+      description: Which symbol shows the problem? Leave empty if it affects everything.
+      placeholder: e.g. BCI5, BTC, XAU, EUR
+    validations:
+      required: false
+
   - type: textarea
     id: description
     attributes:
       label: What happened?
-      description: A clear description of the bug.
+      description: Describe the actual behavior. Include the exact value the sensor shows, if a value is wrong.
     validations:
       required: true
+
   - type: textarea
     id: expected
     attributes:
-      label: What did you expect?
+      label: What did you expect instead?
+      description: If a number is wrong, give the correct number and how you calculated it.
     validations:
       required: true
+
   - type: textarea
     id: steps
     attributes:
@@ -43,19 +95,36 @@ body:
         3. See error
     validations:
       required: false
+
   - type: textarea
     id: logs
     attributes:
       label: Relevant log output
-      description: Paste any relevant logs from Settings → System → Logs.
+      description: |
+        Settings → System → Logs → filter for `bitpanda`.
+        For more detail, add this to `configuration.yaml`, restart, and reproduce:
+
+        ```yaml
+        logger:
+          logs:
+            custom_components.bitpanda: debug
+        ```
       render: text
     validations:
       required: false
+
   - type: textarea
     id: diagnostics
     attributes:
       label: Diagnostics
-      description: Paste the output from Settings → Devices & Services → Bitpanda → Download Diagnostics.
+      description: Settings → Devices & Services → Bitpanda → ⋮ → Download diagnostics. The API key is redacted automatically.
       render: json
     validations:
       required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        > [!WARNING]
+        > **Never paste your Bitpanda API key.** Diagnostics redact it for you, but raw logs or screenshots may not.
+        > If you posted a key by accident, revoke it immediately at https://web.bitpanda.com/apikey.

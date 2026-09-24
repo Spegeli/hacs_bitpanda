@@ -1,10 +1,34 @@
 ## Description
-<!-- What does this PR change and why? -->
 
-## Changes
-<!-- Brief list of what was changed -->
+<!-- What does this PR change, and why? -->
+
+## Related issue
+
+<!-- e.g. Fixes #7 — or "none" -->
+
+## Type of change
+
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Documentation
+- [ ] Refactor / code quality
+- [ ] CI / repository
+
+## How was this tested?
+
+<!--
+Which assets or wallet types did you test against, and in which currency?
+Wallet value bugs are easy to miss — state the numbers you verified.
+-->
 
 ## Checklist
-- [ ] Tested in Home Assistant
-- [ ] `hassfest` validation passes
-- [ ] Changelog updated (if applicable)
+
+- [ ] Tested on a real Home Assistant instance
+- [ ] `hassfest` and HACS validation pass (CI runs both)
+- [ ] No API key or other secret is logged, committed or included in diagnostics
+- [ ] Translations updated and in sync: `strings.json`, `translations/en.json`, `translations/de.json`
+- [ ] README updated if user-facing behavior changed
+
+<!--
+Do NOT bump the version in manifest.json — the maintainer sets it during release.
+-->

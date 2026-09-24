@@ -272,7 +272,7 @@ async def test_add_asset_resolves_id_and_persists_cache_on_save(hass):
 
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     assert result["data"]["tracked_assets"] == ["uuid-btc"]
-    assert result["data"]["asset_cache"]["BTC"]["id"] == "uuid-btc"
+    assert result["data"]["asset_cache"]["uuid-btc"]["id"] == "uuid-btc"
 
 
 # --- Options flow: config_entry access --------------------------------------

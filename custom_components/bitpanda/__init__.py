@@ -16,7 +16,7 @@ from .api import (
     BitpandaAuthError,
     BitpandaRateLimitError,
 )
-from .assets import AssetResolver
+from .assets import AssetResolver, legacy_candidates, pick_legacy
 from .const import (
     CONF_API_KEY,
     CONF_ASSET_CACHE,
@@ -69,6 +69,21 @@ def legacy_symbol(wallet_id: str) -> str:
     return wallet_id
 
 
+def legacy_prefix(wallet_id: str) -> str | None:
+    """Return the recognised v1 category prefix of a wallet id, or None.
+
+    Mirrors `legacy_symbol`'s own prefix search (same `_LEGACY_PREFIXES`,
+    longest/most-specific first) but returns the prefix itself instead of
+    stripping it -- `pick_legacy` (assets.py) needs to know which category a
+    wallet id claimed, not just its bare symbol, to tell a metal wallet from
+    a coin wallet that happens to share a symbol.
+    """
+    for prefix in _LEGACY_PREFIXES:
+        if wallet_id.startswith(prefix):
+            return prefix
+    return None
+
+
 def v2_unique_id(
     unique_id: str,
     entry_id: str,
@@ -80,17 +95,24 @@ def v2_unique_id(
     Returns None when the entity needs no change (the portfolio sensor), when
     it belongs to another config entry, or when its asset did not resolve.
 
-    The wallet check runs before the price check: a wallet unique_id is
+    The wallet check runs before the price check -- a wallet unique_id is
     `f"{entry_id}_wallet_{wallet_id}"`, and `wallet_id` itself can start with
-    "wallet_" (`index_wallet_BCI5`'s stored id is `index_wallet_BCI5`), but it
-    never contains the literal substring "_price_", so there is no ambiguity
-    the other way around.
+    "wallet_" (`index_wallet_BCI5`'s stored id is `index_wallet_BCI5`) -- but
+    a wallet-prefix match is not proof either: a price sensor's own asset
+    symbol could itself start with "wallet_" (`eid_wallet_XYZ_price_EUR`), so
+    a miss in `wallet_map` falls through to the price pattern below instead
+    of returning None outright. The reverse direction cannot be fooled the
+    same way: a wallet unique_id never contains the literal substring
+    "_price_", so nothing here is ever misparsed as a wallet by the price
+    check.
     """
     wallet_prefix = f"{entry_id}_wallet_"
     if unique_id.startswith(wallet_prefix):
         raw_wallet_id = unique_id[len(wallet_prefix):]
         new_id = wallet_map.get(raw_wallet_id)
-        return f"{wallet_prefix}{new_id}" if new_id is not None else None
+        if new_id is not None:
+            return f"{wallet_prefix}{new_id}"
+        # Fall through rather than returning None: see the docstring above.
 
     # rpartition, not split: the symbol half (the head) can itself contain
     # underscores ("SOME_TOKEN"), and only the last "_price_" is the real
@@ -133,8 +155,13 @@ async def _migrate_entity_registry(
             reg_entry.domain, DOMAIN, new_unique_id
         )
         if colliding_entity_id is not None:
-            # Only on a genuine first migration can this not happen -- v2
-            # entities are created by setup, which runs after migration. Log
+            # Not only a "second migration" concern: er.async_migrate_entries
+            # applies each entity's update synchronously inside its own loop,
+            # so if two distinct v1 identifiers resolve to the same UUID --
+            # exactly what this task makes possible, since
+            # "commodity_metal_XAU" and "metal_XAU" now both resolve to gold
+            # -- the second entity's collision check sees the first entity's
+            # just-migrated unique_id, on a single, first-ever run. Log
             # entity_ids only, never entry.data, and move on rather than
             # letting async_update_entity's ValueError crash migration for
             # this one odd installation.
@@ -187,19 +214,42 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         unique_id embeds and what the registry migration below looks up.
         Insertion order is preserved, which is what lets the options lists
         below be rebuilt with `dict.fromkeys` instead of a second pass.
+
+        A symbol does not uniquely name an asset -- `XAU` is both the
+        GoldMoney stock and the Gold metal, in an API order that is not
+        stable -- so every candidate is fetched and `pick_legacy` chooses the
+        one a legacy (crypto/index/metal-only) identifier could have meant,
+        using the wallet id's own category prefix to narrow further. See
+        assets.py.
         """
         out: dict[str, str] = {}
         for value in values:
             sym = legacy_symbol(value) if strip_prefix else value
-            asset = await resolver.async_resolve(sym)
-            if asset is None:
+            prefix = legacy_prefix(value) if strip_prefix else None
+            candidates = await resolver.async_candidates(sym)
+            asset = pick_legacy(candidates, prefix)
+            if asset is not None:
+                out[value] = asset["id"]
+                continue
+            survivors = legacy_candidates(candidates, prefix)
+            if len(survivors) > 1:
+                # Ambiguous, not absent: naming the count (never any asset
+                # detail beyond that) is enough to tell this apart from a
+                # plain "no longer exists" drop in the log.
+                _LOGGER.warning(
+                    "Dropping %s during migration: symbol %s matches %s "
+                    "possible assets and which one this identifier meant is "
+                    "ambiguous",
+                    value,
+                    sym,
+                    len(survivors),
+                )
+            else:
                 _LOGGER.warning(
                     "Dropping %s during migration: symbol %s no longer resolves",
                     value,
                     sym,
                 )
-                continue
-            out[value] = asset["id"]
         return out
 
     options = dict(entry.options)

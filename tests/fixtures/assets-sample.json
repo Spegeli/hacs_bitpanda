@@ -341,5 +341,28 @@
     "sell_active": true,
     "withdrawal_active": true,
     "deposit_active": true
+  },
+  {
+    "id": "1f0f147d-6722-6cdc-8c91-2b9397201d4d",
+    "name": "Banque Nationale de Belgique",
+    "symbol": "BNB",
+    "isin": "BE0003008019",
+    "group": "equity_stock",
+    "type": "equity_security",
+    "buy_active": true,
+    "sell_active": true,
+    "withdrawal_active": false,
+    "deposit_active": false
+  },
+  {
+    "id": "b86cb91a-efe3-11eb-b56f-0691764446a7",
+    "name": "BNB",
+    "symbol": "BNB",
+    "group": "coin",
+    "type": "cryptocoin",
+    "buy_active": true,
+    "sell_active": true,
+    "withdrawal_active": true,
+    "deposit_active": true
   }
 ]

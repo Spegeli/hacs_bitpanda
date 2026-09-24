@@ -30,9 +30,3 @@ PRICE_BUDGET_SHARE = 0.6
 PORTFOLIO_TIMEFRAMES = ["DAY", "WEEK", "MONTH", "SIX_MONTH", "YEAR"]
 
 DEFAULT_CURRENCY = "EUR"
-
-# Temporary shims. The pre-migration __init__.py imports these names, and
-# importing any module of this package executes it — without them the whole
-# test suite stops collecting. Task 16 rewrites __init__.py and deletes both.
-PRICE_UPDATE_INTERVAL = PRICE_UPDATE_INTERVAL_BASE
-WALLET_UPDATE_INTERVAL = PORTFOLIO_UPDATE_INTERVAL

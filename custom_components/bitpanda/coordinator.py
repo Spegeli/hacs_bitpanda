@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -277,6 +277,25 @@ class PriceCoordinator(DataUpdateCoordinator[dict]):
         return prices
 
 
+def _is_later(candidate: str | None, current: str | None) -> bool:
+    """Return True when `candidate` is the later of two API timestamps.
+
+    Comparing these as strings is wrong. The API emits both
+    `2026-09-22T17:16:35Z` and `2026-09-09T18:31:22.080Z`, and within the
+    same second `"." < "Z"`, so a zero-fraction timestamp sorts *above* a
+    later fractional one. Parse instead, and fall back to string comparison
+    only if parsing fails.
+    """
+    if candidate is None:
+        return False
+    if current is None:
+        return True
+    try:
+        return datetime.fromisoformat(candidate) > datetime.fromisoformat(current)
+    except ValueError:
+        return candidate > current
+
+
 @dataclass
 class RewardTotals:
     """Lifetime Earn rewards for one asset, in that asset's own units."""
@@ -336,7 +355,7 @@ def sum_rewards(operations: list[dict]) -> dict[str, RewardTotals]:
             entry.count += 1
 
             credited = tx.get("credited_at")
-            if credited and (entry.last_at is None or credited > entry.last_at):
+            if _is_later(credited, entry.last_at):
                 entry.last_at = credited
 
     return totals

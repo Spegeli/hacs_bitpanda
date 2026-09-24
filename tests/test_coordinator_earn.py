@@ -88,6 +88,26 @@ def test_sum_rewards_tolerates_unknown_operation_type():
     assert sum_rewards(ops) == {}
 
 
+def test_sum_rewards_picks_the_later_timestamp_across_formats():
+    """Same second, one with a fraction and one without — string compare fails here."""
+    ops = [
+        _reward("vsn", "1", "0", "2026-09-22T17:16:35Z"),
+        _reward("vsn", "1", "0", "2026-09-22T17:16:35.500Z"),
+    ]
+    assert sum_rewards(ops)["vsn"].last_at == "2026-09-22T17:16:35.500Z"
+
+
+def test_sum_rewards_ignores_a_reward_from_another_wallet_owner():
+    """Both conditions are required: operation_type AND wallet_owner."""
+    ops = [
+        _reward("vsn", "5", "1", "2026-09-22T17:16:35Z"),
+        _reward("vsn", "99", "0", "2026-09-21T00:00:00Z", owner="shared-default"),
+    ]
+    totals = sum_rewards(ops)["vsn"]
+    assert totals.count == 1
+    assert abs(totals.gross - 5.0) < 1e-9
+
+
 # ---------------------------------------------------------------------------
 # RewardsCoordinator._async_update_data
 #

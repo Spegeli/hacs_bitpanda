@@ -10,7 +10,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import BitpandaApiClient, BitpandaApiError
-from .const import DOMAIN, EUR_CURRENCY_ID, PORTFOLIO_UPDATE_INTERVAL
+from .const import (
+    DOMAIN,
+    EUR_CURRENCY_ID,
+    HOURLY_READ_BUDGET,
+    PORTFOLIO_UPDATE_INTERVAL,
+    PRICE_BUDGET_SHARE,
+    PRICE_UPDATE_INTERVAL_BASE,
+)
 from .fx import derive_rate
 
 _LOGGER = logging.getLogger(__name__)
@@ -137,3 +144,91 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
         except BitpandaApiError as err:
             raise UpdateFailed(str(err)) from None
         return parse_portfolio(entries, rate=rate)
+
+
+_MAX_PRICE_INTERVAL = timedelta(minutes=30)
+
+
+def price_interval(ticker_count: int) -> timedelta:
+    """Return a poll interval that keeps ticker calls inside the budget.
+
+    There is no batch ticker, so each tracked-but-unheld asset costs one
+    request per poll. The read budget is 3000/hour; PRICE_BUDGET_SHARE of it
+    is reserved for prices, leaving room for portfolio, earn and rewards.
+    """
+    if ticker_count <= 0:
+        return PRICE_UPDATE_INTERVAL_BASE
+
+    allowance = HOURLY_READ_BUDGET * PRICE_BUDGET_SHARE
+    required_seconds = ticker_count * 3600 / allowance
+    seconds = max(PRICE_UPDATE_INTERVAL_BASE.total_seconds(), required_seconds)
+    return min(timedelta(seconds=seconds), _MAX_PRICE_INTERVAL)
+
+
+def convert_price(price: str, rate: float | None) -> float | None:
+    """Convert an EUR ticker price into the display currency.
+
+    /tickers always returns EUR. `rate` is units of the display currency per
+    EUR, or None when no conversion is needed or possible.
+    """
+    try:
+        value = float(price)
+    except (TypeError, ValueError):
+        return None
+    return value if rate is None else value * rate
+
+
+class PriceCoordinator(DataUpdateCoordinator[dict]):
+    """Fetches tickers for tracked assets that are not held."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        client: BitpandaApiClient,
+        portfolio: PortfolioCoordinator,
+    ) -> None:
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN}_prices",
+            update_interval=PRICE_UPDATE_INTERVAL_BASE,
+            config_entry=entry,
+        )
+        self._client = client
+        self._portfolio = portfolio
+        self._tracked: list[str] = []
+
+    def set_tracked(self, asset_ids: list[str]) -> None:
+        """Set which asset ids have price sensors."""
+        self._tracked = list(asset_ids)
+
+    async def _async_update_data(self) -> dict[str, float]:
+        portfolio = self._portfolio.data
+        held = portfolio.holdings if portfolio else {}
+        rate = portfolio.rate if portfolio else None
+
+        needed = [a for a in self._tracked if a not in held]
+        self.update_interval = price_interval(len(needed))
+
+        prices: dict[str, float] = {}
+
+        # Held assets: derive the unit price from the portfolio, no request.
+        for asset_id in self._tracked:
+            holding = held.get(asset_id)
+            if holding and holding.balance:
+                prices[asset_id] = holding.value / holding.balance
+
+        for asset_id in needed:
+            try:
+                ticker = await self._client.async_get_ticker(asset_id)
+            except BitpandaApiError:
+                _LOGGER.debug("No ticker for %s this cycle", asset_id)
+                continue
+            converted = convert_price(ticker.get("price", ""), rate)
+            if converted is not None:
+                prices[asset_id] = converted
+
+        if not prices and needed:
+            raise UpdateFailed("No prices could be fetched")
+        return prices

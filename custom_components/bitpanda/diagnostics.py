@@ -26,9 +26,16 @@ def build_diagnostics(
     earn,
     rewards,
     rewards_unauthorized: bool,
+    history,
 ) -> dict[str, Any]:
     """Assemble the diagnostics payload. The API key never appears."""
     holdings = portfolio.data.holdings if portfolio.data else {}
+    # Explicit `is not None`, not `bool(...)`: a derived rate of exactly 0.0
+    # is falsy, so `bool(portfolio.data and portfolio.data.rate)` would report
+    # "not derived" for a rate that had, in fact, been derived. `derive_rate`
+    # (fx.py) happens to never return 0.0 today, but that guarantee lives in
+    # another module and this diagnostic must not silently depend on it.
+    rate_derived = portfolio.data.rate is not None if portfolio.data else False
     return {
         "config": {
             "api_key": _REDACTED,
@@ -43,7 +50,7 @@ def build_diagnostics(
             "portfolio": {
                 "last_update_success": portfolio.last_update_success,
                 "holdings_count": len(holdings),
-                "rate_derived": bool(portfolio.data and portfolio.data.rate),
+                "rate_derived": rate_derived,
             },
             "prices": {
                 "last_update_success": prices.last_update_success,
@@ -57,6 +64,10 @@ def build_diagnostics(
                 "last_update_success": rewards.last_update_success,
                 "assets_with_rewards": len(rewards.data or {}),
                 "unauthorized": rewards_unauthorized,
+            },
+            "history": {
+                "last_update_success": history.last_update_success,
+                "timeframes_covered": len(history.data or {}),
             },
         },
     }
@@ -75,4 +86,5 @@ async def async_get_config_entry_diagnostics(
         earn=store["earn_coordinator"],
         rewards=store["rewards_coordinator"],
         rewards_unauthorized=store["rewards_coordinator"].unauthorized,
+        history=store["history_coordinator"],
     )

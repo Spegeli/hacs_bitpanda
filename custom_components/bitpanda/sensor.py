@@ -13,7 +13,12 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import CHANGE_24H_UPDATE_INTERVAL, DOMAIN
+from .const import (
+    CHANGE_24H_UPDATE_INTERVAL,
+    CONF_TRACKED_ASSETS,
+    CONF_TRACKED_WALLETS,
+    DOMAIN,
+)
 from .coordinator import PortfolioData, RewardTotals
 
 _LOGGER = logging.getLogger(__name__)
@@ -288,3 +293,110 @@ class BitpandaPriceSensor(CoordinatorEntity, SensorEntity):
                 attrs["price_24h_ago"] = self._price_24h_ago
 
         return attrs
+
+
+def portfolio_breakdown(
+    data: PortfolioData | None, asset_cache: dict[str, dict]
+) -> dict[str, float]:
+    """Per-asset value breakdown, keyed by symbol where known."""
+    if data is None:
+        return {}
+    by_id = {a["id"]: a for a in asset_cache.values() if a.get("id")}
+    return {
+        (by_id.get(asset_id) or {}).get("symbol", asset_id): round(holding.value, 2)
+        for asset_id, holding in data.holdings.items()
+    }
+
+
+class BitpandaPortfolioSensor(CoordinatorEntity, SensorEntity):
+    """Combined value of every holding."""
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self, portfolio_coordinator, history_coordinator, config_entry,
+        asset_cache: dict, currency: str,
+    ) -> None:
+        super().__init__(portfolio_coordinator)
+        self._history = history_coordinator
+        self._asset_cache = asset_cache
+        self._attr_name = "Portfolio Total"
+        self._attr_unique_id = f"{config_entry.entry_id}_portfolio_total"
+        self._attr_device_class = SensorDeviceClass.MONETARY
+        self._attr_native_unit_of_measurement = currency
+        self._attr_icon = "mdi:chart-pie"
+        self._attr_suggested_display_precision = 2
+        self._attr_device_info = _wallet_device_info(config_entry)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self._history is not None:
+            self.async_on_remove(
+                self._history.async_add_listener(
+                    self._handle_coordinator_update, None
+                )
+            )
+
+    @property
+    def native_value(self) -> float | None:
+        data = self.coordinator.data
+        return None if data is None else data.total
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self.coordinator.data
+        attrs: dict[str, Any] = {
+            "wallet_count": len(data.holdings) if data else 0,
+            "breakdown": portfolio_breakdown(data, self._asset_cache),
+        }
+        # `async_added_to_hass` above only wires up its listener when
+        # `_history` is not None, which implies it may legitimately be None.
+        # Guard here the same way, rather than assuming the real coordinator
+        # `async_setup_entry` supplies is the only caller this ever gets: a
+        # None history should mean "no timeframe attributes", not an
+        # AttributeError out of a state-attributes read.
+        if self._history is not None:
+            for timeframe, value in (self._history.data or {}).items():
+                attrs[f"return_{timeframe.lower()}_percent"] = value
+        return attrs
+
+
+async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
+    """Set up Bitpanda sensors from a config entry."""
+    store = hass.data[DOMAIN][config_entry.entry_id]
+    portfolio = store["portfolio_coordinator"]
+    prices = store["price_coordinator"]
+    earn = store["earn_coordinator"]
+    rewards = store["rewards_coordinator"]
+    history = store["history_coordinator"]
+    resolver = store["resolver"]
+    currency = store["currency"]
+    cache = resolver.as_dict()
+
+    entities: list[SensorEntity] = []
+
+    for asset_id in config_entry.options.get(CONF_TRACKED_ASSETS, []):
+        asset = resolver.get_cached(asset_id)
+        if asset:
+            entities.append(
+                BitpandaPriceSensor(prices, portfolio, config_entry, asset, currency)
+            )
+
+    tracked_wallets = config_entry.options.get(CONF_TRACKED_WALLETS, [])
+    for asset_id in tracked_wallets:
+        asset = resolver.get_cached(asset_id)
+        if asset:
+            entities.append(
+                BitpandaWalletSensor(
+                    portfolio, earn, rewards, config_entry, asset, currency
+                )
+            )
+
+    if tracked_wallets:
+        entities.append(
+            BitpandaPortfolioSensor(
+                portfolio, history, config_entry, cache, currency
+            )
+        )
+
+    async_add_entities(entities)

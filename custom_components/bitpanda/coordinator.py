@@ -146,7 +146,9 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
         return parse_portfolio(entries, rate=rate)
 
 
-_MAX_PRICE_INTERVAL = timedelta(minutes=30)
+# Past this the data is stale enough to be worth telling the user about.
+# It is a warning threshold, never a cap — see price_interval.
+_SLOW_PRICE_INTERVAL = timedelta(minutes=30)
 
 
 def price_interval(ticker_count: int) -> timedelta:
@@ -155,6 +157,13 @@ def price_interval(ticker_count: int) -> timedelta:
     There is no batch ticker, so each tracked-but-unheld asset costs one
     request per poll. The read budget is 3000/hour; PRICE_BUDGET_SHARE of it
     is reserved for prices, leaving room for portfolio, earn and rewards.
+
+    The result is deliberately uncapped. An earlier version clamped it to 30
+    minutes, which silently broke the guarantee above once the tracked set
+    passed 900 assets: at the clamp, 900 assets exactly exhaust the
+    allowance, and 5000 would issue 10000 requests an hour against a total
+    budget of 3000. A slow sensor is a visible annoyance; a rate-limited one
+    fails in ways nobody can diagnose.
     """
     if ticker_count <= 0:
         return PRICE_UPDATE_INTERVAL_BASE
@@ -162,7 +171,7 @@ def price_interval(ticker_count: int) -> timedelta:
     allowance = HOURLY_READ_BUDGET * PRICE_BUDGET_SHARE
     required_seconds = ticker_count * 3600 / allowance
     seconds = max(PRICE_UPDATE_INTERVAL_BASE.total_seconds(), required_seconds)
-    return min(timedelta(seconds=seconds), _MAX_PRICE_INTERVAL)
+    return timedelta(seconds=seconds)
 
 
 def convert_price(price: str, rate: float | None) -> float | None:
@@ -210,6 +219,15 @@ class PriceCoordinator(DataUpdateCoordinator[dict]):
 
         needed = [a for a in self._tracked if a not in held]
         self.update_interval = price_interval(len(needed))
+
+        if self.update_interval > _SLOW_PRICE_INTERVAL:
+            _LOGGER.warning(
+                "Tracking %s assets you do not hold; prices will refresh only "
+                "every %s to stay inside the API rate limit. Track fewer "
+                "assets for more frequent updates.",
+                len(needed),
+                self.update_interval,
+            )
 
         prices: dict[str, float] = {}
 

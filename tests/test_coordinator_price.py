@@ -22,8 +22,17 @@ def test_interval_keeps_every_size_inside_the_budget():
         assert per_hour <= 1800 + 1
 
 
-def test_interval_is_never_absurdly_long():
-    assert price_interval(5000) <= timedelta(minutes=30)
+def test_interval_keeps_the_budget_even_for_absurd_counts():
+    """The budget guarantee is unconditional — there is no cap to break it."""
+    for count in (900, 901, 5000, 14054):
+        interval = price_interval(count)
+        per_hour = count * (3600 / interval.total_seconds())
+        assert per_hour <= 1800 + 1
+
+
+def test_interval_grows_past_the_old_thirty_minute_clamp():
+    """An earlier version clamped here and silently blew the budget."""
+    assert price_interval(5000) > timedelta(minutes=30)
 
 
 def test_convert_price_returns_eur_unchanged_when_no_rate():

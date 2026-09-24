@@ -13,8 +13,8 @@ from .const import (
     CONF_API_KEY,
     CONF_CURRENCY,
     DOMAIN,
-    PRICE_UPDATE_INTERVAL,
-    WALLET_UPDATE_INTERVAL,
+    PRICE_UPDATE_INTERVAL_BASE,
+    PORTFOLIO_UPDATE_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -53,7 +53,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER,
         name=f"{DOMAIN}_prices",
         update_method=async_update_prices,
-        update_interval=PRICE_UPDATE_INTERVAL,
+        update_interval=PRICE_UPDATE_INTERVAL_BASE,
         config_entry=entry,
     )
 
@@ -62,7 +62,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER,
         name=f"{DOMAIN}_wallets",
         update_method=async_update_wallets,
-        update_interval=WALLET_UPDATE_INTERVAL,
+        update_interval=PORTFOLIO_UPDATE_INTERVAL,
         config_entry=entry,
     )
 

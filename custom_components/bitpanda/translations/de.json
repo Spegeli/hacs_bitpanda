@@ -28,49 +28,38 @@
         "title": "Bitpanda Optionen",
         "description": "Konfiguriere deine Bitpanda Integration",
         "menu_options": {
-          "price_tracker": "📈 Preis-Tracker",
-          "crypto_wallets": "🪙 Krypto Wallets",
-          "fiat_wallets": "💶 Fiat Wallets",
-          "metal_wallets": "🪨 Metall Wallets",
-          "index_wallets": "📊 Index Wallets",
+          "add_asset": "📈 Preis-Tracker hinzufügen",
+          "add_wallet": "🪙 Wallet hinzufügen",
+          "remove": "🗑️ Einträge entfernen",
           "save": "💾 Speichern"
         }
       },
-      "price_tracker": {
-        "title": "Preis-Tracker",
-        "description": "Assets hinzufügen oder entfernen, um deren Live-Preise zu verfolgen.",
+      "add_asset": {
+        "title": "Preis-Tracker hinzufügen",
+        "description": "Gib ein Asset-Symbol ein, zum Beispiel BTC, XAU, BCI5 oder SXR8.",
         "data": {
-          "tracked_assets": "Verfolgte Assets"
+          "symbol": "Symbol"
         }
       },
-      "crypto_wallets": {
-        "title": "Krypto Wallets",
-        "description": "Krypto Wallets hinzufügen oder entfernen, um deren aktuellen Wert zu überwachen.",
+      "add_wallet": {
+        "title": "Wallet hinzufügen",
+        "description": "Gib das Symbol eines Assets ein, das du besitzt.",
         "data": {
-          "tracked_wallets": "Verfolgte Wallets"
+          "symbol": "Symbol"
         }
       },
-      "fiat_wallets": {
-        "title": "Fiat Wallets",
-        "description": "Fiat Wallets hinzufügen oder entfernen, um deren aktuellen Wert zu überwachen.",
+      "remove": {
+        "title": "Einträge entfernen",
         "data": {
-          "tracked_wallets": "Verfolgte Wallets"
-        }
-      },
-      "metal_wallets": {
-        "title": "Metall Wallets",
-        "description": "Metall Wallets hinzufügen oder entfernen, um deren aktuellen Wert zu überwachen.",
-        "data": {
-          "tracked_wallets": "Verfolgte Wallets"
-        }
-      },
-      "index_wallets": {
-        "title": "Index Wallets",
-        "description": "Index Wallets hinzufügen oder entfernen, um deren aktuellen Wert zu überwachen.",
-        "data": {
-          "tracked_wallets": "Verfolgte Wallets"
+          "tracked_assets": "Preis-Tracker",
+          "tracked_wallets": "Wallets"
         }
       }
+    },
+    "error": {
+      "unknown_symbol": "Kein Asset mit diesem Symbol gefunden.",
+      "invalid_auth": "Dein API-Key wurde abgelehnt. Prüfe ihn in deinen Bitpanda-Kontoeinstellungen.",
+      "rate_limited": "Zu viele Anfragen. Warte einen Moment und versuche es erneut."
     }
   }
 }

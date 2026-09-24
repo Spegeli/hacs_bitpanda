@@ -28,49 +28,38 @@
         "title": "Bitpanda Options",
         "description": "Configure your Bitpanda integration",
         "menu_options": {
-          "price_tracker": "📈 Price Tracker",
-          "crypto_wallets": "🪙 Crypto Wallets",
-          "fiat_wallets": "💶 Fiat Wallets",
-          "metal_wallets": "🪨 Metal Wallets",
-          "index_wallets": "📊 Index Wallets",
+          "add_asset": "📈 Add price tracker",
+          "add_wallet": "🪙 Add wallet",
+          "remove": "🗑️ Remove tracked items",
           "save": "💾 Save"
         }
       },
-      "price_tracker": {
-        "title": "Price Tracker",
-        "description": "Add or remove assets to track their live prices.",
+      "add_asset": {
+        "title": "Add price tracker",
+        "description": "Enter an asset symbol, for example BTC, XAU, BCI5 or SXR8.",
         "data": {
-          "tracked_assets": "Tracked Assets"
+          "symbol": "Symbol"
         }
       },
-      "crypto_wallets": {
-        "title": "Crypto Wallets",
-        "description": "Add or remove crypto wallets to monitor their current value.",
+      "add_wallet": {
+        "title": "Add wallet",
+        "description": "Enter the symbol of an asset you hold.",
         "data": {
-          "tracked_wallets": "Tracked Wallets"
+          "symbol": "Symbol"
         }
       },
-      "fiat_wallets": {
-        "title": "Fiat Wallets",
-        "description": "Add or remove fiat wallets to monitor their current value.",
+      "remove": {
+        "title": "Remove tracked items",
         "data": {
-          "tracked_wallets": "Tracked Wallets"
-        }
-      },
-      "metal_wallets": {
-        "title": "Metal Wallets",
-        "description": "Add or remove metal wallets to monitor their current value.",
-        "data": {
-          "tracked_wallets": "Tracked Wallets"
-        }
-      },
-      "index_wallets": {
-        "title": "Index Wallets",
-        "description": "Add or remove index wallets to monitor their current value.",
-        "data": {
-          "tracked_wallets": "Tracked Wallets"
+          "tracked_assets": "Price trackers",
+          "tracked_wallets": "Wallets"
         }
       }
+    },
+    "error": {
+      "unknown_symbol": "No asset found with that symbol.",
+      "invalid_auth": "Your API key was rejected. Check it in your Bitpanda account settings.",
+      "rate_limited": "Too many requests. Wait a moment and try again."
     }
   }
 }

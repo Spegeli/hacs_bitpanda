@@ -263,15 +263,20 @@ class BitpandaPriceSensor(CoordinatorEntity, SensorEntity):
             "asset_name": self._asset.get("name"),
             "trading_pair": f"{self._asset.get('symbol')}/{self._currency}",
         }
-        portfolio = self._portfolio.data
-        if portfolio and self._currency != "EUR":
-            if portfolio.rate is None:
+        # Branch on the currency alone. Gating on `portfolio` as well would
+        # drop the whole block while the coordinator still has no data — which
+        # is every startup, before its first refresh — and a non-EUR user
+        # would see an unconverted EUR price with nothing saying so.
+        if self._currency != "EUR":
+            portfolio = self._portfolio.data
+            rate = portfolio.rate if portfolio else None
+            if rate is None:
                 attrs["conversion"] = (
                     "unavailable - price shown in EUR because no holding "
                     "exists to derive a rate from"
                 )
             else:
-                attrs["conversion_rate"] = round(portfolio.rate, 8)
+                attrs["conversion_rate"] = round(rate, 8)
                 attrs["conversion_source"] = "bitpanda-portfolio"
 
         if self._price_24h_ago is not None:

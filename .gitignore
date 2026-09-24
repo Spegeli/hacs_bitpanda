@@ -10,6 +10,9 @@ CLAUDE.md
 # API migration workspace — local research, notes and probe scripts
 umbau/
 
+# Local planning documents
+docs/
+
 # Python
 __pycache__/
 *.py[cod]

@@ -7,6 +7,9 @@ CLAUDE.md
 *.key
 .env
 
+# API migration workspace — local research, notes and probe scripts
+umbau/
+
 # Python
 __pycache__/
 *.py[cod]

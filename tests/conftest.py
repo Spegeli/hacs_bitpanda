@@ -15,9 +15,13 @@ def pytest_configure(config):
     spins without ever yielding to the event loop — `asyncio.wait_for` cannot
     cancel it, so only an out-of-band signal stops the run. Without the plugin
     that marker is an unknown mark: pytest warns and carries on, and the test
-    hangs the suite instead of failing it. `--strict-markers` would catch this
-    but is silently ignored from `addopts` in this setup, so the check is made
-    explicit here.
+    hangs the suite instead of failing it.
+
+    `--strict-markers` would express the same requirement, but only from the
+    command line. Measured in this plugin stack: passed as a CLI flag it fails
+    collection with "'timeout' not found in `markers` configuration option",
+    while the identical setting in `pytest.ini`'s `addopts` is discarded and
+    leaves only a warning. Hence an explicit hook rather than a config line.
     """
     if not config.pluginmanager.hasplugin("timeout"):
         raise pytest.UsageError(

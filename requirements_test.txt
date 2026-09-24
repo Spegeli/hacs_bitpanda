@@ -8,5 +8,5 @@ pytest-homeassistant-custom-component>=0.13.316
 # stuck-cursor pagination test is guarded by @pytest.mark.timeout, and an
 # undeclared transitive dependency that later disappears would turn that
 # marker into a silent no-op — the test would hang the suite instead of
-# failing. pytest.ini sets --strict-markers so its absence errors loudly.
+# failing. tests/conftest.py refuses to run without the plugin.
 pytest-timeout>=2.4.0

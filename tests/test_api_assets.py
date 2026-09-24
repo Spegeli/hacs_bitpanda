@@ -1,7 +1,8 @@
 """Tests for asset and currency retrieval."""
-import aiohttp
+import asyncio
+
 import pytest
-from aioresponses import aioresponses
+from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client
 
 from custom_components.bitpanda.api import (
     BitpandaApiClient,
@@ -14,86 +15,86 @@ from tests.conftest import load_fixture
 
 
 async def test_get_currencies_returns_all_twelve():
-    async with aiohttp.ClientSession() as session:
-        client = BitpandaApiClient("key", session)
-        with aioresponses() as m:
-            m.get(
-                f"{API_BASE_URL}/currencies",
-                payload={"data": load_fixture("currencies.json")},
-            )
+    with mock_aiohttp_client() as mocker:
+        mocker.get(
+            f"{API_BASE_URL}/currencies",
+            json={"data": load_fixture("currencies.json")},
+        )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
             result = await client.async_get_currencies()
     assert len(result) == 12
     assert any(c["symbol"] == "EUR" for c in result)
 
 
 async def test_get_assets_by_symbol():
-    async with aiohttp.ClientSession() as session:
-        client = BitpandaApiClient("key", session)
-        with aioresponses() as m:
-            m.get(
-                f"{API_BASE_URL}/assets?page_size=100&symbol=BTC",
-                payload={
-                    "data": [{"id": "uuid-btc", "symbol": "BTC", "type": "cryptocoin"}],
-                    "has_next_page": False,
-                },
-            )
+    with mock_aiohttp_client() as mocker:
+        mocker.get(
+            f"{API_BASE_URL}/assets?page_size=100&symbol=BTC",
+            json={
+                "data": [{"id": "uuid-btc", "symbol": "BTC", "type": "cryptocoin"}],
+                "has_next_page": False,
+            },
+        )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
             result = await client.async_get_assets(symbol="BTC")
     assert result[0]["id"] == "uuid-btc"
 
 
 async def test_get_assets_follows_pagination():
-    async with aiohttp.ClientSession() as session:
-        client = BitpandaApiClient("key", session)
-        with aioresponses() as m:
-            m.get(
-                f"{API_BASE_URL}/assets?page_size=100",
-                payload={
-                    "data": [{"id": "a", "symbol": "A"}],
-                    "next_cursor": "CUR",
-                    "has_next_page": True,
-                },
-            )
-            m.get(
-                f"{API_BASE_URL}/assets?cursor=CUR&page_size=100",
-                payload={"data": [{"id": "b", "symbol": "B"}], "has_next_page": False},
-            )
+    with mock_aiohttp_client() as mocker:
+        mocker.get(
+            f"{API_BASE_URL}/assets?cursor=CUR&page_size=100",
+            json={"data": [{"id": "b", "symbol": "B"}], "has_next_page": False},
+        )
+        mocker.get(
+            f"{API_BASE_URL}/assets?page_size=100",
+            json={
+                "data": [{"id": "a", "symbol": "A"}],
+                "next_cursor": "CUR",
+                "has_next_page": True,
+            },
+        )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
             result = await client.async_get_assets()
     assert [a["id"] for a in result] == ["a", "b"]
 
 
 async def test_paginate_stops_when_cursor_does_not_advance():
     """The server emits cursors it then ignores, re-serving the same page."""
-    async with aiohttp.ClientSession() as session:
-        client = BitpandaApiClient("key", session)
-        with aioresponses() as m:
-            m.get(
-                f"{API_BASE_URL}/assets?page_size=100",
-                payload={"data": [{"id": "a"}], "next_cursor": "STUCK",
-                         "has_next_page": True},
-            )
-            m.get(
-                f"{API_BASE_URL}/assets?cursor=STUCK&page_size=100",
-                payload={"data": [{"id": "a"}], "next_cursor": "STUCK",
-                         "has_next_page": True},
-                repeat=True,
-            )
+    with mock_aiohttp_client() as mocker:
+        mocker.get(
+            f"{API_BASE_URL}/assets?cursor=STUCK&page_size=100",
+            json={"data": [{"id": "a"}], "next_cursor": "STUCK",
+                  "has_next_page": True},
+        )
+        mocker.get(
+            f"{API_BASE_URL}/assets?page_size=100",
+            json={"data": [{"id": "a"}], "next_cursor": "STUCK",
+                  "has_next_page": True},
+        )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
             result = await client.async_get_assets()
+            assert mocker.call_count == 2
     assert [a["id"] for a in result] == ["a"]
 
 
 async def test_401_raises_auth_error():
-    async with aiohttp.ClientSession() as session:
-        client = BitpandaApiClient("key", session)
-        with aioresponses() as m:
-            m.get(f"{API_BASE_URL}/currencies", status=401)
+    with mock_aiohttp_client() as mocker:
+        mocker.get(f"{API_BASE_URL}/currencies", status=401)
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
             with pytest.raises(BitpandaAuthError):
                 await client.async_get_currencies()
 
 
 async def test_429_raises_rate_limit_error():
-    async with aiohttp.ClientSession() as session:
-        client = BitpandaApiClient("key", session)
-        with aioresponses() as m:
-            m.get(f"{API_BASE_URL}/currencies", status=429)
+    with mock_aiohttp_client() as mocker:
+        mocker.get(f"{API_BASE_URL}/currencies", status=429)
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
             with pytest.raises(BitpandaRateLimitError):
                 await client.async_get_currencies()

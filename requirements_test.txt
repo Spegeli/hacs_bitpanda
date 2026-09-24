@@ -1,15 +1,6 @@
 pytest>=8.0.0
 pytest-asyncio>=0.24.0
-# Pinned deliberately. This package pins the Home Assistant version the suite
-# runs against, and an unpinned floor drifts silently: it first resolved to a
-# build pairing with HA 2026.2.3 while the instance used for live verification
-# ran 2026.9.3.
-#
-# Moving to the 2026.9.3 pair requires Python 3.14, and there aiohttp 3.14
-# breaks aioresponses: ClientResponse.__init__ gained a required stream_writer
-# argument that aioresponses 0.7.9 — the newest release — does not pass, which
-# fails all 27 tests using it. Closing that gap means migrating the mocking
-# layer to Home Assistant's own AiohttpClientMocker, which is a task of its own.
-# Until then this pin keeps the suite reproducible rather than drifting.
-pytest-homeassistant-custom-component==0.13.316
-aioresponses>=0.7.6
+# Tracks the Home Assistant release the live instance runs. The suite mocks
+# HTTP through homeassistant's own AiohttpClientMocker, which ships inside this
+# package, so there is no separate mocking library to keep in step with aiohttp.
+pytest-homeassistant-custom-component>=0.13.316

@@ -1,7 +1,8 @@
 """Tests for symbol resolution and categorisation."""
-import aiohttp
+import asyncio
+
 import pytest
-from aioresponses import aioresponses
+from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client
 
 from custom_components.bitpanda.api import (
     BitpandaApiClient,
@@ -18,50 +19,51 @@ def _asset(symbol, asset_id, type_, group):
 
 
 async def test_resolve_calls_api_once_then_caches():
-    async with aiohttp.ClientSession() as session:
-        client = BitpandaApiClient("key", session)
-        resolver = AssetResolver(client, {})
-        with aioresponses() as m:
-            m.get(
-                f"{API_BASE_URL}/assets?page_size=100&symbol=BTC",
-                payload={"data": [_asset("BTC", "uuid-btc", "cryptocoin", "coin")],
-                         "has_next_page": False},
-            )
+    with mock_aiohttp_client() as mocker:
+        mocker.get(
+            f"{API_BASE_URL}/assets?page_size=100&symbol=BTC",
+            json={"data": [_asset("BTC", "uuid-btc", "cryptocoin", "coin")],
+                  "has_next_page": False},
+        )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            resolver = AssetResolver(client, {})
             first = await resolver.async_resolve("BTC")
             second = await resolver.async_resolve("BTC")
+            assert mocker.call_count == 1
     assert first["id"] == "uuid-btc"
     assert second["id"] == "uuid-btc"
 
 
 async def test_resolve_unknown_symbol_returns_none():
-    async with aiohttp.ClientSession() as session:
-        client = BitpandaApiClient("key", session)
-        resolver = AssetResolver(client, {})
-        with aioresponses() as m:
-            m.get(
-                f"{API_BASE_URL}/assets?page_size=100&symbol=NOPE",
-                payload={"data": [], "has_next_page": False},
-            )
+    with mock_aiohttp_client() as mocker:
+        mocker.get(
+            f"{API_BASE_URL}/assets?page_size=100&symbol=NOPE",
+            json={"data": [], "has_next_page": False},
+        )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            resolver = AssetResolver(client, {})
             assert await resolver.async_resolve("NOPE") is None
 
 
 async def test_resolve_propagates_auth_error():
     """A bad key must not look like a missing symbol."""
-    async with aiohttp.ClientSession() as session:
-        client = BitpandaApiClient("key", session)
-        resolver = AssetResolver(client, {})
-        with aioresponses() as m:
-            m.get(f"{API_BASE_URL}/assets?page_size=100&symbol=BTC", status=401)
+    with mock_aiohttp_client() as mocker:
+        mocker.get(f"{API_BASE_URL}/assets?page_size=100&symbol=BTC", status=401)
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            resolver = AssetResolver(client, {})
             with pytest.raises(BitpandaAuthError):
                 await resolver.async_resolve("BTC")
 
 
 async def test_resolve_propagates_rate_limit_error():
-    async with aiohttp.ClientSession() as session:
-        client = BitpandaApiClient("key", session)
-        resolver = AssetResolver(client, {})
-        with aioresponses() as m:
-            m.get(f"{API_BASE_URL}/assets?page_size=100&symbol=BTC", status=429)
+    with mock_aiohttp_client() as mocker:
+        mocker.get(f"{API_BASE_URL}/assets?page_size=100&symbol=BTC", status=429)
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            resolver = AssetResolver(client, {})
             with pytest.raises(BitpandaRateLimitError):
                 await resolver.async_resolve("BTC")
 

@@ -8,7 +8,12 @@ from __future__ import annotations
 
 import logging
 
-from .api import BitpandaApiClient, BitpandaApiError
+from .api import (
+    BitpandaApiClient,
+    BitpandaApiError,
+    BitpandaAuthError,
+    BitpandaRateLimitError,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,6 +65,12 @@ class AssetResolver:
             return None
         try:
             found = await self._client.async_get_assets(symbol=symbol)
+        except (BitpandaAuthError, BitpandaRateLimitError):
+            # Never swallow these. "Your key is invalid" and "you are being
+            # rate limited" are not the same condition as "no such symbol",
+            # and the caller has to be able to tell them apart — the config
+            # flow shows a different error for each.
+            raise
         except BitpandaApiError:
             _LOGGER.warning("Could not resolve symbol %s", symbol)
             return None

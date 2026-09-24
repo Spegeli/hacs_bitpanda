@@ -1,8 +1,13 @@
 """Tests for symbol resolution and categorisation."""
 import aiohttp
+import pytest
 from aioresponses import aioresponses
 
-from custom_components.bitpanda.api import BitpandaApiClient
+from custom_components.bitpanda.api import (
+    BitpandaApiClient,
+    BitpandaAuthError,
+    BitpandaRateLimitError,
+)
 from custom_components.bitpanda.assets import AssetResolver, category_of
 from custom_components.bitpanda.const import API_BASE_URL
 
@@ -38,6 +43,32 @@ async def test_resolve_unknown_symbol_returns_none():
                 payload={"data": [], "has_next_page": False},
             )
             assert await resolver.async_resolve("NOPE") is None
+
+
+async def test_resolve_propagates_auth_error():
+    """A bad key must not look like a missing symbol."""
+    async with aiohttp.ClientSession() as session:
+        client = BitpandaApiClient("key", session)
+        resolver = AssetResolver(client, {})
+        with aioresponses() as m:
+            m.get(f"{API_BASE_URL}/assets?page_size=100&symbol=BTC", status=401)
+            with pytest.raises(BitpandaAuthError):
+                await resolver.async_resolve("BTC")
+
+
+async def test_resolve_propagates_rate_limit_error():
+    async with aiohttp.ClientSession() as session:
+        client = BitpandaApiClient("key", session)
+        resolver = AssetResolver(client, {})
+        with aioresponses() as m:
+            m.get(f"{API_BASE_URL}/assets?page_size=100&symbol=BTC", status=429)
+            with pytest.raises(BitpandaRateLimitError):
+                await resolver.async_resolve("BTC")
+
+
+async def test_resolve_without_client_returns_none():
+    resolver = AssetResolver(None, {})
+    assert await resolver.async_resolve("BTC") is None
 
 
 async def test_get_cached_by_id():

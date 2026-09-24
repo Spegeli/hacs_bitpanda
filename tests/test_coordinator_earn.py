@@ -2,6 +2,7 @@
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaAuthError
 from custom_components.bitpanda.coordinator import (
     RewardsCoordinator,
+    _is_later,
     map_earn_configs,
     sum_rewards,
 )
@@ -106,6 +107,24 @@ def test_sum_rewards_ignores_a_reward_from_another_wallet_owner():
     totals = sum_rewards(ops)["vsn"]
     assert totals.count == 1
     assert abs(totals.gross - 5.0) < 1e-9
+
+
+def test_is_later_ignores_empty_timestamps():
+    """The pre-fix code guarded with `if credited`; an empty string must not win."""
+    assert _is_later("", None) is False
+    assert _is_later("", "2026-09-22T17:16:35Z") is False
+    assert _is_later("2026-09-22T17:16:35Z", "") is True
+
+
+def test_is_later_survives_a_mixed_timezone_batch():
+    """A zone-less timestamp must not raise out of a coordinator refresh."""
+    result = _is_later("2026-09-22T17:16:35", "2026-09-21T00:00:00Z")
+    assert isinstance(result, bool)
+
+
+def test_is_later_survives_a_non_string():
+    result = _is_later(12345, "2026-09-21T00:00:00Z")
+    assert isinstance(result, bool)
 
 
 # ---------------------------------------------------------------------------

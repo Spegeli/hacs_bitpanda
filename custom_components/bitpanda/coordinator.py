@@ -286,14 +286,18 @@ def _is_later(candidate: str | None, current: str | None) -> bool:
     later fractional one. Parse instead, and fall back to string comparison
     only if parsing fails.
     """
-    if candidate is None:
+    if not candidate:
         return False
-    if current is None:
+    if not current:
         return True
     try:
         return datetime.fromisoformat(candidate) > datetime.fromisoformat(current)
-    except ValueError:
-        return candidate > current
+    except (TypeError, ValueError):
+        # ValueError for a malformed string; TypeError for a non-string, and
+        # for comparing an offset-aware datetime against a naive one. Every
+        # timestamp seen from this endpoint carries a Z, but it is undocumented
+        # and a mixed batch must not raise out of a coordinator refresh.
+        return str(candidate) > str(current)
 
 
 @dataclass

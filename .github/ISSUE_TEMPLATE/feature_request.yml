@@ -7,18 +7,12 @@ body:
       value: |
         Have an idea to improve this integration? Fill out the form below.
 
-        > [!IMPORTANT]
-        > **Stocks, ETFs and commodities cannot be added.** They are not part of the public Bitpanda
-        > Price Ticker API, so there is no price data to build on. Requests for these will be closed.
-
   - type: checkboxes
     id: preflight
     attributes:
       label: Before you start
       options:
         - label: I searched [existing issues](https://github.com/Spegeli/hacs_bitpanda/issues?q=is%3Aissue) and this is not a duplicate.
-          required: true
-        - label: This is not a request for stocks, ETFs or commodities.
           required: true
 
   - type: dropdown

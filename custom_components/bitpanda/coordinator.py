@@ -217,7 +217,15 @@ class PriceCoordinator(DataUpdateCoordinator[dict]):
         held = portfolio.holdings if portfolio else {}
         rate = portfolio.rate if portfolio else None
 
-        needed = [a for a in self._tracked if a not in held]
+        # A holding priced from the portfolio needs a non-zero balance to
+        # divide by. Anything else — not held at all, or held at zero — must
+        # fall through to a ticker call, or it would get no price from either
+        # path and no log line saying why.
+        def _priceable_from_portfolio(asset_id: str) -> bool:
+            holding = held.get(asset_id)
+            return holding is not None and holding.balance > 0
+
+        needed = [a for a in self._tracked if not _priceable_from_portfolio(a)]
         self.update_interval = price_interval(len(needed))
 
         if self.update_interval > _SLOW_PRICE_INTERVAL:
@@ -233,14 +241,16 @@ class PriceCoordinator(DataUpdateCoordinator[dict]):
 
         # Held assets: derive the unit price from the portfolio, no request.
         for asset_id in self._tracked:
-            holding = held.get(asset_id)
-            if holding and holding.balance:
+            if _priceable_from_portfolio(asset_id):
+                holding = held[asset_id]
                 prices[asset_id] = holding.value / holding.balance
 
+        ticker_failures = 0
         for asset_id in needed:
             try:
                 ticker = await self._client.async_get_ticker(asset_id)
             except BitpandaApiError:
+                ticker_failures += 1
                 _LOGGER.debug("No ticker for %s this cycle", asset_id)
                 continue
             converted = convert_price(ticker.get("price", ""), rate)
@@ -249,4 +259,17 @@ class PriceCoordinator(DataUpdateCoordinator[dict]):
 
         if not prices and needed:
             raise UpdateFailed("No prices could be fetched")
+
+        # Partial data still beats none, so held prices are returned rather
+        # than failing the whole update. But a ticker endpoint that is down
+        # for every asset must not be visible only at DEBUG level, which
+        # nobody has enabled.
+        if needed and ticker_failures == len(needed):
+            _LOGGER.warning(
+                "Every one of the %s ticker requests failed this cycle. "
+                "Prices for assets you do not hold are stale; values for "
+                "assets you hold are unaffected.",
+                len(needed),
+            )
+
         return prices

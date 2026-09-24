@@ -132,3 +132,22 @@ def test_portfolio_cash_is_zero_not_absent_when_coordinator_has_no_data():
     assert "cash" in attrs
     assert attrs["cash"] is not None
     assert attrs["cash"] == 0.0
+
+
+def _sensor(data, *, asset_cache=None):
+    """Build a BitpandaPortfolioSensor with fake coordinators for a given
+    portfolio data value ("no data", "holdings but no cash", "cash only")."""
+    portfolio = _FakeCoordinator(data=data)
+    history = _FakeCoordinator(data=None)
+    return BitpandaPortfolioSensor(
+        portfolio, history, _FakeConfigEntry(),
+        asset_cache=asset_cache or {}, currency="EUR",
+    )
+
+
+def test_portfolio_cash_is_always_a_float():
+    """sum({}.values()) is an int, and round() preserves the type."""
+    for data in (None, PortfolioData(holdings={"a": _h("a", 5.0)}),
+                 PortfolioData(fiat={"eur": 1.5, "usd": 2.25})):
+        sensor = _sensor(data)
+        assert isinstance(sensor.extra_state_attributes["cash"], float)

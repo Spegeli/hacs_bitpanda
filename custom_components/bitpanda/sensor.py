@@ -358,7 +358,18 @@ class BitpandaPortfolioSensor(CoordinatorEntity, SensorEntity):
             # breakdown covers holdings only, so without this the two would
             # disagree by exactly the cash balance, permanently and with
             # nothing explaining it.
-            "cash": round(sum(data.fiat.values()), 2) if data else 0.0,
+            #
+            # float() is not decoration: sum({}.values()) returns the int 0
+            # and round() preserves the type, so an account with holdings but
+            # no cash would otherwise publish an int where every sibling
+            # attribute is a float.
+            #
+            # These three figures are each rounded independently from the same
+            # underlying sum, so sum(breakdown) + cash can differ from
+            # native_value by a cent. That is inherent to rounding partitions
+            # separately, and is preferable to a "cash" figure silently
+            # absorbing the remainder and no longer being the cash balance.
+            "cash": float(round(sum(data.fiat.values()), 2)) if data else 0.0,
         }
         # `async_added_to_hass` above only wires up its listener when
         # `_history` is not None, which implies it may legitimately be None.

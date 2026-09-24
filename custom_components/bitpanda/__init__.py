@@ -157,14 +157,16 @@ async def _migrate_entity_registry(
         if colliding_entity_id is not None:
             # Not only a "second migration" concern: er.async_migrate_entries
             # applies each entity's update synchronously inside its own loop,
-            # so if two distinct v1 identifiers resolve to the same UUID --
-            # exactly what this task makes possible, since
-            # "commodity_metal_XAU" and "metal_XAU" now both resolve to gold
-            # -- the second entity's collision check sees the first entity's
-            # just-migrated unique_id, on a single, first-ever run. Log
-            # entity_ids only, never entry.data, and move on rather than
-            # letting async_update_entity's ValueError crash migration for
-            # this one odd installation.
+            # so if two distinct v1 identifiers resolve to the same UUID, the
+            # second entity's collision check sees the first entity's
+            # just-migrated unique_id, on a single, first-ever run. This was
+            # already possible under the old first-match resolver too --
+            # task 23's prefix narrowing does not introduce the collision,
+            # though it does add a concrete instance: "commodity_metal_XAU"
+            # and "metal_XAU" both resolve to gold. Log entity_ids only,
+            # never entry.data, and move on rather than letting
+            # async_update_entity's ValueError crash migration for this one
+            # odd installation.
             _LOGGER.warning(
                 "Skipping unique_id migration for %s: %s already uses the "
                 "target unique_id",
@@ -205,6 +207,18 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     resolver = AssetResolver(client, {})
 
+    # Memoised across both _resolve_all calls below (tracked_assets, then
+    # tracked_wallets), keyed by the bare symbol -- not by the raw v1 value,
+    # which still differs between a price tracker and a wallet even when they
+    # name the same asset. A symbol tracked as both costs one request instead
+    # of two (task-23-review.md, finding 9).
+    candidates_by_symbol: dict[str, list[dict]] = {}
+
+    async def _candidates_for(sym: str) -> list[dict]:
+        if sym not in candidates_by_symbol:
+            candidates_by_symbol[sym] = await resolver.async_candidates(sym)
+        return candidates_by_symbol[sym]
+
     async def _resolve_all(values: list[str], strip_prefix: bool) -> dict[str, str]:
         """Resolve each raw version-1 value to its asset UUID.
 
@@ -220,15 +234,30 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         stable -- so every candidate is fetched and `pick_legacy` chooses the
         one a legacy (crypto/index/metal-only) identifier could have meant,
         using the wallet id's own category prefix to narrow further. See
-        assets.py.
+        assets.py. Only the chosen asset is `remember`ed into the resolver's
+        cache -- not every candidate `_candidates_for` returned -- so an
+        unrelated candidate sharing the symbol (GoldMoney, say, beside Gold)
+        never rides along into the persisted `asset_cache`.
         """
         out: dict[str, str] = {}
         for value in values:
-            sym = legacy_symbol(value) if strip_prefix else value
             prefix = legacy_prefix(value) if strip_prefix else None
-            candidates = await resolver.async_candidates(sym)
+            if prefix == "fiat_":
+                # A currency is not an /assets record at all -- pick_legacy
+                # always returns None for it -- so asking the API is a
+                # wasted request and a needless rate-limit exposure for a
+                # run that aborts on 429 (task-23-review.md, finding 9).
+                _LOGGER.warning(
+                    "Dropping %s during migration: a fiat wallet has no "
+                    "asset to resolve to",
+                    value,
+                )
+                continue
+            sym = legacy_symbol(value) if strip_prefix else value
+            candidates = await _candidates_for(sym)
             asset = pick_legacy(candidates, prefix)
             if asset is not None:
+                resolver.remember(asset)
                 out[value] = asset["id"]
                 continue
             survivors = legacy_candidates(candidates, prefix)

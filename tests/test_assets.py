@@ -38,11 +38,13 @@ def _by_symbol(symbol: str) -> list[dict]:
 #
 # A symbol is not unique in the 14000-asset catalogue -- XAU alone names both
 # a stock and a metal (see task-23-brief.md) -- so candidates returns every
-# match instead of guessing, and caches each one by id so both stay
-# retrievable even though they share a symbol.
+# match instead of guessing. It no longer caches them itself (task-23-review.md,
+# finding 9): the migration remembers only whichever one `pick_legacy`
+# chooses, so an unrelated candidate sharing the symbol (the stock, say)
+# never rides along into the persisted cache next to the one actually picked.
 
 
-async def test_candidates_returns_every_match_and_caches_each_by_id():
+async def test_candidates_returns_every_match():
     xau = _by_symbol("XAU")
     assert len(xau) == 2
 
@@ -57,10 +59,9 @@ async def test_candidates_returns_every_match_and_caches_each_by_id():
             found = await resolver.async_candidates("XAU")
 
     assert {a["id"] for a in found} == {a["id"] for a in xau}
+    # Not cached by async_candidates itself -- nothing has been chosen yet.
     for asset in xau:
-        cached = resolver.get_cached(asset["id"])
-        assert cached is not None
-        assert cached["id"] == asset["id"]
+        assert resolver.get_cached(asset["id"]) is None
 
 
 async def test_candidates_of_unknown_symbol_returns_empty_list():
@@ -101,6 +102,22 @@ async def test_candidates_without_client_returns_empty_list():
     assert await resolver.async_candidates("BTC") == []
 
 
+async def test_candidates_of_empty_symbol_returns_empty_list_without_a_request():
+    """A bare-prefix v1 wallet id (`legacy_symbol("cryptocoin_")` is `""`)
+    must never reach the API: an empty `symbol` drops the query filter
+    entirely (`api.py`'s `if symbol:`) and would page through the whole
+    ~14,000-asset catalogue instead of finding nothing (task-23-review.md,
+    finding 10). No mock is registered below, so an attempted request raises
+    instead of silently succeeding.
+    """
+    with mock_aiohttp_client() as mocker:
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            resolver = AssetResolver(client, {})
+            assert await resolver.async_candidates("") == []
+        assert mocker.call_count == 0
+
+
 # --- AssetResolver: cache and remember ---------------------------------------
 
 
@@ -110,6 +127,19 @@ def test_get_cached_by_id():
     )
     assert resolver.get_cached("uuid-btc")["symbol"] == "BTC"
     assert resolver.get_cached("uuid-missing") is None
+
+
+def test_resolver_heals_a_symbol_keyed_cache_from_an_earlier_build():
+    """An earlier dev build persisted `asset_cache` keyed by symbol instead
+    of by id. Trusting the cache's own outer keys would keep only the
+    portfolio sensor working and silently drop every tracked price/wallet
+    sensor at setup (task-23-review.md, finding 6). Re-keying from each
+    record's own `id` heals such an entry at zero cost, the same idiom
+    `portfolio_breakdown` and the options flow's `remove` step already use.
+    """
+    symbol_keyed_cache = {"BTC": _asset("BTC", "uuid-btc", "cryptocoin", "coin")}
+    resolver = AssetResolver(None, symbol_keyed_cache)
+    assert resolver.get_cached("uuid-btc")["symbol"] == "BTC"
 
 
 def test_remember_adds_to_cache_by_id():
@@ -208,6 +238,23 @@ def test_pick_legacy_only_a_stock_candidate_is_none():
     assert pick_legacy(_by_symbol("BNB"), None) is not None  # sanity: BNB has a coin
     stock_only = [a for a in _by_symbol("BNB") if a["type"] == "equity_security"]
     assert pick_legacy(stock_only, None) is None
+
+
+def test_pick_legacy_narrows_by_prefix_between_two_legacy_types():
+    """Synthetic: the real catalogue has zero symbols shared between two
+    legacy-supported types (task-23-brief.md), so this pins the prefix
+    narrowing itself (crypto/metal/index) rather than relying on real data to
+    exercise it (task-23-review.md, finding 12, mutation b2). Without the
+    narrowing, both `cryptocoin_` and `commodity_metal_` would see two
+    legacy-supported survivors and return None instead of the right one.
+    """
+    crypto = _asset("DUP", "id-crypto", "cryptocoin", "coin")
+    metal = _asset("DUP", "id-metal", "commodity", "metal")
+    candidates = [crypto, metal]
+
+    assert pick_legacy(candidates, "cryptocoin_") == crypto
+    assert pick_legacy(candidates, "commodity_metal_") == metal
+    assert pick_legacy(candidates, None) is None
 
 
 # --- category_of ---------------------------------------------------------

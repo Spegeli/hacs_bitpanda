@@ -1,10 +1,13 @@
 """Symbol to asset-id resolution for the Bitpanda Public API.
 
-Every endpoint except /assets and /currencies works on UUIDs, and the catalog
-is over 14000 entries, so it is never enumerated. Symbols are resolved one at
-a time and cached in the config entry -- by asset id, not by symbol, because
-a symbol does not uniquely name an asset (`XAU` is both a stock and a metal;
-see `pick_legacy` below).
+Every endpoint except /assets and /currencies works on UUIDs. `AssetResolver`
+resolves one symbol at a time -- migration is its only caller now -- and
+caches every hit in the config entry by asset id, not by symbol, because a
+symbol does not uniquely name an asset (`XAU` is both a stock and a metal;
+see `pick_legacy` below). The options flow separately pages through whole
+catalogue categories to build its pickers (`config_flow.py`'s
+`ASSET_CATEGORY_FILTERS` and `BitpandaApiClient.async_list_assets`) -- a
+different, unrelated enumeration that this module has no part in.
 """
 from __future__ import annotations
 
@@ -105,7 +108,16 @@ class AssetResolver:
         self, client: BitpandaApiClient | None, cache: dict[str, dict] | None = None
     ) -> None:
         self._client = client
-        self._by_id: dict[str, dict] = dict(cache or {})
+        # Re-keyed from each record's own id rather than trusting the given
+        # dict's outer keys: a v2 entry saved by an earlier dev build
+        # persisted `asset_cache` keyed by symbol, and trusting that would
+        # keep every one of its records permanently unreachable by id --
+        # silently dropping every tracked sensor at setup instead of healing
+        # (task-23-review.md, finding 6). A cache already keyed by id
+        # re-keys to the same thing, so this is free for the normal case.
+        self._by_id: dict[str, dict] = {
+            a["id"]: a for a in (cache or {}).values() if a.get("id")
+        }
 
     def remember(self, asset: dict) -> None:
         """Cache an asset record by its id. A record with no id is ignored."""
@@ -113,18 +125,27 @@ class AssetResolver:
             self._by_id[asset["id"]] = asset
 
     async def async_candidates(self, symbol: str) -> list[dict]:
-        """Return every asset the API has under `symbol`, caching each by id.
+        """Return every asset the API has under `symbol`. Migration only.
 
         Always asks the API: nothing here can tell whether a previous call
         already saw every asset that carries this symbol, so there is no
         cache to short-circuit on, unlike a single-answer lookup. The caller
-        (migration's `pick_legacy`, or the options flow) decides which
-        candidate, if any, is the right one.
+        (migration's `pick_legacy`) decides which candidate, if any, is the
+        right one, and `remember`s only that one -- not every candidate this
+        returns, so an unrelated candidate sharing the symbol is never
+        persisted into the config entry alongside the one actually chosen.
+
+        Never queries an empty symbol: `BitpandaApiClient.async_get_assets`
+        drops the `symbol` filter entirely when it is falsy, which would page
+        through the whole ~14,000-asset catalogue instead of finding nothing
+        (task-23-review.md, finding 10). `legacy_symbol` returns "" for a
+        bare-prefix v1 id like `"cryptocoin_"`; migration never builds one,
+        but this stays correct even if that changes.
         """
-        if self._client is None:
+        if not symbol or self._client is None:
             return []
         try:
-            found = await self._client.async_get_assets(symbol=symbol)
+            return await self._client.async_get_assets(symbol=symbol)
         except (BitpandaAuthError, BitpandaRateLimitError):
             # Never swallow these. "Your key is invalid" and "you are being
             # rate limited" are not the same condition as "no such symbol",
@@ -134,9 +155,6 @@ class AssetResolver:
         except BitpandaApiError:
             _LOGGER.warning("Could not resolve symbol %s", symbol)
             return []
-        for asset in found:
-            self.remember(asset)
-        return found
 
     def get_cached(self, asset_id: str) -> dict | None:
         """Return a cached asset by its id, without any network access."""

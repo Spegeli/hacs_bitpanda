@@ -614,6 +614,10 @@ async def test_migrate_entry_disambiguates_xau_wallet_and_price_stock_returned_f
     assert entry.options["asset_cache"][metal["id"]]["id"] == metal["id"]
     assert stock["id"] not in entry.options["tracked_assets"]
     assert stock["id"] not in entry.options["tracked_wallets"]
+    # Only the chosen (metal) record is persisted -- the unchosen stock
+    # candidate must not ride along into the cache (task-23-review.md,
+    # finding 9).
+    assert stock["id"] not in entry.options["asset_cache"]
 
     updated_price = ent_reg.async_get(price_entity_id)
     assert updated_price.unique_id == f"{eid}_{metal['id']}_price_EUR"
@@ -622,14 +626,102 @@ async def test_migrate_entry_disambiguates_xau_wallet_and_price_stock_returned_f
     assert updated_wallet.unique_id == f"{eid}_wallet_{metal['id']}"
 
 
+# --- async_migrate_entry: request budget (task-23-review.md, finding 9) ------
+
+
+async def test_migrate_entry_memoises_candidates_for_a_symbol_tracked_twice(hass):
+    """A symbol tracked as both a price tracker and a wallet must cost one
+    /assets?symbol= request, not two.
+    """
+    entry = _v1_entry(
+        tracked_assets=["BTC"],
+        tracked_wallets=["cryptocoin_BTC"],
+    )
+    entry.add_to_hass(hass)
+
+    mock_get_assets = AsyncMock(return_value=[_asset("BTC", "uuid-btc")])
+    with patch(
+        "custom_components.bitpanda.BitpandaApiClient.async_get_currencies",
+        AsyncMock(return_value=load_fixture("currencies.json")),
+    ), patch(
+        "custom_components.bitpanda.BitpandaApiClient.async_get_assets",
+        mock_get_assets,
+    ):
+        assert await async_migrate_entry(hass, entry) is True
+
+    assert entry.options["tracked_assets"] == ["uuid-btc"]
+    assert entry.options["tracked_wallets"] == ["uuid-btc"]
+    mock_get_assets.assert_called_once_with(symbol="BTC")
+
+
+async def test_migrate_entry_never_requests_assets_for_a_fiat_wallet(hass):
+    """A currency is not an /assets record -- pick_legacy always returns None
+    for a fiat_ wallet -- so asking the API at all is a wasted request and a
+    needless rate-limit exposure for a run that aborts on 429.
+    """
+    entry = _v1_entry(tracked_wallets=["fiat_EUR"])
+    entry.add_to_hass(hass)
+
+    mock_get_assets = AsyncMock(
+        side_effect=AssertionError("must not call the API for a fiat wallet")
+    )
+    with patch(
+        "custom_components.bitpanda.BitpandaApiClient.async_get_currencies",
+        AsyncMock(return_value=load_fixture("currencies.json")),
+    ), patch(
+        "custom_components.bitpanda.BitpandaApiClient.async_get_assets",
+        mock_get_assets,
+    ):
+        assert await async_migrate_entry(hass, entry) is True
+
+    assert entry.options["tracked_wallets"] == []
+
+
+async def test_migrate_entry_wallet_prefix_narrows_a_synthetic_crypto_metal_collision(
+    hass,
+):
+    """Synthetic collision (task-23-review.md, finding 12, mutation b3): the
+    real catalogue has zero symbols shared between two legacy-supported
+    types, so this pins that migration passes the wallet id's OWN category
+    prefix, not `None`. Passing `None` here would see two legacy-supported
+    survivors (the coin and the metal) and drop the wallet as ambiguous
+    instead of resolving it to the coin.
+    """
+    entry = _v1_entry(tracked_wallets=["cryptocoin_DUP"])
+    entry.add_to_hass(hass)
+
+    crypto = _asset("DUP", "id-crypto", "cryptocoin", "coin")
+    metal = _asset("DUP", "id-metal", "commodity", "metal")
+
+    with patch(
+        "custom_components.bitpanda.BitpandaApiClient.async_get_currencies",
+        AsyncMock(return_value=load_fixture("currencies.json")),
+    ), patch(
+        "custom_components.bitpanda.BitpandaApiClient.async_get_assets",
+        AsyncMock(return_value=[crypto, metal]),
+    ):
+        assert await async_migrate_entry(hass, entry) is True
+
+    assert entry.options["tracked_wallets"] == ["id-crypto"]
+
+
 # --- async_migrate_entry: partial-failure retry (Step 6b) ---------------------
 
 
-async def test_migrate_entry_retries_fully_after_a_fault_in_registry_migration(hass):
-    """Proves the ordering claim end-to-end (task-18-fix1-review.md, finding
-    4): a fault partway through the registry rewrite must leave the entry at
-    version 1 with nothing persisted, and a later, unfaulted call must then
-    migrate every entity to its version-2 form exactly once.
+async def test_migrate_entry_retries_fully_after_a_fault_mid_rewrite(hass):
+    """Proves the ordering claim end-to-end with a genuinely half-migrated
+    registry (task-23-review.md, finding 4 -- carried from
+    task-18-fix1-review.md's finding 4, which this replaces): the fault is
+    injected inside `er.async_migrate_entries`'s own per-entity loop, by
+    making `EntityRegistry.async_update_entity` succeed once (so the first
+    entity it visits really is rewritten to v2 form) and then raise (so the
+    second is left genuinely untouched, still in v1 form) -- not by replacing
+    `_migrate_entity_registry` wholesale, which would leave nothing migrated
+    at all and never exercise retry idempotency for an already-migrated
+    entity. The entry must stay at version 1 with nothing persisted, and a
+    later, unfaulted call must then migrate every entity to its version-2
+    form exactly once -- including the one call that visited an entity
+    already in v2 form and had to leave it alone.
     """
     entry = _v1_entry(
         tracked_assets=["BTC"],
@@ -655,10 +747,21 @@ async def test_migrate_entry_retries_fully_after_a_fault_in_registry_migration(h
     )
     price_entity_id = price.entity_id
     wallet_entity_id = wallet.entity_id
+    v1_forms = {f"{eid}_BTC_price_EUR", f"{eid}_wallet_cryptocoin_ETH"}
+    v2_forms = {f"{eid}_uuid-btc_price_EUR", f"{eid}_wallet_uuid-eth"}
 
     assets_by_symbol = _get_assets_by_symbol(
         {"BTC": _asset("BTC", "uuid-btc"), "ETH": _asset("ETH", "uuid-eth")}
     )
+
+    real_update_entity = er.EntityRegistry.async_update_entity
+    calls = {"count": 0}
+
+    def _update_entity_succeeds_once_then_raises(self, entity_id, **changes):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return real_update_entity(self, entity_id, **changes)
+        raise RuntimeError("injected fault mid-rewrite")
 
     with patch(
         "custom_components.bitpanda.BitpandaApiClient.async_get_currencies",
@@ -666,26 +769,34 @@ async def test_migrate_entry_retries_fully_after_a_fault_in_registry_migration(h
     ), patch(
         "custom_components.bitpanda.BitpandaApiClient.async_get_assets",
         assets_by_symbol,
-    ), patch(
-        "custom_components.bitpanda._migrate_entity_registry",
-        AsyncMock(side_effect=RuntimeError("injected fault")),
+    ), patch.object(
+        er.EntityRegistry,
+        "async_update_entity",
+        _update_entity_succeeds_once_then_raises,
     ):
         with pytest.raises(RuntimeError):
             await async_migrate_entry(hass, entry)
 
+    # Exactly one call got through before the fault: one entity really is in
+    # its new, version-2 form; the other is genuinely still in v1 form. Which
+    # one depends only on the registry's own iteration order, not asserted.
+    after_fault = {
+        ent_reg.async_get(price_entity_id).unique_id,
+        ent_reg.async_get(wallet_entity_id).unique_id,
+    }
+    assert len(after_fault & v1_forms) == 1
+    assert len(after_fault & v2_forms) == 1
+
     # Registry runs before the entry is updated specifically so a failure
-    # here leaves both completely untouched -- assert both halves.
+    # here leaves the entry itself completely untouched.
     assert entry.version == 1
     assert "currency_id" not in entry.data
     assert entry.options["tracked_assets"] == ["BTC"]
     assert entry.options["tracked_wallets"] == ["cryptocoin_ETH"]
-    assert ent_reg.async_get(price_entity_id).unique_id == f"{eid}_BTC_price_EUR"
-    assert (
-        ent_reg.async_get(wallet_entity_id).unique_id
-        == f"{eid}_wallet_cryptocoin_ETH"
-    )
 
-    # Retried with no fault: migration completes, each entity exactly once.
+    # Retried with no fault: migration completes, each entity exactly once --
+    # the already-migrated one is left alone (v2_unique_id no longer matches
+    # its v1 patterns), the other one is migrated fresh.
     with patch(
         "custom_components.bitpanda.BitpandaApiClient.async_get_currencies",
         AsyncMock(return_value=load_fixture("currencies.json")),
@@ -698,9 +809,5 @@ async def test_migrate_entry_retries_fully_after_a_fault_in_registry_migration(h
     assert entry.version == 2
     assert entry.options["tracked_assets"] == ["uuid-btc"]
     assert entry.options["tracked_wallets"] == ["uuid-eth"]
-    assert (
-        ent_reg.async_get(price_entity_id).unique_id == f"{eid}_uuid-btc_price_EUR"
-    )
-    assert (
-        ent_reg.async_get(wallet_entity_id).unique_id == f"{eid}_wallet_uuid-eth"
-    )
+    assert ent_reg.async_get(price_entity_id).unique_id == f"{eid}_uuid-btc_price_EUR"
+    assert ent_reg.async_get(wallet_entity_id).unique_id == f"{eid}_wallet_uuid-eth"

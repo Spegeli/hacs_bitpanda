@@ -78,3 +78,57 @@ def test_portfolio_attributes_expose_timeframe_returns():
     attrs = sensor.extra_state_attributes
     assert attrs["return_day_percent"] == -0.64
     assert attrs["return_year_percent"] == -60.55
+
+
+# ---------------------------------------------------------------------------
+# Code review follow-up (Task 13 review)
+#
+# 1. native_value is data.total, which parse_portfolio builds from holdings
+#    AND data.fiat. portfolio_breakdown only iterates holdings, so uninvested
+#    cash was never represented anywhere in the entity's attributes, and the
+#    total would permanently exceed the sum of its own breakdown with nothing
+#    explaining the gap.
+# 2. portfolio_breakdown keyed its result by resolved symbol. The catalogue
+#    is 14054 assets across crypto, stocks and ETFs with no guaranteed
+#    symbol uniqueness across ids, so two ids sharing a symbol silently
+#    dropped one holding from the breakdown.
+# ---------------------------------------------------------------------------
+
+
+def test_breakdown_disambiguates_a_symbol_collision():
+    data = PortfolioData(holdings={"uuid-aaaa1111": _h("uuid-aaaa1111", 10.0),
+                                   "uuid-bbbb2222": _h("uuid-bbbb2222", 20.0)})
+    cache = {"x1": {"id": "uuid-aaaa1111", "symbol": "DUP"},
+             "x2": {"id": "uuid-bbbb2222", "symbol": "DUP"}}
+    result = portfolio_breakdown(data, cache)
+    assert len(result) == 2
+    assert sorted(result.values()) == [10.0, 20.0]
+
+
+def test_portfolio_cash_attribute_reflects_uninvested_fiat_balance():
+    data = PortfolioData(
+        holdings={"uuid-btc": _h("uuid-btc", 100.0)},
+        fiat={"eur-fiat": 0.01, "usd-fiat": 4.99},
+        total=105.0,
+    )
+    portfolio = _FakeCoordinator(data=data)
+    history = _FakeCoordinator(data=None)
+    sensor = BitpandaPortfolioSensor(
+        portfolio, history, _FakeConfigEntry(),
+        asset_cache={"uuid-btc": {"id": "uuid-btc", "symbol": "BTC"}},
+        currency="EUR",
+    )
+    attrs = sensor.extra_state_attributes
+    assert attrs["cash"] == 5.0
+
+
+def test_portfolio_cash_is_zero_not_absent_when_coordinator_has_no_data():
+    portfolio = _FakeCoordinator(data=None)
+    history = _FakeCoordinator(data=None)
+    sensor = BitpandaPortfolioSensor(
+        portfolio, history, _FakeConfigEntry(), asset_cache={}, currency="EUR",
+    )
+    attrs = sensor.extra_state_attributes
+    assert "cash" in attrs
+    assert attrs["cash"] is not None
+    assert attrs["cash"] == 0.0

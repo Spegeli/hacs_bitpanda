@@ -302,10 +302,16 @@ def portfolio_breakdown(
     if data is None:
         return {}
     by_id = {a["id"]: a for a in asset_cache.values() if a.get("id")}
-    return {
-        (by_id.get(asset_id) or {}).get("symbol", asset_id): round(holding.value, 2)
-        for asset_id, holding in data.holdings.items()
-    }
+    out: dict[str, float] = {}
+    for asset_id, holding in data.holdings.items():
+        symbol = (by_id.get(asset_id) or {}).get("symbol") or asset_id
+        if symbol in out:
+            # Two asset ids can share a symbol in a 14000-entry catalogue
+            # spanning crypto, stocks and ETFs. Disambiguate rather than
+            # letting one holding silently overwrite the other.
+            symbol = f"{symbol} ({asset_id[:8]})"
+        out[symbol] = round(holding.value, 2)
+    return out
 
 
 class BitpandaPortfolioSensor(CoordinatorEntity, SensorEntity):
@@ -348,6 +354,11 @@ class BitpandaPortfolioSensor(CoordinatorEntity, SensorEntity):
         attrs: dict[str, Any] = {
             "wallet_count": len(data.holdings) if data else 0,
             "breakdown": portfolio_breakdown(data, self._asset_cache),
+            # native_value is data.total, which includes uninvested cash.
+            # breakdown covers holdings only, so without this the two would
+            # disagree by exactly the cash balance, permanently and with
+            # nothing explaining it.
+            "cash": round(sum(data.fiat.values()), 2) if data else 0.0,
         }
         # `async_added_to_hass` above only wires up its listener when
         # `_history` is not None, which implies it may legitimately be None.
@@ -381,6 +392,12 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
             entities.append(
                 BitpandaPriceSensor(prices, portfolio, config_entry, asset, currency)
             )
+        else:
+            _LOGGER.warning(
+                "Skipping tracked asset %s: no cached record. Remove and "
+                "re-add it in the integration options to restore it.",
+                asset_id,
+            )
 
     tracked_wallets = config_entry.options.get(CONF_TRACKED_WALLETS, [])
     for asset_id in tracked_wallets:
@@ -390,6 +407,12 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
                 BitpandaWalletSensor(
                     portfolio, earn, rewards, config_entry, asset, currency
                 )
+            )
+        else:
+            _LOGGER.warning(
+                "Skipping tracked asset %s: no cached record. Remove and "
+                "re-add it in the integration options to restore it.",
+                asset_id,
             )
 
     if tracked_wallets:

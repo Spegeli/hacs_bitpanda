@@ -445,8 +445,20 @@ async def collect_returns(
             _LOGGER.debug("No history for timeframe %s this cycle", timeframe)
             continue
         value = body.get("return_percentage")
+        if isinstance(value, bool):
+            # isinstance(True, int) is True in Python, so a boolean would be
+            # stored as 1.0 — data that looks real. A dropped key is honest.
+            continue
         if isinstance(value, (int, float)):
             out[timeframe] = float(value)
+
+    # PORTFOLIO_TIMEFRAMES is a fixed five-entry constant, so an empty result
+    # can only mean every request failed. Returning {} normally would leave
+    # last_update_success True, making a dead endpoint indistinguishable from
+    # "no data yet" — forever, at any log level.
+    if not out:
+        raise UpdateFailed("No portfolio history could be fetched")
+
     return out
 
 

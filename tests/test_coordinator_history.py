@@ -1,6 +1,8 @@
 """Tests for the portfolio history coordinator."""
 import aiohttp
+import pytest
 from aioresponses import aioresponses
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.bitpanda.api import BitpandaApiClient
 from custom_components.bitpanda.const import API_BASE_URL, PORTFOLIO_TIMEFRAMES
@@ -39,4 +41,34 @@ async def test_collect_returns_skips_a_failing_timeframe():
                     )
             result = await collect_returns(client, None)
     assert "YEAR" not in result
+    assert len(result) == len(PORTFOLIO_TIMEFRAMES) - 1
+
+
+async def test_collect_returns_raises_when_every_timeframe_fails():
+    """A dead endpoint must not look like an empty result."""
+    async with aiohttp.ClientSession() as session:
+        client = BitpandaApiClient("key", session)
+        with aioresponses() as m:
+            for timeframe in PORTFOLIO_TIMEFRAMES:
+                m.get(
+                    f"{API_BASE_URL}/portfolio-history?timeframe={timeframe}",
+                    status=500,
+                )
+            with pytest.raises(UpdateFailed):
+                await collect_returns(client, None)
+
+
+async def test_collect_returns_drops_a_boolean_percentage():
+    async with aiohttp.ClientSession() as session:
+        client = BitpandaApiClient("key", session)
+        with aioresponses() as m:
+            for timeframe in PORTFOLIO_TIMEFRAMES:
+                payload = {"data": {"return_percentage":
+                                    True if timeframe == "DAY" else 1.5}}
+                m.get(
+                    f"{API_BASE_URL}/portfolio-history?timeframe={timeframe}",
+                    payload=payload,
+                )
+            result = await collect_returns(client, None)
+    assert "DAY" not in result
     assert len(result) == len(PORTFOLIO_TIMEFRAMES) - 1

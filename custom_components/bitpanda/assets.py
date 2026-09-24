@@ -138,19 +138,6 @@ class AssetResolver:
             self.remember(asset)
         return found
 
-    async def async_resolve(self, symbol: str) -> dict | None:
-        """Deprecated: temporary compatibility shim, removed in task 23's
-        second commit.
-
-        `found[0]` is exactly the "first match" defect task 23 fixes (see
-        task-23-brief.md) -- a stock can sort before the metal or coin a v1
-        wallet actually meant. Kept only until `config_flow.py`'s free-text
-        symbol step, its last caller, is replaced by the list-based flow in
-        the same task's next commit. Do not add new callers.
-        """
-        found = await self.async_candidates(symbol)
-        return found[0] if found else None
-
     def get_cached(self, asset_id: str) -> dict | None:
         """Return a cached asset by its id, without any network access."""
         return self._by_id.get(asset_id)
@@ -158,3 +145,11 @@ class AssetResolver:
     def as_dict(self) -> dict[str, dict]:
         """Return the cache for persisting into the config entry, keyed by id."""
         return dict(self._by_id)
+
+
+def asset_label(asset: dict) -> str:
+    """'Name / SYMBOL / ISIN', or 'Name / SYMBOL' when the asset has no ISIN."""
+    parts = [asset.get("name") or asset["symbol"], asset["symbol"]]
+    if asset.get("isin"):
+        parts.append(asset["isin"])
+    return " / ".join(parts)

@@ -54,18 +54,25 @@
           "save": "💾 Save"
         }
       },
+      "asset_category": {
+        "title": "Add price tracker",
+        "description": "Which kind of asset do you want to track?",
+        "data": {
+          "category": "Asset type"
+        }
+      },
       "add_asset": {
         "title": "Add price tracker",
-        "description": "Enter an asset symbol, for example BTC, XAU, BCI5 or SXR8.",
+        "description": "Choose one or more assets. Type to search by name, symbol or ISIN.",
         "data": {
-          "symbol": "Symbol"
+          "assets": "Assets"
         }
       },
       "add_wallet": {
         "title": "Add wallet",
-        "description": "Enter the symbol of an asset you hold.",
+        "description": "Choose one or more assets you hold. Type to search.",
         "data": {
-          "symbol": "Symbol"
+          "wallets": "Wallets"
         }
       },
       "remove": {
@@ -77,9 +84,21 @@
       }
     },
     "error": {
-      "unknown_symbol": "No asset found with that symbol.",
+      "no_wallets_available": "Every asset you hold is already tracked.",
       "invalid_auth": "Your API key was rejected. Check it in your Bitpanda account settings.",
       "rate_limited": "Too many requests. Wait a moment and try again."
+    }
+  },
+  "selector": {
+    "asset_category": {
+      "options": {
+        "crypto": "Crypto",
+        "stock": "Stocks",
+        "etf": "ETFs",
+        "etc": "ETCs (exchange-traded commodities)",
+        "index": "Crypto indices",
+        "metal": "Precious metals"
+      }
     }
   }
 }

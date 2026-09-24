@@ -144,6 +144,22 @@ class BitpandaApiClient:
             params["id"] = asset_id
         return await self._paginate("/assets", params)
 
+    async def async_list_assets(
+        self, type_: str, group: str | None = None
+    ) -> list[dict]:
+        """List every asset of one catalogue type (and, optionally, group).
+
+        Builds the options flow's category pickers (see config_flow.py's
+        ASSET_CATEGORY_FILTERS) -- a handful of these calls cover the whole
+        14000-asset catalogue, each cached there for 24 hours precisely
+        because even one uncached listing is a meaningful slice of the
+        hourly read budget.
+        """
+        params: dict[str, Any] = {"type": type_}
+        if group is not None:
+            params["group"] = group
+        return await self._paginate("/assets", params)
+
     async def async_get_ticker(self, asset_id: str) -> dict:
         """Current price for one asset.
 

@@ -1,4 +1,7 @@
 """Tests for the config and options flow."""
+import json
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -7,20 +10,13 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.api import BitpandaAuthError, BitpandaRateLimitError
 from custom_components.bitpanda.const import API_KEY_URL, DOMAIN
+from custom_components.bitpanda.coordinator import Holding, PortfolioData
 
 from tests.conftest import load_fixture
 
+_INTEGRATION_DIR = Path(__file__).parent.parent / "custom_components" / "bitpanda"
+
 _EUR_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
-
-
-def _btc_asset() -> dict:
-    return {
-        "id": "uuid-btc",
-        "symbol": "BTC",
-        "name": "Bitcoin",
-        "type": "cryptocoin",
-        "group": "coin",
-    }
 
 
 def _mock_entry(**option_overrides) -> MockConfigEntry:
@@ -196,74 +192,61 @@ async def test_config_flow_version_is_two(hass):
     assert BitpandaConfigFlow.VERSION == 2
 
 
-# --- Options flow: add_asset / add_wallet error handling -------------------
+# --- Options flow: add_asset (price tracker) --------------------------------
 #
-# `AssetResolver.async_resolve` re-raises BitpandaAuthError and
-# BitpandaRateLimitError instead of returning None for them. These three
-# tests confirm the options flow turns that distinction into form errors
-# instead of letting the exception escape unhandled (see task-15-report.md,
-# check 1).
+# Maintainer feedback from the live instance (2026-09-24): a free-text symbol
+# field is unusable -- a user knows neither the 14,000 catalogue symbols nor
+# their own holdings' exact symbols. add_asset is now a category choice
+# followed by a multi-select list of real assets; the value submitted is
+# always a UUID, so there is nothing left here for a symbol to be ambiguous
+# about (see task-23-brief.md).
 
 
-async def test_add_asset_unknown_symbol_shows_form_error(hass):
-    result = await _open_menu_step(hass, _mock_entry(), "add_asset")
-    assert result["step_id"] == "add_asset"
+def _btc() -> dict:
+    return {"id": "uuid-btc", "symbol": "BTC", "name": "Bitcoin",
+            "type": "cryptocoin", "group": "coin"}
+
+
+def _eth() -> dict:
+    return {"id": "uuid-eth", "symbol": "ETH", "name": "Ethereum",
+            "type": "cryptocoin", "group": "coin"}
+
+
+async def test_add_asset_category_step_lists_only_that_categorys_assets_minus_tracked(
+    hass,
+):
+    entry = _mock_entry(tracked_assets=["uuid-eth"])
+    result = await _open_menu_step(hass, entry, "add_asset")
+    assert result["step_id"] == "asset_category"
 
     with patch(
-        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_get_assets",
-        AsyncMock(return_value=[]),
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_list_assets",
+        AsyncMock(return_value=[_btc(), _eth()]),
     ):
         result = await hass.config_entries.options.async_configure(
-            result["flow_id"], {"symbol": "nope"}
+            result["flow_id"], {"category": "crypto"}
         )
 
     assert result["type"] == data_entry_flow.FlowResultType.FORM
     assert result["step_id"] == "add_asset"
-    assert result["errors"]["symbol"] == "unknown_symbol"
+    options = _select_options(result["data_schema"], "assets")
+    assert options == [{"value": "uuid-btc", "label": "Bitcoin / BTC"}]
 
 
-async def test_add_asset_auth_error_maps_to_invalid_auth(hass):
+async def test_add_asset_submitting_two_ids_appends_both_and_persists_cache(hass):
     result = await _open_menu_step(hass, _mock_entry(), "add_asset")
 
     with patch(
-        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_get_assets",
-        AsyncMock(side_effect=BitpandaAuthError("nope")),
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_list_assets",
+        AsyncMock(return_value=[_btc(), _eth()]),
     ):
         result = await hass.config_entries.options.async_configure(
-            result["flow_id"], {"symbol": "btc"}
+            result["flow_id"], {"category": "crypto"}
         )
-
-    assert result["type"] == data_entry_flow.FlowResultType.FORM
-    assert result["step_id"] == "add_asset"
-    assert result["errors"]["base"] == "invalid_auth"
-
-
-async def test_add_wallet_rate_limit_maps_to_rate_limited(hass):
-    result = await _open_menu_step(hass, _mock_entry(), "add_wallet")
-
-    with patch(
-        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_get_assets",
-        AsyncMock(side_effect=BitpandaRateLimitError("slow down")),
-    ):
         result = await hass.config_entries.options.async_configure(
-            result["flow_id"], {"symbol": "btc"}
+            result["flow_id"], {"assets": ["uuid-btc", "uuid-eth"]}
         )
 
-    assert result["type"] == data_entry_flow.FlowResultType.FORM
-    assert result["step_id"] == "add_wallet"
-    assert result["errors"]["base"] == "rate_limited"
-
-
-async def test_add_asset_resolves_id_and_persists_cache_on_save(hass):
-    result = await _open_menu_step(hass, _mock_entry(), "add_asset")
-
-    with patch(
-        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_get_assets",
-        AsyncMock(return_value=[_btc_asset()]),
-    ):
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"], {"symbol": "btc"}
-        )
     assert result["type"] == data_entry_flow.FlowResultType.MENU
 
     result = await hass.config_entries.options.async_configure(
@@ -271,8 +254,322 @@ async def test_add_asset_resolves_id_and_persists_cache_on_save(hass):
     )
 
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
-    assert result["data"]["tracked_assets"] == ["uuid-btc"]
+    assert result["data"]["tracked_assets"] == ["uuid-btc", "uuid-eth"]
     assert result["data"]["asset_cache"]["uuid-btc"]["id"] == "uuid-btc"
+    assert result["data"]["asset_cache"]["uuid-eth"]["id"] == "uuid-eth"
+
+
+async def test_add_asset_does_not_cache_unchosen_catalogue_entries(hass):
+    """A category can list thousands of assets (stocks alone is 10,182) --
+    only the ones actually picked belong in the persisted per-entry cache,
+    or every save would carry the weight of the whole category.
+    """
+    result = await _open_menu_step(hass, _mock_entry(), "add_asset")
+
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_list_assets",
+        AsyncMock(return_value=[_btc(), _eth()]),
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"category": "crypto"}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"assets": ["uuid-btc"]}
+        )
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "save"}
+    )
+
+    assert result["data"]["tracked_assets"] == ["uuid-btc"]
+    assert list(result["data"]["asset_cache"]) == ["uuid-btc"]
+
+
+async def test_add_asset_category_listing_is_cached_for_24_hours(hass):
+    """The first stock listing alone costs ~103 requests -- the 24 hour cache
+    is what keeps a second open of the same category free (task-23-brief.md).
+    """
+    entry = _mock_entry()
+    entry.add_to_hass(hass)
+    mock_list = AsyncMock(return_value=[_btc()])
+
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_list_assets",
+        mock_list,
+    ):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"next_step_id": "add_asset"}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"category": "crypto"}
+        )
+        assert result["step_id"] == "add_asset"
+        assert mock_list.call_count == 1
+
+        # A second, independent options-flow session for the same category.
+        result2 = await hass.config_entries.options.async_init(entry.entry_id)
+        result2 = await hass.config_entries.options.async_configure(
+            result2["flow_id"], {"next_step_id": "add_asset"}
+        )
+        result2 = await hass.config_entries.options.async_configure(
+            result2["flow_id"], {"category": "crypto"}
+        )
+        assert result2["step_id"] == "add_asset"
+
+    assert mock_list.call_count == 1
+
+
+async def test_add_asset_stock_category_merges_both_filters(hass):
+    """Stocks exist in two families (equity_security/equity_stock and
+    security/stock) -- often the same company twice -- and both are genuine,
+    priced listings that must both be offered (task-23-brief.md).
+    """
+    accenture_plc = {
+        "id": "id-equity", "symbol": "ACN", "name": "Accenture PLC",
+        "isin": "IE00B4BNMY34", "type": "equity_security", "group": "equity_stock",
+    }
+    accenture = {
+        "id": "id-security", "symbol": "ACN", "name": "Accenture",
+        "isin": "IE00B4BNMY34", "type": "security", "group": "stock",
+    }
+
+    def _list_assets(type_, group=None):
+        return {
+            ("equity_security", "equity_stock"): [accenture_plc],
+            ("security", "stock"): [accenture],
+        }.get((type_, group), [])
+
+    result = await _open_menu_step(hass, _mock_entry(), "add_asset")
+
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_list_assets",
+        AsyncMock(side_effect=_list_assets),
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"category": "stock"}
+        )
+
+    options = _select_options(result["data_schema"], "assets")
+    assert {o["value"] for o in options} == {"id-equity", "id-security"}
+
+
+async def test_add_asset_auth_error_maps_to_invalid_auth(hass):
+    result = await _open_menu_step(hass, _mock_entry(), "add_asset")
+
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_list_assets",
+        AsyncMock(side_effect=BitpandaAuthError("nope")),
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"category": "crypto"}
+        )
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "add_asset"
+    assert result["errors"]["base"] == "invalid_auth"
+
+
+async def test_add_asset_rate_limit_maps_to_rate_limited(hass):
+    result = await _open_menu_step(hass, _mock_entry(), "add_asset")
+
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_list_assets",
+        AsyncMock(side_effect=BitpandaRateLimitError("slow down")),
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"category": "crypto"}
+        )
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "add_asset"
+    assert result["errors"]["base"] == "rate_limited"
+
+
+# --- Options flow: add_wallet ------------------------------------------------
+#
+# The list is built from holdings, never typed -- a wallet id is always the
+# UUID of an asset the user actually holds.
+
+
+def _store_with_holdings(hass, entry, holdings: dict[str, Holding]) -> None:
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
+        "portfolio_coordinator": SimpleNamespace(
+            data=PortfolioData(holdings=holdings)
+        ),
+    }
+
+
+async def test_add_wallet_lists_holdings_minus_tracked_ids(hass):
+    entry = _mock_entry(
+        tracked_wallets=["uuid-eth"],
+        asset_cache={"uuid-btc": _btc(), "uuid-eth": _eth()},
+    )
+    entry.add_to_hass(hass)
+    _store_with_holdings(
+        hass, entry,
+        {
+            "uuid-btc": Holding(asset_id="uuid-btc", balance=1.0, available=1.0,
+                                staked=0.0, value=100.0),
+            "uuid-eth": Holding(asset_id="uuid-eth", balance=1.0, available=1.0,
+                                staked=0.0, value=50.0),
+        },
+    )
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "add_wallet"}
+    )
+
+    assert result["step_id"] == "add_wallet"
+    options = _select_options(result["data_schema"], "wallets")
+    assert options == [{"value": "uuid-btc", "label": "Bitcoin / BTC"}]
+
+
+async def test_add_wallet_submitting_appends_and_returns_to_menu(hass):
+    entry = _mock_entry(asset_cache={"uuid-btc": _btc()})
+    entry.add_to_hass(hass)
+    _store_with_holdings(
+        hass, entry,
+        {"uuid-btc": Holding(asset_id="uuid-btc", balance=1.0, available=1.0,
+                             staked=0.0, value=100.0)},
+    )
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "add_wallet"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"wallets": ["uuid-btc"]}
+    )
+
+    assert result["type"] == data_entry_flow.FlowResultType.MENU
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "save"}
+    )
+    assert result["data"]["tracked_wallets"] == ["uuid-btc"]
+
+
+async def test_add_wallet_looks_up_a_held_id_missing_from_cache_once(hass):
+    entry = _mock_entry(asset_cache={})
+    entry.add_to_hass(hass)
+    _store_with_holdings(
+        hass, entry,
+        {"uuid-btc": Holding(asset_id="uuid-btc", balance=1.0, available=1.0,
+                             staked=0.0, value=100.0)},
+    )
+
+    mock_get_assets = AsyncMock(return_value=[_btc()])
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_get_assets",
+        mock_get_assets,
+    ):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"next_step_id": "add_wallet"}
+        )
+
+    mock_get_assets.assert_called_once_with(asset_id="uuid-btc")
+    options = _select_options(result["data_schema"], "wallets")
+    assert options == [{"value": "uuid-btc", "label": "Bitcoin / BTC"}]
+
+
+async def test_add_wallet_with_everything_tracked_shows_no_wallets_available(hass):
+    entry = _mock_entry(
+        tracked_wallets=["uuid-btc"], asset_cache={"uuid-btc": _btc()}
+    )
+    entry.add_to_hass(hass)
+    _store_with_holdings(
+        hass, entry,
+        {"uuid-btc": Holding(asset_id="uuid-btc", balance=1.0, available=1.0,
+                             staked=0.0, value=100.0)},
+    )
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "add_wallet"}
+    )
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "add_wallet"
+    assert result["errors"]["base"] == "no_wallets_available"
+
+
+async def test_add_wallet_falls_back_to_one_portfolio_call_when_entry_not_loaded(
+    hass,
+):
+    """No hass.data[DOMAIN] store for this entry at all -- the entry is not
+    (or not yet) loaded -- so the holdings must come from one direct
+    /portfolio call instead of a running coordinator.
+    """
+    entry = _mock_entry()
+
+    mock_portfolio = AsyncMock(
+        return_value=[
+            {
+                "asset_id": "uuid-btc",
+                "balance": {"value": "1.0"},
+                "available_balance": {"value": "1.0"},
+                "currency_balance": {"value": "100.0"},
+            }
+        ]
+    )
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_get_portfolio",
+        mock_portfolio,
+    ), patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_get_assets",
+        AsyncMock(return_value=[_btc()]),
+    ):
+        result = await _open_menu_step(hass, entry, "add_wallet")
+
+    mock_portfolio.assert_called_once()
+    options = _select_options(result["data_schema"], "wallets")
+    assert options == [{"value": "uuid-btc", "label": "Bitcoin / BTC"}]
+
+
+async def test_add_wallet_rate_limit_maps_to_rate_limited(hass):
+    entry = _mock_entry()
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_get_portfolio",
+        AsyncMock(side_effect=BitpandaRateLimitError("slow down")),
+    ):
+        result = await _open_menu_step(hass, entry, "add_wallet")
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "add_wallet"
+    assert result["errors"]["base"] == "rate_limited"
+
+
+# --- No leftover free-text surface -------------------------------------------
+
+
+def _all_keys(obj) -> set:
+    keys: set = set()
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            keys.add(key)
+            keys |= _all_keys(value)
+    return keys
+
+
+def test_no_leftover_symbol_pick_or_unknown_symbol_naming():
+    """Step 3b removed the free-text symbol field entirely -- nothing named
+    "symbol", "pick" or "unknown_symbol" (the old error code) should remain
+    in any of the three UI string files (task-23-brief.md, Step 6).
+    """
+    forbidden = {"symbol", "pick", "unknown_symbol"}
+    for filename in ("strings.json", "translations/en.json", "translations/de.json"):
+        data = json.loads((_INTEGRATION_DIR / filename).read_text(encoding="utf-8"))
+        found = _all_keys(data) & forbidden
+        assert not found, f"{filename} still has forbidden key(s): {found}"
+
+
+def test_options_flow_handler_has_no_symbol_step():
+    from custom_components.bitpanda.config_flow import BitpandaOptionsFlowHandler
+
+    assert not hasattr(BitpandaOptionsFlowHandler, "async_step_symbol")
 
 
 # --- Options flow: config_entry access --------------------------------------

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
+from datetime import timedelta
 from typing import Any
 
 import voluptuous as vol
@@ -11,6 +12,7 @@ from homeassistant.config_entries import ConfigEntry, ConfigFlowResult
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig
+from homeassistant.util import dt as dt_util
 import homeassistant.helpers.config_validation as cv
 
 from .api import (
@@ -19,7 +21,7 @@ from .api import (
     BitpandaAuthError,
     BitpandaRateLimitError,
 )
-from .assets import AssetResolver, category_of
+from .assets import AssetResolver, asset_label, category_of
 from .const import (
     API_KEY_URL,
     CONF_API_KEY,
@@ -33,8 +35,34 @@ from .const import (
     REQUIRED_SCOPES,
     SCOPE_LABELS,
 )
+from .coordinator import parse_portfolio
 
 _LOGGER = logging.getLogger(__name__)
+
+# Every category filter below was verified live on 2026-09-24, first page
+# type and group checked. Together they cover 14,051 of 14,054 catalogue
+# assets -- the three left out are security/fiat_earn (Cash Plus, priced at
+# roughly one unit of its own currency and pointless to track). Stocks exist
+# in two families -- equity_security/equity_stock and security/stock, often
+# the same company twice -- and both are genuine, priced listings, so a
+# category can list more than one filter and all of them are merged.
+ASSET_CATEGORY_FILTERS: dict[str, list[tuple[str, str | None]]] = {
+    "crypto": [("cryptocoin", None)],
+    "stock": [("equity_security", "equity_stock"), ("security", "stock")],
+    "etf": [
+        ("equity_security", "equity_etf"),
+        ("equity_security", "equity_complex_etf"),
+        ("security", "etf"),
+    ],
+    "etc": [("equity_security", "equity_complex_etc"), ("security", "etc")],
+    "index": [("index", None)],
+    "metal": [("commodity", "metal")],
+}
+
+# 14000 assets makes even one uncached category listing a meaningful slice of
+# the hourly read budget (~103 requests for stocks alone) -- see
+# BitpandaOptionsFlowHandler._async_category_listing.
+_CATALOGUE_CACHE_TTL = timedelta(hours=24)
 
 
 class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -225,6 +253,7 @@ class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
         self._assets: list[str] | None = None
         self._wallets: list[str] | None = None
         self._cache: dict[str, dict] | None = None
+        self._category: str | None = None
 
     def _load(self) -> None:
         if self._assets is None:
@@ -233,12 +262,14 @@ class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
             self._wallets = list(options.get(CONF_TRACKED_WALLETS, []))
             self._cache = dict(options.get(CONF_ASSET_CACHE, {}))
 
-    def _resolver(self) -> AssetResolver:
-        client = BitpandaApiClient(
+    def _client(self) -> BitpandaApiClient:
+        return BitpandaApiClient(
             self.config_entry.data[CONF_API_KEY],
             async_get_clientsession(self.hass),
         )
-        return AssetResolver(client, self._cache)
+
+    def _resolver(self) -> AssetResolver:
+        return AssetResolver(self._client(), self._cache)
 
     async def async_step_init(self, user_input=None) -> ConfigFlowResult:
         self._load()
@@ -247,51 +278,217 @@ class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
             menu_options=["add_asset", "add_wallet", "remove", "save"],
         )
 
-    async def _async_add(self, step_id: str, target: list[str], user_input):
-        """Resolve a typed symbol and add its asset id to `target`.
+    async def _async_category_listing(
+        self, client: BitpandaApiClient, category: str
+    ) -> list[dict]:
+        """Every asset in one category, all pages, cached for 24 hours.
 
-        `AssetResolver.async_resolve` deliberately re-raises
-        `BitpandaAuthError` and `BitpandaRateLimitError` instead of folding
-        them into "no such symbol" — a revoked key or a 429 is a different
-        problem than a typo, and letting either escape unhandled here would
-        show the user Home Assistant's generic error page instead of a
-        message they can act on. Both are mapped to a form error, the same
-        way the setup step handles them.
+        Cached under the domain's OWN top-level `hass.data` key, never inside
+        `hass.data[DOMAIN]`: `__init__.py`'s refresh service iterates
+        `hass.data[DOMAIN].values()` expecting only per-entry stores, and its
+        unload handler treats an empty `hass.data[DOMAIN]` as "last entry
+        gone" -- a catalogue value under that key would break both. A
+        separate key also survives entry reloads and serves every entry, so
+        a category already fetched once for any entry is free for all.
+
+        Nothing here catches BitpandaAuthError/BitpandaRateLimitError: an
+        error partway through a multi-filter category (stocks merges two
+        listings) must not cache a partial result, and both are already
+        mapped to form errors one level up, in `async_step_add_asset`.
         """
-        self._load()
-        errors: dict[str, str] = {}
+        store: dict[str, tuple] = self.hass.data.setdefault(
+            f"{DOMAIN}_asset_catalogue", {}
+        )
+        cached = store.get(category)
+        now = dt_util.utcnow()
+        if cached is not None and now - cached[0] < _CATALOGUE_CACHE_TTL:
+            return cached[1]
 
+        assets: list[dict] = []
+        seen_ids: set[str] = set()
+        for type_, group in ASSET_CATEGORY_FILTERS[category]:
+            for asset in await client.async_list_assets(type_, group):
+                asset_id = asset.get("id")
+                if asset_id and asset_id not in seen_ids:
+                    seen_ids.add(asset_id)
+                    assets.append(asset)
+
+        store[category] = (now, assets)
+        return assets
+
+    async def async_step_asset_category(self, user_input=None) -> ConfigFlowResult:
+        """Which kind of asset to track -- crypto, stock, etf, etc, index or
+        metal. `translation_key` labels the bare option values below via
+        `selector.asset_category.options.<value>` in the translation files.
+        """
         if user_input is not None:
-            symbol = user_input["symbol"].strip().upper()
-            resolver = self._resolver()
-            try:
-                asset = await resolver.async_resolve(symbol)
-            except BitpandaAuthError:
-                errors["base"] = "invalid_auth"
-            except BitpandaRateLimitError:
-                errors["base"] = "rate_limited"
-            else:
-                if asset is None:
-                    errors["symbol"] = "unknown_symbol"
-                else:
-                    self._cache = resolver.as_dict()
-                    if asset["id"] not in target:
-                        target.append(asset["id"])
-                    return await self.async_step_init()
+            self._category = user_input["category"]
+            return await self.async_step_add_asset()
 
         return self.async_show_form(
-            step_id=step_id,
-            data_schema=vol.Schema({vol.Required("symbol"): cv.string}),
-            errors=errors,
+            step_id="asset_category",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("category"): SelectSelector(
+                        SelectSelectorConfig(
+                            options=list(ASSET_CATEGORY_FILTERS),
+                            translation_key="asset_category",
+                        )
+                    )
+                }
+            ),
         )
 
     async def async_step_add_asset(self, user_input=None) -> ConfigFlowResult:
+        """Multi-select of one category's assets, minus those already tracked.
+
+        Reached from the menu (`next_step_id == "add_asset"`) with no
+        category chosen yet, in which case this hops straight to
+        `asset_category` without rendering anything of its own; the category
+        step then calls back in here once `self._category` is set.
+
+        The catalogue is fetched on both the render and the submit -- cheap
+        either way, since both hit the same 24 hour cache -- rather than
+        remembering every listed asset into the persisted cache up front. A
+        category can list thousands of assets (stocks alone is 10,182); only
+        the ones the user actually picks belong in a config entry's options.
+        """
         self._load()
-        return await self._async_add("add_asset", self._assets, user_input)
+
+        if self._category is None:
+            return await self.async_step_asset_category()
+
+        client = self._client()
+        try:
+            catalogue = await self._async_category_listing(client, self._category)
+        except BitpandaAuthError:
+            return self.async_show_form(
+                step_id="add_asset",
+                data_schema=vol.Schema({}),
+                errors={"base": "invalid_auth"},
+            )
+        except BitpandaRateLimitError:
+            return self.async_show_form(
+                step_id="add_asset",
+                data_schema=vol.Schema({}),
+                errors={"base": "rate_limited"},
+            )
+
+        if user_input is not None:
+            chosen_ids = set(user_input.get("assets", []))
+            resolver = self._resolver()
+            for asset in catalogue:
+                if asset.get("id") in chosen_ids:
+                    resolver.remember(asset)
+                    if asset["id"] not in self._assets:
+                        self._assets.append(asset["id"])
+            self._cache = resolver.as_dict()
+            self._category = None
+            return await self.async_step_init()
+
+        options = sorted(
+            (
+                {"value": asset["id"], "label": asset_label(asset)}
+                for asset in catalogue
+                if asset.get("id") and asset["id"] not in self._assets
+            ),
+            key=lambda option: option["label"],
+        )
+
+        return self.async_show_form(
+            step_id="add_asset",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("assets"): SelectSelector(
+                        SelectSelectorConfig(
+                            options=options, multiple=True, mode="list"
+                        )
+                    )
+                }
+            ),
+        )
+
+    async def _async_held_asset_ids(self, client: BitpandaApiClient) -> list[str]:
+        """Ids of every currently held asset -- never fiat, see PortfolioData.
+
+        Reuses the running portfolio coordinator's last data when the entry
+        is loaded, costing nothing beyond what refreshes already do. An
+        entry that is not (or not yet) loaded -- mid-reload, or opened right
+        after setup failed -- falls back to one direct /portfolio call.
+        """
+        store = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        if store is not None:
+            data = store["portfolio_coordinator"].data
+            return list(data.holdings) if data else []
+
+        entries = await client.async_get_portfolio()
+        return list(parse_portfolio(entries, rate=None).holdings)
 
     async def async_step_add_wallet(self, user_input=None) -> ConfigFlowResult:
+        """Multi-select of held assets, minus those already tracked as wallets."""
         self._load()
-        return await self._async_add("add_wallet", self._wallets, user_input)
+
+        if user_input is not None:
+            for asset_id in user_input.get("wallets", []):
+                if asset_id not in self._wallets:
+                    self._wallets.append(asset_id)
+            return await self.async_step_init()
+
+        client = self._client()
+        resolver = self._resolver()
+        try:
+            held_ids = await self._async_held_asset_ids(client)
+            options: list[dict] = []
+            for asset_id in held_ids:
+                if asset_id in self._wallets:
+                    continue
+                asset = resolver.get_cached(asset_id)
+                if asset is None:
+                    # One UUID per request -- the API returns 500 for a
+                    # comma-separated list, despite what the docs say.
+                    found = await client.async_get_assets(asset_id=asset_id)
+                    asset = found[0] if found else None
+                    if asset is not None:
+                        resolver.remember(asset)
+                if asset is not None:
+                    options.append(
+                        {"value": asset_id, "label": asset_label(asset)}
+                    )
+        except BitpandaAuthError:
+            return self.async_show_form(
+                step_id="add_wallet",
+                data_schema=vol.Schema({}),
+                errors={"base": "invalid_auth"},
+            )
+        except BitpandaRateLimitError:
+            return self.async_show_form(
+                step_id="add_wallet",
+                data_schema=vol.Schema({}),
+                errors={"base": "rate_limited"},
+            )
+
+        self._cache = resolver.as_dict()
+
+        if not options:
+            return self.async_show_form(
+                step_id="add_wallet",
+                data_schema=vol.Schema({}),
+                errors={"base": "no_wallets_available"},
+            )
+
+        options.sort(key=lambda option: option["label"])
+        return self.async_show_form(
+            step_id="add_wallet",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("wallets"): SelectSelector(
+                        SelectSelectorConfig(
+                            options=options, multiple=True, mode="list"
+                        )
+                    )
+                }
+            ),
+        )
 
     async def async_step_remove(self, user_input=None) -> ConfigFlowResult:
         self._load()

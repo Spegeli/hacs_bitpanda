@@ -11,6 +11,7 @@ from custom_components.bitpanda.api import (
 )
 from custom_components.bitpanda.assets import (
     AssetResolver,
+    asset_label,
     category_of,
     is_legacy_supported,
     pick_legacy,
@@ -228,3 +229,26 @@ def test_category_of_covers_every_observed_group():
 
 def test_category_of_unknown_group_does_not_raise():
     assert category_of(_asset("X", "i", "brand_new", "never_seen")) == "other"
+
+
+# --- asset_label ---------------------------------------------------------
+#
+# One label for both the add_asset and add_wallet pickers: name, symbol and
+# -- where one exists -- ISIN, so a user can recognise and search an asset
+# by any of the three. The picker's search runs over the label, which is
+# what makes ISIN search work.
+
+
+def test_asset_label_with_isin():
+    asset = {"name": "Accenture PLC", "symbol": "ACN", "isin": "IE00B4BNMY34"}
+    assert asset_label(asset) == "Accenture PLC / ACN / IE00B4BNMY34"
+
+
+def test_asset_label_without_isin():
+    asset = {"name": "Bitcoin", "symbol": "BTC"}
+    assert asset_label(asset) == "Bitcoin / BTC"
+
+
+def test_asset_label_falls_back_to_symbol_when_name_is_empty():
+    asset = {"name": "", "symbol": "XYZ"}
+    assert asset_label(asset) == "XYZ / XYZ"

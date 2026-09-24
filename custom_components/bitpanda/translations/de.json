@@ -54,18 +54,25 @@
           "save": "💾 Speichern"
         }
       },
+      "asset_category": {
+        "title": "Preis-Tracker hinzufügen",
+        "description": "Welche Art von Asset möchtest du verfolgen?",
+        "data": {
+          "category": "Asset-Typ"
+        }
+      },
       "add_asset": {
         "title": "Preis-Tracker hinzufügen",
-        "description": "Gib ein Asset-Symbol ein, zum Beispiel BTC, XAU, BCI5 oder SXR8.",
+        "description": "Wähle ein oder mehrere Assets. Tippe, um nach Name, Symbol oder ISIN zu suchen.",
         "data": {
-          "symbol": "Symbol"
+          "assets": "Assets"
         }
       },
       "add_wallet": {
         "title": "Wallet hinzufügen",
-        "description": "Gib das Symbol eines Assets ein, das du besitzt.",
+        "description": "Wähle ein oder mehrere Assets, die du besitzt. Tippe, um zu suchen.",
         "data": {
-          "symbol": "Symbol"
+          "wallets": "Wallets"
         }
       },
       "remove": {
@@ -77,9 +84,21 @@
       }
     },
     "error": {
-      "unknown_symbol": "Kein Asset mit diesem Symbol gefunden.",
+      "no_wallets_available": "Alle Assets, die du besitzt, werden bereits verfolgt.",
       "invalid_auth": "Dein API-Key wurde abgelehnt. Prüfe ihn in deinen Bitpanda-Kontoeinstellungen.",
       "rate_limited": "Zu viele Anfragen. Warte einen Moment und versuche es erneut."
+    }
+  },
+  "selector": {
+    "asset_category": {
+      "options": {
+        "crypto": "Krypto",
+        "stock": "Aktien",
+        "etf": "ETFs",
+        "etc": "ETCs (börsengehandelte Rohstoffe)",
+        "index": "Krypto-Indizes",
+        "metal": "Edelmetalle"
+      }
     }
   }
 }

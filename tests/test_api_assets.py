@@ -90,6 +90,73 @@ async def test_paginate_stops_when_cursor_does_not_advance():
     assert [a["id"] for a in result] == ["a"]
 
 
+# --- async_list_assets ---------------------------------------------------
+#
+# Builds the options flow's category pickers. The mock's own URL matching is
+# a subset match (every param in the registration must be present in the
+# request, but extra params on the request still match) -- see
+# AiohttpClientMockResponse.match_request -- so an accidental extra
+# parameter would pass unnoticed there. The exact query string is asserted
+# directly from mocker.mock_calls instead (task-23-brief.md, Step 6).
+
+
+async def test_list_assets_sends_exactly_type_group_and_page_size():
+    with mock_aiohttp_client() as mocker:
+        mocker.get(
+            f"{API_BASE_URL}/assets",
+            json={"data": [], "has_next_page": False},
+        )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            await client.async_list_assets("commodity", "metal")
+
+    assert mocker.call_count == 1
+    _, url, _, _ = mocker.mock_calls[0]
+    assert dict(url.query) == {
+        "type": "commodity",
+        "group": "metal",
+        "page_size": "100",
+    }
+
+
+async def test_list_assets_without_a_group_omits_the_group_param():
+    """crypto's filter is (\"cryptocoin\", None): every cryptocoin sub-group
+    (coin, token, leveraged_token, security_token) belongs to the category,
+    so nothing narrows by group.
+    """
+    with mock_aiohttp_client() as mocker:
+        mocker.get(
+            f"{API_BASE_URL}/assets",
+            json={"data": [], "has_next_page": False},
+        )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            await client.async_list_assets("cryptocoin", None)
+
+    _, url, _, _ = mocker.mock_calls[0]
+    assert dict(url.query) == {"type": "cryptocoin", "page_size": "100"}
+
+
+async def test_list_assets_paginates():
+    with mock_aiohttp_client() as mocker:
+        mocker.get(
+            f"{API_BASE_URL}/assets?cursor=CUR&page_size=100&type=index",
+            json={"data": [{"id": "b"}], "has_next_page": False},
+        )
+        mocker.get(
+            f"{API_BASE_URL}/assets?page_size=100&type=index",
+            json={
+                "data": [{"id": "a"}],
+                "next_cursor": "CUR",
+                "has_next_page": True,
+            },
+        )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            result = await client.async_list_assets("index", None)
+    assert [a["id"] for a in result] == ["a", "b"]
+
+
 async def test_401_raises_auth_error():
     with mock_aiohttp_client() as mocker:
         mocker.get(f"{API_BASE_URL}/currencies", status=401)

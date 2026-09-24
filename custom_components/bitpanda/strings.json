@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Bitpanda Setup",
-        "description": "Enter your Bitpanda API key. You can create one in your [Bitpanda account settings]({api_key_url}).",
+        "description": "Enter your Bitpanda API key. Create one at [{api_key_url}]({api_key_url}) with these permissions: Guthaben (Balance), Transaktion (Transaction) and Earn (Read). Trading is not needed. Permissions cannot be added to an existing key later.",
         "data": {
           "api_key": "API Key"
         }
@@ -17,7 +17,9 @@
       }
     },
     "error": {
-      "invalid_auth": "Invalid API key",
+      "invalid_auth": "Bitpanda rejected this API key. Check that it was copied completely and that it has at least one of the required permissions.",
+      "missing_scopes": "This API key is missing permissions: {missing_scopes}. Permissions cannot be added to an existing key — create a new one with Guthaben (Balance), Transaktion (Transaction) and Earn (Read).",
+      "rate_limited": "Too many requests. Wait a moment and try again.",
       "cannot_connect": "Failed to connect",
       "unknown": "Unexpected error"
     }

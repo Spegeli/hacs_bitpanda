@@ -20,6 +20,7 @@ from .api import (
 )
 from .assets import AssetResolver, category_of
 from .const import (
+    API_KEY_URL,
     CONF_API_KEY,
     CONF_ASSET_CACHE,
     CONF_CURRENCY,
@@ -28,6 +29,8 @@ from .const import (
     CONF_TRACKED_WALLETS,
     DEFAULT_CURRENCY,
     DOMAIN,
+    REQUIRED_SCOPES,
+    SCOPE_LABELS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -42,23 +45,41 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._api_key: str | None = None
         self._currencies: list[dict] = []
 
+    async def _async_validate_key(
+        self, api_key: str
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        """Probe every required scope. Returns (errors, placeholders)."""
+        client = BitpandaApiClient(api_key, async_get_clientsession(self.hass))
+        try:
+            missing = await client.async_missing_scopes()
+        except BitpandaRateLimitError:
+            return {"base": "rate_limited"}, {}
+        except BitpandaApiError:
+            return {"base": "cannot_connect"}, {}
+        if len(missing) == len(REQUIRED_SCOPES):
+            return {"base": "invalid_auth"}, {}
+        if missing:
+            return {"base": "missing_scopes"}, {
+                "missing_scopes": ", ".join(SCOPE_LABELS[s] for s in missing)
+            }
+        return {}, {}
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
+        placeholders: dict[str, str] = {}
 
         if user_input is not None:
-            self._api_key = user_input[CONF_API_KEY]
-            client = BitpandaApiClient(
-                self._api_key, async_get_clientsession(self.hass)
-            )
+            self._api_key = user_input[CONF_API_KEY].strip()
             try:
-                self._currencies = await client.async_get_currencies()
-                return await self.async_step_currency()
-            except BitpandaAuthError:
-                errors["base"] = "invalid_auth"
-            except BitpandaApiError:
-                errors["base"] = "cannot_connect"
+                errors, placeholders = await self._async_validate_key(self._api_key)
+                if not errors:
+                    client = BitpandaApiClient(
+                        self._api_key, async_get_clientsession(self.hass)
+                    )
+                    self._currencies = await client.async_get_currencies()
+                    return await self.async_step_currency()
             except Exception:  # noqa: BLE001
                 errors["base"] = "unknown"
 
@@ -66,9 +87,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema({vol.Required(CONF_API_KEY): cv.string}),
             errors=errors,
-            description_placeholders={
-                "api_key_url": "https://web.bitpanda.com/apikey"
-            },
+            description_placeholders={"api_key_url": API_KEY_URL, **placeholders},
         )
 
     async def async_step_currency(

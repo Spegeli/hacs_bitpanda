@@ -7,7 +7,7 @@ from typing import Any
 
 import aiohttp
 
-from .const import API_BASE_URL, API_TIMEOUT, MAX_PAGE_SIZE
+from .const import API_BASE_URL, API_TIMEOUT, MAX_PAGE_SIZE, REQUIRED_SCOPES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,6 +22,16 @@ class BitpandaAuthError(BitpandaApiError):
 
 class BitpandaRateLimitError(BitpandaApiError):
     """The read rate limit was exceeded."""
+
+
+# One cheap, read-only endpoint per required scope, used only to probe which
+# scopes a key carries during setup. `/portfolio` needs no params; the other
+# two accept `page_size` and 1 is the smallest page the API allows.
+_SCOPE_PROBES: dict[str, tuple[str, dict[str, Any] | None]] = {
+    "balance": ("/portfolio", None),
+    "transaction": ("/operations", {"page_size": 1}),
+    "earn": ("/earn/configs", {"page_size": 1}),
+}
 
 
 class BitpandaApiClient:
@@ -201,3 +211,20 @@ class BitpandaApiClient:
         if to_ts:
             params["to"] = to_ts
         return await self._paginate("/operations", params)
+
+    async def async_missing_scopes(self) -> list[str]:
+        """Return the required scopes this key lacks, in REQUIRED_SCOPES order.
+
+        One request per scope. Bitpanda answers a wrong key and a missing scope
+        with the same 401, so the caller reads the pattern: every scope missing
+        means the key itself is wrong or carries none of them. Rate-limit and
+        connection errors propagate.
+        """
+        missing: list[str] = []
+        for scope in REQUIRED_SCOPES:
+            path, params = _SCOPE_PROBES[scope]
+            try:
+                await self._request(path, params)
+            except BitpandaAuthError:
+                missing.append(scope)
+        return missing

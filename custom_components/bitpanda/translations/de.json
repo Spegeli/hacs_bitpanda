@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Bitpanda Einrichtung",
-        "description": "Gib deinen Bitpanda API-Schlüssel ein. Du kannst einen in den [Bitpanda Kontoeinstellungen]({api_key_url}) erstellen.",
+        "description": "Gib deinen Bitpanda API-Schlüssel ein. Erstelle einen unter [{api_key_url}]({api_key_url}) mit diesen Berechtigungen: Guthaben, Transaktion und Earn (Read). Trading wird nicht benötigt. Berechtigungen lassen sich einem bestehenden Schlüssel später nicht hinzufügen.",
         "data": {
           "api_key": "API-Schlüssel"
         }
@@ -17,7 +17,9 @@
       }
     },
     "error": {
-      "invalid_auth": "Ungültiger API-Schlüssel",
+      "invalid_auth": "Bitpanda hat diesen API-Schlüssel abgelehnt. Prüfe, ob er vollständig kopiert wurde und mindestens eine der benötigten Berechtigungen hat.",
+      "missing_scopes": "Diesem API-Schlüssel fehlen Berechtigungen: {missing_scopes}. Einem bestehenden Schlüssel lassen sich keine Berechtigungen hinzufügen — erstelle einen neuen mit Guthaben, Transaktion und Earn (Read).",
+      "rate_limited": "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
       "cannot_connect": "Verbindung fehlgeschlagen",
       "unknown": "Unerwarteter Fehler"
     }

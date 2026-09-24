@@ -6,7 +6,7 @@ from homeassistant import config_entries, data_entry_flow
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.api import BitpandaAuthError, BitpandaRateLimitError
-from custom_components.bitpanda.const import DOMAIN
+from custom_components.bitpanda.const import API_KEY_URL, DOMAIN
 
 from tests.conftest import load_fixture
 
@@ -56,15 +56,14 @@ async def _open_menu_step(hass, entry: MockConfigEntry, step_id: str):
 
 
 async def test_user_step_rejects_bad_key(hass):
-    from custom_components.bitpanda.api import BitpandaAuthError
-
+    """A key with none of the required scopes: identical to a wrong key."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
     with patch(
         "custom_components.bitpanda.config_flow.BitpandaApiClient."
-        "async_get_currencies",
-        side_effect=BitpandaAuthError("nope"),
+        "async_missing_scopes",
+        AsyncMock(return_value=["balance", "transaction", "earn"]),
     ):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"api_key": "bad"}
@@ -73,11 +72,105 @@ async def test_user_step_rejects_bad_key(hass):
     assert result["errors"]["base"] == "invalid_auth"
 
 
+async def test_user_step_missing_scopes_names_them(hass):
+    """A key valid for one scope but not the other two: named, not rejected outright."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient."
+        "async_missing_scopes",
+        AsyncMock(return_value=["transaction", "earn"]),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": "partial"}
+        )
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["errors"]["base"] == "missing_scopes"
+    assert (
+        result["description_placeholders"]["missing_scopes"]
+        == "Transaktion (Transaction), Earn (Read)"
+    )
+
+
+async def test_user_step_rate_limited_maps(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient."
+        "async_missing_scopes",
+        AsyncMock(side_effect=BitpandaRateLimitError("slow down")),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": "key"}
+        )
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["errors"]["base"] == "rate_limited"
+
+
+async def test_user_step_shows_api_key_url_placeholder(hass):
+    """The initial form (no submission yet) still carries the key-page link."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["description_placeholders"]["api_key_url"] == API_KEY_URL
+
+
+async def test_user_step_all_scopes_present_proceeds_to_currency(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient."
+        "async_missing_scopes",
+        AsyncMock(return_value=[]),
+    ), patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient."
+        "async_get_currencies",
+        AsyncMock(return_value=load_fixture("currencies.json")),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": "good"}
+        )
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "currency"
+
+
+async def test_user_step_stores_stripped_api_key(hass):
+    """A pasted key with surrounding whitespace/newlines is stored trimmed."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient."
+        "async_missing_scopes",
+        AsyncMock(return_value=[]),
+    ), patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient."
+        "async_get_currencies",
+        AsyncMock(return_value=load_fixture("currencies.json")),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": "  good  \n"}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"currency": "EUR"}
+        )
+    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
+    assert result["data"]["api_key"] == "good"
+
+
 async def test_full_setup_stores_currency_id(hass):
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
     with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient."
+        "async_missing_scopes",
+        AsyncMock(return_value=[]),
+    ), patch(
         "custom_components.bitpanda.config_flow.BitpandaApiClient."
         "async_get_currencies",
         AsyncMock(return_value=load_fixture("currencies.json")),

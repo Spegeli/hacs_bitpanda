@@ -436,12 +436,14 @@ async def collect_returns(
     window is logged and skipped so the others still report.
     """
     out: dict[str, float] = {}
+    failures = 0
     for timeframe in PORTFOLIO_TIMEFRAMES:
         try:
             body = await client.async_get_portfolio_history(
                 timeframe=timeframe, equivalent_currency_id=currency_id
             )
         except BitpandaApiError:
+            failures += 1
             _LOGGER.debug("No history for timeframe %s this cycle", timeframe)
             continue
         value = body.get("return_percentage")
@@ -452,11 +454,13 @@ async def collect_returns(
         if isinstance(value, (int, float)):
             out[timeframe] = float(value)
 
-    # PORTFOLIO_TIMEFRAMES is a fixed five-entry constant, so an empty result
-    # can only mean every request failed. Returning {} normally would leave
-    # last_update_success True, making a dead endpoint indistinguishable from
-    # "no data yet" — forever, at any log level.
-    if not out:
+    # Raise only when every *request* failed. Returning {} normally would
+    # leave last_update_success True, making a dead endpoint indistinguishable
+    # from "no data yet" — forever, at any log level. But an account whose
+    # history is genuinely empty answers all five requests successfully with
+    # no usable return_percentage, and that must not be reported as an
+    # outage, or it would fail on every cycle.
+    if failures == len(PORTFOLIO_TIMEFRAMES):
         raise UpdateFailed("No portfolio history could be fetched")
 
     return out

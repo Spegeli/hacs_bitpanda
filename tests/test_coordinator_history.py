@@ -72,3 +72,18 @@ async def test_collect_returns_drops_a_boolean_percentage():
             result = await collect_returns(client, None)
     assert "DAY" not in result
     assert len(result) == len(PORTFOLIO_TIMEFRAMES) - 1
+
+
+async def test_collect_returns_is_quiet_when_history_is_genuinely_empty():
+    """All five answer, none carries a usable value. Not an outage."""
+    async with aiohttp.ClientSession() as session:
+        client = BitpandaApiClient("key", session)
+        with aioresponses() as m:
+            for timeframe in PORTFOLIO_TIMEFRAMES:
+                m.get(
+                    f"{API_BASE_URL}/portfolio-history?timeframe={timeframe}",
+                    payload={"data": {"datapoints": [],
+                                      "return_percentage": None}},
+                )
+            result = await collect_returns(client, None)
+    assert result == {}

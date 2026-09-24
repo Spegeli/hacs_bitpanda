@@ -1,0 +1,62 @@
+[
+  {
+    "id": "b88b8b25-efe3-11eb-b56f-0691764446a7",
+    "symbol": "GBP",
+    "name": "British Pound Sterling"
+  },
+  {
+    "id": "7098d116-f214-11ec-a2e6-0a686dc2c129",
+    "symbol": "HUF",
+    "name": "Hungarian Forint"
+  },
+  {
+    "id": "b88b8466-efe3-11eb-b56f-0691764446a7",
+    "symbol": "EUR",
+    "name": "Euro"
+  },
+  {
+    "id": "b88b8879-efe3-11eb-b56f-0691764446a7",
+    "symbol": "USD",
+    "name": "US Dollar"
+  },
+  {
+    "id": "b88b89f1-efe3-11eb-b56f-0691764446a7",
+    "symbol": "CHF",
+    "name": "Swiss Franc"
+  },
+  {
+    "id": "b88b8d23-efe3-11eb-b56f-0691764446a7",
+    "symbol": "PLN",
+    "name": "Polish Zloty"
+  },
+  {
+    "id": "b88b8c2d-efe3-11eb-b56f-0691764446a7",
+    "symbol": "TRY",
+    "name": "Turkish Lira"
+  },
+  {
+    "id": "cb3fff0b-f214-11ec-a2e6-0a686dc2c129",
+    "symbol": "DKK",
+    "name": "Danish Krone"
+  },
+  {
+    "id": "b8d63f2b-f214-11ec-a2e6-0a686dc2c129",
+    "symbol": "SEK",
+    "name": "Swedish Krona"
+  },
+  {
+    "id": "a65abafd-f214-11ec-a2e6-0a686dc2c129",
+    "symbol": "NOK",
+    "name": "Norwegian Krone"
+  },
+  {
+    "id": "8d529233-f214-11ec-a2e6-0a686dc2c129",
+    "symbol": "CZK",
+    "name": "Czech Koruna"
+  },
+  {
+    "id": "7a35d8c9-3f2f-11ed-aa9a-0ab224216cc3",
+    "symbol": "RON",
+    "name": "Romanian leu"
+  }
+]

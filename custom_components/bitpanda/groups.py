@@ -21,6 +21,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry, ConfigSubentry, ConfigSubentryData
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.translation import async_get_translations
 
 from .assets import ASSET_CATEGORY_FILTERS, CATEGORY_OTHER, asset_category, slim_asset
@@ -63,6 +64,24 @@ def group_of_category(
         (group for group in groups_of_type(entry, subentry_type) if group.unique_id == category),
         None,
     )
+
+
+def entities_by_group(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> dict[str, list[er.RegistryEntry]]:
+    """Subentry id -> the entity registry entries of `entry` in that group,
+    disabled ones included; entries in no group are left out.
+
+    What a group holds is read from the entity registry: every supported
+    Home Assistant version records an entity's subentry there, while the
+    device registry changed how it records a device's -- from 2026.9 the
+    older form is only a deprecated compatibility property.
+    """
+    out: dict[str, list[er.RegistryEntry]] = {}
+    for reg_entry in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id):
+        if reg_entry.config_subentry_id is not None:
+            out.setdefault(reg_entry.config_subentry_id, []).append(reg_entry)
+    return out
 
 
 def price_group_data(category: str, records: Iterable[dict]) -> dict[str, Any]:

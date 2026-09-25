@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from homeassistant.config_entries import ConfigSubentryData
+from homeassistant.helpers import device_registry as dr
 import pytest
 
 from custom_components.bitpanda.assets import slim_asset
@@ -72,3 +73,18 @@ def wallet_group(category: str, title: str | None = None) -> ConfigSubentryData:
         title=title or category,
         unique_id=category,
     )
+
+
+def device_names_in_subentry(hass, entry_id: str, subentry_id: str | None) -> set[str]:
+    """Names of the devices of config entry `entry_id` in its subentry
+    `subentry_id` -- in none, for None.
+
+    Read from the device's own `config_subentry_id`, as the test image's
+    Home Assistant records it; the integration itself reads group membership
+    from the entity registry only.
+    """
+    return {
+        device.name
+        for device in dr.async_entries_for_config_entry(dr.async_get(hass), entry_id)
+        if device.config_subentry_id == subentry_id
+    }

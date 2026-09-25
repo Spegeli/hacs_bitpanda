@@ -21,8 +21,7 @@ from .const import (
     SUBENTRY_TYPE_WALLET_GROUP,
     entry_type,
 )
-from .devices import subentry_devices
-from .groups import groups_of_type
+from .groups import entities_by_group, groups_of_type
 
 _REDACTED = "**REDACTED**"
 
@@ -38,12 +37,20 @@ def _groups_by_category(entry: ConfigEntry, subentry_type: str) -> list[ConfigSu
 
 
 def _wallet_groups(hass: HomeAssistant, entry: ConfigEntry) -> list[dict[str, Any]]:
-    """Each wallet group's category, title and number of wallet devices."""
+    """Each wallet group's category, title and number of wallet devices: the
+    devices its sensors belong to."""
+    members = entities_by_group(hass, entry)
     return [
         {
             "category": group.data[CONF_CATEGORY],
             "title": group.title,
-            "wallets": len(subentry_devices(hass, entry.entry_id, group.subentry_id)),
+            "wallets": len(
+                {
+                    reg_entry.device_id
+                    for reg_entry in members.get(group.subentry_id, [])
+                    if reg_entry.device_id is not None
+                }
+            ),
         }
         for group in _groups_by_category(entry, SUBENTRY_TYPE_WALLET_GROUP)
     ]

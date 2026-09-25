@@ -16,7 +16,6 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.bitpanda.const import DOMAIN
-from custom_components.bitpanda.devices import subentry_devices
 from custom_components.bitpanda.groups import async_get_or_create_wallet_group
 from custom_components.bitpanda.portfolio_coordinator import PortfolioRuntime
 from custom_components.bitpanda.portfolio_model import EarnData, Holding, PortfolioData
@@ -24,6 +23,8 @@ from custom_components.bitpanda.portfolio_sensor import (
     PortfolioEntityManager,
     async_setup_portfolio_entities,
 )
+
+from tests.conftest import device_names_in_subentry
 
 VSN = {"id": "1f051b7c-5980-6dda-9d3d-cf107d8d4bfb", "symbol": "VSN", "name": "Vision",
        "type": "cryptocoin", "group": "token"}
@@ -125,8 +126,9 @@ class _Harness:
         return group
 
     def group_devices(self, category: str) -> set[str]:
-        subentry_id = self.group(category).subentry_id
-        return {d.name for d in subentry_devices(self.hass, self.entry.entry_id, subentry_id)}
+        return device_names_in_subentry(
+            self.hass, self.entry.entry_id, self.group(category).subentry_id
+        )
 
     def subentry_of(self, entity_id: str) -> str | None:
         return er.async_get(self.hass).async_get(entity_id).config_subentry_id

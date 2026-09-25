@@ -25,8 +25,13 @@ from .const import (
     SUBENTRY_TYPE_WALLET_GROUP,
     WALLET_REMOVAL_MISSES,
 )
-from .devices import find_entry_device, subentry_devices
-from .groups import async_get_or_create_wallet_group, group_of_category, groups_of_type
+from .devices import find_entry_device
+from .groups import (
+    async_get_or_create_wallet_group,
+    entities_by_group,
+    group_of_category,
+    groups_of_type,
+)
 from .naming import (
     asset_display_label,
     managed_asset_id,
@@ -499,18 +504,16 @@ class PortfolioEntityManager:
 
     def _remove_empty_groups(self) -> None:
         """Remove every wallet group that no tracked wallet belongs to and
-        that holds no device of this entry any more.
+        that holds nothing of this entry any more.
 
         A wallet this manager does not track yet -- one registered before a
         restart, whose asset is unnamed for now or has been sold since --
-        still has its device in its group, and keeps the group until it goes.
+        still has its sensors in its group, and keeps the group until they go.
         """
-        entry_id = self._entry.entry_id
         in_use = set(self._wallets.values())
+        occupied = entities_by_group(self._hass, self._entry)
         for group in groups_of_type(self._entry, SUBENTRY_TYPE_WALLET_GROUP):
-            if group.unique_id in in_use or subentry_devices(
-                self._hass, entry_id, group.subentry_id
-            ):
+            if group.unique_id in in_use or group.subentry_id in occupied:
                 continue
             self._hass.config_entries.async_remove_subentry(self._entry, group.subentry_id)
 

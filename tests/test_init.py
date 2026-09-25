@@ -17,10 +17,10 @@ from custom_components.bitpanda import async_remove_config_entry_device
 from custom_components.bitpanda.api import BitpandaAuthError
 from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.const import DOMAIN
-from custom_components.bitpanda.devices import find_entry_device, subentry_devices
+from custom_components.bitpanda.devices import find_entry_device
 from custom_components.bitpanda.ecb import EcbRates
 
-from tests.conftest import load_fixture, price_group
+from tests.conftest import device_names_in_subentry, load_fixture, price_group
 
 _CLIENT = "custom_components.bitpanda.api.BitpandaApiClient."
 _EUR_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
@@ -152,8 +152,10 @@ _VSN_ENTITIES = (
 )
 
 
-def _group_devices(hass, entry, group: ConfigSubentry) -> list[str]:
-    return sorted(d.name for d in subentry_devices(hass, entry.entry_id, group.subentry_id))
+def _group_devices(hass, entry, group: ConfigSubentry | None) -> set[str]:
+    """Names of the devices in `group`, or in none for None."""
+    subentry_id = None if group is None else group.subentry_id
+    return device_names_in_subentry(hass, entry.entry_id, subentry_id)
 
 
 async def test_the_portfolio_groups_its_wallets_and_keeps_its_own_device_outside(
@@ -169,12 +171,10 @@ async def test_the_portfolio_groups_its_wallets_and_keeps_its_own_device_outside
     ent_reg = er.async_get(hass)
     for entity_id in _VSN_ENTITIES:
         assert ent_reg.async_get(entity_id).config_subentry_id == group.subentry_id
-    assert _group_devices(hass, entry, group) == ["Vision (VSN) Wallet"]
+    assert _group_devices(hass, entry, group) == {"Vision (VSN) Wallet"}
     for key in ("total", "cash", "cash_plus", "return_day"):
         assert ent_reg.async_get(f"sensor.bitpanda_portfolio_{key}").config_subentry_id is None
-    portfolio = _own_device(hass, entry, "portfolio")
-    assert portfolio is not None
-    assert portfolio.name not in _group_devices(hass, entry, group)
+    assert _group_devices(hass, entry, None) == {"Portfolio"}
 
 
 async def _next_refresh(hass) -> None:
@@ -203,7 +203,7 @@ async def test_a_deleted_wallet_group_comes_back_on_the_next_refresh_without_a_r
     assert regrouped.subentry_id != group.subentry_id
     for entity_id in _VSN_ENTITIES:
         assert ent_reg.async_get(entity_id).config_subentry_id == regrouped.subentry_id
-    assert _group_devices(hass, entry, regrouped) == ["Vision (VSN) Wallet"]
+    assert _group_devices(hass, entry, regrouped) == {"Vision (VSN) Wallet"}
     assert _value(hass, "sensor.bitpanda_vision_vsn_wallet") == 50.0
 
 

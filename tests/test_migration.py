@@ -10,7 +10,6 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
 from custom_components.bitpanda.const import DOMAIN
-from custom_components.bitpanda.devices import subentry_devices
 from custom_components.bitpanda.ecb import EcbRates
 from custom_components.bitpanda.migration import (
     async_adopt_legacy_prices,
@@ -20,7 +19,7 @@ from custom_components.bitpanda.migration import (
     legacy_symbol,
 )
 
-from tests.conftest import load_fixture, price_group
+from tests.conftest import device_names_in_subentry, load_fixture, price_group
 
 _API = "custom_components.bitpanda.migration.BitpandaApiClient."
 _EUR_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
@@ -480,10 +479,13 @@ async def test_a_migrated_install_ends_with_its_wallets_in_groups(hass, legacy_a
     assert (total.unique_id, total.config_subentry_id) == (f"{eid}_portfolio_total", None)
     left = ent_reg.async_get(gone)
     assert (left.config_subentry_id, left.device_id) == (None, device)
-    assert all(
-        device not in {d.id for d in subentry_devices(hass, eid, group.subentry_id)}
-        for group in groups.values()
-    )
+    assert device_names_in_subentry(hass, eid, groups["crypto"].subentry_id) == {
+        "Bitcoin (BTC) Wallet"
+    }
+    assert device_names_in_subentry(hass, eid, groups["metal"].subentry_id) == {
+        "Gold (XAU) Wallet"
+    }
+    assert device_names_in_subentry(hass, eid, None) == {"Portfolio", "Bitpanda Wallets"}
 
 
 async def test_the_fiat_wallet_of_the_entry_currency_becomes_portfolio_cash(

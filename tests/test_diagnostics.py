@@ -3,7 +3,7 @@ from datetime import timedelta
 from types import SimpleNamespace
 
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentryData
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.const import DOMAIN
@@ -29,18 +29,26 @@ class _Coordinator:
         self.update_interval = interval
 
 
-def _add_device(hass, entry, name: str, category: str | None = None) -> None:
-    """A device of `entry`, in the wallet group of `category` or in none."""
+def _add_device(
+    hass, entry, name: str, category: str | None = None, sensors: tuple[str, ...] = ("value",)
+) -> None:
+    """A device of `entry` with one sensor per name in `sensors`, all in the
+    wallet group of `category` or in none."""
     group = next(
         (sub.subentry_id for sub in entry.subentries.values() if sub.unique_id == category),
         None,
     )
-    dr.async_get(hass).async_get_or_create(
+    device = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
         config_subentry_id=group,
         identifiers={(DOMAIN, f"{entry.entry_id}_{name}")},
         name=name,
     )
+    for sensor in sensors:
+        er.async_get(hass).async_get_or_create(
+            "sensor", DOMAIN, f"{entry.entry_id}_{name}_{sensor}", config_entry=entry,
+            config_subentry_id=group, device_id=device.id,
+        )
 
 
 def _portfolio_entry(hass, *, loaded: bool) -> MockConfigEntry:
@@ -61,9 +69,10 @@ def _portfolio_entry(hass, *, loaded: bool) -> MockConfigEntry:
         ],
     )
     entry.add_to_hass(hass)
-    _add_device(hass, entry, "Portfolio")
+    _add_device(hass, entry, "Portfolio", sensors=("total", "cash"))
     _add_device(hass, entry, "Bitcoin (BTC) Wallet", "crypto")
-    _add_device(hass, entry, "Vision (VSN) Wallet", "crypto")
+    # Wallet, Staking and Total: three sensors, one wallet device.
+    _add_device(hass, entry, "Vision (VSN) Wallet", "crypto", ("wallet", "staking", "total"))
     _add_device(hass, entry, "Gold (XAU) Wallet", "metal")
     if loaded:
         data = PortfolioData(

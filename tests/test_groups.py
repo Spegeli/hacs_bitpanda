@@ -2,6 +2,7 @@
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.config_entries import ConfigSubentryData
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.assets import slim_asset
@@ -11,13 +12,14 @@ from custom_components.bitpanda.groups import (
     async_get_or_create_wallet_group,
     async_group_titles,
     async_remove_asset_from_group,
+    entities_by_group,
     group_of_category,
     groups_of_type,
     price_group_of_asset,
     tracked_assets,
 )
 
-from tests.conftest import load_fixture, price_group
+from tests.conftest import load_fixture, price_group, wallet_group
 
 _TRANSLATIONS = "custom_components.bitpanda.groups.async_get_translations"
 
@@ -96,6 +98,40 @@ async def test_groups_are_found_by_their_type_and_category(hass):
     assert group_of_category(entry, "price_group", "index").subentry_id == ids["index"]
     assert group_of_category(entry, "price_group", "metal") is None
     assert group_of_category(entry, "wallet_group", "metal").subentry_id == ids["metal"]
+
+
+async def test_entities_are_found_by_the_group_they_sit_in(hass):
+    """Disabled ones included; an entity in no group, or of another entry,
+    is in none of them."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=3, data={"entry_type": "portfolio"},
+        subentries_data=[wallet_group("crypto"), wallet_group("metal"), wallet_group("etf")],
+    )
+    other = MockConfigEntry(domain=DOMAIN, version=3, subentries_data=[wallet_group("crypto")])
+    entry.add_to_hass(hass)
+    other.add_to_hass(hass)
+    ids = {sub.unique_id: sub.subentry_id for sub in entry.subentries.values()}
+    [elsewhere] = other.subentries
+    ent_reg = er.async_get(hass)
+
+    def _entity(owner, unique_id: str, subentry_id: str | None = None, **kwargs) -> str:
+        return ent_reg.async_get_or_create(
+            "sensor", DOMAIN, unique_id, config_entry=owner, config_subentry_id=subentry_id,
+            **kwargs,
+        ).entity_id
+
+    btc = _entity(entry, "btc", ids["crypto"])
+    sol = _entity(entry, "sol", ids["crypto"], disabled_by=er.RegistryEntryDisabler.USER)
+    gold = _entity(entry, "gold", ids["metal"])
+    _entity(entry, "outside")
+    _entity(other, "elsewhere", elsewhere)
+
+    members = entities_by_group(hass, entry)
+
+    assert {group: sorted(e.entity_id for e in regs) for group, regs in members.items()} == {
+        ids["crypto"]: sorted([btc, sol]),
+        ids["metal"]: [gold],
+    }
 
 
 async def test_the_price_tracker_tracks_the_assets_of_all_its_groups(hass):

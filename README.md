@@ -27,6 +27,7 @@ The integration offers two services. Set up either or both — each one once.
   - **Staking** — the value of the staked units, with APR and lifetime rewards
   - **Total** — the whole position, with invested amount, average buy price and total return
   - Staking and Total appear as soon as something is staked or Bitpanda offers an Earn product for the asset, and stay while either is true
+- The wallets appear in groups by asset type, such as Cryptocurrencies or Precious metals, named in the language Home Assistant runs in. The Portfolio device stays outside the groups, on top. Groups come and go with your holdings — there is nothing to add. Deleting a group (**⋮ → Delete**) only hides it until the next refresh while you still hold those assets: the group and its wallets come back, under the same entity IDs
 - The wallet of an asset you no longer hold can be deleted from its device page (**⋮ → Delete**) instead of waiting for it to go. The Portfolio device and the wallets of assets you hold cannot be deleted: they would come straight back
 - Updates every 5 minutes; Earn products every 24 hours; rewards every hour
 
@@ -113,7 +114,7 @@ Bitpanda API keys expire after **one year** — see [Changing the key or the cur
 
 ### 3. Track prices
 
-The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stocks, ETFs, ETCs, Crypto indices, Precious metals — with one device per asset inside. A group is named in the language Home Assistant runs in when it is created; **⋮ → Rename** on the group renames it.
+The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stocks, ETFs, ETCs, Crypto indices, Precious metals — with one device per asset inside. A group is named in the language Home Assistant runs in when it is created, and the name never changes by itself; newer Home Assistant versions let you rename a group with **⋮ → Rename**.
 
 1. On the **Bitpanda Price Tracker** entry, click **Add price tracker**
 2. Pick a category (Crypto, Stocks, ETFs, ETCs, Crypto indices, Precious metals), then type to search by name, symbol or ISIN and pick one asset. Entries read `Name / SYMBOL / ISIN` (ISIN only for stocks, ETFs and ETCs)
@@ -172,7 +173,7 @@ This release moves to Bitpanda's new Public API and splits the integration into 
 
 - **Two services.** Your entry becomes **Bitpanda Portfolio**; your price trackers move to a new **Bitpanda Price Tracker** entry.
 - **Entity IDs follow the new scheme**, for example `sensor.bitpanda_wallets_vsn_wallet` → `sensor.bitpanda_vision_vsn_wallet` and `sensor.bitpanda_price_tracker_btc_eur` → `sensor.bitpanda_bitcoin_btc_eur`.
-- **Every holding is tracked**, not only the wallets you picked, and each gets its own device.
+- **Every holding is tracked**, not only the wallets you picked, and each gets its own device, in a group by asset type.
 - **Wallets of assets you no longer hold go away.** They are migrated like the others, then removed together with their history after three portfolio refreshes without them — about ten minutes after the Portfolio starts working with your new key.
 - **Wallet still means the unstaked part**, as before. The new **Staking** and **Total** sensors show the staked part and the whole position; they start without history.
 - **Portfolio Total value now covers your whole account** — every holding plus all fiat. It used to add up only the wallets you tracked, so its value steps up at the upgrade: check automations that compare it against a threshold.

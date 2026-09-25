@@ -53,15 +53,15 @@ Everything lives in `custom_components/bitpanda/`:
 | `asset_flow.py` | The "Add price tracker" subentry flow and the cached catalogue listings |
 | `config_flow.py` | Service menu, Portfolio setup/reauth/reconfigure, Price Tracker setup and options, import |
 | `const.py` | Domain, URLs, scopes, currencies, intervals, budgets |
-| `devices.py` | Device lookups scoped to their config entry |
+| `devices.py` | Device lookups scoped to their config entry or subentry |
 | `diagnostics.py` | Diagnostics per service, API key redacted |
 | `ecb.py` | ECB daily reference rates |
-| `groups.py` | Groups by asset type (config subentries): titles, lookups, the Price Tracker's tracked assets |
+| `groups.py` | Groups by asset type (config subentries): titles, lookups, the Price Tracker's tracked assets, the Portfolio's wallet groups |
 | `migration.py` | Migration of version 1 (legacy API) entries to version 3 |
 | `naming.py` | Labels, entity IDs, unique_ids, device identifiers |
 | `portfolio_coordinator.py` | Portfolio, History, Earn and Rewards coordinators |
 | `portfolio_model.py` | Pure data model: holdings, value split, Cash Plus, Earn, rewards |
-| `portfolio_sensor.py` | Portfolio sensors and the wallet lifecycle manager |
+| `portfolio_sensor.py` | Portfolio sensors and the wallet lifecycle manager, which also keeps the wallet groups |
 | `price_coordinator.py` | Keyless ticker coordinator with its request budget, ECB coordinator |
 | `price_sensor.py` | Price sensors per asset and currency |
 | `purge.py` | Deletes the Portfolio's sensors with their history on a currency change |
@@ -69,6 +69,8 @@ Everything lives in `custom_components/bitpanda/`:
 | `strings.json`, `translations/` | UI strings |
 
 The Portfolio polls `/portfolio` and `/portfolio-history` every 5 minutes, `/operations` every hour and `/earn/configs` every 24 hours, all with the key. The Price Tracker polls `/tickers` without a key — every 60 seconds, stretched above 30 assets to stay within 1,800 requests per hour — and the ECB every 6 hours when extra currencies are configured. Add new reads to an existing coordinator rather than polling from a sensor.
+
+The wallet lifecycle manager (`PortfolioEntityManager`) runs after every portfolio refresh. It adds and removes the wallet devices and keeps them in wallet groups, config subentries it creates and removes itself; a group the user deletes comes back with the next refresh. So the Portfolio's update listener reloads the entry only when `entry.data` or `entry.options` changed since setup — subentry changes never reload it. The Price Tracker reloads on every change, subentries included: its groups are what it tracks.
 
 ## Things that are easy to get wrong
 

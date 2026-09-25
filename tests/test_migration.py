@@ -2,11 +2,13 @@
 from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
-from homeassistant.helpers import entity_registry as er
+from homeassistant import data_entry_flow
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
 from custom_components.bitpanda.const import DOMAIN
+from custom_components.bitpanda.ecb import EcbRates
 from custom_components.bitpanda.migration import (
     async_migrate_entry,
     legacy_prefix,
@@ -272,3 +274,275 @@ def test_legacy_prefix_of_bare_symbol_is_none():
 
 def test_legacy_prefix_of_unrecognized_prefix_is_none():
     assert legacy_prefix("stock_AAPL") is None
+
+
+# --- Registry, adoption and notification -----------------------------------------
+
+
+@pytest.fixture
+def notify():
+    with patch(
+        "custom_components.bitpanda.migration.persistent_notification.async_create"
+    ) as create:
+        yield create
+
+
+def _message(notify) -> str:
+    notify.assert_called_once()
+    return notify.call_args.args[1]
+
+
+@pytest.fixture
+def price_api():
+    with patch(
+        "custom_components.bitpanda.api.BitpandaApiClient.async_get_ticker",
+        AsyncMock(return_value={"price": "100.00000000"}),
+    ), patch(
+        "custom_components.bitpanda.price_coordinator.async_fetch_ecb_rates",
+        AsyncMock(return_value=EcbRates(date="2026-09-24", rates={"USD": 2.0})),
+    ):
+        yield
+
+
+def _legacy_device(hass, entry, kind: str) -> str:
+    names = {"wallets": "Bitpanda Wallets", "price_tracker": "Bitpanda Price Tracker"}
+    return dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"{entry.entry_id}_{kind}")},
+        name=names[kind],
+    ).id
+
+
+def _legacy_entity(hass, entry, unique_id: str, object_id: str, device_id=None) -> str:
+    return er.async_get(hass).async_get_or_create(
+        "sensor", DOMAIN, unique_id, config_entry=entry, device_id=device_id,
+        suggested_object_id=object_id,
+    ).entity_id
+
+
+async def test_wallets_are_rekeyed_and_default_ids_renamed(hass, legacy_api, no_setup, notify):
+    entry = _v1_entry(hass, wallets=["cryptocoin_BTC", "commodity_metal_XAU", "index_index_BCI5"])
+    device = _legacy_device(hass, entry, "wallets")
+    eid = entry.entry_id
+    _legacy_entity(hass, entry, f"{eid}_wallet_cryptocoin_BTC", "bitpanda_wallets_btc_wallet", device)
+    _legacy_entity(hass, entry, f"{eid}_wallet_commodity_metal_XAU", "bitpanda_wallets_xau_wallet_2", device)
+    _legacy_entity(hass, entry, f"{eid}_wallet_index_index_BCI5", "my_index", device)
+
+    assert await async_migrate_entry(hass, entry)
+
+    ent_reg = er.async_get(hass)
+    btc = ent_reg.async_get("sensor.bitpanda_bitcoin_btc_wallet")
+    assert btc.unique_id == f"{eid}_wallet_{BTC_ID}"
+    assert btc.device_id is None
+    # A "_2" suffix still counts as the legacy default.
+    assert ent_reg.async_get("sensor.bitpanda_gold_xau_wallet").unique_id == f"{eid}_wallet_{GOLD_ID}"
+    # A user's own ID is kept; only the unique_id moves.
+    assert ent_reg.async_get("sensor.my_index").unique_id == f"{eid}_wallet_{BCI5_ID}"
+    assert dr.async_get(hass).async_get(device) is None
+    message = _message(notify)
+    assert "`sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet`" in message
+    assert "sensor.my_index" not in message
+
+
+async def test_the_fiat_wallet_of_the_entry_currency_becomes_portfolio_cash(
+    hass, legacy_api, no_setup, notify
+):
+    entry = _v1_entry(hass, wallets=["fiat_EUR", "fiat_USD"])
+    device = _legacy_device(hass, entry, "wallets")
+    eid = entry.entry_id
+    _legacy_entity(hass, entry, f"{eid}_wallet_fiat_EUR", "bitpanda_wallets_eur_wallet", device)
+    usd = _legacy_entity(hass, entry, f"{eid}_wallet_fiat_USD", "bitpanda_wallets_usd_wallet", device)
+
+    assert await async_migrate_entry(hass, entry)
+
+    ent_reg = er.async_get(hass)
+    assert ent_reg.async_get("sensor.bitpanda_portfolio_cash").unique_id == f"{eid}_portfolio_cash"
+    assert ent_reg.async_get(usd).unique_id == f"{eid}_wallet_fiat_USD"
+    # Still holds the USD wallet: the legacy device stays.
+    assert dr.async_get(hass).async_get(device) is not None
+    assert f"`{usd}`" in _message(notify)
+
+
+async def test_the_only_fiat_wallet_becomes_portfolio_cash_whatever_its_currency(
+    hass, legacy_api, no_setup, notify
+):
+    entry = _v1_entry(hass, wallets=["fiat_USD"])
+    eid = entry.entry_id
+    _legacy_entity(hass, entry, f"{eid}_wallet_fiat_USD", "bitpanda_wallets_usd_wallet")
+    assert await async_migrate_entry(hass, entry)
+    assert er.async_get(hass).async_get("sensor.bitpanda_portfolio_cash").unique_id == f"{eid}_portfolio_cash"
+
+
+async def test_portfolio_total_keeps_its_unique_id_and_gets_the_new_id(hass, legacy_api, no_setup, notify):
+    entry = _v1_entry(hass)
+    eid = entry.entry_id
+    _legacy_entity(hass, entry, f"{eid}_portfolio_total", "bitpanda_wallets_portfolio_total")
+    assert await async_migrate_entry(hass, entry)
+    total = er.async_get(hass).async_get("sensor.bitpanda_portfolio_total")
+    assert total.unique_id == f"{eid}_portfolio_total"
+
+
+async def test_an_unresolvable_wallet_is_left_alone_and_listed(hass, legacy_api, no_setup, notify):
+    entry = _v1_entry(hass, wallets=["cryptocoin_GONE"])
+    eid = entry.entry_id
+    gone = _legacy_entity(hass, entry, f"{eid}_wallet_cryptocoin_GONE", "bitpanda_wallets_gone_wallet")
+    assert await async_migrate_entry(hass, entry)
+    assert er.async_get(hass).async_get(gone).unique_id == f"{eid}_wallet_cryptocoin_GONE"
+    assert f"`{gone}`: GONE no longer exists at Bitpanda" in _message(notify)
+
+
+async def test_a_wallet_prefix_decides_between_legacy_types(hass, legacy_api, no_setup, notify):
+    """A wallet id's category prefix, not just its bare symbol, drives resolution.
+
+    "TWIN" alone is ambiguous between a coin and a metal of the same symbol;
+    only the `commodity_metal_` prefix (via `legacy_prefix` and `pick_legacy`)
+    picks the metal instead of the coin.
+    """
+    _, assets = legacy_api
+    assets.side_effect = lambda **kwargs: (
+        [
+            {
+                "id": "11111111-1111-1111-1111-111111111111",
+                "symbol": "TWIN",
+                "name": "Twin Coin",
+                "type": "cryptocoin",
+                "group": "coin",
+            },
+            {
+                "id": "22222222-2222-2222-2222-222222222222",
+                "symbol": "TWIN",
+                "name": "Twin Metal",
+                "type": "commodity",
+                "group": "metal",
+            },
+        ]
+        if kwargs.get("symbol") == "TWIN"
+        else []
+    )
+    entry = _v1_entry(hass, wallets=["commodity_metal_TWIN"])
+    eid = entry.entry_id
+    _legacy_entity(hass, entry, f"{eid}_wallet_commodity_metal_TWIN", "bitpanda_wallets_twin_wallet")
+
+    assert await async_migrate_entry(hass, entry)
+
+    ent_reg = er.async_get(hass)
+    assert ent_reg.async_get_entity_id(
+        "sensor", DOMAIN, f"{eid}_wallet_22222222-2222-2222-2222-222222222222"
+    ) == "sensor.bitpanda_twin_metal_twin_wallet"
+
+
+async def test_legacy_price_sensors_move_to_the_price_tracker(hass, legacy_api, price_api, notify):
+    entry = _v1_entry(hass, currency="USD", assets=["BTC"])
+    device = _legacy_device(hass, entry, "price_tracker")
+    eid = entry.entry_id
+    _legacy_entity(hass, entry, f"{eid}_BTC_price_USD", "bitpanda_price_tracker_btc_usd", device)
+
+    assert await async_migrate_entry(hass, entry)
+    await hass.async_block_till_done()
+
+    [tracker] = _price_trackers(hass)
+    ent_reg = er.async_get(hass)
+    moved = ent_reg.async_get("sensor.bitpanda_bitcoin_btc_usd")
+    assert moved.config_entry_id == tracker.entry_id
+    assert moved.config_subentry_id == next(iter(tracker.subentries))
+    assert moved.unique_id == f"{tracker.entry_id}_{BTC_ID}_price_USD"
+    # The adopted entity IS the live USD sensor: no "_2" twin beside it.
+    assert ent_reg.async_get("sensor.bitpanda_bitcoin_btc_usd_2") is None
+    assert float(hass.states.get("sensor.bitpanda_bitcoin_btc_usd").state) == 200.0
+    assert "legacy_adopt" not in tracker.data
+    assert dr.async_get(hass).async_get(device) is None
+    assert (
+        "`sensor.bitpanda_price_tracker_btc_usd` → `sensor.bitpanda_bitcoin_btc_usd`"
+        in _message(notify)
+    )
+
+
+async def test_an_unresolvable_price_is_left_alone_and_listed(hass, legacy_api, no_setup, notify):
+    entry = _v1_entry(hass, assets=["GONE"])
+    old = _legacy_entity(hass, entry, f"{entry.entry_id}_GONE_price_EUR", "bitpanda_price_tracker_gone_eur")
+    assert await async_migrate_entry(hass, entry)
+    assert _price_trackers(hass) == []
+    assert er.async_get(hass).async_get(old).config_entry_id == entry.entry_id
+    assert f"`{old}`" in _message(notify)
+
+
+async def test_an_existing_price_tracker_does_not_block_the_migration(
+    hass, legacy_api, no_setup, notify
+):
+    MockConfigEntry(
+        domain=DOMAIN,
+        version=3,
+        unique_id="price_tracker",
+        data={"entry_type": "price_tracker"},
+        options={"extra_currencies": []},
+    ).add_to_hass(hass)
+    entry = _v1_entry(hass, assets=["BTC"])
+    eid = entry.entry_id
+    old = _legacy_entity(hass, entry, f"{eid}_BTC_price_EUR", "bitpanda_price_tracker_btc_eur")
+
+    assert await async_migrate_entry(hass, entry)
+    assert entry.version == 3
+
+    reg_entry = er.async_get(hass).async_get(old)
+    # Untouched: still belongs to the v1 entry (now the Portfolio), under its
+    # legacy unique_id -- nothing adopted it, because no Price Tracker entry
+    # was ever created for this migration to hand it to.
+    assert reg_entry.config_entry_id == eid
+    assert reg_entry.unique_id == f"{eid}_BTC_price_EUR"
+    assert f"`{old}`: a Price Tracker was already set up" in _message(notify)
+
+
+async def test_a_failed_price_tracker_import_changes_nothing(hass, legacy_api, no_setup):
+    entry = _v1_entry(hass, assets=["BTC"])
+    with patch.object(
+        hass.config_entries.flow,
+        "async_init",
+        AsyncMock(
+            return_value={"type": data_entry_flow.FlowResultType.ABORT, "reason": "unknown"}
+        ),
+    ):
+        assert not await async_migrate_entry(hass, entry)
+    assert entry.version == 1
+    assert dict(entry.options) == {"tracked_assets": ["BTC"], "tracked_wallets": []}
+    assert _price_trackers(hass) == []
+
+
+async def test_the_notification_asks_for_a_new_key(hass, legacy_api, no_setup, notify):
+    assert await async_migrate_entry(hass, _v1_entry(hass))
+    message = _message(notify)
+    assert "https://app.bitpanda.com/my-account/apikey" in message
+    assert "Earn (Read)" in message
+    assert notify.call_args.kwargs["notification_id"] == "bitpanda_migration"
+
+
+async def test_an_interrupted_migration_can_run_again(hass, legacy_api, no_setup, notify):
+    entry = _v1_entry(hass, wallets=["cryptocoin_BTC"])
+    eid = entry.entry_id
+    _legacy_entity(hass, entry, f"{eid}_wallet_cryptocoin_BTC", "bitpanda_wallets_btc_wallet")
+    assert await async_migrate_entry(hass, entry)
+    # As if the version bump had never been saved.
+    hass.config_entries.async_update_entry(
+        entry, version=1, data={"api_key": "legacy-key", "currency": "EUR"},
+        options={"tracked_assets": [], "tracked_wallets": ["cryptocoin_BTC"]},
+    )
+    notify.reset_mock()
+    assert await async_migrate_entry(hass, entry)
+    wallet = er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_wallet")
+    assert wallet.unique_id == f"{eid}_wallet_{BTC_ID}"
+    assert "Not migrated" not in _message(notify)
+
+
+async def test_an_empty_currency_list_aborts_the_migration(hass, legacy_api, no_setup):
+    """R12: an empty (or EUR-less) /currencies answer must not fall back to EUR.
+
+    Such an answer means the list itself cannot be trusted, so the migration
+    aborts with nothing changed and retries at the next start, exactly like a
+    rate limit or any other API error.
+    """
+    currencies, _ = legacy_api
+    currencies.return_value = []
+    entry = _v1_entry(hass)
+    assert not await async_migrate_entry(hass, entry)
+    assert entry.version == 1
+    assert dict(entry.options) == {"tracked_assets": [], "tracked_wallets": []}
+    assert _price_trackers(hass) == []

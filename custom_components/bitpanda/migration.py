@@ -15,16 +15,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import logging
+from typing import Any
 
+from homeassistant.components import persistent_notification
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
 from .assets import legacy_candidates, pick_legacy, slim_asset
 from .const import (
+    API_KEY_URL,
     CONF_API_KEY,
     CONF_CURRENCY,
     CONF_CURRENCY_ID,
@@ -42,10 +45,17 @@ from .const import (
     SUPPORTED_CURRENCIES,
 )
 from .naming import (
+    LEGACY_PORTFOLIO_OBJECT_ID,
     is_default_entity_id,
     legacy_price_object_id,
+    legacy_wallet_object_id,
     managed_asset_id,
+    portfolio_entity_id,
+    portfolio_unique_id,
     price_entity_id,
+    price_unique_id,
+    wallet_entity_id,
+    wallet_unique_id,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -77,8 +87,9 @@ def legacy_symbol(wallet_id: str) -> str:
 
     A wallet id with no recognised prefix (already a bare symbol, or an
     unrecognised category) is returned unchanged. Resolution then either
-    succeeds outright (a bare symbol) or legitimately fails and gets dropped
-    with a warning (an unrecognised category) -- both are safer than
+    succeeds outright (a bare symbol) or legitimately fails (an unrecognised
+    category), in which case the entity is left in place and listed, with
+    the reason, in the migration notification -- both are safer than
     guessing at a split.
     """
     for prefix in _LEGACY_PREFIXES:
@@ -175,7 +186,15 @@ async def async_plan(hass: HomeAssistant, entry: ConfigEntry) -> MigrationPlan:
     """
     client = BitpandaApiClient(None, async_get_clientsession(hass))
     currency = entry.data.get(CONF_CURRENCY, DEFAULT_CURRENCY)
-    ids = {c.get("symbol"): c.get("id") for c in await client.async_get_currencies()}
+    currencies = await client.async_get_currencies()
+    if not any(c.get("symbol") == "EUR" and c.get("id") for c in currencies):
+        # Empty, or missing EUR: too broken a list to plan a migration from.
+        # Abort with nothing changed rather than silently switch a non-EUR
+        # user to EUR on a fallback built from a bad answer -- a currency
+        # genuinely missing from an otherwise valid list still falls back
+        # further down.
+        raise BitpandaApiError("/currencies returned no usable currency list")
+    ids = {c.get("symbol"): c.get("id") for c in currencies}
     if currency in SUPPORTED_CURRENCIES and ids.get(currency):
         plan = MigrationPlan(currency=currency, currency_id=ids[currency])
     else:
@@ -310,6 +329,152 @@ async def _async_create_price_tracker(
     return "failed"
 
 
+def rewrite_portfolio_registry(
+    hass: HomeAssistant, entry: ConfigEntry, plan: MigrationPlan
+) -> tuple[list[tuple[str, str]], list[str]]:
+    """Re-key, rename and detach the entry's wallet and portfolio entities.
+
+    Returns the renames (old, new) and a line for every entity left alone.
+    Idempotent: an entity an earlier run already re-keyed carries a UUID
+    unique_id or a new Portfolio key and matches nothing here any more.
+    """
+    ent_reg = er.async_get(hass)
+    eid = entry.entry_id
+    wallet_prefix = f"{eid}_wallet_"
+    renames: list[tuple[str, str]] = []
+    skipped: list[str] = []
+    reserved: set[str] = set()
+    for reg_entry in list(er.async_entries_for_config_entry(ent_reg, eid)):
+        unique_id = reg_entry.unique_id
+        if unique_id == portfolio_unique_id(eid, "total"):
+            new_unique_id = None
+            target = portfolio_entity_id("total")
+            legacy_default = LEGACY_PORTFOLIO_OBJECT_ID
+        elif unique_id.startswith(wallet_prefix) and managed_asset_id(eid, unique_id) is None:
+            wallet_id = unique_id[len(wallet_prefix):]
+            legacy_default = legacy_wallet_object_id(legacy_symbol(wallet_id))
+            if wallet_id in plan.wallets:
+                asset = plan.wallets[wallet_id]
+                new_unique_id = wallet_unique_id(eid, asset["id"])
+                target = wallet_entity_id(asset)
+            elif wallet_id == plan.cash_wallet:
+                new_unique_id = portfolio_unique_id(eid, "cash")
+                target = portfolio_entity_id("cash")
+            else:
+                reason = plan.reasons.get(wallet_id, "unknown wallet")
+                skipped.append(f"`{reg_entry.entity_id}`: {reason}")
+                continue
+        else:
+            continue  # price entities: adopted by the Price Tracker
+        if new_unique_id is not None and ent_reg.async_get_entity_id(
+            reg_entry.domain, DOMAIN, new_unique_id
+        ):
+            skipped.append(
+                f"`{reg_entry.entity_id}`: another entity already stands for the same asset"
+            )
+            continue
+        updates: dict[str, Any] = {"device_id": None}
+        if new_unique_id is not None:
+            updates["new_unique_id"] = new_unique_id
+        if reg_entry.entity_id != target and is_default_entity_id(
+            reg_entry.entity_id, legacy_default
+        ):
+            updates["new_entity_id"] = free_entity_id(hass, target, reserved)
+            reserved.add(updates["new_entity_id"])
+            renames.append((reg_entry.entity_id, updates["new_entity_id"]))
+        ent_reg.async_update_entity(reg_entry.entity_id, **updates)
+    return renames, skipped
+
+
+def remove_empty_legacy_device(hass: HomeAssistant, identifier: str) -> None:
+    """Remove a legacy device once no entity refers to it any more.
+
+    Removing a device also removes its entities -- which is why every
+    migrated entity was detached first, and why a device that still holds a
+    legacy entity the migration left alone is kept.
+    """
+    dev_reg = dr.async_get(hass)
+    device = dev_reg.async_get_device(identifiers={(DOMAIN, identifier)})
+    if device is None:
+        return
+    if er.async_entries_for_device(er.async_get(hass), device.id, include_disabled_entities=True):
+        return
+    dev_reg.async_remove_device(device.id)
+
+
+@callback
+def async_adopt_legacy_prices(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Take over the legacy price entities the migration listed for `entry`.
+
+    Runs first in the Price Tracker's setup, before it creates any entity:
+    an adopted entity must already carry its new unique_id when the new
+    sensor is added, or Home Assistant would create a "_2" twin beside it.
+    """
+    adopt = entry.data.get(CONF_LEGACY_ADOPT) or {}
+    ent_reg = er.async_get(hass)
+    subentry_ids = {sub.unique_id: sub.subentry_id for sub in entry.subentries.values()}
+    for item in adopt.get("entities", []):
+        entity_id = ent_reg.async_get_entity_id("sensor", DOMAIN, item["unique_id"])
+        subentry_id = subentry_ids.get(item["asset_id"])
+        if entity_id is None or subentry_id is None:
+            continue
+        new_unique_id = price_unique_id(entry.entry_id, item["asset_id"], item["currency"])
+        if ent_reg.async_get_entity_id("sensor", DOMAIN, new_unique_id) is not None:
+            _LOGGER.warning(
+                "Not adopting %s: another entity already stands for the same price",
+                entity_id,
+            )
+            continue
+        updates: dict[str, Any] = {
+            "config_entry_id": entry.entry_id,
+            "config_subentry_id": subentry_id,
+            "device_id": None,
+            "new_unique_id": new_unique_id,
+        }
+        target = item.get("new_entity_id")
+        if target and target != entity_id:
+            updates["new_entity_id"] = free_entity_id(hass, target)
+        ent_reg.async_update_entity(entity_id, **updates)
+    source = adopt.get("source_entry_id")
+    if source:
+        remove_empty_legacy_device(hass, f"{source}_price_tracker")
+    hass.config_entries.async_update_entry(
+        entry, data={k: v for k, v in entry.data.items() if k != CONF_LEGACY_ADOPT}
+    )
+
+
+def _notify(
+    hass: HomeAssistant,
+    renames: list[tuple[str, str]],
+    skipped: list[str],
+    notes: list[str],
+) -> None:
+    lines = [
+        "Bitpanda is now two services: Bitpanda Portfolio and Bitpanda Price Tracker."
+    ]
+    if renames:
+        lines += [
+            "",
+            "**Renamed entity IDs.** Check dashboards, automations and scripts that use them:",
+        ]
+        lines += [f"- `{old}` → `{new}`" for old, new in renames]
+    if skipped:
+        lines += ["", "**Not migrated** (left unchanged, delete them when you no longer need them):"]
+        lines += [f"- {line}" for line in skipped]
+    for note in notes:
+        lines += ["", note]
+    lines += [
+        "",
+        "Bitpanda needs a new API key with the permissions Guthaben (Balance), "
+        f"Transaktion (Transaction) and Earn (Read). Create it at {API_KEY_URL} and "
+        "enter it when Home Assistant asks for it. If a Bitpanda dialog shows raw "
+        "text, reload the browser tab.",
+    ]
+    persistent_notification.async_create(
+        hass, "\n".join(lines), title="Bitpanda upgraded", notification_id=f"{DOMAIN}_migration"
+    )
+
+
 def _portfolio_taken(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return any(
         other.entry_id != entry.entry_id and other.unique_id == ENTRY_TYPE_PORTFOLIO
@@ -361,9 +526,20 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         return False
 
-    items, _, _ = plan_price_adoption(hass, entry, plan)
-    if await _async_create_price_tracker(hass, entry, plan, items) == "failed":
+    # Registry before the version bump: an interrupted run repeats in full on
+    # the next start, and every step here is idempotent.
+    renames, skipped = rewrite_portfolio_registry(hass, entry, plan)
+    items, price_renames, price_skipped = plan_price_adoption(hass, entry, plan)
+    outcome = await _async_create_price_tracker(hass, entry, plan, items)
+    if outcome == "failed":
         return False
+    if outcome == "exists":
+        price_renames = []
+        price_skipped += [
+            f"`{item['entity_id']}`: a Price Tracker was already set up; add the asset there"
+            for item in items
+        ]
+    remove_empty_legacy_device(hass, f"{entry.entry_id}_wallets")
     hass.config_entries.async_update_entry(
         entry,
         title=PORTFOLIO_TITLE,
@@ -377,4 +553,5 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         options={},
         version=3,
     )
+    _notify(hass, renames + price_renames, skipped + price_skipped, plan.notes)
     return True

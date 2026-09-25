@@ -17,6 +17,7 @@ from .const import (
     CONF_ASSET,
     CONF_CURRENCY_ID,
     CONF_EXTRA_CURRENCIES,
+    CONF_LEGACY_ADOPT,
     DOMAIN,
     ENTRY_TYPE_PRICE_TRACKER,
     REFRESH_MIN_COOLDOWN,
@@ -88,6 +89,9 @@ async def _async_start_portfolio(hass: HomeAssistant, entry: ConfigEntry) -> Por
 async def _async_start_price_tracker(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> PriceTrackerRuntime:
+    if entry.data.get(CONF_LEGACY_ADOPT):
+        # Before any entity exists -- see migration.async_adopt_legacy_prices.
+        migration.async_adopt_legacy_prices(hass, entry)
     session = async_get_clientsession(hass)
     tracked = {
         subentry.data[CONF_ASSET]["id"]: asset_display_label(subentry.data[CONF_ASSET])

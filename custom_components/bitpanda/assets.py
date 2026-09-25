@@ -83,9 +83,10 @@ def legacy_candidates(candidates: list[dict], prefix: str | None) -> list[dict]:
     """Candidates narrowed to what a v1 identifier bearing `prefix` could mean.
 
     Shared by `pick_legacy` (which wants exactly one survivor) and
-    migration.py's own logging, which needs to tell "no survivor" apart from
-    "more than one" so it can name the count in its warning instead of
-    collapsing both into the same message.
+    migration.py's own reason-building, which needs to tell "no survivor"
+    apart from "more than one" so it can name the count in the reason it
+    lists -- with the entity left in place -- in the migration notification,
+    instead of collapsing both into the same message.
     """
     if prefix == "fiat_":
         # A currency is not an /assets record at all -- fiat balances live on

@@ -32,8 +32,9 @@ def build_diagnostics(
     # Explicit `is not None`, not `bool(...)`: a derived rate of exactly 0.0
     # is falsy, so `bool(portfolio.data and portfolio.data.rate)` would report
     # "not derived" for a rate that had, in fact, been derived. `derive_rate`
-    # (fx.py) happens to never return 0.0 today, but that guarantee lives in
-    # another module and this diagnostic must not silently depend on it.
+    # (fx.py) rejects zero and negative amounts, so it never returns 0.0, but
+    # that guarantee lives in another module and this diagnostic must not
+    # silently depend on it.
     rate_derived = portfolio.data.rate is not None if portfolio.data else False
     return {
         "config": {

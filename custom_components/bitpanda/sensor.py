@@ -55,7 +55,8 @@ def wallet_value(data: PortfolioData | None, asset_id: str) -> float | None:
     instead of 431.44.
 
     Returns None when the asset is absent, which happens after the position is
-    sold. The entity then goes unavailable rather than raising.
+    sold, or when the API sent no value for it. The entity then goes
+    unavailable rather than raising or showing a 0 that looks real.
     """
     if data is None:
         return None
@@ -269,16 +270,19 @@ class BitpandaPriceSensor(CoordinatorEntity, SensorEntity):
             "trading_pair": f"{self._asset.get('symbol')}/{self._currency}",
         }
         # Branch on the currency alone. Gating on `portfolio` as well would
-        # drop the whole block while the coordinator still has no data — which
-        # is every startup, before its first refresh — and a non-EUR user
-        # would see an unconverted EUR price with nothing saying so.
+        # drop the whole block while the coordinator still has no data, and a
+        # non-EUR user would see a missing price with nothing saying why.
         if self._currency != "EUR":
             portfolio = self._portfolio.data
             rate = portfolio.rate if portfolio else None
             if rate is None:
+                # PriceCoordinator publishes no ticker price in this state:
+                # /tickers answers in EUR only, and an EUR figure under this
+                # sensor's unit would be off by the exchange rate.
                 attrs["conversion"] = (
-                    "unavailable - price shown in EUR because no holding "
-                    "exists to derive a rate from"
+                    "unavailable - no cash or holding in the portfolio to "
+                    "derive an exchange rate from, so prices of assets you "
+                    "do not hold are not shown"
                 )
             else:
                 attrs["conversion_rate"] = round(rate, 8)
@@ -297,8 +301,11 @@ class BitpandaPriceSensor(CoordinatorEntity, SensorEntity):
 
 def portfolio_breakdown(
     data: PortfolioData | None, asset_cache: dict[str, dict]
-) -> dict[str, float]:
-    """Per-asset value breakdown, keyed by symbol where known."""
+) -> dict[str, float | None]:
+    """Per-asset value breakdown, keyed by symbol where known.
+
+    A holding the API sent no value for is listed as None, not 0.
+    """
     if data is None:
         return {}
     by_id = {a["id"]: a for a in asset_cache.values() if a.get("id")}
@@ -310,7 +317,7 @@ def portfolio_breakdown(
             # spanning crypto, stocks and ETFs. Disambiguate rather than
             # letting one holding silently overwrite the other.
             symbol = f"{symbol} ({asset_id[:8]})"
-        out[symbol] = round(holding.value, 2)
+        out[symbol] = None if holding.value is None else round(holding.value, 2)
     return out
 
 

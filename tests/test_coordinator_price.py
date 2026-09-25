@@ -3,6 +3,7 @@ import logging
 from datetime import timedelta
 
 from custom_components.bitpanda.api import BitpandaApiError
+from custom_components.bitpanda.const import EUR_CURRENCY_ID
 from custom_components.bitpanda.coordinator import (
     Holding,
     PortfolioData,
@@ -10,6 +11,8 @@ from custom_components.bitpanda.coordinator import (
     convert_price,
     price_interval,
 )
+
+_USD_ID = "b88b8879-efe3-11eb-b56f-0691764446a7"
 
 
 def test_interval_stays_at_base_for_small_sets():
@@ -55,6 +58,12 @@ def test_convert_price_returns_none_on_garbage():
     assert convert_price("not-a-number", None) is None
 
 
+def test_convert_price_rounds_to_the_eight_decimals_the_api_quotes():
+    """No float noise such as 0.30000000000000004 in a published price."""
+    assert convert_price("0.10000000", 3.0) == 0.3
+    assert convert_price("0.00000032", 1.13755257) == 0.00000036
+
+
 # ---------------------------------------------------------------------------
 # PriceCoordinator._async_update_data
 #
@@ -67,10 +76,11 @@ def test_convert_price_returns_none_on_garbage():
 
 
 class _FakePortfolioCoordinator:
-    """Duck-typed stand-in exposing the one attribute PriceCoordinator reads."""
+    """Duck-typed stand-in exposing what PriceCoordinator reads."""
 
-    def __init__(self, data):
+    def __init__(self, data, last_update_success=True):
         self.data = data
+        self.last_update_success = last_update_success
 
 
 class _FakeClient:
@@ -93,6 +103,17 @@ def _holding(balance, value):
                    staked=0.0, value=value)
 
 
+def _coordinator(held, *, client, rate=None, currency_id=EUR_CURRENCY_ID,
+                 portfolio_ok=True):
+    portfolio = _FakePortfolioCoordinator(
+        PortfolioData(holdings=held, rate=rate), last_update_success=portfolio_ok
+    )
+    return PriceCoordinator(
+        hass=None, entry=None, client=client, portfolio=portfolio,
+        currency_id=currency_id,
+    )
+
+
 async def test_zero_balance_holding_falls_through_to_a_ticker_call():
     """A holding sold down to exactly zero must still get a price.
 
@@ -100,12 +121,8 @@ async def test_zero_balance_holding_falls_through_to_a_ticker_call():
     old "presence only" check skipped both pricing paths silently. It must
     end up in `needed` and be priced from the ticker instead.
     """
-    held = {"a1": _holding(balance=0.0, value=0.0)}
-    portfolio = _FakePortfolioCoordinator(PortfolioData(holdings=held, rate=None))
     client = _FakeClient(tickers={"a1": {"price": "123.45"}})
-    coordinator = PriceCoordinator(
-        hass=None, entry=None, client=client, portfolio=portfolio
-    )
+    coordinator = _coordinator({"a1": _holding(balance=0.0, value=0.0)}, client=client)
     coordinator.set_tracked(["a1"])
 
     prices = await coordinator._async_update_data()
@@ -122,15 +139,117 @@ async def test_total_ticker_outage_still_returns_held_prices(caplog):
     so it is visible without anyone having enabled DEBUG logging.
     """
     caplog.set_level(logging.WARNING, logger="custom_components.bitpanda.coordinator")
-    held = {"a1": _holding(balance=2.0, value=20.0)}
-    portfolio = _FakePortfolioCoordinator(PortfolioData(holdings=held, rate=None))
     client = _FakeClient(fail=True)
-    coordinator = PriceCoordinator(
-        hass=None, entry=None, client=client, portfolio=portfolio
-    )
+    coordinator = _coordinator({"a1": _holding(balance=2.0, value=200.0)}, client=client)
     coordinator.set_tracked(["a1", "a2"])
 
     prices = await coordinator._async_update_data()
 
-    assert prices == {"a1": 10.0}
+    assert prices == {"a1": 100.0}
     assert "ticker requests failed" in caplog.text
+
+
+# --- Which held assets may be priced from the portfolio ------------------------
+#
+# The portfolio values a holding in cents. Dividing that by the balance gives
+# a unit price whose rounding error is up to half a cent over the value: about
+# 0.01 % at 50, whole percent below 1, and a price of exactly 0 for dust
+# valued at 0.00. Only a fresh value of at least 50 is used; anything else is
+# priced from the ticker.
+
+
+async def test_dust_holding_valued_at_zero_is_priced_from_the_ticker():
+    client = _FakeClient(tickers={"btc": {"price": "73188.51648958"}})
+    coordinator = _coordinator({"btc": _holding(balance=0.00000004, value=0.0)},
+                               client=client)
+    coordinator.set_tracked(["btc"])
+
+    assert await coordinator._async_update_data() == {"btc": 73188.51648958}
+    assert client.calls == ["btc"]
+
+
+async def test_small_holding_is_priced_from_the_ticker():
+    """The test account's SPC: 9.41652 units valued at 0.04 would price at
+    0.004248, anywhere in [0.003717, 0.004779) in truth.
+    """
+    client = _FakeClient(tickers={"spc": {"price": "0.00423500"}})
+    coordinator = _coordinator({"spc": _holding(balance=9.41652, value=0.04)},
+                               client=client)
+    coordinator.set_tracked(["spc"])
+
+    assert await coordinator._async_update_data() == {"spc": 0.004235}
+    assert client.calls == ["spc"]
+
+
+async def test_holding_worth_at_least_fifty_is_priced_from_the_portfolio():
+    client = _FakeClient()
+    coordinator = _coordinator(
+        {"btc": _holding(balance=0.0114, value=850.0),
+         "xau": _holding(balance=0.5, value=50.0)},
+        client=client,
+    )
+    coordinator.set_tracked(["btc", "xau"])
+
+    prices = await coordinator._async_update_data()
+
+    assert prices == {"btc": round(850.0 / 0.0114, 8), "xau": 100.0}
+    assert client.calls == []
+
+
+async def test_holding_without_a_value_is_priced_from_the_ticker():
+    client = _FakeClient(tickers={"eth": {"price": "2500.00000000"}})
+    coordinator = _coordinator({"eth": _holding(balance=1.0, value=None)}, client=client)
+    coordinator.set_tracked(["eth"])
+
+    assert await coordinator._async_update_data() == {"eth": 2500.0}
+    assert client.calls == ["eth"]
+
+
+async def test_held_asset_is_priced_from_the_ticker_while_the_portfolio_fails():
+    """After a failed portfolio refresh `data` still holds the last good
+    response. Prices derived from it would look fresh while the wallet
+    sensors already show unavailable -- and after a portfolio auth failure
+    Home Assistant stops polling it, so they would freeze until reauth.
+    """
+    client = _FakeClient(tickers={"btc": {"price": "73188.51648958"}})
+    coordinator = _coordinator({"btc": _holding(balance=0.0114, value=850.0)},
+                               client=client, portfolio_ok=False)
+    coordinator.set_tracked(["btc"])
+
+    assert await coordinator._async_update_data() == {"btc": 73188.51648958}
+    assert client.calls == ["btc"]
+
+
+# --- Non-EUR display currency: never an EUR number under another unit -------
+
+
+async def test_ticker_price_is_converted_and_rounded_for_a_non_eur_currency():
+    client = _FakeClient(tickers={"btc": {"price": "73188.51648958"}})
+    coordinator = _coordinator({}, client=client, rate=1.13755257, currency_id=_USD_ID)
+    coordinator.set_tracked(["btc"])
+
+    assert await coordinator._async_update_data() == {
+        "btc": round(73188.51648958 * 1.13755257, 8)
+    }
+
+
+async def test_no_price_without_a_rate_for_a_non_eur_currency():
+    """/tickers answers in EUR only. Without a rate that number would be
+    published under the display currency's unit -- wrong by the exchange
+    rate, silently. No price (the sensor reads unknown and its `conversion`
+    attribute explains why) and no pointless ticker request instead.
+    """
+    client = _FakeClient(tickers={"btc": {"price": "73188.51648958"}})
+    coordinator = _coordinator({}, client=client, rate=None, currency_id=_USD_ID)
+    coordinator.set_tracked(["btc"])
+
+    assert await coordinator._async_update_data() == {}
+    assert client.calls == []
+
+
+async def test_eur_prices_need_no_rate():
+    client = _FakeClient(tickers={"btc": {"price": "73188.51648958"}})
+    coordinator = _coordinator({}, client=client, rate=None)
+    coordinator.set_tracked(["btc"])
+
+    assert await coordinator._async_update_data() == {"btc": 73188.51648958}

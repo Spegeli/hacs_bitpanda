@@ -23,11 +23,11 @@ def _asset_entry(asset_id, balance, available, value, ret_pct="10.5"):
     }
 
 
-def _fiat_entry(currency_id, balance):
+def _fiat_entry(currency_id, balance, available=None):
     return {
         "currency_id": currency_id,
         "balance": {"value": balance},
-        "available_balance": {"value": balance},
+        "available_balance": {"value": balance if available is None else available},
     }
 
 
@@ -83,8 +83,32 @@ def test_parse_tolerates_missing_optional_fields():
                "available_balance": {"value": "1"}}
     data = parse_portfolio([minimal], rate=None)
     h = data.holdings["a1"]
-    assert h.value == 0.0
     assert h.invested is None
+
+
+def test_parse_keeps_a_missing_currency_balance_unknown_not_zero():
+    """0.0 would be a value that looks real -- and, divided by the balance,
+    a price of 0. Unknown stays None and adds nothing to the total.
+    """
+    minimal = {"asset_id": "a1", "balance": {"value": "1"},
+               "available_balance": {"value": "1"}}
+    data = parse_portfolio([minimal, _asset_entry("a2", "1", "1", "10.00")], rate=None)
+    assert data.holdings["a1"].value is None
+    assert data.total == 10.0
+
+
+def test_cash_and_total_use_the_fiat_balance_including_locked_funds():
+    """Fiat reserved by a pending order is still the user's cash, and the
+    legacy integration counted it. available_balance leaves it out;
+    `balance` does not.
+    """
+    data = parse_portfolio(
+        [_asset_entry("a1", "1", "1", "10.00"),
+         _fiat_entry("cur-eur", "10.00", available="7.50")],
+        rate=None,
+    )
+    assert data.fiat == {"cur-eur": 10.0}
+    assert data.total == 20.0
 
 
 def test_parse_skips_unparsable_entry_without_raising():

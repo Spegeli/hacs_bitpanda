@@ -39,13 +39,18 @@ def _to_float(container: dict | None, key: str = "value") -> float | None:
 
 @dataclass
 class Holding:
-    """One asset position, already valued in the display currency."""
+    """One asset position, already valued in the display currency.
+
+    `value` is None when the API sent no usable `currency_balance`: an unknown
+    value must never read as 0.0, which looks real and, divided by the
+    balance, would publish a price of 0.
+    """
 
     asset_id: str
     balance: float
     available: float
     staked: float
-    value: float
+    value: float | None
     invested: float | None = None
     avg_buy_price: float | None = None
     total_return: float | None = None
@@ -79,7 +84,10 @@ def parse_portfolio(entries: list[dict], *, rate: float | None) -> PortfolioData
         asset_id = entry.get("asset_id")
         if not asset_id:
             currency_id = entry.get("currency_id")
-            amount = _to_float(entry.get("available_balance"))
+            # `balance`, not `available_balance`: fiat reserved by a pending
+            # order is still the user's cash. (The FX rate is derived from
+            # `available_balance` instead, for its precision -- see fx.py.)
+            amount = _to_float(entry.get("balance"))
             if currency_id and amount is not None:
                 data.fiat[currency_id] = amount
                 total += amount
@@ -91,7 +99,7 @@ def parse_portfolio(entries: list[dict], *, rate: float | None) -> PortfolioData
             _LOGGER.debug("Skipping unparsable holding %s", asset_id)
             continue
 
-        value = _to_float(entry.get("currency_balance")) or 0.0
+        value = _to_float(entry.get("currency_balance"))
         try:
             return_pct = float(entry["total_return_percent"])
         except (KeyError, TypeError, ValueError):
@@ -108,7 +116,8 @@ def parse_portfolio(entries: list[dict], *, rate: float | None) -> PortfolioData
             total_return=_to_float(entry.get("total_return")),
             total_return_pct=return_pct,
         )
-        total += value
+        if value is not None:
+            total += value
 
     data.total = round(total, 2)
     return data
@@ -156,6 +165,18 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
 # It is a warning threshold, never a cap — see price_interval.
 _SLOW_PRICE_INTERVAL = timedelta(minutes=30)
 
+# A held asset's unit price is its portfolio value over its balance, and that
+# value is rounded to cents. From a value of 50 in the display currency the
+# rounding error stays near 0.01 %; below it grows to whole percent (0.04 over
+# 9.41652 units is anywhere in a +-12 % band), and dust valued at 0.00 would
+# publish a price of 0. Smaller holdings are priced from the ticker instead.
+_MIN_PORTFOLIO_PRICED_VALUE = 50.0
+
+# The API quotes prices and amounts as 8-decimal strings. Anything computed
+# from them -- a converted or derived price, a sum of rewards -- is rounded to
+# match rather than publishing float noise.
+_API_DECIMALS = 8
+
 
 def price_interval(ticker_count: int) -> timedelta:
     """Return a poll interval that keeps ticker calls inside the budget.
@@ -184,17 +205,23 @@ def convert_price(price: str, rate: float | None) -> float | None:
     """Convert an EUR ticker price into the display currency.
 
     /tickers always returns EUR. `rate` is units of the display currency per
-    EUR, or None when no conversion is needed or possible.
+    EUR, or None when no conversion is needed. The result is rounded to the
+    8 decimals the API quotes.
     """
     try:
         value = float(price)
     except (TypeError, ValueError):
         return None
-    return value if rate is None else value * rate
+    return round(value if rate is None else value * rate, _API_DECIMALS)
 
 
 class PriceCoordinator(DataUpdateCoordinator[dict]):
-    """Fetches tickers for tracked assets that are not held."""
+    """Prices every tracked asset in the display currency.
+
+    A held asset is priced from the portfolio when its value there is current
+    and large enough to divide precisely; everything else from /tickers,
+    converted with the portfolio's currency rate.
+    """
 
     def __init__(
         self,
@@ -202,6 +229,7 @@ class PriceCoordinator(DataUpdateCoordinator[dict]):
         entry: ConfigEntry,
         client: BitpandaApiClient,
         portfolio: PortfolioCoordinator,
+        currency_id: str,
     ) -> None:
         super().__init__(
             hass,
@@ -212,6 +240,7 @@ class PriceCoordinator(DataUpdateCoordinator[dict]):
         )
         self._client = client
         self._portfolio = portfolio
+        self._currency_id = currency_id
         self._tracked: list[str] = []
 
     def set_tracked(self, asset_ids: list[str]) -> None:
@@ -222,21 +251,47 @@ class PriceCoordinator(DataUpdateCoordinator[dict]):
         portfolio = self._portfolio.data
         held = portfolio.holdings if portfolio else {}
         rate = portfolio.rate if portfolio else None
+        # After a failed refresh `data` still holds the last good response.
+        # Prices derived from it would look fresh while the wallet sensors
+        # already show unavailable -- and after an auth failure Home
+        # Assistant stops polling the portfolio, freezing them until reauth.
+        portfolio_current = portfolio is not None and bool(
+            self._portfolio.last_update_success
+        )
 
-        # A holding priced from the portfolio needs a non-zero balance to
-        # divide by. Anything else — not held at all, or held at zero — must
-        # fall through to a ticker call, or it would get no price from either
-        # path and no log line saying why.
+        # Only a current value, known and large enough for its cent rounding
+        # not to matter, over a non-zero balance. Anything else -- not held,
+        # held at zero, dust, no value -- falls through to a ticker call, or
+        # it would get no price from either path and no log line saying why.
         def _priceable_from_portfolio(asset_id: str) -> bool:
             holding = held.get(asset_id)
-            return holding is not None and holding.balance > 0
+            return (
+                portfolio_current
+                and holding is not None
+                and holding.balance > 0
+                and holding.value is not None
+                and holding.value >= _MIN_PORTFOLIO_PRICED_VALUE
+            )
 
         needed = [a for a in self._tracked if not _priceable_from_portfolio(a)]
+
+        if needed and rate is None and self._currency_id != EUR_CURRENCY_ID:
+            # /tickers answers in EUR only. Without a rate that number cannot
+            # be expressed in the display currency, and publishing it under
+            # the sensor's unit would be off by the exchange rate. These
+            # assets get no price until a rate exists; the price sensor's
+            # `conversion` attribute says why.
+            _LOGGER.debug(
+                "No currency rate; skipping %s ticker requests", len(needed)
+            )
+            needed = []
+
         self.update_interval = price_interval(len(needed))
 
         if self.update_interval > _SLOW_PRICE_INTERVAL:
             _LOGGER.warning(
-                "Tracking %s assets you do not hold; prices will refresh only "
+                "%s tracked assets need a ticker request each (assets you do "
+                "not hold, or hold only a little of); prices will refresh only "
                 "every %s to stay inside the API rate limit. Track fewer "
                 "assets for more frequent updates.",
                 len(needed),
@@ -249,7 +304,9 @@ class PriceCoordinator(DataUpdateCoordinator[dict]):
         for asset_id in self._tracked:
             if _priceable_from_portfolio(asset_id):
                 holding = held[asset_id]
-                prices[asset_id] = holding.value / holding.balance
+                prices[asset_id] = round(
+                    holding.value / holding.balance, _API_DECIMALS
+                )
 
         ticker_failures = 0
         for asset_id in needed:
@@ -273,8 +330,8 @@ class PriceCoordinator(DataUpdateCoordinator[dict]):
         if needed and ticker_failures == len(needed):
             _LOGGER.warning(
                 "Every one of the %s ticker requests failed this cycle. "
-                "Prices for assets you do not hold are stale; values for "
-                "assets you hold are unaffected.",
+                "Prices fetched from the ticker are stale; prices derived "
+                "from your portfolio are unaffected.",
                 len(needed),
             )
 
@@ -365,6 +422,13 @@ def sum_rewards(operations: list[dict]) -> dict[str, RewardTotals]:
             credited = tx.get("credited_at")
             if _is_later(credited, entry.last_at):
                 entry.last_at = credited
+
+    # The amounts are 8-decimal strings; summing them as floats leaves noise
+    # such as 751.4920099999999. Rounded once, at the end, not per step.
+    for entry in totals.values():
+        entry.gross = round(entry.gross, _API_DECIMALS)
+        entry.fee = round(entry.fee, _API_DECIMALS)
+        entry.net = round(entry.net, _API_DECIMALS)
 
     return totals
 

@@ -365,7 +365,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     resolver = AssetResolver(client, entry.options.get(CONF_ASSET_CACHE, {}))
 
     portfolio = PortfolioCoordinator(hass, entry, client, currency_id)
-    prices = PriceCoordinator(hass, entry, client, portfolio)
+    prices = PriceCoordinator(hass, entry, client, portfolio, currency_id)
     earn = EarnCoordinator(hass, entry, client)
     rewards = RewardsCoordinator(hass, entry, client)
     history = HistoryCoordinator(hass, entry, client, currency_id)

@@ -40,6 +40,14 @@ def test_precision_handles_zero_and_none():
 
 _USD_RATE = 1.13755257  # the same measured USD rate used elsewhere in this suite
 
+# PriceCoordinator publishes no ticker price without a rate for a non-EUR
+# currency (see test_coordinator_price.py), so the attribute must not claim
+# an EUR price is shown.
+_NO_RATE_MESSAGE = (
+    "unavailable - no cash or holding in the portfolio to derive an exchange "
+    "rate from, so prices of assets you do not hold are not shown"
+)
+
 
 class _FakeCoordinator:
     """Duck-typed stand-in exposing what CoordinatorEntity/the entity read."""
@@ -90,11 +98,11 @@ def test_conversion_rate_present_for_non_eur_when_rate_is_known():
 def test_conversion_message_for_non_eur_when_rate_is_none():
     sensor = _price_sensor(currency="USD", portfolio_data=PortfolioData(rate=None))
     attrs = sensor.extra_state_attributes
-    assert attrs["conversion"] == (
-        "unavailable - price shown in EUR because no holding "
-        "exists to derive a rate from"
-    )
+    assert attrs["conversion"] == _NO_RATE_MESSAGE
     assert "conversion_rate" not in attrs
+    # No EUR figure is ever published under the USD unit.
+    assert sensor.native_value is None
+    assert sensor.native_unit_of_measurement == "USD"
 
 
 def test_conversion_message_for_non_eur_when_portfolio_data_is_none():
@@ -106,8 +114,5 @@ def test_conversion_message_for_non_eur_when_portfolio_data_is_none():
     """
     sensor = _price_sensor(currency="USD", portfolio_data=None)
     attrs = sensor.extra_state_attributes
-    assert attrs["conversion"] == (
-        "unavailable - price shown in EUR because no holding "
-        "exists to derive a rate from"
-    )
+    assert attrs["conversion"] == _NO_RATE_MESSAGE
     assert "conversion_rate" not in attrs

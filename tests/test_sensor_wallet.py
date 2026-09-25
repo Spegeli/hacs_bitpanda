@@ -137,6 +137,19 @@ def test_wallet_sensor_available_is_false_when_asset_not_in_portfolio():
     assert sensor.available is False
 
 
+def test_wallet_sensor_is_unavailable_when_the_value_is_unknown():
+    """No currency_balance means no known value; 0.0 would look real."""
+    data = PortfolioData(holdings={"a1": _holding(value=None)})
+    sensor = BitpandaWalletSensor(
+        _FakeCoordinator(data=data), _FakeCoordinator(data={}),
+        _FakeCoordinator(data={}), _FakeConfigEntry(),
+        asset={"id": "a1", "symbol": "VSN"}, currency="EUR",
+    )
+
+    assert sensor.available is False
+    assert sensor.native_value is None
+
+
 def test_wallet_sensor_available_is_true_when_asset_is_held():
     data = PortfolioData(holdings={"a1": _holding()})
     portfolio = _FakeCoordinator(data=data)

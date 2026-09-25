@@ -71,6 +71,20 @@ def test_sum_rewards_totals_gross_fee_and_net():
     assert totals.count == 2
 
 
+def test_sum_rewards_rounds_to_eight_decimals():
+    """Summing floats leaves noise such as 751.4920099999999 or
+    0.30000000000000004; the amounts come from 8-decimal strings.
+    """
+    ops = [
+        _reward("vsn", "0.1", "0.01", "2026-09-15T17:16:25Z"),
+        _reward("vsn", "0.2", "0.02", "2026-09-22T17:16:35Z"),
+    ]
+    totals = sum_rewards(ops)["vsn"]
+    assert totals.gross == 0.3
+    assert totals.fee == 0.03
+    assert totals.net == 0.27
+
+
 def test_sum_rewards_records_latest_timestamp():
     ops = [
         _reward("vsn", "1", "0", "2026-09-15T17:16:25Z"),

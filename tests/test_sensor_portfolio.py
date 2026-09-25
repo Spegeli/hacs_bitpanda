@@ -28,6 +28,15 @@ def test_breakdown_rounds_to_two_decimals():
     assert portfolio_breakdown(data, cache) == {"A": 12.35}
 
 
+def test_breakdown_reports_an_unknown_value_as_none():
+    """A holding without currency_balance has no known value -- not 0."""
+    data = PortfolioData(holdings={"uuid-a": _h("uuid-a", None),
+                                   "uuid-b": _h("uuid-b", 5.0)})
+    cache = {"uuid-a": {"id": "uuid-a", "symbol": "A"},
+             "uuid-b": {"id": "uuid-b", "symbol": "B"}}
+    assert portfolio_breakdown(data, cache) == {"A": None, "B": 5.0}
+
+
 def test_breakdown_of_empty_portfolio_is_empty():
     assert portfolio_breakdown(PortfolioData(), {}) == {}
 

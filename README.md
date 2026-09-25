@@ -22,6 +22,7 @@ The integration offers two services. Set up either or both — each one once.
 - Tracks every holding in your account automatically — there is no list to maintain. A holding you buy appears at the next refresh; one you sell is removed after three refreshes without it (about 15 minutes)
 - Every value in your Portfolio currency, as Bitpanda reports it
 - A **Portfolio** device: **Total value** (every holding, Cash Plus included, plus all fiat), **Cash** (all fiat balances, including funds reserved by a pending order), **Cash Plus**, and your **return** over a day, a week, a month, six months and a year
+- **Cash Plus** is the value of all your Cash Plus holdings in the Portfolio currency. Its attributes show each held product's own amount in its own currency — for example `eur: 100.00` while the Portfolio itself is shown in USD
 - One device per held asset, such as **Vision (VSN) Wallet**:
   - **Wallet** — the value of the units you can trade (not staked)
   - **Staking** — the value of the staked units, with APR and lifetime rewards
@@ -149,7 +150,7 @@ When two assets share a label, Home Assistant appends `_2` to the second one's I
 | Wallet | `asset`, `asset_name`, `units` (tradable units). Without a Total sensor also `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
 | Staking | `asset`, `asset_name`, `units` (staked), `apr_percent`, `rewards_gross`, `rewards_fee`, `rewards_net`, `rewards_count`, `rewards_last_at` |
 | Total | `asset`, `asset_name`, `units` (whole position), `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
-| Portfolio Total value | `wallet_count` |
+| Portfolio Cash Plus | `eur`, `usd`, `gbp` — the amount of each held Cash Plus product in its own currency |
 | Price (EUR) | `asset`, `asset_name`, `trading_pair`, `change_24h_pct`, `price_24h_ago` |
 | Price (other currencies) | as EUR, plus `conversion_rate`, `rate_date`, `rate_source` (`ECB`) |
 

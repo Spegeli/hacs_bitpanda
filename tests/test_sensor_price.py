@@ -45,8 +45,8 @@ _USD_RATE = 1.13755257  # the same measured USD rate used elsewhere in this suit
 # an EUR price is shown.
 _NO_RATE_MESSAGE = (
     "unavailable - no cash, and no holding worth at least 50 EUR, in the "
-    "portfolio to derive an exchange rate from, so prices of assets you do "
-    "not hold are not shown"
+    "portfolio to derive an exchange rate from, so prices that would have to "
+    "be converted from EUR are not shown"
 )
 
 

@@ -282,7 +282,8 @@ class BitpandaPriceSensor(CoordinatorEntity, SensorEntity):
                 attrs["conversion"] = (
                     "unavailable - no cash, and no holding worth at least 50 "
                     "EUR, in the portfolio to derive an exchange rate from, so "
-                    "prices of assets you do not hold are not shown"
+                    "prices that would have to be converted from EUR are not "
+                    "shown"
                 )
             else:
                 attrs["conversion_rate"] = round(rate, 8)

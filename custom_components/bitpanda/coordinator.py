@@ -166,9 +166,6 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
 # It is a warning threshold, never a cap — see price_interval.
 _SLOW_PRICE_INTERVAL = timedelta(minutes=30)
 
-# A held asset is priced from the portfolio only from MIN_PORTFOLIO_DERIVED_VALUE
-# upwards (see const.py for why); smaller holdings are priced from the ticker.
-
 # The API quotes prices and amounts as 8-decimal strings. Anything computed
 # from them -- a converted or derived price, a sum of rewards -- is rounded to
 # match rather than publishing float noise.

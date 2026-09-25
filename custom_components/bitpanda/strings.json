@@ -168,7 +168,18 @@
         "name": "Cash"
       },
       "cash_plus": {
-        "name": "Cash Plus"
+        "name": "Cash Plus",
+        "state_attributes": {
+          "eur": {
+            "name": "EUR"
+          },
+          "usd": {
+            "name": "USD"
+          },
+          "gbp": {
+            "name": "GBP"
+          }
+        }
       },
       "return_day": {
         "name": "Return day"

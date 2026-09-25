@@ -78,6 +78,19 @@ def test_the_wallet_group_is_named_and_has_no_flow():
     }
 
 
+def test_cash_plus_attribute_names_show_the_currency_code():
+    """So the frontend shows `EUR`, not a title-cased key (`Eur`); identical
+    in every language, since a currency code is never translated."""
+    expected = {
+        "eur": {"name": "EUR"},
+        "usd": {"name": "USD"},
+        "gbp": {"name": "GBP"},
+    }
+    for name in _FILES:
+        strings = json.loads((_DIR / name).read_text(encoding="utf-8"))
+        assert strings["entity"]["sensor"]["cash_plus"]["state_attributes"] == expected, name
+
+
 def test_every_asset_category_has_a_group_title():
     strings = json.loads((_DIR / "strings.json").read_text(encoding="utf-8"))
     assert set(strings["selector"]["asset_group"]["options"]) == {

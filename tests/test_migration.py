@@ -1,4 +1,5 @@
 """Tests for v1 to v3 config entry migration."""
+import logging
 from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
@@ -11,6 +12,7 @@ from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.ecb import EcbRates
 from custom_components.bitpanda.migration import (
     async_migrate_entry,
+    free_entity_id,
     legacy_prefix,
     legacy_symbol,
 )
@@ -316,6 +318,26 @@ def test_legacy_prefix_of_unrecognized_prefix_is_none():
     assert legacy_prefix("stock_AAPL") is None
 
 
+# --- free_entity_id ----------------------------------------------------------------
+
+
+async def test_free_entity_id_skips_every_id_home_assistant_counts_as_taken(hass):
+    """Free the way Home Assistant's entity registry means it -- registered by
+    no entity, with no state and not reserved for an entity being added --
+    and not already planned in this run. Renaming onto a reserved ID would
+    raise in the middle of the migration."""
+    er.async_get(hass).async_get_or_create(
+        "sensor", "other", "u1", suggested_object_id="registered"
+    )
+    hass.states.async_set("sensor.with_state", "1")
+    hass.states.async_reserve("sensor.reserved")
+    assert free_entity_id(hass, "sensor.free") == "sensor.free"
+    assert free_entity_id(hass, "sensor.registered") == "sensor.registered_2"
+    assert free_entity_id(hass, "sensor.with_state") == "sensor.with_state_2"
+    assert free_entity_id(hass, "sensor.planned", {"sensor.planned"}) == "sensor.planned_2"
+    assert free_entity_id(hass, "sensor.reserved") == "sensor.reserved_2"
+
+
 # --- Registry, adoption and notification -----------------------------------------
 
 
@@ -558,6 +580,33 @@ async def test_a_failed_price_tracker_import_changes_nothing(hass, legacy_api, n
     assert reg_entry.entity_id == "sensor.bitpanda_wallets_btc_wallet"
     assert reg_entry.device_id == device
     assert dr.async_get(hass).async_get(device) is not None
+
+
+async def test_the_notification_text_is_also_logged_once(
+    hass, legacy_api, no_setup, notify, caplog
+):
+    """A persistent notification lives in memory only; the log keeps the
+    old -> new mapping across a restart."""
+    entry = _v1_entry(hass, wallets=["cryptocoin_BTC", "cryptocoin_GONE"])
+    eid = entry.entry_id
+    _legacy_entity(hass, entry, f"{eid}_wallet_cryptocoin_BTC", "bitpanda_wallets_btc_wallet")
+    gone = _legacy_entity(
+        hass, entry, f"{eid}_wallet_cryptocoin_GONE", "bitpanda_wallets_gone_wallet"
+    )
+
+    assert await async_migrate_entry(hass, entry)
+
+    warnings = [
+        record for record in caplog.records
+        if record.name == "custom_components.bitpanda.migration"
+        and record.levelno == logging.WARNING
+    ]
+    assert len(warnings) == 1
+    logged = warnings[0].getMessage()
+    assert "`sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet`" in logged
+    assert f"`{gone}`: GONE no longer exists at Bitpanda" in logged
+    assert logged == _message(notify)
+    assert "legacy-key" not in caplog.text
 
 
 async def test_the_notification_asks_for_a_new_key(hass, legacy_api, no_setup, notify):

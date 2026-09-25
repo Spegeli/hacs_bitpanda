@@ -143,14 +143,19 @@ def legacy_price_key(entry_id: str, unique_id: str) -> tuple[str, str] | None:
 
 def free_entity_id(hass: HomeAssistant, entity_id: str, reserved=frozenset()) -> str:
     """`entity_id`, or the first free "_2", "_3", ... variant, the way Home
-    Assistant itself numbers a taken ID. `reserved` holds IDs planned in this
-    run that are not registered yet."""
+    Assistant itself numbers a taken ID.
+
+    Free the way the entity registry itself checks it: registered by no
+    entity, and available in the state machine -- no state, and not reserved
+    for an entity being added. `reserved` holds IDs planned in this run that
+    are not registered yet.
+    """
     ent_reg = er.async_get(hass)
     candidate, number = entity_id, 2
     while (
         candidate in reserved
         or ent_reg.async_is_registered(candidate)
-        or hass.states.get(candidate) is not None
+        or not hass.states.async_available(candidate)
     ):
         candidate = f"{entity_id}_{number}"
         number += 1
@@ -472,8 +477,12 @@ def _notify(
         "enter it when Home Assistant asks for it. If a Bitpanda dialog shows raw "
         "text, reload the browser tab.",
     ]
+    message = "\n".join(lines)
+    # A persistent notification lives in memory only. The same text goes to
+    # the log once, so the old -> new mapping outlives a restart.
+    _LOGGER.warning("%s", message)
     persistent_notification.async_create(
-        hass, "\n".join(lines), title="Bitpanda upgraded", notification_id=f"{DOMAIN}_migration"
+        hass, message, title="Bitpanda upgraded", notification_id=f"{DOMAIN}_migration"
     )
 
 

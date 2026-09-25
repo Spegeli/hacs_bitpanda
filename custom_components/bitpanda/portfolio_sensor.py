@@ -444,9 +444,10 @@ class PortfolioEntityManager:
                 self._staking.discard(asset_id)
                 self._remove(asset_id, ("staking", "total"), device=False)
 
-        # An asset in `unparsed_assets` is still held -- its record just did
-        # not resolve this refresh -- so it counts as present here even
-        # though it has no entry in `data.holdings` (Task 3 ruling).
+        # An asset in `unparsed_assets` is still held: /portfolio listed it,
+        # but its balances could not be read this refresh. It has no entry in
+        # `data.holdings`, yet an unreadable entry is no sign of a sale, so it
+        # counts as present and never as a miss.
         held = set(data.holdings) | data.unparsed_assets
         for asset_id in held:
             self._misses.pop(asset_id, None)
@@ -474,8 +475,9 @@ def _keep_polling() -> None:
     none registered -- nothing staked and nothing offered, or the last
     Staking sensor was just removed -- would freeze its catalogue forever at
     whatever the first refresh returned (or at `None` if that one failed),
-    even though the manager reads it on every portfolio refresh and needs to
-    notice when an asset later becomes offered (spec §2.4).
+    even though the manager reads it on every portfolio refresh: an Earn
+    product offered later gives a wallet its Staking and Total sensors even
+    with nothing staked yet.
     """
 
 

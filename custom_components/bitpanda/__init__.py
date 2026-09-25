@@ -325,11 +325,13 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "retried on the next restart."
         )
         return False
-    except BitpandaApiError:
+    except BitpandaApiError as err:
+        # The message names only a path and a cause ("Timeout for /assets",
+        # "HTTP 503 from /assets") -- never request data, never the key.
         _LOGGER.error(
-            "Cannot migrate the Bitpanda config entry: could not reach the "
-            "Bitpanda API. Nothing has been changed; migration will be "
-            "retried on the next restart."
+            "Cannot migrate the Bitpanda config entry: %s. Nothing has been "
+            "changed; migration will be retried on the next restart.",
+            err,
         )
         return False
 

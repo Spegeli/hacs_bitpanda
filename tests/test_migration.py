@@ -390,6 +390,9 @@ async def test_migrate_entry_aborts_on_a_transient_error_and_leaves_entry_untouc
     }
     assert ent_reg.async_get(price.entity_id).unique_id == f"{eid}_BTC_price_EUR"
     assert "no longer resolves" not in caplog.text
+    # The abort names what failed -- path and cause only, never the key.
+    assert "Timeout for /assets" in caplog.text
+    assert "retried on the next restart" in caplog.text
 
 
 async def test_migrate_entry_refuses_a_future_version(hass):

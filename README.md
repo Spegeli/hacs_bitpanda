@@ -38,7 +38,7 @@ The integration offers two services. Set up either or both — each one once.
 
 ### Manual Refresh
 - The `bitpanda.refresh` service updates the portfolio and the prices immediately
-- Calls closer together than the price interval (60 seconds, longer with many tracked assets) are ignored, so an automation cannot push requests beyond the normal polling rate
+- A call within the cooldown of the last accepted one is ignored. With a Price Tracker set up, the cooldown is its price interval (60 seconds, longer with many tracked assets), so an automation cannot push price requests beyond the normal polling rate; with only the Portfolio, it is 10 seconds
 
 ### Supported Assets
 | Type | Examples | Assets | Price Tracker | Portfolio |
@@ -151,21 +151,24 @@ When two assets share a label, Home Assistant appends `_2` to the second one's I
 
 ## ⬆️ Upgrading from 2026.06.x
 
-This release moves to Bitpanda's new Public API and splits the integration into two services.
+This release moves to Bitpanda's new Public API and splits the integration into two services. It needs Home Assistant **2025.5** or newer — on an older version the entry is left unmigrated and the integration does not load.
+
+⚠️ **The upgrade is one-way.** The previous release cannot load the migrated entries, so going back to it afterwards does not work. Make a backup before you update if you may want to return.
 
 1. Create a new API key with **Guthaben (Balance)**, **Transaktion (Transaction)** and **Earn (Read)** at [app.bitpanda.com/my-account/apikey](https://app.bitpanda.com/my-account/apikey) — keys from the old key page never had Earn
 2. Update the integration through HACS and restart Home Assistant
 3. **Reload the browser tab** (`Ctrl+F5` / `Cmd+Shift+R`) — otherwise the integration's dialogs can show raw text from your browser's cached translations
 4. Home Assistant shows **New Bitpanda API key needed** — paste the new key (or use **⋮ → Reconfigure** on the Bitpanda Portfolio entry)
-5. A notification lists **every renamed entity ID (old → new)** and anything that could not be migrated. **Check your dashboards, automations and scripts** for the old IDs.
+5. A notification lists **every renamed entity ID (old → new)** and anything that could not be migrated; the same list goes to the Home Assistant log. **Check your dashboards, automations and scripts** for the old IDs.
 
-**What is kept:** the history of every migrated sensor (it moves with the rename), your price trackers (now in the Bitpanda Price Tracker, in EUR and in your old currency) and your wallets. Entity IDs you renamed yourself are left as they are.
+**What is kept:** the history of every migrated sensor (it moves with the rename), your price trackers (now in the Bitpanda Price Tracker, in EUR and in your old currency) and the wallets of assets you still hold. Entity IDs you renamed yourself are left as they are.
 
 **What changes:**
 
 - **Two services.** Your entry becomes **Bitpanda Portfolio**; your price trackers move to a new **Bitpanda Price Tracker** entry.
 - **Entity IDs follow the new scheme**, for example `sensor.bitpanda_wallets_vsn_wallet` → `sensor.bitpanda_vision_vsn_wallet` and `sensor.bitpanda_price_tracker_btc_eur` → `sensor.bitpanda_bitcoin_btc_eur`.
 - **Every holding is tracked**, not only the wallets you picked, and each gets its own device.
+- **Wallets of assets you no longer hold go away.** They are migrated like the others, then removed together with their history after three portfolio refreshes without them — about ten minutes after the Portfolio starts working with your new key.
 - **Wallet still means the unstaked part**, as before. The new **Staking** and **Total** sensors show the staked part and the whole position; they start without history.
 - **Portfolio Total value now covers your whole account** — every holding plus all fiat. It used to add up only the wallets you tracked, so its value steps up at the upgrade: check automations that compare it against a threshold.
 - **The fiat wallet in your currency becomes Portfolio Cash**, which sums all your fiat balances. Other fiat wallets are left as `unavailable` entities you can delete.

@@ -53,6 +53,7 @@ Everything lives in `custom_components/bitpanda/`:
 | `asset_flow.py` | The "Add price tracker" subentry flow and the cached catalogue listings |
 | `config_flow.py` | Service menu, Portfolio setup/reauth/reconfigure, Price Tracker setup and options, import |
 | `const.py` | Domain, URLs, scopes, currencies, intervals, budgets |
+| `devices.py` | Device lookups scoped to their config entry |
 | `diagnostics.py` | Diagnostics per service, API key redacted |
 | `ecb.py` | ECB daily reference rates |
 | `migration.py` | Migration of version 1 (legacy API) entries to version 3 |

@@ -120,8 +120,8 @@ The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stock
 2. Pick a category (Crypto, Stocks, ETFs, ETCs, Crypto indices, Precious metals), then type to search by name, symbol or ISIN and pick one asset. Entries read `Name / SYMBOL / ISIN` (ISIN only for stocks, ETFs and ETCs)
 3. The asset joins the group of its type; the first asset of a type creates that group
 4. The first time you open the Stocks list it takes about ten seconds; it is then cached for 24 hours
-5. To stop tracking one asset, open its device and use **⋮ → Delete**. **⋮ → Delete** on a group stops tracking all of its assets. Tracking an asset again later restores the same entity IDs and their history
-6. To change the extra currencies, use **Configure**: removing a currency deletes its sensors, adding it back restores the same entity IDs and their history
+5. To stop tracking one asset, open its device and use **⋮ → Delete**. **⋮ → Delete** on a group stops tracking all of its assets. Tracking an asset again later brings its sensors back under the entity IDs the integration gives them, with their history; IDs you renamed yourself, and other customisations, survive only on newer Home Assistant versions
+6. To change the extra currencies, use **Configure**: removing a currency deletes its sensors; adding it back brings them back under the entity IDs the integration gives them, with their history; IDs you renamed yourself, and other customisations, survive only on newer Home Assistant versions
 
 ### Changing the key or the currency
 

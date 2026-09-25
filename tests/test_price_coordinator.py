@@ -56,6 +56,14 @@ def test_convert_price_of_garbage_is_none():
     assert convert_price(None, 1.1) is None
 
 
+def test_convert_price_of_a_non_finite_number_is_none():
+    """"inf" and "nan" parse as floats, but Home Assistant refuses a
+    non-finite sensor value."""
+    assert convert_price("inf", None) is None
+    assert convert_price("nan", None) is None
+    assert convert_price("-inf", 1.1) is None
+
+
 # --- TickerCoordinator -------------------------------------------------------------
 
 
@@ -105,6 +113,11 @@ async def test_a_failing_asset_is_left_out_and_warned_about_once(caplog):
 
 async def test_an_unreadable_price_counts_as_a_failure():
     client = _Client({SOL: "150.00000000"})  # BTC answers "n/a"
+    assert await _coordinator(client)._async_update_data() == {SOL: 150.0}
+
+
+async def test_a_non_finite_price_counts_as_a_failure():
+    client = _Client({BTC: "nan", SOL: "150.00000000"})
     assert await _coordinator(client)._async_update_data() == {SOL: 150.0}
 
 

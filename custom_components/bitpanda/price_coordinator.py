@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 import logging
+import math
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
@@ -54,13 +55,18 @@ def convert_price(price, rate: float | None) -> float | None:
     """An EUR ticker price, times an ECB rate when given, rounded to 8 decimals.
 
     /tickers always answers in EUR. `rate` is units of the target currency
-    per EUR.
+    per EUR. Anything that is not a finite number is no price: "inf" and
+    "nan" parse as floats, but Home Assistant refuses them as a sensor value.
     """
     try:
         value = float(price)
     except (TypeError, ValueError):
         return None
-    return round(value if rate is None else value * rate, DECIMALS)
+    if rate is not None:
+        value *= rate
+    if not math.isfinite(value):
+        return None
+    return round(value, DECIMALS)
 
 
 class TickerCoordinator(DataUpdateCoordinator[dict[str, float]]):

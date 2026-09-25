@@ -27,7 +27,7 @@ The integration offers two services. Set up either or both — each one once.
   - **Staking** — the value of the staked units, with APR and lifetime rewards
   - **Total** — the whole position, with invested amount, average buy price and total return
   - Staking and Total appear as soon as something is staked or Bitpanda offers an Earn product for the asset, and stay while either is true
-- The wallets appear in groups by asset type, such as Cryptocurrencies or Precious metals, named in the language Home Assistant runs in. The Portfolio device stays outside the groups, on top. Groups come and go with your holdings — there is nothing to add. Deleting a group (**⋮ → Delete**) only hides it until the next refresh while you still hold those assets: the group and its wallets come back, under the entity IDs the integration gives them; IDs you renamed yourself, and other customisations, survive only on newer Home Assistant versions
+- The wallets appear in groups by asset type, such as Cryptocurrencies or Precious metals, named in the language Home Assistant runs in. The Portfolio device stays outside the groups (newer Home Assistant versions list it above them). Groups come and go with your holdings — there is nothing to add. Deleting a group (**⋮ → Delete**) only hides it until the next refresh while you still hold those assets: the group and its wallets come back, under the entity IDs the integration gives them; IDs you renamed yourself, and other customisations, survive only on newer Home Assistant versions
 - The wallet of an asset you no longer hold can be deleted from its device page (**⋮ → Delete**) instead of waiting for it to go. The Portfolio device and the wallets of assets you hold cannot be deleted: they would come straight back
 - Updates every 5 minutes; Earn products every 24 hours; rewards every hour
 
@@ -116,7 +116,7 @@ Bitpanda API keys expire after **one year** — see [Changing the key or the cur
 
 The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stocks, ETFs, ETCs, Crypto indices, Precious metals — with one device per asset inside. A group is named in the language Home Assistant runs in when it is created, and the name never changes by itself; newer Home Assistant versions let you rename a group with **⋮ → Rename**.
 
-1. On the **Bitpanda Price Tracker** entry, click **Add price tracker**
+1. On the **Bitpanda Price Tracker** entry, click **Add price tracker** (older versions: **⋮ → Add price tracker**)
 2. Pick a category (Crypto, Stocks, ETFs, ETCs, Crypto indices, Precious metals), then type to search by name, symbol or ISIN and pick one asset. Entries read `Name / SYMBOL / ISIN` (ISIN only for stocks, ETFs and ETCs)
 3. The asset joins the group of its type; the first asset of a type creates that group
 4. The first time you open the Stocks list it takes about ten seconds; it is then cached for 24 hours

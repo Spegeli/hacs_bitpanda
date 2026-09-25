@@ -105,9 +105,9 @@ class AssetResolver:
         # dict's outer keys: a v2 entry saved by an earlier dev build
         # persisted `asset_cache` keyed by symbol, and trusting that would
         # keep every one of its records permanently unreachable by id --
-        # silently dropping every tracked sensor at setup instead of healing
-        # (task-23-review.md, finding 6). A cache already keyed by id
-        # re-keys to the same thing, so this is free for the normal case.
+        # silently dropping every tracked sensor at setup instead of healing.
+        # A cache already keyed by id re-keys to the same thing, so this is
+        # free for the normal case.
         self._by_id: dict[str, dict] = {
             a["id"]: a for a in (cache or {}).values() if a.get("id")
         }
@@ -130,10 +130,10 @@ class AssetResolver:
 
         Never queries an empty symbol: `BitpandaApiClient.async_get_assets`
         drops the `symbol` filter entirely when it is falsy, which would page
-        through the whole ~14,000-asset catalogue instead of finding nothing
-        (task-23-review.md, finding 10). `legacy_symbol` returns "" for a
-        bare-prefix v1 id like `"cryptocoin_"`; migration never builds one,
-        but this stays correct even if that changes.
+        through the whole ~14,000-asset catalogue instead of finding nothing.
+        `legacy_symbol` returns "" for a bare-prefix v1 id like
+        `"cryptocoin_"`; migration never builds one, but this stays correct
+        even if that changes.
 
         Every API error propagates, not only auth and rate-limit errors. An
         empty 200 is the only answer that means "no such symbol": the

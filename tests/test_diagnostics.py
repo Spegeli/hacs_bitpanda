@@ -141,3 +141,33 @@ async def test_async_get_config_entry_diagnostics_reads_the_real_store(hass):
         "history",
     }
     assert "unauthorized" not in result["coordinators"]["rewards"]
+
+
+async def test_diagnostics_of_an_entry_that_is_not_loaded(hass):
+    """Setup failed or reauth is pending -- exactly when diagnostics are
+    wanted -- so there is no per-entry store. Config and options only,
+    instead of a KeyError.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"api_key": "super-secret", "currency": "EUR"},
+        options={
+            "tracked_assets": ["a"],
+            "tracked_wallets": ["w1", "w2"],
+            "asset_cache": {"a": {"id": "a"}},
+        },
+    )
+    # Another entry's store exists, this one's does not.
+    hass.data.setdefault(DOMAIN, {})["some-other-entry"] = {}
+
+    result = await async_get_config_entry_diagnostics(hass, entry)
+
+    assert result == {
+        "config": {"api_key": "**REDACTED**", "currency": "EUR"},
+        "options": {
+            "tracked_assets_count": 1,
+            "tracked_wallets_count": 2,
+            "asset_cache_size": 1,
+        },
+    }
+    assert "super-secret" not in repr(result)

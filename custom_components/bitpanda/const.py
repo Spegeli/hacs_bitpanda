@@ -16,7 +16,8 @@ MAX_PAGE_SIZE = 100
 
 API_KEY_URL = "https://app.bitpanda.com/my-account/apikey"
 
-# Measured 2026-09-24 with one key per scope; see umbau/02-api-basics.md.
+# Measured 2026-09-24 with one key per scope: /portfolio needs Guthaben
+# (Balance), /operations Transaktion (Transaction), /earn/configs Earn (Read).
 # Trading (Read) unlocks nothing the integration calls, so it is not required.
 REQUIRED_SCOPES: tuple[str, ...] = ("balance", "transaction", "earn")
 
@@ -37,6 +38,10 @@ PRICE_UPDATE_INTERVAL_BASE = timedelta(seconds=60)
 EARN_UPDATE_INTERVAL = timedelta(hours=24)
 REWARDS_UPDATE_INTERVAL = timedelta(hours=1)
 CHANGE_24H_UPDATE_INTERVAL = timedelta(minutes=15)
+
+# Floor for the bitpanda.refresh cooldown, which otherwise follows the price
+# interval (see __init__.py's _refresh_cooldown).
+REFRESH_MIN_COOLDOWN = timedelta(seconds=10)
 
 # Read budget: 3000 requests/hour. Reserve headroom for portfolio, earn and rewards.
 HOURLY_READ_BUDGET = 3000

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-import time
+from time import monotonic
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -26,6 +26,7 @@ from .const import (
     CONF_TRACKED_WALLETS,
     DOMAIN,
     EUR_CURRENCY_ID,
+    REFRESH_MIN_COOLDOWN,
 )
 from .coordinator import (
     EarnCoordinator,
@@ -146,8 +147,9 @@ async def _migrate_entity_registry(
     Only unique_id changes; entity_id is untouched by
     `async_migrate_entries`/`async_update_entity`. That is what keeps
     recorder history, dashboard cards and automations pointed at the same
-    entity across the upgrade instead of Home Assistant creating an orphaned
-    duplicate (see task-18-fix1-brief.md).
+    entity across the upgrade. Left alone, every v1 unique_id would fail to
+    match its sensor's v2 unique_id on the next setup, and Home Assistant
+    would create a duplicate `_2` entity next to an orphaned original.
     """
     ent_reg = er.async_get(hass)
 
@@ -166,12 +168,10 @@ async def _migrate_entity_registry(
             # applies each entity's update synchronously inside its own loop,
             # so if two distinct v1 identifiers resolve to the same UUID, the
             # second entity's collision check sees the first entity's
-            # just-migrated unique_id, on a single, first-ever run. This was
-            # already possible under the old first-match resolver too --
-            # task 23's prefix narrowing does not introduce the collision,
-            # though it does add a concrete instance: "commodity_metal_XAU"
-            # and "metal_XAU" both resolve to gold. Log entity_ids only,
-            # never entry.data, and move on rather than letting
+            # just-migrated unique_id, on a single, first-ever run -- for
+            # example "commodity_metal_XAU" next to a hand-edited
+            # "metal_XAU", both of which resolve to gold. Log entity_ids
+            # only, never entry.data, and move on rather than letting
             # async_update_entity's ValueError crash migration for this one
             # odd installation.
             _LOGGER.warning(
@@ -228,7 +228,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # tracked_wallets), keyed by the bare symbol -- not by the raw v1 value,
     # which still differs between a price tracker and a wallet even when they
     # name the same asset. A symbol tracked as both costs one request instead
-    # of two (task-23-review.md, finding 9).
+    # of two.
     candidates_by_symbol: dict[str, list[dict]] = {}
 
     async def _candidates_for(sym: str) -> list[dict]:
@@ -263,7 +263,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 # A currency is not an /assets record at all -- pick_legacy
                 # always returns None for it -- so asking the API is a
                 # wasted request and a needless rate-limit exposure for a
-                # run that aborts on 429 (task-23-review.md, finding 9).
+                # run that aborts on 429.
                 _LOGGER.warning(
                     "Dropping %s during migration: a fiat wallet has no "
                     "asset to resolve to",
@@ -401,23 +401,53 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
-    if not hass.services.has_service(DOMAIN, "refresh"):
-        _last_refresh: dict[str, float] = {"time": 0.0}
-        _COOLDOWN = 10.0
-
-        async def handle_refresh(call: ServiceCall) -> None:
-            now = time.monotonic()
-            if now - _last_refresh["time"] < _COOLDOWN:
-                _LOGGER.debug("Refresh cooldown active, ignoring call")
-                return
-            _last_refresh["time"] = now
-            for store in hass.data[DOMAIN].values():
-                await store["portfolio_coordinator"].async_request_refresh()
-                await store["price_coordinator"].async_request_refresh()
-
-        hass.services.async_register(DOMAIN, "refresh", handle_refresh)
+    _async_register_refresh_service(hass)
 
     return True
+
+
+def _refresh_cooldown(stores: list[dict]) -> float:
+    """Seconds between two accepted `bitpanda.refresh` calls.
+
+    The price coordinator's current interval, never below
+    REFRESH_MIN_COOLDOWN. Every accepted call costs one or two portfolio
+    requests plus a ticker request per asset the portfolio cannot price, and
+    the price interval is what keeps exactly that inside the hourly read
+    budget -- stretching as more assets are tracked. A shorter cooldown would
+    let an automation drive requests above the normal polling rate.
+    """
+    seconds = REFRESH_MIN_COOLDOWN.total_seconds()
+    for store in stores:
+        interval = store["price_coordinator"].update_interval
+        if interval is not None:
+            seconds = max(seconds, interval.total_seconds())
+    return seconds
+
+
+@callback
+def _async_register_refresh_service(hass: HomeAssistant) -> None:
+    """Register `bitpanda.refresh` once, shared by every loaded entry."""
+    if hass.services.has_service(DOMAIN, "refresh"):
+        return
+
+    # Empty until the first accepted call. The monotonic clock can start
+    # near zero after a boot, so a pretend earlier call at time 0 would turn
+    # the very first call away.
+    last_accepted: dict[str, float] = {}
+
+    async def handle_refresh(call: ServiceCall) -> None:
+        stores = list(hass.data.get(DOMAIN, {}).values())
+        now = monotonic()
+        previous = last_accepted.get("time")
+        if previous is not None and now - previous < _refresh_cooldown(stores):
+            _LOGGER.debug("Refresh cooldown active, ignoring call")
+            return
+        last_accepted["time"] = now
+        for store in stores:
+            await store["portfolio_coordinator"].async_request_refresh()
+            await store["price_coordinator"].async_request_refresh()
+
+    hass.services.async_register(DOMAIN, "refresh", handle_refresh)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

@@ -95,8 +95,11 @@ class BitpandaApiClient:
     async def _request(self, path: str, params: dict[str, Any] | None = None) -> Any:
         """Perform one GET and return the decoded body.
 
-        Never attach the exception chain to the log record: tracebacks can carry
-        the API key.
+        Failures are logged at DEBUG only: every caller either reports an
+        outage once itself (the coordinators) or turns it into a form error,
+        and a line per failed request would flood the log during an outage.
+        Never attach the exception chain to the log record: tracebacks can
+        carry the API key.
         """
         url = f"{API_BASE_URL}{path}"
         try:
@@ -113,13 +116,13 @@ class BitpandaApiClient:
                 response.raise_for_status()
                 return await response.json()
         except aiohttp.ClientResponseError as err:
-            _LOGGER.error("HTTP %s from %s", err.status, path)
+            _LOGGER.debug("HTTP %s from %s", err.status, path)
             raise BitpandaApiError(f"HTTP {err.status} from {path}") from None
         except aiohttp.ClientError as err:
-            _LOGGER.error("Connection error for %s: %s", path, type(err).__name__)
+            _LOGGER.debug("Connection error for %s: %s", path, type(err).__name__)
             raise BitpandaApiError(f"Connection error for {path}") from None
         except asyncio.TimeoutError:
-            _LOGGER.error("Timeout for %s", path)
+            _LOGGER.debug("Timeout for %s", path)
             raise BitpandaApiError(f"Timeout for {path}") from None
         except ValueError:
             # json.JSONDecodeError subclasses ValueError, and a body that
@@ -129,7 +132,7 @@ class BitpandaApiClient:
             # coordinator, whose final handler calls logger.exception() —
             # exc_info=True through this integration's own logger, which is
             # exactly what the API-key rule forbids.
-            _LOGGER.error("Could not decode response from %s", path)
+            _LOGGER.debug("Could not decode response from %s", path)
             raise BitpandaApiError(f"Could not decode response from {path}") from None
 
     async def _paginate(

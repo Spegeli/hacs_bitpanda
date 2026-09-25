@@ -17,6 +17,25 @@ from .const import (
 _REDACTED = "**REDACTED**"
 
 
+def _entry_sections(entry_data: dict, options: dict) -> dict[str, Any]:
+    """Config and options, counts only. The API key never appears.
+
+    Copies named fields out of `entry_data` rather than spreading it, so a
+    field added later cannot leak by default.
+    """
+    return {
+        "config": {
+            "api_key": _REDACTED,
+            "currency": entry_data.get(CONF_CURRENCY),
+        },
+        "options": {
+            "tracked_assets_count": len(options.get(CONF_TRACKED_ASSETS, [])),
+            "tracked_wallets_count": len(options.get(CONF_TRACKED_WALLETS, [])),
+            "asset_cache_size": len(options.get(CONF_ASSET_CACHE, {})),
+        },
+    }
+
+
 def build_diagnostics(
     *,
     entry_data: dict,
@@ -37,15 +56,7 @@ def build_diagnostics(
     # silently depend on it.
     rate_derived = portfolio.data.rate is not None if portfolio.data else False
     return {
-        "config": {
-            "api_key": _REDACTED,
-            "currency": entry_data.get(CONF_CURRENCY),
-        },
-        "options": {
-            "tracked_assets_count": len(options.get(CONF_TRACKED_ASSETS, [])),
-            "tracked_wallets_count": len(options.get(CONF_TRACKED_WALLETS, [])),
-            "asset_cache_size": len(options.get(CONF_ASSET_CACHE, {})),
-        },
+        **_entry_sections(entry_data, options),
         "coordinators": {
             "portfolio": {
                 "last_update_success": portfolio.last_update_success,
@@ -75,8 +86,15 @@ def build_diagnostics(
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> dict[str, Any]:
-    """Return diagnostics for a config entry."""
-    store = hass.data[DOMAIN][entry.entry_id]
+    """Return diagnostics for a config entry.
+
+    An entry that is not loaded -- setup failed, or reauth is pending, which
+    is exactly when diagnostics are wanted -- has no coordinators to report,
+    so it gets config and options only.
+    """
+    store = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if store is None:
+        return _entry_sections(dict(entry.data), dict(entry.options))
     return build_diagnostics(
         entry_data=dict(entry.data),
         options=dict(entry.options),

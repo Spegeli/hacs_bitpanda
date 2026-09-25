@@ -460,11 +460,16 @@ class EarnCoordinator(DataUpdateCoordinator[dict]):
 class RewardsCoordinator(DataUpdateCoordinator[dict]):
     """Aggregates Earn rewards from the operation history.
 
-    Requires a key with all read scopes. Task 21 already requires every scope
-    at setup, so a 401 here means the key expired, was revoked, or predates
-    that requirement (a migrated legacy key) -- each case is answered by a new
-    key, so it raises ConfigEntryAuthFailed the same as every other
-    coordinator, instead of degrading silently.
+    /operations needs the Transaktion (Transaction) scope. Setup already
+    checks every required scope, so a 401 here means the key expired, was
+    revoked, or predates that requirement (a migrated legacy key) -- each
+    case is answered by a new key, so it raises ConfigEntryAuthFailed the
+    same as every other coordinator, instead of degrading silently.
+
+    A listing that cannot be paged completely raises too (see
+    BitpandaApiClient._paginate) and becomes UpdateFailed: the rewards
+    attributes then stay absent, or keep the last complete totals, rather
+    than showing a recount over part of the history.
     """
 
     def __init__(

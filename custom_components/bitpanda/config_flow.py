@@ -68,21 +68,44 @@ ASSET_CATEGORY_FILTERS: dict[str, list[tuple[str, str | None]]] = {
 # BitpandaOptionsFlowHandler._async_category_listing.
 _CATALOGUE_CACHE_TTL = timedelta(hours=24)
 
+# All the options flow reads from a catalogue record: the picker label
+# (name, symbol, ISIN) and what the sensors and the cache need later. The
+# rest of a full record -- trading flags -- would only cost memory, several
+# megabytes across the stock and ETF listings.
+_CATALOGUE_FIELDS = ("id", "symbol", "name", "isin", "type", "group")
+
+
+def _slim(asset: dict) -> dict:
+    """A catalogue record reduced to _CATALOGUE_FIELDS."""
+    return {key: asset[key] for key in _CATALOGUE_FIELDS if key in asset}
+
+
+def _log_unexpected(step: str, err: Exception) -> None:
+    """Log an unexpected error by its type alone.
+
+    Its message or a traceback could carry request data, the API key among
+    it, so neither is ever logged -- no exc_info either.
+    """
+    _LOGGER.error(
+        "Unexpected %s while checking the API key in the %s step",
+        type(err).__name__,
+        step,
+    )
+
 
 def _multiselect_schema(field: str, options: list[dict]) -> vol.Schema:
     """A searchable multi-select, never pre-filled, always submittable empty.
 
     `mode=SelectSelectorMode.DROPDOWN` (not `"list"`, which the frontend
     renders as one unsearchable checkbox per option -- the wrong branch of
-    `ha-selector-select` runs first for `"list"`) is what makes this the
-    "type to search" picker the brief describes, for every category
-    including the 4-item metals (task-23-review.md, finding 1).
+    `ha-selector-select` runs first for `"list"`) is what makes this a
+    "type to search" picker, for every category including the 4-item
+    metals.
 
     `vol.Optional(field, default=[])`, not `vol.Required`, is what lets the
     frontend seed an empty selection instead of a pre-ticked first option,
     and what lets an empty submission -- the escape hatch every "nothing to
-    add" and every error re-render relies on -- validate at all
-    (task-23-review.md, finding 2).
+    add" and every error re-render relies on -- validate at all.
     """
     return vol.Schema(
         {
@@ -104,8 +127,7 @@ def _api_error_code(err: BitpandaApiError) -> str:
     so a plain 5xx/timeout/undecodable body (`BitpandaApiError` on its own)
     gets a form error instead of escaping the step -- which Home Assistant's
     flow manager does not catch, closing the whole dialog and discarding the
-    session when the escape happens from a menu-triggered step
-    (task-23-review.md, finding 3).
+    session when the escape happens from a menu-triggered step.
     """
     if isinstance(err, BitpandaAuthError):
         return "invalid_auth"
@@ -158,7 +180,8 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                     self._currencies = await client.async_get_currencies()
                     return await self.async_step_currency()
-            except Exception:  # noqa: BLE001
+            except Exception as err:  # noqa: BLE001 - a form error, never a traceback
+                _log_unexpected("user", err)
                 errors["base"] = "unknown"
 
         return self.async_show_form(
@@ -241,7 +264,11 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         placeholders: dict[str, str] = {"api_key_url": API_KEY_URL}
         if user_input is not None:
             api_key = user_input[CONF_API_KEY].strip()
-            errors, extra = await self._async_validate_key(api_key)
+            try:
+                errors, extra = await self._async_validate_key(api_key)
+            except Exception as err:  # noqa: BLE001 - a form error, never a traceback
+                _log_unexpected("reauth", err)
+                errors, extra = {"base": "unknown"}, {}
             placeholders.update(extra)
             if not errors:
                 return self._async_replace_key(
@@ -267,7 +294,11 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         placeholders: dict[str, str] = {"api_key_url": API_KEY_URL}
         if user_input is not None:
             api_key = user_input[CONF_API_KEY].strip()
-            errors, extra = await self._async_validate_key(api_key)
+            try:
+                errors, extra = await self._async_validate_key(api_key)
+            except Exception as err:  # noqa: BLE001 - a form error, never a traceback
+                _log_unexpected("reconfigure", err)
+                errors, extra = {"base": "unknown"}, {}
             placeholders.update(extra)
             if not errors:
                 return self._async_replace_key(
@@ -340,17 +371,29 @@ class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
         separate key also survives entry reloads and serves every entry, so
         a category already fetched once for any entry is free for all.
 
-        Nothing here catches BitpandaAuthError/BitpandaRateLimitError: an
-        error partway through a multi-filter category (stocks merges two
-        listings) must not cache a partial result, and both are already
-        mapped to form errors one level up, in `async_step_add_asset`.
+        Nothing here catches an API error: an error partway through a
+        multi-filter category (stocks merges two listings) must not cache a
+        partial result, and every one is already mapped to a form error one
+        level up, in `_try_category_listing`.
+
+        Records are stored slimmed to _CATALOGUE_FIELDS, and every listing
+        past its TTL is dropped on each call -- not only refreshed if its own
+        category happens to be opened again -- so the cache holds at most a
+        day's worth of what was actually browsed.
         """
         store: dict[str, tuple] = self.hass.data.setdefault(
             f"{DOMAIN}_asset_catalogue", {}
         )
-        cached = store.get(category)
         now = dt_util.utcnow()
-        if cached is not None and now - cached[0] < _CATALOGUE_CACHE_TTL:
+        for expired in [
+            key
+            for key, (fetched_at, _) in store.items()
+            if now - fetched_at >= _CATALOGUE_CACHE_TTL
+        ]:
+            del store[expired]
+
+        cached = store.get(category)
+        if cached is not None:
             return cached[1]
 
         assets: list[dict] = []
@@ -360,7 +403,7 @@ class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
                 asset_id = asset.get("id")
                 if asset_id and asset_id not in seen_ids:
                     seen_ids.add(asset_id)
-                    assets.append(asset)
+                    assets.append(_slim(asset))
 
         store[category] = (now, assets)
         return assets
@@ -400,9 +443,9 @@ class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
         empty selection -- the default, and what "nothing to add" and every
         listing error's own re-render both submit -- never needs the
         catalogue at all, so it always reaches the menu, never an escaping
-        exception and never a retry-only dead end (task-23-review.md,
-        findings 2 and 3). Only a non-empty selection fetches the catalogue
-        (cheap either way once cached) to look up the chosen records.
+        exception and never a retry-only dead end. Only a non-empty selection
+        fetches the catalogue (cheap either way once cached) to look up the
+        chosen records.
         """
         self._load()
 
@@ -468,7 +511,7 @@ class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
         Wraps `_async_category_listing` so both call sites in
         `async_step_add_asset` -- the render and a non-empty submit -- handle
         a transport failure identically, instead of only the render path
-        catching it (task-23-review.md, finding 3).
+        catching it.
         """
         try:
             return await self._async_category_listing(self._client(), category), None
@@ -497,7 +540,7 @@ class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
         A submission never touches the network -- the chosen values are
         already asset ids, looked up during whichever render produced them
         -- so an empty selection always reaches the menu the same way
-        add_asset's does (task-23-review.md, findings 2 and 3).
+        add_asset's does.
         """
         self._load()
 
@@ -529,8 +572,8 @@ class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
                     )
         except BitpandaApiError as err:
             # Covers BitpandaAuthError/BitpandaRateLimitError too (both
-            # subclass it): a plain 5xx, timeout or undecodable body used to
-            # escape this step entirely (task-23-review.md, finding 3).
+            # subclass it), and a plain 5xx, timeout or undecodable body,
+            # which would otherwise escape this step and close the dialog.
             return self.async_show_form(
                 step_id="add_wallet",
                 data_schema=_multiselect_schema("wallets", []),
@@ -572,9 +615,9 @@ class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
             # default/value, and the user would have no way to remove it.
             #
             # `asset_label`, not the bare symbol -- two assets sharing a
-            # symbol (the two Accenture listings this task deliberately
-            # lists side by side) were otherwise indistinguishable here too
-            # (task-23-review.md, finding 7).
+            # symbol (the stock category deliberately lists both Accenture
+            # listings, one per stock family) would otherwise be
+            # indistinguishable here.
             return [
                 {
                     "value": i,

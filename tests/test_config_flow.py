@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 import voluptuous as vol
 from homeassistant import config_entries, data_entry_flow
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.api import (
@@ -556,6 +557,61 @@ async def test_add_asset_category_listing_refetches_after_24_hours(hass):
         )
 
     assert mock_list.call_count == 2
+
+
+async def test_catalogue_cache_keeps_only_the_fields_the_flow_uses(hass):
+    """A full catalogue record carries flags nothing here reads; the stock
+    listings alone held about 2.7 MB of them for the life of the process.
+    """
+    record = {
+        "id": "id-acn", "name": "Accenture PLC", "symbol": "ACN",
+        "isin": "IE00B4BNMY34", "group": "equity_stock",
+        "type": "equity_security", "buy_active": True, "sell_active": True,
+        "withdrawal_active": False, "deposit_active": False,
+    }
+
+    def _list_assets(type_, group=None):
+        return [record] if (type_, group) == ("equity_security", "equity_stock") else []
+
+    result = await _open_menu_step(hass, _mock_entry(), "add_asset")
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_list_assets",
+        AsyncMock(side_effect=_list_assets),
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"category": "stock"}
+        )
+
+    assert hass.data[f"{DOMAIN}_asset_catalogue"]["stock"][1] == [
+        {
+            "id": "id-acn", "name": "Accenture PLC", "symbol": "ACN",
+            "isin": "IE00B4BNMY34", "group": "equity_stock",
+            "type": "equity_security",
+        }
+    ]
+    assert _select_options(result["data_schema"], "assets") == [
+        {"value": "id-acn", "label": "Accenture PLC / ACN / IE00B4BNMY34"}
+    ]
+
+
+async def test_catalogue_cache_drops_listings_past_their_ttl(hass):
+    """An expired listing is dropped, not only refreshed if it happens to be
+    opened again -- otherwise every category ever opened stays in memory.
+    """
+    store = hass.data.setdefault(f"{DOMAIN}_asset_catalogue", {})
+    store["stock"] = (dt_util.utcnow() - timedelta(hours=25), [{"id": "old"}])
+
+    result = await _open_menu_step(hass, _mock_entry(), "add_asset")
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient.async_list_assets",
+        AsyncMock(return_value=[_btc()]),
+    ):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"], {"category": "crypto"}
+        )
+
+    assert "stock" not in store
+    assert "crypto" in store
 
 
 async def test_add_asset_category_cache_lives_outside_hass_data_domain(hass):
@@ -1168,6 +1224,91 @@ async def test_reconfigure_without_listener_schedules_a_reload(hass):
 # source -- see task-22-report.md). A step that forgets to carry a
 # placeholder through an error re-render would show the user the literal
 # text "{api_key_url}" instead of a working link.
+
+
+# --- Unexpected errors: a form error, logged by type only ------------------
+#
+# Anything unforeseen while validating a key becomes the "unknown" form error
+# in all three key steps instead of escaping the flow. It is logged by its
+# type alone: a message or a traceback could carry request data, the key
+# among it.
+
+_UNEXPECTED_TEXT = "detail that could carry totally-secret-key"
+
+
+def _assert_logged_by_type_only(caplog) -> None:
+    records = [
+        r for r in caplog.records
+        if r.name == "custom_components.bitpanda.config_flow"
+    ]
+    assert any("RuntimeError" in r.getMessage() for r in records)
+    assert all(r.exc_info is None for r in records)
+    assert _UNEXPECTED_TEXT not in caplog.text
+    assert "totally-secret-key" not in caplog.text
+
+
+async def test_user_step_unexpected_error_shows_unknown_and_logs_its_type(
+    hass, caplog
+):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient."
+        "async_missing_scopes",
+        AsyncMock(side_effect=RuntimeError(_UNEXPECTED_TEXT)),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": "totally-secret-key"}
+        )
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["errors"]["base"] == "unknown"
+    _assert_logged_by_type_only(caplog)
+
+
+async def test_reauth_confirm_unexpected_error_shows_unknown(hass, caplog):
+    entry = _mock_entry()
+    entry.add_to_hass(hass)
+    result = await entry.start_reauth_flow(hass)
+
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient."
+        "async_missing_scopes",
+        AsyncMock(side_effect=RuntimeError(_UNEXPECTED_TEXT)),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": "totally-secret-key"}
+        )
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "reauth_confirm"
+    assert result["errors"]["base"] == "unknown"
+    assert result["description_placeholders"]["api_key_url"] == API_KEY_URL
+    assert entry.data["api_key"] == "key"
+    _assert_logged_by_type_only(caplog)
+
+
+async def test_reconfigure_unexpected_error_shows_unknown(hass, caplog):
+    entry = _mock_entry()
+    entry.add_to_hass(hass)
+    result = await entry.start_reconfigure_flow(hass)
+
+    with patch(
+        "custom_components.bitpanda.config_flow.BitpandaApiClient."
+        "async_missing_scopes",
+        AsyncMock(side_effect=RuntimeError(_UNEXPECTED_TEXT)),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": "totally-secret-key"}
+        )
+
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+    assert result["errors"]["base"] == "unknown"
+    assert result["description_placeholders"]["api_key_url"] == API_KEY_URL
+    assert entry.data["api_key"] == "key"
+    _assert_logged_by_type_only(caplog)
 
 
 async def test_user_step_error_rerender_keeps_api_key_url_placeholder(hass):

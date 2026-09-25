@@ -1,6 +1,8 @@
 """Tests for ticker, portfolio and portfolio history."""
 import asyncio
+import logging
 
+import aiohttp
 import pytest
 from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client
 
@@ -109,6 +111,33 @@ async def test_malformed_json_becomes_an_api_error():
             client = BitpandaApiClient("key", session)
             with pytest.raises(BitpandaApiError):
                 await client.async_get_portfolio()
+
+
+async def test_request_failures_are_logged_at_debug_only(caplog):
+    """The coordinators already report an outage once. A line per failed
+    request at ERROR meant hundreds of lines an hour during an outage, and a
+    delisted asset's ticker 404 every 60 seconds for good.
+    """
+    caplog.set_level(logging.DEBUG, logger="custom_components.bitpanda.api")
+    secret = "totally-secret-key"
+    with mock_aiohttp_client() as mocker:
+        mocker.get(f"{API_BASE_URL}/tickers/http", status=500)
+        mocker.get(
+            f"{API_BASE_URL}/tickers/conn", exc=aiohttp.ClientConnectionError()
+        )
+        mocker.get(f"{API_BASE_URL}/tickers/slow", exc=asyncio.TimeoutError())
+        mocker.get(f"{API_BASE_URL}/tickers/json", text="not json{")
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient(secret, session)
+            for asset_id in ("http", "conn", "slow", "json"):
+                with pytest.raises(BitpandaApiError):
+                    await client.async_get_ticker(asset_id)
+
+    records = [r for r in caplog.records if r.name == "custom_components.bitpanda.api"]
+    assert len(records) == 4
+    assert {r.levelno for r in records} == {logging.DEBUG}
+    assert all(r.exc_info is None for r in records)
+    assert secret not in caplog.text
 
 
 async def test_null_data_becomes_an_empty_result():

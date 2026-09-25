@@ -1,0 +1,380 @@
+"""Migration of a version 1 (legacy API) config entry to version 3.
+
+Version 1 was one entry: the legacy API key, a currency, and two lists the
+user picked -- price-tracked symbols and wallet ids. Version 3 is two
+services. The version 1 entry becomes the Portfolio in place; its tracked
+prices move to a new Price Tracker entry created through an import flow.
+
+Entity history is kept: every legacy entity is re-keyed to its new unique_id
+and, while its ID is still the legacy default, renamed to the new scheme --
+the recorder moves history and statistics along with a rename. A user's own
+entity IDs are never renamed, and nothing that cannot be mapped with
+certainty is changed or deleted: it is listed in a notification instead.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+import logging
+
+from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
+from .assets import legacy_candidates, pick_legacy, slim_asset
+from .const import (
+    CONF_API_KEY,
+    CONF_CURRENCY,
+    CONF_CURRENCY_ID,
+    CONF_EXTRA_CURRENCIES,
+    CONF_LEGACY_ADOPT,
+    CONF_TRACKED_ASSETS,
+    CONF_TRACKED_WALLETS,
+    DEFAULT_CURRENCY,
+    DOMAIN,
+    ENTRY_TYPE,
+    ENTRY_TYPE_PORTFOLIO,
+    EUR_CURRENCY_ID,
+    IMPORT_ASSETS,
+    PORTFOLIO_TITLE,
+    SUPPORTED_CURRENCIES,
+)
+from .naming import (
+    is_default_entity_id,
+    legacy_price_object_id,
+    managed_asset_id,
+    price_entity_id,
+)
+
+_LOGGER = logging.getLogger(__name__)
+
+# The v1 options flow built wallet ids from the legacy /asset-wallets nesting:
+# "{category}_{symbol}" for a flat category, "{category}_{sub}_{symbol}" for a
+# nested one. Crypto was flat, metals sat under commodity -> metal and indices
+# under index -> index, and fiat came from a separate listing -- so the ids it
+# produced are "cryptocoin_BTC", "commodity_metal_XAU", "index_index_BCI5" and
+# "fiat_EUR". "index_wallet_", "index_" and "metal_" were never produced; they
+# stay as tolerance for hand-edited entries.
+#
+# Order matters: this is checked longest/most-specific first, or a shorter
+# prefix that is itself a prefix of a longer one ("index_" / "index_index_")
+# would strip first and leave a symbol that does not exist ("index_BCI5").
+_LEGACY_PREFIXES = (
+    "commodity_metal_",
+    "index_index_",
+    "index_wallet_",
+    "cryptocoin_",
+    "fiat_",
+    "index_",
+    "metal_",
+)
+
+
+def legacy_symbol(wallet_id: str) -> str:
+    """Extract the asset symbol from a version 1 wallet id.
+
+    A wallet id with no recognised prefix (already a bare symbol, or an
+    unrecognised category) is returned unchanged. Resolution then either
+    succeeds outright (a bare symbol) or legitimately fails and gets dropped
+    with a warning (an unrecognised category) -- both are safer than
+    guessing at a split.
+    """
+    for prefix in _LEGACY_PREFIXES:
+        if wallet_id.startswith(prefix):
+            return wallet_id[len(prefix):]
+    return wallet_id
+
+
+def legacy_prefix(wallet_id: str) -> str | None:
+    """Return the recognised v1 category prefix of a wallet id, or None.
+
+    Mirrors `legacy_symbol`'s own prefix search (same `_LEGACY_PREFIXES`,
+    longest/most-specific first) but returns the prefix itself instead of
+    stripping it -- `pick_legacy` (assets.py) needs to know which category a
+    wallet id claimed, not just its bare symbol, to tell a metal wallet from
+    a coin wallet that happens to share a symbol.
+    """
+    for prefix in _LEGACY_PREFIXES:
+        if wallet_id.startswith(prefix):
+            return prefix
+    return None
+
+
+@dataclass
+class MigrationPlan:
+    """Everything the migration resolved, before anything is changed."""
+
+    currency: str
+    currency_id: str
+    wallets: dict[str, dict] = field(default_factory=dict)
+    prices: dict[str, dict] = field(default_factory=dict)
+    cash_wallet: str | None = None
+    reasons: dict[str, str] = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)
+
+
+def legacy_price_key(entry_id: str, unique_id: str) -> tuple[str, str] | None:
+    """(symbol, currency) of a legacy price unique_id "{entry_id}_{SYMBOL}_price_{CUR}".
+
+    rpartition: the symbol can itself contain underscores. A wallet unique_id
+    never contains "_price_".
+    """
+    head, sep, currency = unique_id.rpartition("_price_")
+    prefix = f"{entry_id}_"
+    if not sep or not head.startswith(prefix) or not currency:
+        return None
+    return head[len(prefix):], currency
+
+
+def free_entity_id(hass: HomeAssistant, entity_id: str, reserved=frozenset()) -> str:
+    """`entity_id`, or the first free "_2", "_3", ... variant, the way Home
+    Assistant itself numbers a taken ID. `reserved` holds IDs planned in this
+    run that are not registered yet."""
+    ent_reg = er.async_get(hass)
+    candidate, number = entity_id, 2
+    while (
+        candidate in reserved
+        or ent_reg.async_is_registered(candidate)
+        or hass.states.get(candidate) is not None
+    ):
+        candidate = f"{entity_id}_{number}"
+        number += 1
+    return candidate
+
+
+def _legacy_wallet_ids(hass: HomeAssistant, entry: ConfigEntry) -> list[str]:
+    """Wallet ids from the options and from the registry, minus the ones an
+    earlier, interrupted run already re-keyed to a UUID."""
+    prefix = f"{entry.entry_id}_wallet_"
+    registered = [
+        reg_entry.unique_id[len(prefix):]
+        for reg_entry in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+        if reg_entry.unique_id.startswith(prefix)
+        and managed_asset_id(entry.entry_id, reg_entry.unique_id) is None
+    ]
+    return list(dict.fromkeys([*entry.options.get(CONF_TRACKED_WALLETS, []), *registered]))
+
+
+def _legacy_symbols(hass: HomeAssistant, entry: ConfigEntry) -> list[str]:
+    registered = [
+        key[0]
+        for reg_entry in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+        if (key := legacy_price_key(entry.entry_id, reg_entry.unique_id)) is not None
+    ]
+    return list(dict.fromkeys([*entry.options.get(CONF_TRACKED_ASSETS, []), *registered]))
+
+
+async def async_plan(hass: HomeAssistant, entry: ConfigEntry) -> MigrationPlan:
+    """Resolve every legacy identifier. Changes nothing; API errors propagate.
+
+    Public endpoints only, called without a key: the legacy key plays no
+    part. An empty answer is the only meaning of "no longer exists" -- a
+    timeout or a 5xx says nothing about a symbol, so it aborts instead.
+    """
+    client = BitpandaApiClient(None, async_get_clientsession(hass))
+    currency = entry.data.get(CONF_CURRENCY, DEFAULT_CURRENCY)
+    ids = {c.get("symbol"): c.get("id") for c in await client.async_get_currencies()}
+    if currency in SUPPORTED_CURRENCIES and ids.get(currency):
+        plan = MigrationPlan(currency=currency, currency_id=ids[currency])
+    else:
+        plan = MigrationPlan(
+            currency=DEFAULT_CURRENCY,
+            currency_id=ids.get(DEFAULT_CURRENCY) or EUR_CURRENCY_ID,
+        )
+        plan.notes.append(
+            f"Bitpanda no longer offers {currency}; the Portfolio now reports in EUR."
+        )
+
+    candidates: dict[str, list[dict]] = {}
+
+    async def _resolve(symbol: str, prefix: str | None) -> tuple[dict | None, str]:
+        if symbol not in candidates:
+            # Never an empty symbol: without the filter /assets lists the
+            # whole 14,000-asset catalogue.
+            candidates[symbol] = (
+                await client.async_get_assets(symbol=symbol) if symbol else []
+            )
+        asset = pick_legacy(candidates[symbol], prefix)
+        if asset is not None:
+            return slim_asset(asset), ""
+        survivors = legacy_candidates(candidates[symbol], prefix)
+        if len(survivors) > 1:
+            return None, f"{symbol} matches {len(survivors)} assets, which one is unclear"
+        return None, f"{symbol} no longer exists at Bitpanda"
+
+    fiat: list[str] = []
+    for wallet_id in _legacy_wallet_ids(hass, entry):
+        prefix = legacy_prefix(wallet_id)
+        if prefix == "fiat_":
+            fiat.append(wallet_id)
+            continue
+        asset, reason = await _resolve(legacy_symbol(wallet_id), prefix)
+        if asset is not None:
+            plan.wallets[wallet_id] = asset
+        else:
+            plan.reasons[wallet_id] = reason
+
+    for symbol in _legacy_symbols(hass, entry):
+        asset, reason = await _resolve(symbol, None)
+        if asset is not None:
+            plan.prices[symbol] = asset
+        else:
+            plan.reasons[symbol] = reason
+
+    # Portfolio Cash sums every fiat balance. The legacy fiat wallet in the
+    # entry currency -- else the only one -- carries its history over.
+    preferred = f"fiat_{currency}"
+    if preferred in fiat:
+        plan.cash_wallet = preferred
+    elif len(fiat) == 1:
+        plan.cash_wallet = fiat[0]
+    for wallet_id in fiat:
+        if wallet_id != plan.cash_wallet:
+            plan.reasons[wallet_id] = "Portfolio Cash now covers every fiat balance"
+    return plan
+
+
+def plan_price_adoption(
+    hass: HomeAssistant, entry: ConfigEntry, plan: MigrationPlan
+) -> tuple[list[dict], list[tuple[str, str]], list[str]]:
+    """Which legacy price entities the Price Tracker adopts, and as what.
+
+    Changes nothing: the Price Tracker entry does the moving on its first
+    setup, before it creates any entity (migration.async_adopt_legacy_prices).
+    """
+    items: list[dict] = []
+    renames: list[tuple[str, str]] = []
+    skipped: list[str] = []
+    reserved: set[str] = set()
+    for reg_entry in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id):
+        key = legacy_price_key(entry.entry_id, reg_entry.unique_id)
+        if key is None:
+            continue
+        symbol, currency = key
+        asset = plan.prices.get(symbol)
+        if asset is None:
+            skipped.append(f"`{reg_entry.entity_id}`: {plan.reasons.get(symbol, 'unknown asset')}")
+            continue
+        if currency not in SUPPORTED_CURRENCIES:
+            skipped.append(f"`{reg_entry.entity_id}`: Bitpanda no longer offers {currency}")
+            continue
+        new_entity_id = None
+        if is_default_entity_id(reg_entry.entity_id, legacy_price_object_id(symbol, currency)):
+            new_entity_id = free_entity_id(hass, price_entity_id(asset, currency), reserved)
+            reserved.add(new_entity_id)
+            renames.append((reg_entry.entity_id, new_entity_id))
+        items.append(
+            {
+                "entity_id": reg_entry.entity_id,
+                "unique_id": reg_entry.unique_id,
+                "asset_id": asset["id"],
+                "currency": currency,
+                "new_entity_id": new_entity_id,
+            }
+        )
+    return items, renames, skipped
+
+
+async def _async_create_price_tracker(
+    hass: HomeAssistant, entry: ConfigEntry, plan: MigrationPlan, items: list[dict]
+) -> str:
+    """Create the Price Tracker through its import flow.
+
+    Returns "none" (nothing tracked), "created", "exists" (a Price Tracker was
+    already set up; nothing adopted) or "failed". Awaited: the new entry's
+    setup, adoption included, runs inside the flow.
+    """
+    if not plan.prices:
+        return "none"
+    extras = {item["currency"] for item in items} | {plan.currency}
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_IMPORT},
+        data={
+            IMPORT_ASSETS: list({a["id"]: a for a in plan.prices.values()}.values()),
+            CONF_EXTRA_CURRENCIES: sorted(c for c in extras if c != "EUR"),
+            CONF_LEGACY_ADOPT: {"source_entry_id": entry.entry_id, "entities": items},
+        },
+    )
+    if result["type"] == FlowResultType.CREATE_ENTRY:
+        return "created"
+    if result.get("reason") == "already_configured":
+        return "exists"
+    _LOGGER.error(
+        "Cannot migrate the Bitpanda config entry: the Price Tracker could not be "
+        "created (%s). Migration will be retried on the next restart.",
+        result.get("reason"),
+    )
+    return "failed"
+
+
+def _portfolio_taken(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    return any(
+        other.entry_id != entry.entry_id and other.unique_id == ENTRY_TYPE_PORTFOLIO
+        for other in hass.config_entries.async_entries(DOMAIN)
+    )
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate a config entry to version 3."""
+    if entry.version > 3:
+        _LOGGER.error(
+            "The Bitpanda config entry was written by a newer release of this "
+            "integration (version %s) and cannot be loaded by this one",
+            entry.version,
+        )
+        return False
+    if entry.version == 3:
+        return True
+    if entry.version == 2:
+        _LOGGER.error(
+            "This Bitpanda config entry comes from an unreleased development "
+            "build (version 2) that cannot be migrated. Please remove the "
+            "Bitpanda integration and add it again."
+        )
+        return False
+    if _portfolio_taken(hass, entry):
+        _LOGGER.error(
+            "Cannot migrate the Bitpanda config entry: a Bitpanda Portfolio is "
+            "already set up. Remove one of the two entries."
+        )
+        return False
+
+    _LOGGER.info("Migrating the Bitpanda config entry to version 3")
+    try:
+        plan = await async_plan(hass, entry)
+    except BitpandaRateLimitError:
+        _LOGGER.error(
+            "Cannot migrate the Bitpanda config entry: rate limited by the "
+            "Bitpanda API. Nothing has been changed; migration will be retried "
+            "on the next restart."
+        )
+        return False
+    except BitpandaApiError as err:
+        # The message names only a path and a cause, never request data.
+        _LOGGER.error(
+            "Cannot migrate the Bitpanda config entry: %s. Nothing has been "
+            "changed; migration will be retried on the next restart.",
+            err,
+        )
+        return False
+
+    items, _, _ = plan_price_adoption(hass, entry, plan)
+    if await _async_create_price_tracker(hass, entry, plan, items) == "failed":
+        return False
+    hass.config_entries.async_update_entry(
+        entry,
+        title=PORTFOLIO_TITLE,
+        unique_id=ENTRY_TYPE_PORTFOLIO,
+        data={
+            ENTRY_TYPE: ENTRY_TYPE_PORTFOLIO,
+            CONF_API_KEY: entry.data[CONF_API_KEY],
+            CONF_CURRENCY: plan.currency,
+            CONF_CURRENCY_ID: plan.currency_id,
+        },
+        options={},
+        version=3,
+    )
+    return True

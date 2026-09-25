@@ -8,7 +8,6 @@ CONF_CURRENCY = "currency"
 CONF_CURRENCY_ID = "currency_id"
 CONF_TRACKED_ASSETS = "tracked_assets"
 CONF_TRACKED_WALLETS = "tracked_wallets"
-CONF_ASSET_CACHE = "asset_cache"
 
 API_BASE_URL = "https://api.public.bitpanda.com/v1"
 API_TIMEOUT = 15

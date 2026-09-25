@@ -2,8 +2,8 @@
 
 Every endpoint except /assets and /currencies works on UUIDs. A symbol does
 not uniquely name an asset (`XAU` is both a stock and a metal), so nothing
-here ever keys by symbol. `AssetResolver` and `pick_legacy` serve only the
-version 1 migration; `AssetDirectory` names the holdings of a portfolio.
+here ever keys by symbol. `pick_legacy` serves only the version 1 migration;
+`AssetDirectory` names the holdings of a portfolio.
 """
 from __future__ import annotations
 
@@ -82,10 +82,10 @@ def is_legacy_supported(asset: dict) -> bool:
 def legacy_candidates(candidates: list[dict], prefix: str | None) -> list[dict]:
     """Candidates narrowed to what a v1 identifier bearing `prefix` could mean.
 
-    Shared by `pick_legacy` (which wants exactly one survivor) and the
-    migration's own logging (`__init__.py`), which needs to tell "no
-    survivor" apart from "more than one" so it can name the count in its
-    warning instead of collapsing both into the same message.
+    Shared by `pick_legacy` (which wants exactly one survivor) and
+    migration.py's own logging, which needs to tell "no survivor" apart from
+    "more than one" so it can name the count in its warning instead of
+    collapsing both into the same message.
     """
     if prefix == "fiat_":
         # A currency is not an /assets record at all -- fiat balances live on
@@ -100,7 +100,7 @@ def legacy_candidates(candidates: list[dict], prefix: str | None) -> list[dict]:
     if prefix in ("commodity_metal_", "metal_"):
         return [a for a in survivors if a.get("group") == "metal"]
     # "index_index_" is what the legacy flow stored; the other two are
-    # tolerance only (see _LEGACY_PREFIXES in __init__.py).
+    # tolerance only (see _LEGACY_PREFIXES in migration.py).
     if prefix in ("index_index_", "index_", "index_wallet_"):
         return [a for a in survivors if a.get("type") == "index"]
     # prefix is None for a bare symbol (what v1 price trackers stored) --
@@ -118,66 +118,6 @@ def pick_legacy(candidates: list[dict], prefix: str | None) -> dict | None:
     """
     survivors = legacy_candidates(candidates, prefix)
     return survivors[0] if len(survivors) == 1 else None
-
-
-class AssetResolver:
-    """Resolves symbols to asset records, caching every hit by asset id."""
-
-    def __init__(
-        self, client: BitpandaApiClient | None, cache: dict[str, dict] | None = None
-    ) -> None:
-        self._client = client
-        # Re-keyed from each record's own id rather than trusting the given
-        # dict's outer keys: a v2 entry saved by an earlier dev build
-        # persisted `asset_cache` keyed by symbol, and trusting that would
-        # keep every one of its records permanently unreachable by id --
-        # silently dropping every tracked sensor at setup instead of healing.
-        # A cache already keyed by id re-keys to the same thing, so this is
-        # free for the normal case.
-        self._by_id: dict[str, dict] = {
-            a["id"]: a for a in (cache or {}).values() if a.get("id")
-        }
-
-    def remember(self, asset: dict) -> None:
-        """Cache an asset record by its id. A record with no id is ignored."""
-        if asset.get("id"):
-            self._by_id[asset["id"]] = asset
-
-    async def async_candidates(self, symbol: str) -> list[dict]:
-        """Return every asset the API has under `symbol`. Migration only.
-
-        Always asks the API: nothing here can tell whether a previous call
-        already saw every asset that carries this symbol, so there is no
-        cache to short-circuit on, unlike a single-answer lookup. The caller
-        (migration's `pick_legacy`) decides which candidate, if any, is the
-        right one, and `remember`s only that one -- not every candidate this
-        returns, so an unrelated candidate sharing the symbol is never
-        persisted into the config entry alongside the one actually chosen.
-
-        Never queries an empty symbol: `BitpandaApiClient.async_get_assets`
-        drops the `symbol` filter entirely when it is falsy, which would page
-        through the whole ~14,000-asset catalogue instead of finding nothing.
-        `legacy_symbol` returns "" for a bare-prefix v1 id like
-        `"cryptocoin_"`; migration never builds one, but this stays correct
-        even if that changes.
-
-        Every API error propagates, not only auth and rate-limit errors. An
-        empty 200 is the only answer that means "no such symbol": the
-        migration drops an asset for good on that, while a timeout, a 5xx or
-        a reset connection says nothing about the symbol and must abort the
-        migration instead, which retries on the next start.
-        """
-        if not symbol or self._client is None:
-            return []
-        return await self._client.async_get_assets(symbol=symbol)
-
-    def get_cached(self, asset_id: str) -> dict | None:
-        """Return a cached asset by its id, without any network access."""
-        return self._by_id.get(asset_id)
-
-    def as_dict(self) -> dict[str, dict]:
-        """Return the cache for persisting into the config entry, keyed by id."""
-        return dict(self._by_id)
 
 
 def asset_label(asset: dict) -> str:

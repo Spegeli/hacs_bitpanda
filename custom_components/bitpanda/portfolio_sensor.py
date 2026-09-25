@@ -9,13 +9,23 @@ from collections.abc import Callable
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import (
+    CONF_CURRENCY,
+    DEFAULT_CURRENCY,
+    DOMAIN,
+    PORTFOLIO_TIMEFRAMES,
+    WALLET_REMOVAL_MISSES,
+)
 from .naming import (
     asset_display_label,
+    managed_asset_id,
     portfolio_device_identifier,
     portfolio_entity_id,
     portfolio_unique_id,
@@ -28,7 +38,8 @@ from .naming import (
     wallet_entity_id,
     wallet_unique_id,
 )
-from .portfolio_model import DECIMALS, Holding, PortfolioData
+from .portfolio_coordinator import PortfolioRuntime
+from .portfolio_model import DECIMALS, EarnData, Holding, PortfolioData, staking_applies
 
 _CONFIGURATION_URL = "https://www.bitpanda.com"
 
@@ -323,3 +334,155 @@ class WalletTotalSensor(_WalletPart):
         if holding is not None:
             attrs.update(_performance(holding))
         return attrs
+
+
+# --- Lifecycle manager ---------------------------------------------------------------
+
+
+_UNIQUE_IDS = {
+    "wallet": wallet_unique_id,
+    "staking": staking_unique_id,
+    "total": total_unique_id,
+}
+
+
+class PortfolioEntityManager:
+    """Adds and removes wallet devices as holdings appear and disappear.
+
+    Runs after every portfolio refresh; a failed refresh changes nothing.
+    A holding absent from WALLET_REMOVAL_MISSES consecutive successful
+    refreshes loses its sensors and device -- a wallet migrated from version
+    1 whose asset is no longer held included. Only unique_ids that name an
+    asset UUID are ever removed (naming.managed_asset_id): a legacy wallet
+    the migration could not resolve is left for the user.
+    """
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        runtime: PortfolioRuntime,
+        currency: str,
+        add_entities: Callable[[list[SensorEntity]], None],
+    ) -> None:
+        self._hass = hass
+        self._entry = entry
+        self._runtime = runtime
+        self._currency = currency
+        self._add_entities = add_entities
+        self._wallets: set[str] = set()
+        self._staking: set[str] = set()
+        self._misses: dict[str, int] = {}
+
+    def has_total(self, asset_id: str) -> bool:
+        return asset_id in self._staking
+
+    def _registered(self) -> dict[str, set[str]]:
+        """Asset id -> the kinds ("wallet", "staking", "total") registered for it."""
+        entry_id = self._entry.entry_id
+        out: dict[str, set[str]] = {}
+        ent_reg = er.async_get(self._hass)
+        for reg_entry in er.async_entries_for_config_entry(ent_reg, entry_id):
+            asset_id = managed_asset_id(entry_id, reg_entry.unique_id)
+            if asset_id is not None:
+                kind = reg_entry.unique_id[len(entry_id) + 1 :].split("_", 1)[0]
+                out.setdefault(asset_id, set()).add(kind)
+        return out
+
+    def _current_earn(self) -> EarnData | None:
+        earn = self._runtime.earn
+        return earn.data if earn.last_update_success else None
+
+    def _remove(self, asset_id: str, kinds: tuple[str, ...], *, device: bool) -> None:
+        entry_id = self._entry.entry_id
+        ent_reg = er.async_get(self._hass)
+        for kind in kinds:
+            entity_id = ent_reg.async_get_entity_id(
+                "sensor", DOMAIN, _UNIQUE_IDS[kind](entry_id, asset_id)
+            )
+            if entity_id is not None:
+                ent_reg.async_remove(entity_id)
+        if device:
+            dev_reg = dr.async_get(self._hass)
+            found = dev_reg.async_get_device(
+                identifiers={(DOMAIN, wallet_device_identifier(entry_id, asset_id))}
+            )
+            if found is not None:
+                dev_reg.async_remove_device(found.id)
+
+    @callback
+    def async_reconcile(self) -> None:
+        portfolio = self._runtime.portfolio
+        data: PortfolioData | None = portfolio.data
+        if not portfolio.last_update_success or data is None:
+            return
+        entry_id = self._entry.entry_id
+        registered = self._registered()
+        earn = self._current_earn()
+        new: list[SensorEntity] = []
+
+        for asset_id in data.wallet_ids:
+            asset = data.assets[asset_id]
+            if asset_id not in self._wallets:
+                self._wallets.add(asset_id)
+                new.append(
+                    WalletSensor(portfolio, entry_id, self._currency, asset, self.has_total)
+                )
+            applies = staking_applies(data.holdings[asset_id], earn)
+            kinds = registered.get(asset_id, set())
+            wanted = applies is True or (applies is None and "staking" in kinds)
+            if wanted and asset_id not in self._staking:
+                self._staking.add(asset_id)
+                new.append(
+                    StakingSensor(
+                        portfolio, self._runtime.earn, self._runtime.rewards,
+                        entry_id, self._currency, asset,
+                    )
+                )
+                new.append(WalletTotalSensor(portfolio, entry_id, self._currency, asset))
+            elif applies is False and (asset_id in self._staking or kinds & {"staking", "total"}):
+                self._staking.discard(asset_id)
+                self._remove(asset_id, ("staking", "total"), device=False)
+
+        # An asset in `unparsed_assets` is still held -- its record just did
+        # not resolve this refresh -- so it counts as present here even
+        # though it has no entry in `data.holdings` (Task 3 ruling).
+        held = set(data.holdings) | data.unparsed_assets
+        for asset_id in held:
+            self._misses.pop(asset_id, None)
+        for asset_id in (set(registered) | self._wallets) - held:
+            misses = self._misses.get(asset_id, 0) + 1
+            if misses < WALLET_REMOVAL_MISSES:
+                self._misses[asset_id] = misses
+                continue
+            self._misses.pop(asset_id, None)
+            self._wallets.discard(asset_id)
+            self._staking.discard(asset_id)
+            self._remove(asset_id, ("wallet", "staking", "total"), device=True)
+
+        if new:
+            self._add_entities(new)
+
+
+async def async_setup_portfolio_entities(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    add_entities: Callable[[list[SensorEntity]], None],
+) -> None:
+    """The Portfolio device's sensors, then the wallets the manager keeps current."""
+    runtime: PortfolioRuntime = entry.runtime_data
+    currency = entry.data.get(CONF_CURRENCY, DEFAULT_CURRENCY)
+    add_entities(
+        [
+            PortfolioTotalSensor(runtime.portfolio, entry.entry_id, currency),
+            PortfolioCashSensor(runtime.portfolio, entry.entry_id, currency),
+            PortfolioCashPlusSensor(runtime.portfolio, entry.entry_id, currency),
+            *(
+                PortfolioReturnSensor(runtime.history, entry.entry_id, timeframe)
+                for timeframe in PORTFOLIO_TIMEFRAMES
+            ),
+        ]
+    )
+    manager = PortfolioEntityManager(hass, entry, runtime, currency, add_entities)
+    manager.async_reconcile()
+    entry.async_on_unload(runtime.portfolio.async_add_listener(manager.async_reconcile))

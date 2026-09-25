@@ -18,9 +18,9 @@ from custom_components.bitpanda.coordinator import (
     EarnCoordinator,
     Holding,
     PortfolioData,
-    RewardsCoordinator,
     map_earn_configs,
 )
+from custom_components.bitpanda.portfolio_coordinator import RewardsCoordinator
 from custom_components.bitpanda.sensor import BitpandaWalletSensor
 
 

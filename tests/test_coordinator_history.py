@@ -8,7 +8,10 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.bitpanda.api import BitpandaApiClient, BitpandaAuthError
 from custom_components.bitpanda.const import API_BASE_URL, PORTFOLIO_TIMEFRAMES
-from custom_components.bitpanda.coordinator import HistoryCoordinator, collect_returns
+from custom_components.bitpanda.portfolio_coordinator import (
+    HistoryCoordinator,
+    collect_returns,
+)
 
 
 async def test_collect_returns_one_entry_per_timeframe():

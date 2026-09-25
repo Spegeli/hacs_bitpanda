@@ -17,14 +17,13 @@ from .const import (
     EUR_CURRENCY_ID,
     HOURLY_READ_BUDGET,
     MIN_PORTFOLIO_DERIVED_VALUE,
-    PORTFOLIO_TIMEFRAMES,
     PORTFOLIO_UPDATE_INTERVAL,
     PRICE_BUDGET_SHARE,
     PRICE_UPDATE_INTERVAL_BASE,
-    REWARDS_UPDATE_INTERVAL,
 )
 from .fx import derive_rate
-from .portfolio_model import RewardTotals, sum_rewards
+from .portfolio_coordinator import HistoryCoordinator, RewardsCoordinator, collect_returns
+from .portfolio_model import RewardTotals
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -370,113 +369,3 @@ class EarnCoordinator(DataUpdateCoordinator[dict]):
             raise ConfigEntryAuthFailed("Bitpanda rejected the API key") from None
         except BitpandaApiError as err:
             raise UpdateFailed(str(err)) from None
-
-
-class RewardsCoordinator(DataUpdateCoordinator[dict]):
-    """Aggregates Earn rewards from the operation history.
-
-    /operations needs the Transaktion (Transaction) scope. Setup already
-    checks every required scope, so a 401 here means the key expired, was
-    revoked, or predates that requirement (a migrated legacy key) -- each
-    case is answered by a new key, so it raises ConfigEntryAuthFailed the
-    same as every other coordinator, instead of degrading silently.
-
-    A listing that cannot be paged completely raises too (see
-    BitpandaApiClient._paginate) and becomes UpdateFailed: the rewards
-    attributes then stay absent, or keep the last complete totals, rather
-    than showing a recount over part of the history.
-    """
-
-    def __init__(
-        self, hass: HomeAssistant, entry: ConfigEntry, client: BitpandaApiClient
-    ) -> None:
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=f"{DOMAIN}_rewards",
-            update_interval=REWARDS_UPDATE_INTERVAL,
-            config_entry=entry,
-        )
-        self._client = client
-
-    async def _async_update_data(self) -> dict[str, RewardTotals]:
-        try:
-            operations = await self._client.async_get_operations()
-        except BitpandaAuthError:
-            raise ConfigEntryAuthFailed("Bitpanda rejected the API key") from None
-        except BitpandaApiError as err:
-            raise UpdateFailed(str(err)) from None
-        return sum_rewards(operations)
-
-
-async def collect_returns(
-    client: BitpandaApiClient, currency_id: str | None
-) -> dict[str, float]:
-    """Fetch return_percentage for every timeframe.
-
-    One request per timeframe — there is no combined call. A failure on one
-    window is logged and skipped so the others still report. An auth error is
-    different: it will not resolve by trying the next timeframe, so it
-    propagates immediately instead of being counted as one of five failures --
-    otherwise five 401s would read as "No portfolio history could be
-    fetched" (an UpdateFailed) and the caller would never see the
-    BitpandaAuthError it needs to start reauth.
-    """
-    out: dict[str, float] = {}
-    failures = 0
-    for timeframe in PORTFOLIO_TIMEFRAMES:
-        try:
-            body = await client.async_get_portfolio_history(
-                timeframe=timeframe, equivalent_currency_id=currency_id
-            )
-        except BitpandaAuthError:
-            raise
-        except BitpandaApiError:
-            failures += 1
-            _LOGGER.debug("No history for timeframe %s this cycle", timeframe)
-            continue
-        value = body.get("return_percentage")
-        if isinstance(value, bool):
-            # isinstance(True, int) is True in Python, so a boolean would be
-            # stored as 1.0 — data that looks real. A dropped key is honest.
-            continue
-        if isinstance(value, (int, float)):
-            out[timeframe] = float(value)
-
-    # Raise only when every *request* failed. Returning {} normally would
-    # leave last_update_success True, making a dead endpoint indistinguishable
-    # from "no data yet" — forever, at any log level. But an account whose
-    # history is genuinely empty answers all five requests successfully with
-    # no usable return_percentage, and that must not be reported as an
-    # outage, or it would fail on every cycle.
-    if failures == len(PORTFOLIO_TIMEFRAMES):
-        raise UpdateFailed("No portfolio history could be fetched")
-
-    return out
-
-
-class HistoryCoordinator(DataUpdateCoordinator[dict]):
-    """Portfolio return over each supported timeframe."""
-
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        entry: ConfigEntry,
-        client: BitpandaApiClient,
-        currency_id: str,
-    ) -> None:
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=f"{DOMAIN}_history",
-            update_interval=PORTFOLIO_UPDATE_INTERVAL,
-            config_entry=entry,
-        )
-        self._client = client
-        self._currency_id = currency_id
-
-    async def _async_update_data(self) -> dict[str, float]:
-        try:
-            return await collect_returns(self._client, self._currency_id)
-        except BitpandaAuthError:
-            raise ConfigEntryAuthFailed("Bitpanda rejected the API key") from None

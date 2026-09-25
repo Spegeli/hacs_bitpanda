@@ -195,16 +195,26 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     This runs once against a real installation's only copy of its
     configuration, so it must never leave an entry partially rewritten.
-    Resolution failing for one symbol (delisted, renamed) is expected and
-    that entry is dropped with a warning. An auth or rate-limit error means
-    something else: it says nothing about whether any particular symbol
-    still exists, and would fail every remaining lookup the same way, so
-    treating it like "symbol not found" would silently empty out the whole
-    list. The whole attempt is aborted instead, with the entry untouched --
-    Home Assistant re-checks the version and retries migration on every
-    subsequent startup, so nothing is lost by waiting.
+    A symbol the API answers with an empty result (delisted, renamed) is
+    expected, and that entry is dropped with a warning. Any API error means
+    something else: an auth or rate-limit error, a timeout, a 5xx or a reset
+    connection says nothing about whether a particular symbol still exists,
+    and dropping on it would be permanent. The whole attempt is aborted
+    instead, with the entry untouched -- Home Assistant re-checks the
+    version and retries migration on every subsequent startup, so nothing
+    is lost by waiting.
+
+    An entry from a newer release (version above 2) is refused: this code
+    cannot know its format, and Home Assistant leaves it unloaded.
     """
-    if entry.version >= 2:
+    if entry.version > 2:
+        _LOGGER.error(
+            "The Bitpanda config entry was written by a newer release of this "
+            "integration (version %s) and cannot be loaded by this one",
+            entry.version,
+        )
+        return False
+    if entry.version == 2:
         return True
 
     _LOGGER.info("Migrating Bitpanda config entry to version 2")

@@ -6,6 +6,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp
 
 from custom_components.bitpanda.api import (
     BitpandaApiClient,
+    BitpandaApiError,
     BitpandaAuthError,
     BitpandaRateLimitError,
 )
@@ -94,6 +95,20 @@ async def test_candidates_propagates_rate_limit_error():
             client = BitpandaApiClient("key", session)
             resolver = AssetResolver(client, {})
             with pytest.raises(BitpandaRateLimitError):
+                await resolver.async_candidates("BTC")
+
+
+async def test_candidates_propagates_a_plain_api_error():
+    """A 5xx, timeout or reset connection is not "no such symbol" either.
+    Only an empty 200 may read as that -- the migration, the sole caller,
+    drops an asset for good on it, but aborts and retries on an error.
+    """
+    with mock_aiohttp_client() as mocker:
+        mocker.get(f"{API_BASE_URL}/assets?page_size=100&symbol=BTC", status=503)
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            resolver = AssetResolver(client, {})
+            with pytest.raises(BitpandaApiError):
                 await resolver.async_candidates("BTC")
 
 

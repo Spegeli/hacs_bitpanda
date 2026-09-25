@@ -11,16 +11,7 @@ different, unrelated enumeration that this module has no part in.
 """
 from __future__ import annotations
 
-import logging
-
-from .api import (
-    BitpandaApiClient,
-    BitpandaApiError,
-    BitpandaAuthError,
-    BitpandaRateLimitError,
-)
-
-_LOGGER = logging.getLogger(__name__)
+from .api import BitpandaApiClient
 
 # Keyed by `group`, the more specific of the API's two classification fields.
 _GROUP_CATEGORY = {
@@ -143,20 +134,16 @@ class AssetResolver:
         (task-23-review.md, finding 10). `legacy_symbol` returns "" for a
         bare-prefix v1 id like `"cryptocoin_"`; migration never builds one,
         but this stays correct even if that changes.
+
+        Every API error propagates, not only auth and rate-limit errors. An
+        empty 200 is the only answer that means "no such symbol": the
+        migration drops an asset for good on that, while a timeout, a 5xx or
+        a reset connection says nothing about the symbol and must abort the
+        migration instead, which retries on the next start.
         """
         if not symbol or self._client is None:
             return []
-        try:
-            return await self._client.async_get_assets(symbol=symbol)
-        except (BitpandaAuthError, BitpandaRateLimitError):
-            # Never swallow these. "Your key is invalid" and "you are being
-            # rate limited" are not the same condition as "no such symbol",
-            # and the caller has to be able to tell them apart — the config
-            # flow shows a different error for each.
-            raise
-        except BitpandaApiError:
-            _LOGGER.warning("Could not resolve symbol %s", symbol)
-            return []
+        return await self._client.async_get_assets(symbol=symbol)
 
     def get_cached(self, asset_id: str) -> dict | None:
         """Return a cached asset by its id, without any network access."""

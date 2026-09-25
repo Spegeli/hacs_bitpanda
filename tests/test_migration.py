@@ -11,7 +11,11 @@ from custom_components.bitpanda import (
     legacy_symbol,
     v2_unique_id,
 )
-from custom_components.bitpanda.api import BitpandaAuthError, BitpandaRateLimitError
+from custom_components.bitpanda.api import (
+    BitpandaApiError,
+    BitpandaAuthError,
+    BitpandaRateLimitError,
+)
 from custom_components.bitpanda.const import DOMAIN
 
 from tests.conftest import load_fixture
@@ -341,6 +345,73 @@ async def test_migrate_entry_aborts_on_rate_limit_mid_resolution_and_leaves_entr
     assert entry.version == 1
     assert "currency_id" not in entry.data
     assert entry.options["tracked_assets"] == ["BTC", "ETH"]
+
+
+async def test_migrate_entry_aborts_on_a_transient_error_and_leaves_entry_untouched(
+    hass, caplog
+):
+    """A timeout (or 5xx, or a reset connection) on one symbol says nothing
+    about whether that symbol still exists. Treating it as "no longer
+    resolves" dropped the asset for good; aborting costs nothing, because
+    Home Assistant retries the migration on the next start. Only an empty
+    200 means a symbol is gone.
+    """
+    entry = _v1_entry(tracked_assets=["BTC", "ETH"], tracked_wallets=["cryptocoin_ETH"])
+    entry.add_to_hass(hass)
+    eid = entry.entry_id
+    ent_reg = er.async_get(hass)
+    price = ent_reg.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        f"{eid}_BTC_price_EUR",
+        config_entry=entry,
+        suggested_object_id="btc_eur",
+    )
+
+    def _get_assets(*, symbol=None, asset_id=None, page_size=100):
+        if symbol == "ETH":
+            raise BitpandaApiError("Timeout for /assets")
+        return [_asset("BTC", "uuid-btc")]
+
+    with patch(
+        "custom_components.bitpanda.BitpandaApiClient.async_get_currencies",
+        AsyncMock(return_value=load_fixture("currencies.json")),
+    ), patch(
+        "custom_components.bitpanda.BitpandaApiClient.async_get_assets",
+        AsyncMock(side_effect=_get_assets),
+    ):
+        assert await async_migrate_entry(hass, entry) is False
+
+    assert entry.version == 1
+    assert "currency_id" not in entry.data
+    assert entry.options == {
+        "tracked_assets": ["BTC", "ETH"],
+        "tracked_wallets": ["cryptocoin_ETH"],
+    }
+    assert ent_reg.async_get(price.entity_id).unique_id == f"{eid}_BTC_price_EUR"
+    assert "no longer resolves" not in caplog.text
+
+
+async def test_migrate_entry_refuses_a_future_version(hass):
+    """An entry written by a newer release cannot be read by this one. Home
+    Assistant then leaves it unloaded instead of setting it up from data in
+    a format this code does not know.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=3,
+        data={"api_key": "key", "currency": "EUR", "currency_id": _EUR_ID},
+        options={"tracked_assets": [], "tracked_wallets": [], "asset_cache": {}},
+    )
+    entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.bitpanda.BitpandaApiClient.async_get_currencies",
+        AsyncMock(side_effect=AssertionError("must not call the API")),
+    ):
+        assert await async_migrate_entry(hass, entry) is False
+
+    assert entry.version == 3
 
 
 # --- async_migrate_entry: entity registry -------------------------------------

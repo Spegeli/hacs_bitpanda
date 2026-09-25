@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -24,6 +24,7 @@ from .const import (
     REWARDS_UPDATE_INTERVAL,
 )
 from .fx import derive_rate
+from .portfolio_model import RewardTotals, sum_rewards
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -332,40 +333,6 @@ class PriceCoordinator(DataUpdateCoordinator[dict]):
         return prices
 
 
-def _is_later(candidate: str | None, current: str | None) -> bool:
-    """Return True when `candidate` is the later of two API timestamps.
-
-    Comparing these as strings is wrong. The API emits both
-    `2026-09-22T17:16:35Z` and `2026-09-09T18:31:22.080Z`, and within the
-    same second `"." < "Z"`, so a zero-fraction timestamp sorts *above* a
-    later fractional one. Parse instead, and fall back to string comparison
-    only if parsing fails.
-    """
-    if not candidate:
-        return False
-    if not current:
-        return True
-    try:
-        return datetime.fromisoformat(candidate) > datetime.fromisoformat(current)
-    except (TypeError, ValueError):
-        # ValueError for a malformed string; TypeError for a non-string, and
-        # for comparing an offset-aware datetime against a naive one. Every
-        # timestamp seen from this endpoint carries a Z, but it is undocumented
-        # and a mixed batch must not raise out of a coordinator refresh.
-        return str(candidate) > str(current)
-
-
-@dataclass
-class RewardTotals:
-    """Lifetime Earn rewards for one asset, in that asset's own units."""
-
-    gross: float = 0.0
-    fee: float = 0.0
-    net: float = 0.0
-    count: int = 0
-    last_at: str | None = None
-
-
 def map_earn_configs(configs: list[dict]) -> dict[str, float]:
     """Map asset id to annual percentage rate.
 
@@ -379,52 +346,6 @@ def map_earn_configs(configs: list[dict]) -> dict[str, float]:
         if asset_id and isinstance(rate, (int, float)):
             out[asset_id] = float(rate)
     return out
-
-
-def sum_rewards(operations: list[dict]) -> dict[str, RewardTotals]:
-    """Aggregate staking rewards per asset.
-
-    Only `operation_type == "reward"` with `wallet_owner == "staking-service"`
-    counts. `earn_on_fiat_reward` is Cash Plus interest, a different product.
-    The operation_type enum is open — 29 values were seen in a single account —
-    so anything unrecognised is ignored rather than raising.
-
-    The fee is charged in the reward asset and is not a fixed rate: recent
-    payouts showed exactly 20 % while lifetime aggregates sat near 17 %. Always
-    read `fee_amount`.
-    """
-    totals: dict[str, RewardTotals] = {}
-
-    for operation in operations:
-        if operation.get("operation_type") != "reward":
-            continue
-        for tx in operation.get("transactions", []):
-            if tx.get("wallet_owner") != "staking-service":
-                continue
-            asset_id = tx.get("asset_id")
-            gross = _to_float(tx.get("asset_amount"))
-            if not asset_id or gross is None:
-                continue
-            fee = _to_float(tx.get("fee_amount")) or 0.0
-
-            entry = totals.setdefault(asset_id, RewardTotals())
-            entry.gross += gross
-            entry.fee += fee
-            entry.net += gross - fee
-            entry.count += 1
-
-            credited = tx.get("credited_at")
-            if _is_later(credited, entry.last_at):
-                entry.last_at = credited
-
-    # The amounts are 8-decimal strings; summing them as floats leaves noise
-    # such as 751.4920099999999. Rounded once, at the end, not per step.
-    for entry in totals.values():
-        entry.gross = round(entry.gross, _API_DECIMALS)
-        entry.fee = round(entry.fee, _API_DECIMALS)
-        entry.net = round(entry.net, _API_DECIMALS)
-
-    return totals
 
 
 class EarnCoordinator(DataUpdateCoordinator[dict]):

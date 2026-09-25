@@ -19,7 +19,8 @@ from .const import (
     CONF_TRACKED_WALLETS,
     DOMAIN,
 )
-from .coordinator import PortfolioData, RewardTotals
+from .coordinator import PortfolioData
+from .portfolio_model import RewardTotals
 
 _LOGGER = logging.getLogger(__name__)
 

@@ -3,6 +3,7 @@ from datetime import timedelta
 from types import SimpleNamespace
 
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentryData
+from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.const import DOMAIN
@@ -10,9 +11,15 @@ from custom_components.bitpanda.diagnostics import async_get_config_entry_diagno
 from custom_components.bitpanda.ecb import EcbRates
 from custom_components.bitpanda.portfolio_model import EarnData, Holding, PortfolioData
 
-from tests.conftest import price_group
+from tests.conftest import price_group, wallet_group
 
 _SECRET = "totally-secret-diagnostics-key"
+
+# Sorted by category, whatever order the groups were stored in.
+_WALLET_GROUPS = [
+    {"category": "crypto", "title": "Kryptowährungen", "wallets": 2},
+    {"category": "metal", "title": "Precious metals", "wallets": 1},
+]
 
 
 class _Coordinator:
@@ -20,6 +27,20 @@ class _Coordinator:
         self.data = data
         self.last_update_success = success
         self.update_interval = interval
+
+
+def _add_device(hass, entry, name: str, category: str | None = None) -> None:
+    """A device of `entry`, in the wallet group of `category` or in none."""
+    group = next(
+        (sub.subentry_id for sub in entry.subentries.values() if sub.unique_id == category),
+        None,
+    )
+    dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        config_subentry_id=group,
+        identifiers={(DOMAIN, f"{entry.entry_id}_{name}")},
+        name=name,
+    )
 
 
 def _portfolio_entry(hass, *, loaded: bool) -> MockConfigEntry:
@@ -34,8 +55,16 @@ def _portfolio_entry(hass, *, loaded: bool) -> MockConfigEntry:
             # A field added later must not leak by default either.
             "future_field": _SECRET,
         },
+        subentries_data=[
+            wallet_group("metal", "Precious metals"),
+            wallet_group("crypto", "Kryptowährungen"),
+        ],
     )
     entry.add_to_hass(hass)
+    _add_device(hass, entry, "Portfolio")
+    _add_device(hass, entry, "Bitcoin (BTC) Wallet", "crypto")
+    _add_device(hass, entry, "Vision (VSN) Wallet", "crypto")
+    _add_device(hass, entry, "Gold (XAU) Wallet", "metal")
     if loaded:
         data = PortfolioData(
             holdings={"a": Holding("a", 1.0, 1.0, 5.0), "b": Holding("b", 1.0, 1.0, 5.0)}
@@ -65,6 +94,13 @@ async def test_portfolio_diagnostics_report_health_and_never_the_key(hass):
     }
 
 
+async def test_portfolio_diagnostics_list_the_wallet_groups(hass):
+    """Each group's category, title and number of wallet devices; the
+    Portfolio device is in none."""
+    result = await async_get_config_entry_diagnostics(hass, _portfolio_entry(hass, loaded=True))
+    assert result["groups"] == _WALLET_GROUPS
+
+
 async def test_portfolio_that_is_not_loaded_reports_its_config_only(hass):
     """Setup failed or reauth pending: exactly when diagnostics are wanted."""
     result = await async_get_config_entry_diagnostics(hass, _portfolio_entry(hass, loaded=False))
@@ -72,6 +108,7 @@ async def test_portfolio_that_is_not_loaded_reports_its_config_only(hass):
     assert result == {
         "service": "portfolio",
         "config": {"api_key": "**REDACTED**", "currency": "EUR"},
+        "groups": _WALLET_GROUPS,
     }
 
 

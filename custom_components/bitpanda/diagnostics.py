@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry, ConfigEntryState
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState, ConfigSubentry
 from homeassistant.core import HomeAssistant
 
 from .assets import slim_asset
@@ -18,8 +18,10 @@ from .const import (
     CONF_EXTRA_CURRENCIES,
     ENTRY_TYPE_PRICE_TRACKER,
     SUBENTRY_TYPE_PRICE_GROUP,
+    SUBENTRY_TYPE_WALLET_GROUP,
     entry_type,
 )
+from .devices import subentry_devices
 from .groups import groups_of_type
 
 _REDACTED = "**REDACTED**"
@@ -29,10 +31,29 @@ def _health(coordinator) -> dict[str, Any]:
     return {"last_update_success": coordinator.last_update_success}
 
 
-def _portfolio(entry: ConfigEntry, runtime) -> dict[str, Any]:
+def _groups_by_category(entry: ConfigEntry, subentry_type: str) -> list[ConfigSubentry]:
+    return sorted(
+        groups_of_type(entry, subentry_type), key=lambda group: group.data[CONF_CATEGORY]
+    )
+
+
+def _wallet_groups(hass: HomeAssistant, entry: ConfigEntry) -> list[dict[str, Any]]:
+    """Each wallet group's category, title and number of wallet devices."""
+    return [
+        {
+            "category": group.data[CONF_CATEGORY],
+            "title": group.title,
+            "wallets": len(subentry_devices(hass, entry.entry_id, group.subentry_id)),
+        }
+        for group in _groups_by_category(entry, SUBENTRY_TYPE_WALLET_GROUP)
+    ]
+
+
+def _portfolio(hass: HomeAssistant, entry: ConfigEntry, runtime) -> dict[str, Any]:
     out: dict[str, Any] = {
         "service": "portfolio",
         "config": {"api_key": _REDACTED, "currency": entry.data.get(CONF_CURRENCY)},
+        "groups": _wallet_groups(hass, entry),
     }
     if runtime is None:
         return out
@@ -67,10 +88,7 @@ def _price_groups(entry: ConfigEntry) -> list[dict[str, Any]]:
                 key=lambda record: (record.get("symbol", ""), record["id"]),
             ),
         }
-        for group in sorted(
-            groups_of_type(entry, SUBENTRY_TYPE_PRICE_GROUP),
-            key=lambda group: group.data[CONF_CATEGORY],
-        )
+        for group in _groups_by_category(entry, SUBENTRY_TYPE_PRICE_GROUP)
     ]
 
 
@@ -104,8 +122,8 @@ async def async_get_config_entry_diagnostics(
 ) -> dict[str, Any]:
     """An entry that is not loaded -- setup failed, or reauth is pending,
     which is exactly when diagnostics are wanted -- has no runtime data and
-    reports its configuration only."""
+    reports its configuration and groups only."""
     runtime = entry.runtime_data if entry.state is ConfigEntryState.LOADED else None
     if entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER:
         return _price_tracker(entry, runtime)
-    return _portfolio(entry, runtime)
+    return _portfolio(hass, entry, runtime)

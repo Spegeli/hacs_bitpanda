@@ -2,93 +2,114 @@
   "config": {
     "step": {
       "user": {
-        "title": "Bitpanda Einrichtung",
+        "title": "Bitpanda",
+        "description": "Welchen Dienst möchtest du einrichten? Jeder lässt sich einmal hinzufügen.",
+        "menu_options": {
+          "portfolio": "Bitpanda Portfolio: deine Bestände (braucht einen API-Schlüssel)",
+          "price_tracker": "Bitpanda Price Tracker: Preise beliebiger Assets (ohne API-Schlüssel)"
+        }
+      },
+      "portfolio": {
+        "title": "Bitpanda Portfolio",
         "description": "Gib deinen Bitpanda API-Schlüssel ein. Erstelle einen unter [{api_key_url}]({api_key_url}) mit diesen Berechtigungen: Guthaben, Transaktion und Earn (Read). Trading wird nicht benötigt. Berechtigungen lassen sich einem bestehenden Schlüssel später nicht hinzufügen.",
         "data": {
           "api_key": "API-Schlüssel"
         }
       },
       "currency": {
-        "title": "Währung auswählen",
-        "description": "Wähle die Währung, die für alle Preise und Wallet-Werte verwendet wird.\n\n⚠️ Diese Einstellung kann später nicht geändert werden. Um eine andere Währung zu verwenden, muss die Integration neu eingerichtet werden.\n\nNach der Einrichtung kannst du Wallets und den Preis-Tracker über die Integrationsoptionen konfigurieren.",
+        "title": "Portfolio-Währung",
+        "description": "Bitpanda meldet alle Werte deines Portfolios in dieser Währung. Du kannst sie später über Neu konfigurieren ändern, dabei werden aber alle Portfolio-Sensoren samt Verlauf gelöscht.",
         "data": {
           "currency": "Währung"
         }
       },
+      "price_tracker": {
+        "title": "Bitpanda Price Tracker",
+        "description": "Jedes verfolgte Asset bekommt immer einen Preis-Sensor in EUR. Wähle zusätzliche Währungen, um pro Asset und Währung einen weiteren Sensor zu erhalten, umgerechnet mit den täglichen Referenzkursen der Europäischen Zentralbank. Assets fügst du danach mit \"Preis-Tracker hinzufügen\" hinzu.",
+        "data": {
+          "extra_currencies": "Zusätzliche Währungen"
+        }
+      },
       "reauth_confirm": {
         "title": "Neuer Bitpanda API-Schlüssel nötig",
-        "description": "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen, oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht. Erstelle unter [{api_key_url}]({api_key_url}) einen neuen Schlüssel mit Guthaben, Transaktion und Earn (Read) und füge ihn hier ein. Deine Assets und Sensoren bleiben erhalten.",
+        "description": "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen, oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht. Erstelle unter [{api_key_url}]({api_key_url}) einen neuen Schlüssel mit Guthaben, Transaktion und Earn (Read) und füge ihn hier ein. Deine Sensoren bleiben erhalten.",
         "data": {
           "api_key": "API-Schlüssel"
         }
       },
       "reconfigure": {
-        "title": "Bitpanda API-Schlüssel ersetzen",
-        "description": "Füge einen neuen Schlüssel von [{api_key_url}]({api_key_url}) ein. Er braucht Guthaben, Transaktion und Earn (Read). Deine Assets und Sensoren bleiben erhalten.",
+        "title": "Bitpanda Portfolio neu konfigurieren",
+        "description": "Um den gespeicherten API-Schlüssel zu ersetzen, füge einen neuen von [{api_key_url}]({api_key_url}) ein; er braucht Guthaben, Transaktion und Earn (Read). Lass das Feld leer, um den aktuellen Schlüssel zu behalten.",
         "data": {
-          "api_key": "API-Schlüssel"
+          "api_key": "Neuer API-Schlüssel",
+          "currency": "Währung"
         }
+      },
+      "confirm_currency": {
+        "title": "Währung ändern?",
+        "description": "Wenn du die Währung von {old} auf {new} änderst, werden alle Portfolio-Sensoren samt Verlauf gelöscht und in der neuen Währung neu angelegt. Das lässt sich nicht rückgängig machen. Sende das Formular ab, um fortzufahren, oder schließe diesen Dialog, um {old} zu behalten."
       }
     },
     "error": {
       "invalid_auth": "Bitpanda hat diesen API-Schlüssel abgelehnt. Prüfe, ob er vollständig kopiert wurde und mindestens eine der benötigten Berechtigungen hat.",
-      "missing_scopes": "Diesem API-Schlüssel fehlen Berechtigungen: {missing_scopes}. Einem bestehenden Schlüssel lassen sich keine Berechtigungen hinzufügen — erstelle einen neuen mit Guthaben, Transaktion und Earn (Read).",
+      "missing_scopes": "Diesem API-Schlüssel fehlen Berechtigungen: {missing_scopes}. Einem bestehenden Schlüssel lassen sich keine Berechtigungen hinzufügen. Erstelle einen neuen mit Guthaben, Transaktion und Earn (Read).",
       "rate_limited": "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
-      "cannot_connect": "Verbindung fehlgeschlagen",
+      "cannot_connect": "Bitpanda ist nicht erreichbar. Versuche es später erneut.",
       "unknown": "Unerwarteter Fehler"
     },
     "abort": {
+      "all_configured": "Beide Dienste sind bereits eingerichtet.",
+      "already_configured": "Dieser Dienst ist bereits eingerichtet.",
+      "already_in_progress": "Dieser Dienst wird bereits in einem anderen Dialog eingerichtet.",
       "reauth_successful": "Der API-Schlüssel wurde aktualisiert.",
-      "reconfigure_successful": "Der API-Schlüssel wurde ersetzt."
+      "reconfigure_successful": "Der API-Schlüssel wurde ersetzt.",
+      "currency_changed": "Die Währung wurde geändert. Die Portfolio-Sensoren werden neu angelegt.",
+      "no_changes": "Es wurde nichts geändert.",
+      "no_reconfigure": "Beim Price Tracker gibt es nichts neu zu konfigurieren. Seine Währungen wählst du unter Konfigurieren."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Bitpanda Optionen",
-        "description": "Konfiguriere deine Bitpanda Integration",
-        "menu_options": {
-          "add_asset": "📈 Preis-Tracker hinzufügen",
-          "add_wallet": "🪙 Wallet hinzufügen",
-          "remove": "🗑️ Einträge entfernen",
-          "save": "💾 Speichern"
-        }
-      },
-      "asset_category": {
-        "title": "Preis-Tracker hinzufügen",
-        "description": "Welche Art von Asset möchtest du verfolgen?",
+        "title": "Währungen des Price Trackers",
+        "description": "Jedes verfolgte Asset behält immer seinen EUR-Sensor. Jede gewählte Währung fügt pro Asset einen Sensor hinzu; wird eine Währung abgewählt, werden diese Sensoren gelöscht.",
         "data": {
-          "category": "Asset-Typ"
-        }
-      },
-      "add_asset": {
-        "title": "Preis-Tracker hinzufügen",
-        "description": "Wähle ein oder mehrere Assets. Tippe, um nach Name, Symbol oder ISIN zu suchen.",
-        "data": {
-          "assets": "Assets"
-        }
-      },
-      "add_wallet": {
-        "title": "Wallet hinzufügen",
-        "description": "Wähle ein oder mehrere Assets, die du besitzt. Tippe, um zu suchen.",
-        "data": {
-          "wallets": "Wallets"
-        }
-      },
-      "remove": {
-        "title": "Einträge entfernen",
-        "data": {
-          "tracked_assets": "Preis-Tracker",
-          "tracked_wallets": "Wallets"
+          "extra_currencies": "Zusätzliche Währungen"
         }
       }
-    },
-    "error": {
-      "no_wallets_available": "Alle Assets, die du besitzt, werden bereits verfolgt.",
-      "no_assets_available": "Alle Assets dieser Kategorie werden bereits verfolgt.",
-      "invalid_auth": "Dein API-Key wurde abgelehnt. Prüfe ihn in deinen Bitpanda-Kontoeinstellungen.",
-      "rate_limited": "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
-      "cannot_connect": "Bitpanda nicht erreichbar. Versuche es später erneut."
+    }
+  },
+  "config_subentries": {
+    "asset": {
+      "initiate_flow": {
+        "user": "Preis-Tracker hinzufügen"
+      },
+      "entry_type": "Preis-Tracker",
+      "step": {
+        "user": {
+          "title": "Preis-Tracker hinzufügen",
+          "description": "Welche Art von Asset möchtest du verfolgen?",
+          "data": {
+            "category": "Asset-Typ"
+          }
+        },
+        "asset": {
+          "title": "Preis-Tracker hinzufügen",
+          "description": "Tippe, um nach Name, Symbol oder ISIN zu suchen, und wähle ein Asset. Sende ohne Auswahl ab, um zu den Asset-Typen zurückzukehren.",
+          "data": {
+            "asset": "Asset"
+          }
+        }
+      },
+      "error": {
+        "no_assets_available": "Alle Assets dieses Typs werden bereits verfolgt.",
+        "unknown_asset": "Wähle ein Asset aus der Liste.",
+        "rate_limited": "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
+        "cannot_connect": "Bitpanda ist nicht erreichbar. Versuche es später erneut."
+      },
+      "abort": {
+        "already_configured": "Dieses Asset wird bereits verfolgt."
+      }
     }
   },
   "selector": {
@@ -100,6 +121,56 @@
         "etc": "ETCs (börsengehandelte Rohstoffe)",
         "index": "Krypto-Indizes",
         "metal": "Edelmetalle"
+      }
+    },
+    "currency": {
+      "options": {
+        "CHF": "Schweizer Franken (CHF)",
+        "CZK": "Tschechische Krone (CZK)",
+        "DKK": "Dänische Krone (DKK)",
+        "EUR": "Euro (EUR)",
+        "GBP": "Britisches Pfund (GBP)",
+        "HUF": "Ungarischer Forint (HUF)",
+        "NOK": "Norwegische Krone (NOK)",
+        "PLN": "Polnischer Złoty (PLN)",
+        "RON": "Rumänischer Leu (RON)",
+        "SEK": "Schwedische Krone (SEK)",
+        "TRY": "Türkische Lira (TRY)",
+        "USD": "US-Dollar (USD)"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "total_value": {
+        "name": "Gesamtwert"
+      },
+      "cash": {
+        "name": "Bargeld"
+      },
+      "cash_plus": {
+        "name": "Cash Plus"
+      },
+      "return_day": {
+        "name": "Rendite Tag"
+      },
+      "return_week": {
+        "name": "Rendite Woche"
+      },
+      "return_month": {
+        "name": "Rendite Monat"
+      },
+      "return_six_month": {
+        "name": "Rendite 6 Monate"
+      },
+      "return_year": {
+        "name": "Rendite Jahr"
+      },
+      "staking": {
+        "name": "Staking"
+      },
+      "wallet_total": {
+        "name": "Gesamt"
       }
     }
   }

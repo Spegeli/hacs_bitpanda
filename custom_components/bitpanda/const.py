@@ -103,3 +103,16 @@ WALLET_REMOVAL_MISSES = 3
 # The asset group of Bitpanda's Cash Plus products. They count towards the
 # Portfolio's Cash Plus sensor and never get a wallet device.
 CASH_PLUS_GROUP = "fiat_earn"
+
+# Import data key: the asset records the version 1 migration hands the
+# Price Tracker import flow.
+IMPORT_ASSETS = "assets"
+
+
+def entry_type(entry) -> str:
+    """The service a config entry belongs to.
+
+    A version 1 entry predates the field; it is the one that becomes the
+    Portfolio, so it counts as one.
+    """
+    return entry.data.get(ENTRY_TYPE, ENTRY_TYPE_PORTFOLIO)

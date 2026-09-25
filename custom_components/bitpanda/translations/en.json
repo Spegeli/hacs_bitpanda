@@ -2,93 +2,114 @@
   "config": {
     "step": {
       "user": {
-        "title": "Bitpanda Setup",
+        "title": "Bitpanda",
+        "description": "Which service do you want to set up? Each one can be added once.",
+        "menu_options": {
+          "portfolio": "Bitpanda Portfolio: your holdings (needs an API key)",
+          "price_tracker": "Bitpanda Price Tracker: prices of any asset (no API key)"
+        }
+      },
+      "portfolio": {
+        "title": "Bitpanda Portfolio",
         "description": "Enter your Bitpanda API key. Create one at [{api_key_url}]({api_key_url}) with these permissions: Guthaben (Balance), Transaktion (Transaction) and Earn (Read). Trading is not needed. Permissions cannot be added to an existing key later.",
         "data": {
-          "api_key": "API Key"
+          "api_key": "API key"
         }
       },
       "currency": {
-        "title": "Select Currency",
-        "description": "Select the currency used for all prices and wallet values.\n\n⚠️ This setting cannot be changed later. To use a different currency, you will need to remove and re-add the integration.\n\nAfter setup, you can configure wallets and price tracking via the integration options.",
+        "title": "Portfolio currency",
+        "description": "Bitpanda reports every value of your portfolio in this currency. You can change it later with Reconfigure, but that deletes all Portfolio sensors including their history.",
         "data": {
           "currency": "Currency"
         }
       },
+      "price_tracker": {
+        "title": "Bitpanda Price Tracker",
+        "description": "Every tracked asset always gets a price sensor in EUR. Select additional currencies to get one more sensor per asset and currency, converted with the daily reference rates of the European Central Bank. Add assets afterwards with \"Add price tracker\".",
+        "data": {
+          "extra_currencies": "Additional currencies"
+        }
+      },
       "reauth_confirm": {
         "title": "New Bitpanda API key needed",
-        "description": "Bitpanda rejected the stored API key. It may have expired, or it predates the permissions this version needs. Create a new key at [{api_key_url}]({api_key_url}) with Guthaben (Balance), Transaktion (Transaction) and Earn (Read), and paste it here. Your tracked assets and sensors are kept.",
+        "description": "Bitpanda rejected the stored API key. It may have expired, or it predates the permissions this version needs. Create a new key at [{api_key_url}]({api_key_url}) with Guthaben (Balance), Transaktion (Transaction) and Earn (Read), and paste it here. Your sensors are kept.",
         "data": {
-          "api_key": "API Key"
+          "api_key": "API key"
         }
       },
       "reconfigure": {
-        "title": "Replace Bitpanda API key",
-        "description": "Paste a new key from [{api_key_url}]({api_key_url}). It needs Guthaben (Balance), Transaktion (Transaction) and Earn (Read). Your tracked assets and sensors are kept.",
+        "title": "Reconfigure Bitpanda Portfolio",
+        "description": "To replace the stored API key, paste a new one from [{api_key_url}]({api_key_url}); it needs Guthaben (Balance), Transaktion (Transaction) and Earn (Read). Leave the field empty to keep the current key.",
         "data": {
-          "api_key": "API Key"
+          "api_key": "New API key",
+          "currency": "Currency"
         }
+      },
+      "confirm_currency": {
+        "title": "Change the currency?",
+        "description": "Changing the currency from {old} to {new} deletes all Portfolio sensors including their history and recreates them in the new currency. This cannot be undone. Submit to continue, or close this dialog to keep {old}."
       }
     },
     "error": {
       "invalid_auth": "Bitpanda rejected this API key. Check that it was copied completely and that it has at least one of the required permissions.",
-      "missing_scopes": "This API key is missing permissions: {missing_scopes}. Permissions cannot be added to an existing key — create a new one with Guthaben (Balance), Transaktion (Transaction) and Earn (Read).",
+      "missing_scopes": "This API key is missing permissions: {missing_scopes}. Permissions cannot be added to an existing key. Create a new one with Guthaben (Balance), Transaktion (Transaction) and Earn (Read).",
       "rate_limited": "Too many requests. Wait a moment and try again.",
-      "cannot_connect": "Failed to connect",
+      "cannot_connect": "Could not reach Bitpanda. Try again later.",
       "unknown": "Unexpected error"
     },
     "abort": {
+      "all_configured": "Both services are already set up.",
+      "already_configured": "This service is already set up.",
+      "already_in_progress": "This service is already being set up in another dialog.",
       "reauth_successful": "The API key was updated.",
-      "reconfigure_successful": "The API key was replaced."
+      "reconfigure_successful": "The API key was replaced.",
+      "currency_changed": "The currency was changed. The Portfolio sensors are being recreated.",
+      "no_changes": "Nothing was changed.",
+      "no_reconfigure": "The Price Tracker has nothing to reconfigure. Use Configure to choose its currencies."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Bitpanda Options",
-        "description": "Configure your Bitpanda integration",
-        "menu_options": {
-          "add_asset": "📈 Add price tracker",
-          "add_wallet": "🪙 Add wallet",
-          "remove": "🗑️ Remove tracked items",
-          "save": "💾 Save"
-        }
-      },
-      "asset_category": {
-        "title": "Add price tracker",
-        "description": "Which kind of asset do you want to track?",
+        "title": "Price Tracker currencies",
+        "description": "Every tracked asset always keeps its EUR sensor. Each selected currency adds one sensor per asset; removing a currency deletes those sensors.",
         "data": {
-          "category": "Asset type"
-        }
-      },
-      "add_asset": {
-        "title": "Add price tracker",
-        "description": "Choose one or more assets. Type to search by name, symbol or ISIN.",
-        "data": {
-          "assets": "Assets"
-        }
-      },
-      "add_wallet": {
-        "title": "Add wallet",
-        "description": "Choose one or more assets you hold. Type to search.",
-        "data": {
-          "wallets": "Wallets"
-        }
-      },
-      "remove": {
-        "title": "Remove tracked items",
-        "data": {
-          "tracked_assets": "Price trackers",
-          "tracked_wallets": "Wallets"
+          "extra_currencies": "Additional currencies"
         }
       }
-    },
-    "error": {
-      "no_wallets_available": "Every asset you hold is already tracked.",
-      "no_assets_available": "Every asset in this category is already tracked.",
-      "invalid_auth": "Your API key was rejected. Check it in your Bitpanda account settings.",
-      "rate_limited": "Too many requests. Wait a moment and try again.",
-      "cannot_connect": "Could not reach Bitpanda. Try again later."
+    }
+  },
+  "config_subentries": {
+    "asset": {
+      "initiate_flow": {
+        "user": "Add price tracker"
+      },
+      "entry_type": "Price tracker",
+      "step": {
+        "user": {
+          "title": "Add price tracker",
+          "description": "Which kind of asset do you want to track?",
+          "data": {
+            "category": "Asset type"
+          }
+        },
+        "asset": {
+          "title": "Add price tracker",
+          "description": "Type to search by name, symbol or ISIN, then pick one asset. Submit without a choice to go back to the asset types.",
+          "data": {
+            "asset": "Asset"
+          }
+        }
+      },
+      "error": {
+        "no_assets_available": "Every asset of this type is already tracked.",
+        "unknown_asset": "Pick an asset from the list.",
+        "rate_limited": "Too many requests. Wait a moment and try again.",
+        "cannot_connect": "Could not reach Bitpanda. Try again later."
+      },
+      "abort": {
+        "already_configured": "This asset is already tracked."
+      }
     }
   },
   "selector": {
@@ -100,6 +121,56 @@
         "etc": "ETCs (exchange-traded commodities)",
         "index": "Crypto indices",
         "metal": "Precious metals"
+      }
+    },
+    "currency": {
+      "options": {
+        "CHF": "Swiss Franc (CHF)",
+        "CZK": "Czech Koruna (CZK)",
+        "DKK": "Danish Krone (DKK)",
+        "EUR": "Euro (EUR)",
+        "GBP": "British Pound (GBP)",
+        "HUF": "Hungarian Forint (HUF)",
+        "NOK": "Norwegian Krone (NOK)",
+        "PLN": "Polish Zloty (PLN)",
+        "RON": "Romanian Leu (RON)",
+        "SEK": "Swedish Krona (SEK)",
+        "TRY": "Turkish Lira (TRY)",
+        "USD": "US Dollar (USD)"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "total_value": {
+        "name": "Total value"
+      },
+      "cash": {
+        "name": "Cash"
+      },
+      "cash_plus": {
+        "name": "Cash Plus"
+      },
+      "return_day": {
+        "name": "Return day"
+      },
+      "return_week": {
+        "name": "Return week"
+      },
+      "return_month": {
+        "name": "Return month"
+      },
+      "return_six_month": {
+        "name": "Return 6 months"
+      },
+      "return_year": {
+        "name": "Return year"
+      },
+      "staking": {
+        "name": "Staking"
+      },
+      "wallet_total": {
+        "name": "Total"
       }
     }
   }

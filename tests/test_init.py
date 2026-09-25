@@ -470,7 +470,15 @@ def _add_device(hass, entry, name: str, kind: str, asset: dict | None = None) ->
 
 
 async def _remove_through_the_device_page(hass, hass_ws_client, entry, device) -> dict:
-    """What "Delete" on a device page sends."""
+    """What "Delete" on a device page sends -- on the frontend of Home
+    Assistant 2025.5, this integration's floor.
+
+    Newer versions renamed the command `config/device_registry/remove`,
+    which takes the `device_id` alone, and log the old name as a deprecated
+    alias that Home Assistant 2027.9 removes. With a test image from 2027.9
+    on, the device-page tests fail with an unknown command until this sends
+    the new one.
+    """
     assert await async_setup_component(hass, "config", {})
     client = await hass_ws_client(hass)
     await client.send_json_auto_id(

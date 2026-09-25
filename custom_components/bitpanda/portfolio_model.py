@@ -134,6 +134,12 @@ class PortfolioData:
         """Held assets that get a wallet device: resolved and not Cash Plus."""
         return [a for a in self.holdings if self.is_cash_plus(a) is False]
 
+    @property
+    def held(self) -> set[str]:
+        """Every asset /portfolio listed, its balances readable or not: an
+        unreadable entry is no sign of a sale."""
+        return set(self.holdings) | self.unparsed_assets
+
 
 def parse_portfolio(entries: list[dict]) -> PortfolioData:
     """Normalise a /portfolio response.

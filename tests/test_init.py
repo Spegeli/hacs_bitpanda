@@ -6,15 +6,18 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentry, ConfigSubentryData
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
 )
 
+from custom_components.bitpanda import async_remove_config_entry_device
 from custom_components.bitpanda.api import BitpandaAuthError
 from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.const import DOMAIN
+from custom_components.bitpanda.devices import find_entry_device
 from custom_components.bitpanda.ecb import EcbRates
 
 from tests.conftest import load_fixture, price_group
@@ -312,3 +315,180 @@ async def test_the_refresh_service_lives_while_any_entry_is_loaded(hass, portfol
     assert hass.services.has_service(DOMAIN, "refresh")
     assert await hass.config_entries.async_unload(tracker.entry_id)
     assert not hass.services.has_service(DOMAIN, "refresh")
+
+
+# --- Deleting a device from its device page ------------------------------------------
+
+
+def _identifier(entry, kind: str, asset: dict | None = None) -> str:
+    """A device identifier of `entry`: `{entry_id}_{kind}[_{asset id}]`."""
+    return f"{entry.entry_id}_{kind}" + (f"_{asset['id']}" if asset else "")
+
+
+def _own_device(hass, entry, kind: str, asset: dict | None = None) -> dr.DeviceEntry:
+    return find_entry_device(hass, entry.entry_id, _identifier(entry, kind, asset))
+
+
+def _add_device(hass, entry, name: str, kind: str, asset: dict | None = None) -> dr.DeviceEntry:
+    return dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, _identifier(entry, kind, asset))},
+        name=name,
+    )
+
+
+async def _remove_through_the_device_page(hass, hass_ws_client, entry, device) -> dict:
+    """What "Delete" on a device page sends."""
+    assert await async_setup_component(hass, "config", {})
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id(
+        {
+            "type": "config/device_registry/remove_config_entry",
+            "config_entry_id": entry.entry_id,
+            "device_id": device.id,
+        }
+    )
+    return await client.receive_json()
+
+
+async def test_deleting_a_price_device_takes_its_asset_out_of_its_group(hass, price_api):
+    ticker, _ = price_api
+    entry = _price_entry(hass, [], price_group("crypto", BTC, SOL))
+    await _setup(hass, entry)
+    device = _own_device(hass, entry, "price", SOL)
+
+    assert await async_remove_config_entry_device(hass, entry, device)
+    await hass.async_block_till_done()
+
+    assert list(_group(entry, "crypto").data["assets"]) == [BTC["id"]]
+    assert er.async_get(hass).async_get("sensor.bitpanda_solana_sol_eur") is None
+    assert dr.async_get(hass).async_get(device.id) is None
+    # One reload, whose first refresh asks for the one asset left.
+    assert ticker.call_count == 3
+
+
+async def test_deleting_the_last_price_device_of_a_group_removes_the_group(hass, price_api):
+    ticker, _ = price_api
+    entry = _price_entry(hass, [], price_group("crypto", BTC), price_group("metal", GOLD))
+    await _setup(hass, entry)
+    device = _own_device(hass, entry, "price", GOLD)
+
+    assert await async_remove_config_entry_device(hass, entry, device)
+    await hass.async_block_till_done()
+
+    assert [sub.unique_id for sub in entry.subentries.values()] == ["crypto"]
+    assert er.async_get(hass).async_get("sensor.bitpanda_gold_xau_eur") is None
+    assert dr.async_get(hass).async_get(device.id) is None
+    assert ticker.call_count == 3
+
+
+async def test_any_other_device_of_the_price_tracker_may_be_deleted(hass, price_api):
+    ticker, _ = price_api
+    entry = _price_entry(hass, [], price_group("crypto", BTC))
+    await _setup(hass, entry)
+    other = _add_device(hass, entry, "Bitpanda Price Tracker", "price_tracker")
+
+    assert await async_remove_config_entry_device(hass, entry, other)
+    await hass.async_block_till_done()
+
+    assert list(_group(entry, "crypto").data["assets"]) == [BTC["id"]]
+    assert ticker.call_count == 1
+
+
+async def test_the_portfolio_device_cannot_be_deleted(hass, portfolio_api):
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    assert not await async_remove_config_entry_device(
+        hass, entry, _own_device(hass, entry, "portfolio")
+    )
+
+
+async def test_the_wallet_of_a_held_asset_cannot_be_deleted(hass, portfolio_api):
+    """It would come straight back with the next refresh."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    calls = portfolio_api.call_count
+
+    assert not await async_remove_config_entry_device(
+        hass, entry, _own_device(hass, entry, "wallet", VSN)
+    )
+    await hass.async_block_till_done()
+    assert portfolio_api.call_count == calls
+
+
+async def test_a_holding_whose_balances_cannot_be_read_is_still_held(hass, portfolio_api):
+    portfolio_api.return_value = [
+        *portfolio_api.return_value,
+        {"asset_id": BTC["id"], "balance": {"value": "unreadable"}},
+    ]
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    wallet = _add_device(hass, entry, "Bitcoin (BTC) Wallet", "wallet", BTC)
+
+    assert not await async_remove_config_entry_device(hass, entry, wallet)
+
+
+async def test_the_wallet_of_an_asset_no_longer_held_may_be_deleted(hass, portfolio_api):
+    """Allowed, with one reload: the wallet manager starts afresh, so the
+    wallet comes back should the asset be bought again soon."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    wallet = _add_device(hass, entry, "Bitcoin (BTC) Wallet", "wallet", BTC)
+    calls = portfolio_api.call_count
+
+    assert await async_remove_config_entry_device(hass, entry, wallet)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert portfolio_api.call_count == calls + 1
+
+
+async def test_a_legacy_device_of_the_portfolio_may_be_deleted(hass, portfolio_api):
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    legacy = _add_device(hass, entry, "Bitpanda Wallets", "wallets")
+    calls = portfolio_api.call_count
+
+    assert await async_remove_config_entry_device(hass, entry, legacy)
+    await hass.async_block_till_done()
+    assert portfolio_api.call_count == calls
+
+
+async def test_a_portfolio_that_is_not_loaded_refuses_only_its_portfolio_device(hass):
+    entry = _portfolio_entry(hass)
+    portfolio = _add_device(hass, entry, "Portfolio", "portfolio")
+    wallet = _add_device(hass, entry, "Vision (VSN) Wallet", "wallet", VSN)
+    with patch.object(hass.config_entries, "async_schedule_reload") as reload:
+        assert not await async_remove_config_entry_device(hass, entry, portfolio)
+        assert await async_remove_config_entry_device(hass, entry, wallet)
+    reload.assert_not_called()
+
+
+async def test_the_device_page_deletes_a_price_device(hass, price_api, hass_ws_client):
+    ticker, _ = price_api
+    entry = _price_entry(hass, [], price_group("crypto", BTC, SOL))
+    await _setup(hass, entry)
+    device = _own_device(hass, entry, "price", SOL)
+
+    response = await _remove_through_the_device_page(hass, hass_ws_client, entry, device)
+    await hass.async_block_till_done()
+
+    assert response["success"]
+    assert list(_group(entry, "crypto").data["assets"]) == [BTC["id"]]
+    assert dr.async_get(hass).async_get(device.id) is None
+    assert er.async_get(hass).async_get("sensor.bitpanda_solana_sol_eur") is None
+    assert ticker.call_count == 3
+
+
+async def test_the_device_page_refuses_to_delete_a_held_wallet(
+    hass, portfolio_api, hass_ws_client
+):
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    wallet = _own_device(hass, entry, "wallet", VSN)
+
+    response = await _remove_through_the_device_page(hass, hass_ws_client, entry, wallet)
+
+    assert not response["success"]
+    assert response["error"]["message"] == "Failed to remove device entry, rejected by integration"
+    assert dr.async_get(hass).async_get(wallet.id) is not None

@@ -107,6 +107,14 @@ def test_parse_skips_an_unparsable_holding():
     assert data.unparsed_assets == {VSN}
 
 
+def test_an_unparsable_holding_still_counts_as_held():
+    """An unreadable entry is no sign of a sale."""
+    data = parse_portfolio(
+        [_asset_entry(VSN, "100.0", "25.0"), {"asset_id": BCPEUR, "balance": {"value": "x"}}]
+    )
+    assert data.held == {VSN, BCPEUR}
+
+
 def test_parse_keeps_a_holding_without_currency_balance_as_no_value():
     data = parse_portfolio([_asset_entry(VSN, "1.0", "1.0", value=None)])
     assert data.holdings[VSN].value is None

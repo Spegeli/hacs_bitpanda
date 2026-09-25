@@ -30,6 +30,14 @@ def _squash(text: str) -> str:
     return "".join(text.split()).casefold()
 
 
+def _uuid_after(prefix: str, text: str) -> str | None:
+    """The UUID that `text` consists of after `prefix`, or None."""
+    if not text.startswith(prefix):
+        return None
+    candidate = text[len(prefix):]
+    return candidate if _UUID.fullmatch(candidate) else None
+
+
 def asset_display_label(asset: dict) -> str:
     """ "Name (SYMBOL)", or just SYMBOL when the name only repeats it.
 
@@ -100,14 +108,6 @@ def total_entity_id(asset: dict) -> str:
     return f"{_ENTITY_ID_PREFIX}{asset_slug(asset)}_wallet_total"
 
 
-def _uuid_after(prefix: str, text: str) -> str | None:
-    """The UUID that `text` consists of after `prefix`, or None."""
-    if not text.startswith(prefix):
-        return None
-    candidate = text[len(prefix):]
-    return candidate if _UUID.fullmatch(candidate) else None
-
-
 def managed_asset_id(entry_id: str, unique_id: str) -> str | None:
     """The asset a wallet, staking or total unique_id of this entry names.
 
@@ -121,6 +121,11 @@ def managed_asset_id(entry_id: str, unique_id: str) -> str | None:
         if asset_id is not None:
             return asset_id
     return None
+
+
+def wallet_device_asset_id(entry_id: str, identifier: str) -> str | None:
+    """The asset a wallet device identifier of this entry names, or None."""
+    return _uuid_after(f"{entry_id}_wallet_", identifier)
 
 
 # --- Price Tracker devices ------------------------------------------------------

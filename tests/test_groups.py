@@ -9,6 +9,7 @@ from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.groups import (
     async_add_asset_to_group,
     async_group_titles,
+    async_remove_asset_from_group,
     group_of_category,
     groups_of_type,
     price_group_of_asset,
@@ -122,3 +123,25 @@ async def test_an_asset_added_to_a_group_is_saved_and_keeps_the_title(hass):
     }
     assert group.title == "My coins"
     listener.assert_called_once()
+
+
+async def test_an_asset_leaves_its_group_and_the_last_one_takes_the_group_along(hass):
+    """One change per removal, so the update listener reloads once."""
+    entry = _entry(hass, price_group("crypto", BTC, SOL), price_group("index", BCI5))
+    listener = AsyncMock()
+    entry.add_update_listener(listener)
+
+    async_remove_asset_from_group(hass, entry, SOL["id"])
+    await hass.async_block_till_done()
+    assert tracked_assets(entry) == {a["id"]: slim_asset(a) for a in (BTC, BCI5)}
+    assert listener.call_count == 1
+
+    async_remove_asset_from_group(hass, entry, BCI5["id"])
+    await hass.async_block_till_done()
+    assert [group.unique_id for group in groups_of_type(entry, "price_group")] == ["crypto"]
+    assert listener.call_count == 2
+
+    # Tracked nowhere: nothing changes.
+    async_remove_asset_from_group(hass, entry, GOLD["id"])
+    await hass.async_block_till_done()
+    assert listener.call_count == 2

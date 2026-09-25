@@ -20,6 +20,7 @@ from custom_components.bitpanda.naming import (
     staking_unique_id,
     total_entity_id,
     total_unique_id,
+    wallet_device_asset_id,
     wallet_device_identifier,
     wallet_entity_id,
     wallet_unique_id,
@@ -125,6 +126,16 @@ def test_price_device_asset_id_reads_only_price_devices_of_this_entry():
     assert price_device_asset_id("eid", wallet_device_identifier("eid", asset_id)) is None
     # The legacy "Bitpanda Price Tracker" device.
     assert price_device_asset_id("eid", "eid_price_tracker") is None
+
+
+def test_wallet_device_asset_id_reads_only_wallet_devices_of_this_entry():
+    asset_id = VISION["id"]
+    assert wallet_device_asset_id("eid", wallet_device_identifier("eid", asset_id)) == asset_id
+    assert wallet_device_asset_id("other", wallet_device_identifier("eid", asset_id)) is None
+    assert wallet_device_asset_id("eid", price_device_identifier("eid", asset_id)) is None
+    assert wallet_device_asset_id("eid", portfolio_device_identifier("eid")) is None
+    # The legacy "Bitpanda Wallets" device.
+    assert wallet_device_asset_id("eid", "eid_wallets") is None
 
 
 def test_legacy_default_object_ids():

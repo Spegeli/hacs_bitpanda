@@ -115,3 +115,20 @@ def async_add_asset_to_group(
         group,
         data={**group.data, CONF_ASSETS: {**group.data[CONF_ASSETS], record["id"]: record}},
     )
+
+
+@callback
+def async_remove_asset_from_group(hass: HomeAssistant, entry: ConfigEntry, asset_id: str) -> None:
+    """Stop tracking `asset_id`: it leaves its group, and a group left without
+    assets goes altogether. Exactly one change either way, so the update
+    listener reloads the entry once; nothing changes for an untracked asset."""
+    group = price_group_of_asset(entry, asset_id)
+    if group is None:
+        return
+    assets = {key: record for key, record in group.data[CONF_ASSETS].items() if key != asset_id}
+    if assets:
+        hass.config_entries.async_update_subentry(
+            entry, group, data={**group.data, CONF_ASSETS: assets}
+        )
+    else:
+        hass.config_entries.async_remove_subentry(entry, group.subentry_id)

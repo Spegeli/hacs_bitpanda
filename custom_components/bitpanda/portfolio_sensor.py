@@ -444,11 +444,10 @@ class PortfolioEntityManager:
                 self._staking.discard(asset_id)
                 self._remove(asset_id, ("staking", "total"), device=False)
 
-        # An asset in `unparsed_assets` is still held: /portfolio listed it,
-        # but its balances could not be read this refresh. It has no entry in
-        # `data.holdings`, yet an unreadable entry is no sign of a sale, so it
-        # counts as present and never as a miss.
-        held = set(data.holdings) | data.unparsed_assets
+        # An asset whose balances could not be read this refresh has no entry
+        # in `data.holdings`, yet counts as held (PortfolioData.held), never
+        # as a miss.
+        held = data.held
         for asset_id in held:
             self._misses.pop(asset_id, None)
         for asset_id in (set(registered) | self._wallets) - held:

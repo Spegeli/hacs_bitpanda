@@ -7,6 +7,7 @@ from time import monotonic
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from . import migration
@@ -24,8 +25,14 @@ from .const import (
     SUBENTRY_TYPE_PRICE_GROUP,
     entry_type,
 )
-from .groups import groups_of_type, tracked_assets
-from .naming import asset_display_label
+from .devices import device_identifier
+from .groups import async_remove_asset_from_group, groups_of_type, tracked_assets
+from .naming import (
+    asset_display_label,
+    portfolio_device_identifier,
+    price_device_asset_id,
+    wallet_device_asset_id,
+)
 from .portfolio_coordinator import (
     EarnCoordinator,
     HistoryCoordinator,
@@ -178,3 +185,36 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     ):
         hass.services.async_remove(DOMAIN, "refresh")
     return unload_ok
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, config_entry: ConfigEntry, device_entry: dr.DeviceEntry
+) -> bool:
+    """Whether "Delete" on a device page may remove `device_entry`.
+
+    Refused only where the device would come straight back: the Portfolio
+    device, and the wallet of an asset the Portfolio holds. Deleting a price
+    device stops tracking its asset.
+    """
+    identifier = device_identifier(device_entry)
+    if identifier is None:
+        return True
+    entry_id = config_entry.entry_id
+    if entry_type(config_entry) == ENTRY_TYPE_PRICE_TRACKER:
+        asset_id = price_device_asset_id(entry_id, identifier)
+        if asset_id is not None:
+            async_remove_asset_from_group(hass, config_entry, asset_id)
+        return True
+    if identifier == portfolio_device_identifier(entry_id):
+        return False
+    asset_id = wallet_device_asset_id(entry_id, identifier)
+    if asset_id is None or config_entry.state is not ConfigEntryState.LOADED:
+        return True
+    runtime: PortfolioRuntime = config_entry.runtime_data
+    if asset_id in runtime.portfolio.data.held:
+        return False
+    # The wallet manager keeps a wallet until its asset has been missing from
+    # several refreshes, and would not create it again if the asset were
+    # bought back in that time. A reload starts it afresh.
+    hass.config_entries.async_schedule_reload(entry_id)
+    return True

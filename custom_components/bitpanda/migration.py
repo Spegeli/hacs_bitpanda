@@ -526,13 +526,20 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         return False
 
-    # Registry before the version bump: an interrupted run repeats in full on
-    # the next start, and every step here is idempotent.
-    renames, skipped = rewrite_portfolio_registry(hass, entry, plan)
+    # plan_price_adoption only reads, so it can run before the import; the
+    # registry rewrite must not -- a failed import has to leave the entry,
+    # registry included, exactly as it was.
     items, price_renames, price_skipped = plan_price_adoption(hass, entry, plan)
     outcome = await _async_create_price_tracker(hass, entry, plan, items)
     if outcome == "failed":
         return False
+    # Registry rewrite, after the Price Tracker step and before the version
+    # bump: every step from here on is idempotent, so a migration whose
+    # version bump was never saved runs again in full on the next start. A
+    # hard kill after the bump *was* saved is not covered by this -- the
+    # entity registry itself saves later than config entries, and that
+    # residual gap is an accepted risk, not one this code closes.
+    renames, skipped = rewrite_portfolio_registry(hass, entry, plan)
     if outcome == "exists":
         price_renames = []
         price_skipped += [

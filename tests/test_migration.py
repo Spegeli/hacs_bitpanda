@@ -493,7 +493,12 @@ async def test_an_existing_price_tracker_does_not_block_the_migration(
 
 
 async def test_a_failed_price_tracker_import_changes_nothing(hass, legacy_api, no_setup):
-    entry = _v1_entry(hass, assets=["BTC"])
+    entry = _v1_entry(hass, assets=["BTC"], wallets=["cryptocoin_BTC"])
+    eid = entry.entry_id
+    device = _legacy_device(hass, entry, "wallets")
+    wallet = _legacy_entity(
+        hass, entry, f"{eid}_wallet_cryptocoin_BTC", "bitpanda_wallets_btc_wallet", device
+    )
     with patch.object(
         hass.config_entries.flow,
         "async_init",
@@ -503,8 +508,16 @@ async def test_a_failed_price_tracker_import_changes_nothing(hass, legacy_api, n
     ):
         assert not await async_migrate_entry(hass, entry)
     assert entry.version == 1
-    assert dict(entry.options) == {"tracked_assets": ["BTC"], "tracked_wallets": []}
+    assert dict(entry.options) == {"tracked_assets": ["BTC"], "tracked_wallets": ["cryptocoin_BTC"]}
     assert _price_trackers(hass) == []
+
+    # The registry rewrite must not have run either: a failed import leaves
+    # the whole entry -- registry included -- exactly as it was.
+    reg_entry = er.async_get(hass).async_get(wallet)
+    assert reg_entry.unique_id == f"{eid}_wallet_cryptocoin_BTC"
+    assert reg_entry.entity_id == "sensor.bitpanda_wallets_btc_wallet"
+    assert reg_entry.device_id == device
+    assert dr.async_get(hass).async_get(device) is not None
 
 
 async def test_the_notification_asks_for_a_new_key(hass, legacy_api, no_setup, notify):

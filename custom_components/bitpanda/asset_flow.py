@@ -1,7 +1,8 @@
 """The "Add price tracker" config subentry flow of the Price Tracker.
 
 Category first, then one searchable pick from that category's catalogue --
-public data, fetched without a key and cached for 24 hours.
+public data, fetched without a key and cached for 24 hours. The asset joins
+the group of its asset type, which the flow creates when there is none yet.
 """
 from __future__ import annotations
 
@@ -20,8 +21,15 @@ from homeassistant.helpers.selector import (
 from homeassistant.util import dt as dt_util
 
 from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
-from .assets import ASSET_CATEGORY_FILTERS, asset_label, slim_asset
-from .const import CONF_ASSET, DOMAIN
+from .assets import ASSET_CATEGORY_FILTERS, asset_category, asset_label, slim_asset
+from .const import DOMAIN, SUBENTRY_TYPE_PRICE_GROUP
+from .groups import (
+    async_add_asset_to_group,
+    async_group_titles,
+    group_of_category,
+    price_group_data,
+    tracked_assets,
+)
 from .naming import asset_display_label
 
 # The stock listing alone is ~103 requests; a day-old catalogue is current
@@ -66,20 +74,23 @@ async def async_category_listing(
     return assets
 
 
-class AssetSubentryFlow(ConfigSubentryFlow):
-    """Track one more asset: one subentry, one device, one sensor per currency."""
+class PriceTrackerSubentryFlow(ConfigSubentryFlow):
+    """Track one more asset: it joins the group of its asset type (a
+    price_group subentry), or starts that group. One device per asset, one
+    sensor per asset and currency."""
 
     def __init__(self) -> None:
         self._category: str | None = None
 
     def _tracked_ids(self) -> set[str]:
-        # Not ConfigSubentryFlow._get_entry(): that raises UnknownEntry when the
-        # entry was removed while this dialog was open. Looked up here, a
-        # removed entry simply tracks nothing.
+        """Assets tracked in any group.
+
+        Not ConfigSubentryFlow._get_entry(): that raises UnknownEntry when the
+        entry was removed while this dialog was open. Looked up here, a
+        removed entry simply tracks nothing.
+        """
         entry = self.hass.config_entries.async_get_entry(self.handler[0])
-        if entry is None:
-            return set()
-        return {sub.unique_id for sub in entry.subentries.values() if sub.unique_id}
+        return set() if entry is None else set(tracked_assets(entry))
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -143,10 +154,10 @@ class AssetSubentryFlow(ConfigSubentryFlow):
             self._category = None
             return await self.async_step_user()
 
-        tracked = self._tracked_ids()
         catalogue, error = await self._async_listing()
         if error is not None:
             return self._show_assets([], error)
+        tracked = self._tracked_ids()
         options = sorted(
             (
                 {"value": asset["id"], "label": asset_label(asset)}
@@ -162,12 +173,37 @@ class AssetSubentryFlow(ConfigSubentryFlow):
                 return self._show_assets(options, "unknown_asset")
             if chosen["id"] in tracked:
                 return self.async_abort(reason="already_configured")
-            return self.async_create_entry(
-                title=asset_display_label(chosen),
-                data={CONF_ASSET: slim_asset(chosen)},
-                unique_id=chosen["id"],
-            )
+            return await self._async_track(slim_asset(chosen))
 
         if not options:
             return self._show_assets([], "no_assets_available")
         return self._show_assets(options, None)
+
+    async def _async_track(self, record: dict) -> SubentryFlowResult:
+        """Add `record` to the group of its asset type, or start that group.
+
+        Joining ends the dialog with a message naming the group: no subentry
+        is created, so Home Assistant's own confirmation would not fit.
+        """
+        category = asset_category(record)
+        titles = await async_group_titles(self.hass)
+        # Looked up after the last await, so no other dialog can start the
+        # same group before this step ends. Raises UnknownEntry if the Price
+        # Tracker was removed while the dialog was open, as Home Assistant
+        # itself does when a group is created then.
+        entry = self._get_entry()
+        group = group_of_category(entry, SUBENTRY_TYPE_PRICE_GROUP, category)
+        if group is None:
+            return self.async_create_entry(
+                title=titles[category],
+                data=price_group_data(category, [record]),
+                unique_id=category,
+            )
+        async_add_asset_to_group(self.hass, entry, group, record)
+        return self.async_abort(
+            reason="asset_added",
+            description_placeholders={
+                "asset": asset_display_label(record),
+                "group": group.title,
+            },
+        )

@@ -10,6 +10,8 @@ from custom_components.bitpanda.diagnostics import async_get_config_entry_diagno
 from custom_components.bitpanda.ecb import EcbRates
 from custom_components.bitpanda.portfolio_model import EarnData, Holding, PortfolioData
 
+from tests.conftest import price_group
+
 _SECRET = "totally-secret-diagnostics-key"
 
 
@@ -73,6 +75,14 @@ async def test_portfolio_that_is_not_loaded_reports_its_config_only(hass):
     }
 
 
+_BTC = {"id": "uuid-btc", "symbol": "BTC", "name": "Bitcoin", "type": "cryptocoin",
+        "group": "coin"}
+_SOL = {"id": "uuid-sol", "symbol": "SOL", "name": "Solana", "type": "cryptocoin",
+        "group": "coin"}
+_GOLD = {"id": "uuid-gold", "symbol": "XAU", "name": "Gold", "type": "commodity",
+         "group": "metal"}
+
+
 def _price_entry(hass, *, extra, ecb) -> MockConfigEntry:
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -80,12 +90,17 @@ def _price_entry(hass, *, extra, ecb) -> MockConfigEntry:
         data={"entry_type": "price_tracker"},
         options={"extra_currencies": extra},
         subentries_data=[
+            price_group("metal", _GOLD, title="My metals"),
             ConfigSubentryData(
-                data={"asset": {"id": "uuid-btc", "symbol": "BTC", "name": "Bitcoin"}},
-                subentry_type="asset",
-                title="Bitcoin (BTC)",
-                unique_id="uuid-btc",
-            )
+                data={
+                    "category": "crypto",
+                    # Stored out of order, and with a field added later.
+                    "assets": {"uuid-sol": {**_SOL, "future_field": "x"}, "uuid-btc": _BTC},
+                },
+                subentry_type="price_group",
+                title="Cryptocurrencies",
+                unique_id="crypto",
+            ),
         ],
     )
     entry.add_to_hass(hass)
@@ -96,12 +111,15 @@ def _price_entry(hass, *, extra, ecb) -> MockConfigEntry:
     return entry
 
 
-async def test_price_tracker_diagnostics(hass):
+async def test_price_tracker_diagnostics_list_the_groups(hass):
     ecb = _Coordinator(EcbRates(date="2026-09-24", rates={"USD": 1.1}))
     result = await async_get_config_entry_diagnostics(hass, _price_entry(hass, extra=["USD"], ecb=ecb))
     assert result == {
         "service": "price_tracker",
-        "assets": ["BTC (uuid-btc)"],
+        "groups": [
+            {"category": "crypto", "title": "Cryptocurrencies", "assets": [_BTC, _SOL]},
+            {"category": "metal", "title": "My metals", "assets": [_GOLD]},
+        ],
         "currencies": ["EUR", "USD"],
         "tickers": {"last_update_success": True, "priced_assets": 1,
                     "update_interval_seconds": 60.0},
@@ -112,3 +130,19 @@ async def test_price_tracker_diagnostics(hass):
 async def test_price_tracker_without_extra_currencies_has_no_ecb(hass):
     result = await async_get_config_entry_diagnostics(hass, _price_entry(hass, extra=[], ecb=None))
     assert result["ecb"] is None
+
+
+async def test_price_tracker_that_is_not_loaded_reports_its_config_only(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=3,
+        data={"entry_type": "price_tracker"},
+        options={"extra_currencies": []},
+        subentries_data=[price_group("metal", _GOLD, title="Precious metals")],
+    )
+    entry.add_to_hass(hass)
+    assert await async_get_config_entry_diagnostics(hass, entry) == {
+        "service": "price_tracker",
+        "groups": [{"category": "metal", "title": "Precious metals", "assets": [_GOLD]}],
+        "currencies": ["EUR"],
+    }

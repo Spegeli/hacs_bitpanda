@@ -80,11 +80,11 @@
     }
   },
   "config_subentries": {
-    "asset": {
+    "price_group": {
       "initiate_flow": {
         "user": "Add price tracker"
       },
-      "entry_type": "Price tracker",
+      "entry_type": "Price tracker group",
       "step": {
         "user": {
           "title": "Add price tracker",
@@ -108,7 +108,8 @@
         "cannot_connect": "Could not reach Bitpanda. Try again later."
       },
       "abort": {
-        "already_configured": "This asset is already tracked."
+        "already_configured": "This asset is already tracked.",
+        "asset_added": "{asset} is now tracked in the group {group}."
       }
     }
   },

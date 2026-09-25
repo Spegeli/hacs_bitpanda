@@ -46,6 +46,7 @@ from .const import (
     SUPPORTED_CURRENCIES,
 )
 from .devices import find_entry_device
+from .groups import price_group_of_asset
 from .naming import (
     LEGACY_PORTFOLIO_OBJECT_ID,
     is_default_entity_id,
@@ -416,14 +417,15 @@ def async_adopt_legacy_prices(hass: HomeAssistant, entry: ConfigEntry) -> None:
     Runs first in the Price Tracker's setup, before it creates any entity:
     an adopted entity must already carry its new unique_id when the new
     sensor is added, or Home Assistant would create a "_2" twin beside it.
+    Each entity moves into the group that tracks its asset; an entity whose
+    asset no group tracks stays where it is.
     """
     adopt = entry.data.get(CONF_LEGACY_ADOPT) or {}
     ent_reg = er.async_get(hass)
-    subentry_ids = {sub.unique_id: sub.subentry_id for sub in entry.subentries.values()}
     for item in adopt.get("entities", []):
         entity_id = ent_reg.async_get_entity_id("sensor", DOMAIN, item["unique_id"])
-        subentry_id = subentry_ids.get(item["asset_id"])
-        if entity_id is None or subentry_id is None:
+        group = price_group_of_asset(entry, item["asset_id"])
+        if entity_id is None or group is None:
             continue
         new_unique_id = price_unique_id(entry.entry_id, item["asset_id"], item["currency"])
         if ent_reg.async_get_entity_id("sensor", DOMAIN, new_unique_id) is not None:
@@ -434,7 +436,7 @@ def async_adopt_legacy_prices(hass: HomeAssistant, entry: ConfigEntry) -> None:
             continue
         updates: dict[str, Any] = {
             "config_entry_id": entry.entry_id,
-            "config_subentry_id": subentry_id,
+            "config_subentry_id": group.subentry_id,
             "device_id": None,
             "new_unique_id": new_unique_id,
         }

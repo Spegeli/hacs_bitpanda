@@ -60,9 +60,12 @@ PRICE_TRACKER_TITLE = "Bitpanda Price Tracker"
 # Price Tracker options: currencies converted from EUR in addition to EUR.
 CONF_EXTRA_CURRENCIES = "extra_currencies"
 
-# One config subentry per tracked asset; its data holds the slim asset record.
-SUBENTRY_TYPE_ASSET = "asset"
-CONF_ASSET = "asset"
+# The Price Tracker keeps its assets in groups by asset type (groups.py): one
+# config subentry per category, keyed by the category, whose data holds the
+# category and the slim records of its assets by asset id.
+SUBENTRY_TYPE_PRICE_GROUP = "price_group"
+CONF_CATEGORY = "category"
+CONF_ASSETS = "assets"
 
 # Set by the version 1 migration on the Price Tracker entry it creates: the
 # legacy price entities that entry adopts on its first setup.

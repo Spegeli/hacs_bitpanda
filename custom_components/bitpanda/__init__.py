@@ -14,16 +14,17 @@ from .api import BitpandaApiClient
 from .assets import AssetDirectory
 from .const import (
     CONF_API_KEY,
-    CONF_ASSET,
+    CONF_ASSETS,
     CONF_CURRENCY_ID,
     CONF_EXTRA_CURRENCIES,
     CONF_LEGACY_ADOPT,
     DOMAIN,
     ENTRY_TYPE_PRICE_TRACKER,
     REFRESH_MIN_COOLDOWN,
-    SUBENTRY_TYPE_ASSET,
+    SUBENTRY_TYPE_PRICE_GROUP,
     entry_type,
 )
+from .groups import groups_of_type, tracked_assets
 from .naming import asset_display_label
 from .portfolio_coordinator import (
     EarnCoordinator,
@@ -92,11 +93,15 @@ async def _async_start_price_tracker(
     if entry.data.get(CONF_LEGACY_ADOPT):
         # Before any entity exists -- see migration.async_adopt_legacy_prices.
         migration.async_adopt_legacy_prices(hass, entry)
+    # A group that tracks nothing shows up empty on the integration page. No
+    # update listener exists yet, so dropping it triggers no reload.
+    for group in groups_of_type(entry, SUBENTRY_TYPE_PRICE_GROUP):
+        if not group.data[CONF_ASSETS]:
+            hass.config_entries.async_remove_subentry(entry, group.subentry_id)
     session = async_get_clientsession(hass)
     tracked = {
-        subentry.data[CONF_ASSET]["id"]: asset_display_label(subentry.data[CONF_ASSET])
-        for subentry in entry.subentries.values()
-        if subentry.subentry_type == SUBENTRY_TYPE_ASSET
+        asset_id: asset_display_label(record)
+        for asset_id, record in tracked_assets(entry).items()
     }
     tickers = TickerCoordinator(hass, entry, BitpandaApiClient(None, session), tracked)
     ecb = (

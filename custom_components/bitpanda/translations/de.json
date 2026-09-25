@@ -80,11 +80,11 @@
     }
   },
   "config_subentries": {
-    "asset": {
+    "price_group": {
       "initiate_flow": {
         "user": "Preis-Tracker hinzufügen"
       },
-      "entry_type": "Preis-Tracker",
+      "entry_type": "Preis-Tracker-Gruppe",
       "step": {
         "user": {
           "title": "Preis-Tracker hinzufügen",
@@ -108,7 +108,8 @@
         "cannot_connect": "Bitpanda ist nicht erreichbar. Versuche es später erneut."
       },
       "abort": {
-        "already_configured": "Dieses Asset wird bereits verfolgt."
+        "already_configured": "Dieses Asset wird bereits verfolgt.",
+        "asset_added": "{asset} wird jetzt in der Gruppe {group} verfolgt."
       }
     }
   },

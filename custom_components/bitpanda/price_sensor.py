@@ -13,7 +13,7 @@ from typing import Any
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -21,17 +21,20 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CHANGE_24H_UPDATE_INTERVAL,
-    CONF_ASSET,
+    CONF_ASSETS,
     CONF_EXTRA_CURRENCIES,
     DOMAIN,
-    SUBENTRY_TYPE_ASSET,
+    SUBENTRY_TYPE_PRICE_GROUP,
 )
+from .devices import device_identifier
+from .groups import groups_of_type, tracked_assets
 from .naming import (
     asset_display_label,
+    price_device_asset_id,
     price_device_identifier,
     price_entity_id,
+    price_key,
     price_unique_id,
-    price_unique_id_currency,
 )
 from .price_coordinator import PriceTrackerRuntime, convert_price
 
@@ -192,33 +195,45 @@ class PriceSensor(CoordinatorEntity, SensorEntity):
         return attrs
 
 
+def _remove_untracked(hass: HomeAssistant, entry: ConfigEntry, currencies: list[str]) -> None:
+    """Remove the price sensors of a currency or asset no longer tracked, and
+    the devices of assets no longer tracked.
+
+    Their history is kept: tracking the asset or currency again brings back
+    the same entity IDs. Only UUID-based IDs of this entry are touched.
+    """
+    tracked = tracked_assets(entry)
+    ent_reg = er.async_get(hass)
+    for reg_entry in er.async_entries_for_config_entry(ent_reg, entry.entry_id):
+        key = price_key(entry.entry_id, reg_entry.unique_id)
+        if key is not None and (key[0] not in tracked or key[1] not in currencies):
+            ent_reg.async_remove(reg_entry.entity_id)
+    dev_reg = dr.async_get(hass)
+    for device in dr.async_entries_for_config_entry(dev_reg, entry.entry_id):
+        identifier = device_identifier(device)
+        if identifier is None:
+            continue
+        asset_id = price_device_asset_id(entry.entry_id, identifier)
+        if asset_id is not None and asset_id not in tracked:
+            dev_reg.async_remove_device(device.id)
+
+
 async def async_setup_price_entities(
     hass: HomeAssistant, entry: ConfigEntry, add_entities: Callable[..., None]
 ) -> None:
-    """One sensor per tracked asset and currency, each bound to its subentry.
+    """One sensor per tracked asset and currency, bound to the asset's group.
 
-    Sensors of a currency no longer configured are removed first. Their
-    history is kept: re-adding the currency brings back the same entity ID.
-    Sensors of a removed asset are cleared by Home Assistant together with
-    its subentry.
+    Whatever is no longer tracked is removed first (_remove_untracked).
     """
     runtime: PriceTrackerRuntime = entry.runtime_data
     currencies = tracked_currencies(entry)
-
-    ent_reg = er.async_get(hass)
-    for reg_entry in er.async_entries_for_config_entry(ent_reg, entry.entry_id):
-        currency = price_unique_id_currency(entry.entry_id, reg_entry.unique_id)
-        if currency is not None and currency not in currencies:
-            ent_reg.async_remove(reg_entry.entity_id)
-
-    for subentry in entry.subentries.values():
-        if subentry.subentry_type != SUBENTRY_TYPE_ASSET:
-            continue
-        asset = subentry.data[CONF_ASSET]
+    _remove_untracked(hass, entry, currencies)
+    for group in groups_of_type(entry, SUBENTRY_TYPE_PRICE_GROUP):
         add_entities(
             [
                 PriceSensor(runtime.tickers, runtime.ecb, entry.entry_id, asset, currency)
+                for asset in group.data[CONF_ASSETS].values()
                 for currency in currencies
             ],
-            config_subentry_id=subentry.subentry_id,
+            config_subentry_id=group.subentry_id,
         )

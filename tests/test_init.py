@@ -17,7 +17,7 @@ from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.ecb import EcbRates
 
-from tests.conftest import load_fixture
+from tests.conftest import load_fixture, price_group
 
 _CLIENT = "custom_components.bitpanda.api.BitpandaApiClient."
 _EUR_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
@@ -31,6 +31,7 @@ def _fixture(symbol: str, type_: str | None = None) -> dict:
 
 
 VSN, BTC, SOL = _fixture("VSN"), _fixture("BTC"), _fixture("SOL")
+GOLD = _fixture("XAU", "commodity")
 
 
 def _lookup(**kwargs):
@@ -78,18 +79,25 @@ def _portfolio_entry(hass) -> MockConfigEntry:
     return entry
 
 
-def _price_entry(hass, extra, assets) -> MockConfigEntry:
+def _price_entry(hass, extra, *groups: ConfigSubentryData) -> MockConfigEntry:
     entry = MockConfigEntry(
         domain=DOMAIN, version=3, unique_id="price_tracker", title="Bitpanda Price Tracker",
         data={"entry_type": "price_tracker"}, options={"extra_currencies": extra},
-        subentries_data=[
-            ConfigSubentryData(data={"asset": slim_asset(a)}, subentry_type="asset",
-                               title=a["name"], unique_id=a["id"])
-            for a in assets
-        ],
+        subentries_data=list(groups),
     )
     entry.add_to_hass(hass)
     return entry
+
+
+def _group(entry, category: str) -> ConfigSubentry:
+    return next(sub for sub in entry.subentries.values() if sub.unique_id == category)
+
+
+def _set_group_assets(hass, entry, category: str, *assets: dict) -> None:
+    group = _group(entry, category)
+    hass.config_entries.async_update_subentry(
+        entry, group, data={**group.data, "assets": {a["id"]: slim_asset(a) for a in assets}}
+    )
 
 
 async def _setup(hass, entry) -> None:
@@ -206,7 +214,7 @@ async def test_reauth_with_the_same_key_revives_a_portfolio_stopped_by_a_401(
 
 
 async def test_price_tracker_setup_creates_one_sensor_per_asset_and_currency(hass, price_api):
-    entry = _price_entry(hass, ["USD"], [BTC])
+    entry = _price_entry(hass, ["USD"], price_group("crypto", BTC))
     await _setup(hass, entry)
     assert _value(hass, "sensor.bitpanda_bitcoin_btc_eur") == 100.0
     assert _value(hass, "sensor.bitpanda_bitcoin_btc_usd") == 200.0
@@ -214,35 +222,80 @@ async def test_price_tracker_setup_creates_one_sensor_per_asset_and_currency(has
     assert usd.attributes["friendly_name"] == "Bitcoin (BTC) USD"
     assert usd.attributes["rate_source"] == "ECB"
     registry_entry = er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_usd")
-    assert registry_entry.config_subentry_id == next(iter(entry.subentries))
+    assert registry_entry.config_subentry_id == _group(entry, "crypto").subentry_id
     device = dr.async_get(hass).async_get(registry_entry.device_id)
     assert device.name == "Bitcoin (BTC)"
 
 
+async def test_the_price_tracker_polls_the_assets_of_every_group(hass, price_api):
+    ticker, _ = price_api
+    entry = _price_entry(hass, [], price_group("crypto", BTC, SOL), price_group("metal", GOLD))
+    await _setup(hass, entry)
+    assert sorted(call.args[0] for call in ticker.call_args_list) == sorted(
+        a["id"] for a in (BTC, SOL, GOLD)
+    )
+    assert _value(hass, "sensor.bitpanda_gold_xau_eur") == 100.0
+
+
+async def test_a_group_without_assets_is_dropped_at_setup(hass, price_api):
+    ticker, _ = price_api
+    entry = _price_entry(hass, [], price_group("crypto", BTC), price_group("metal"))
+    await _setup(hass, entry)
+    assert [sub.unique_id for sub in entry.subentries.values()] == ["crypto"]
+    # Dropped before the update listener exists: no reload followed.
+    assert ticker.call_count == 1
+
+
 async def test_without_extra_currencies_the_ecb_is_never_asked(hass, price_api):
     _, ecb = price_api
-    await _setup(hass, _price_entry(hass, [], [BTC]))
+    await _setup(hass, _price_entry(hass, [], price_group("crypto", BTC)))
     ecb.assert_not_called()
 
 
-async def test_a_new_asset_subentry_gets_its_sensors_after_the_reload(hass, price_api):
-    entry = _price_entry(hass, [], [BTC])
+async def test_a_new_group_gets_its_sensors_after_the_reload(hass, price_api):
+    entry = _price_entry(hass, [], price_group("crypto", BTC))
     await _setup(hass, entry)
     hass.config_entries.async_add_subentry(
         entry,
         ConfigSubentry(
-            data=MappingProxyType({"asset": slim_asset(SOL)}),
-            subentry_type="asset",
-            title="Solana (SOL)",
-            unique_id=SOL["id"],
+            data=MappingProxyType({"category": "metal", "assets": {GOLD["id"]: slim_asset(GOLD)}}),
+            subentry_type="price_group",
+            title="Precious metals",
+            unique_id="metal",
         ),
     )
+    await hass.async_block_till_done()
+    assert _value(hass, "sensor.bitpanda_gold_xau_eur") == 100.0
+
+
+async def test_an_asset_added_to_a_group_gets_its_sensors_after_the_reload(hass, price_api):
+    entry = _price_entry(hass, [], price_group("crypto", BTC))
+    await _setup(hass, entry)
+    _set_group_assets(hass, entry, "crypto", BTC, SOL)
+    await hass.async_block_till_done()
+    assert _value(hass, "sensor.bitpanda_solana_sol_eur") == 100.0
+    registry_entry = er.async_get(hass).async_get("sensor.bitpanda_solana_sol_eur")
+    assert registry_entry.config_subentry_id == _group(entry, "crypto").subentry_id
+
+
+async def test_an_asset_tracked_again_gets_its_entity_ids_back(hass, price_api):
+    """Leaving its group removes the asset's sensors and device on the
+    reload; tracking it again brings the same entity IDs back."""
+    entry = _price_entry(hass, [], price_group("crypto", BTC, SOL))
+    await _setup(hass, entry)
+    _set_group_assets(hass, entry, "crypto", BTC)
+    await hass.async_block_till_done()
+    assert er.async_get(hass).async_get("sensor.bitpanda_solana_sol_eur") is None
+    devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    assert [device.name for device in devices] == ["Bitcoin (BTC)"]
+
+    _set_group_assets(hass, entry, "crypto", BTC, SOL)
     await hass.async_block_till_done()
     assert _value(hass, "sensor.bitpanda_solana_sol_eur") == 100.0
 
 
 async def test_dropping_a_currency_removes_its_sensors_on_reload(hass, price_api):
-    entry = _price_entry(hass, ["USD"], [BTC])
+    entry = _price_entry(hass, ["USD"], price_group("crypto", BTC))
     await _setup(hass, entry)
     hass.config_entries.async_update_entry(entry, options={"extra_currencies": []})
     await hass.async_block_till_done()
@@ -251,7 +304,7 @@ async def test_dropping_a_currency_removes_its_sensors_on_reload(hass, price_api
 
 
 async def test_the_refresh_service_lives_while_any_entry_is_loaded(hass, portfolio_api, price_api):
-    portfolio, tracker = _portfolio_entry(hass), _price_entry(hass, [], [BTC])
+    portfolio, tracker = _portfolio_entry(hass), _price_entry(hass, [], price_group("crypto", BTC))
     await _setup(hass, portfolio)
     await _setup(hass, tracker)
     assert hass.services.has_service(DOMAIN, "refresh")

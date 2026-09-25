@@ -3,15 +3,16 @@ from datetime import timedelta
 from unittest.mock import ANY, AsyncMock, patch
 
 from homeassistant import data_entry_flow
-from homeassistant.config_entries import ConfigSubentryData
+from homeassistant.config_entries import ConfigSubentryData, UnknownEntry
 from homeassistant.util import dt as dt_util
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
 from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.const import DOMAIN
 
-from tests.conftest import load_fixture
+from tests.conftest import load_fixture, price_group
 
 _LIST = "custom_components.bitpanda.asset_flow.BitpandaApiClient.async_list_assets"
 _FLOW = data_entry_flow.FlowResultType
@@ -28,35 +29,44 @@ def _metals() -> list[dict]:
     return [a for a in load_fixture("assets-sample.json") if a.get("group") == "metal"]
 
 
-def _entry(hass, tracked=()) -> MockConfigEntry:
+GOLD, SILVER = _fixture("XAU", "commodity"), _fixture("XAG")
+
+
+def _entry(hass, *groups: ConfigSubentryData) -> MockConfigEntry:
     entry = MockConfigEntry(
         domain=DOMAIN,
         version=3,
         unique_id="price_tracker",
         data={"entry_type": "price_tracker"},
         options={"extra_currencies": []},
-        subentries_data=[
-            ConfigSubentryData(
-                data={"asset": slim_asset(a)},
-                subentry_type="asset",
-                title=a["name"],
-                unique_id=a["id"],
-            )
-            for a in tracked
-        ],
+        subentries_data=list(groups),
     )
     entry.add_to_hass(hass)
     return entry
 
 
-async def _pick_category(hass, entry, category="metal"):
+async def _start(hass, entry):
     result = await hass.config_entries.subentries.async_init(
-        (entry.entry_id, "asset"), context={"source": "user"}
+        (entry.entry_id, "price_group"), context={"source": "user"}
     )
     assert result["step_id"] == "user"
+    return result
+
+
+async def _pick_category(hass, entry, category="metal"):
+    result = await _start(hass, entry)
     return await hass.config_entries.subentries.async_configure(
         result["flow_id"], {"category": category}
     )
+
+
+async def _pick_metal(hass, entry, asset: dict):
+    """Precious metals, then `asset`."""
+    with patch(_LIST, AsyncMock(return_value=_metals())):
+        result = await _pick_category(hass, entry)
+        return await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {"asset": asset["id"]}
+        )
 
 
 def _options(result) -> list[dict]:
@@ -73,14 +83,16 @@ async def test_the_portfolio_offers_no_subentries(hass):
     assert BitpandaConfigFlow.async_get_supported_subentry_types(portfolio) == {}
 
 
+# --- Listing ---------------------------------------------------------------------
+
+
 async def test_listing_is_one_searchable_single_pick_minus_tracked_assets(hass):
-    gold = _fixture("XAU", "commodity")
-    entry = _entry(hass, tracked=[gold])
+    entry = _entry(hass, price_group("metal", GOLD))
     with patch(_LIST, AsyncMock(return_value=_metals())):
         result = await _pick_category(hass, entry)
     assert result["step_id"] == "asset"
     values = {option["value"] for option in _options(result)}
-    assert gold["id"] not in values
+    assert GOLD["id"] not in values
     assert len(values) == 3
     for marker, validator in result["data_schema"].schema.items():
         if marker == "asset":
@@ -88,42 +100,17 @@ async def test_listing_is_one_searchable_single_pick_minus_tracked_assets(hass):
             assert validator.config.get("multiple", False) is False
 
 
-async def test_picking_an_asset_creates_its_subentry(hass):
-    entry = _entry(hass)
-    silver = _fixture("XAG")
+async def test_an_asset_tracked_in_any_group_is_left_out_of_the_listing(hass):
+    """Gold filed under another group -- as if the catalogue had re-typed it
+    since -- is tracked all the same."""
+    entry = _entry(hass, price_group("other", GOLD))
     with patch(_LIST, AsyncMock(return_value=_metals())):
         result = await _pick_category(hass, entry)
-        result = await hass.config_entries.subentries.async_configure(
-            result["flow_id"], {"asset": silver["id"]}
-        )
-    assert result["type"] == _FLOW.CREATE_ENTRY
-    subentry = next(iter(entry.subentries.values()))
-    assert subentry.title == "Silver (XAG)"
-    assert subentry.unique_id == silver["id"]
-    assert dict(subentry.data) == {"asset": slim_asset(silver)}
-
-
-async def test_an_empty_submit_goes_back_to_the_categories(hass):
-    entry = _entry(hass)
-    with patch(_LIST, AsyncMock(return_value=_metals())):
-        result = await _pick_category(hass, entry)
-        result = await hass.config_entries.subentries.async_configure(result["flow_id"], {})
-    assert result["step_id"] == "user"
-
-
-async def test_a_typed_value_that_is_no_asset_is_rejected(hass):
-    entry = _entry(hass)
-    with patch(_LIST, AsyncMock(return_value=_metals())):
-        result = await _pick_category(hass, entry)
-        result = await hass.config_entries.subentries.async_configure(
-            result["flow_id"], {"asset": "gold please"}
-        )
-    assert result["step_id"] == "asset"
-    assert result["errors"]["base"] == "unknown_asset"
+    assert GOLD["id"] not in {option["value"] for option in _options(result)}
 
 
 async def test_a_fully_tracked_category_says_so(hass):
-    entry = _entry(hass, tracked=_metals())
+    entry = _entry(hass, price_group("metal", *_metals()))
     with patch(_LIST, AsyncMock(return_value=_metals())):
         result = await _pick_category(hass, entry)
     assert result["errors"]["base"] == "no_assets_available"
@@ -185,3 +172,90 @@ async def test_expired_listings_are_dropped_not_kept(hass):
         await _pick_category(hass, _entry(hass))
     assert "stock" not in store
     assert "metal" in store
+
+
+# --- Picking ---------------------------------------------------------------------
+
+
+async def test_the_first_asset_of_a_type_starts_its_group(hass):
+    entry = _entry(hass)
+    result = await _pick_metal(hass, entry, SILVER)
+    assert result["type"] == _FLOW.CREATE_ENTRY
+    [group] = entry.subentries.values()
+    assert group.subentry_type == "price_group"
+    assert group.unique_id == "metal"
+    assert group.title == "Precious metals"
+    assert dict(group.data) == {"category": "metal", "assets": {SILVER["id"]: slim_asset(SILVER)}}
+
+
+async def test_a_new_group_is_titled_in_the_language_home_assistant_runs_in(hass):
+    hass.config.language = "de"
+    entry = _entry(hass)
+    await _pick_metal(hass, entry, SILVER)
+    [group] = entry.subentries.values()
+    assert group.title == "Edelmetalle"
+
+
+async def test_an_asset_joins_the_group_of_its_type(hass):
+    """The group keeps the title the user gave it, and the dialog names it."""
+    entry = _entry(
+        hass, price_group("crypto", _fixture("BTC")), price_group("metal", GOLD, title="My metals")
+    )
+    result = await _pick_metal(hass, entry, SILVER)
+    assert result["type"] == _FLOW.ABORT
+    assert result["reason"] == "asset_added"
+    assert result["description_placeholders"] == {"asset": "Silver (XAG)", "group": "My metals"}
+    groups = {group.unique_id: group for group in entry.subentries.values()}
+    assert len(groups) == 2
+    assert groups["metal"].title == "My metals"
+    assert dict(groups["metal"].data) == {
+        "category": "metal",
+        "assets": {GOLD["id"]: slim_asset(GOLD), SILVER["id"]: slim_asset(SILVER)},
+    }
+
+
+async def test_a_tracked_asset_typed_in_is_not_added_twice(hass):
+    """The listing leaves tracked assets out; a typed-in id still arrives."""
+    entry = _entry(hass, price_group("other", GOLD))
+    result = await _pick_metal(hass, entry, GOLD)
+    assert result["type"] == _FLOW.ABORT
+    assert result["reason"] == "already_configured"
+    [group] = entry.subentries.values()
+    assert list(group.data["assets"]) == [GOLD["id"]]
+
+
+async def test_an_empty_submit_goes_back_to_the_categories(hass):
+    entry = _entry(hass)
+    with patch(_LIST, AsyncMock(return_value=_metals())):
+        result = await _pick_category(hass, entry)
+        result = await hass.config_entries.subentries.async_configure(result["flow_id"], {})
+    assert result["step_id"] == "user"
+
+
+async def test_a_typed_value_that_is_no_asset_is_rejected(hass):
+    entry = _entry(hass)
+    with patch(_LIST, AsyncMock(return_value=_metals())):
+        result = await _pick_category(hass, entry)
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {"asset": "gold please"}
+        )
+    assert result["step_id"] == "asset"
+    assert result["errors"]["base"] == "unknown_asset"
+
+
+async def test_a_price_tracker_removed_while_the_dialog_is_open(hass):
+    """The listing still opens; only the final pick ends in Home Assistant's
+    own UnknownEntry."""
+    entry = _entry(hass)
+    result = await _start(hass, entry)
+    await hass.config_entries.async_remove(entry.entry_id)
+    with patch(_LIST, AsyncMock(return_value=_metals())):
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {"category": "metal"}
+        )
+        assert result["step_id"] == "asset"
+        assert len(_options(result)) == 4
+        with pytest.raises(UnknownEntry):
+            await hass.config_entries.subentries.async_configure(
+                result["flow_id"], {"asset": SILVER["id"]}
+            )

@@ -1,9 +1,8 @@
 """Tests for the Price Tracker sensors."""
 from homeassistant.config_entries import ConfigSubentryData
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.ecb import EcbRates
 from custom_components.bitpanda.price_coordinator import PriceTrackerRuntime
@@ -14,7 +13,11 @@ from custom_components.bitpanda.price_sensor import (
     price_device_info,
 )
 
+from tests.conftest import price_group
+
 BTC = {"id": "b86c034b-efe3-11eb-b56f-0691764446a7", "symbol": "BTC", "name": "Bitcoin",
+       "type": "cryptocoin", "group": "coin"}
+SOL = {"id": "b86da33d-efe3-11eb-b56f-0691764446a7", "symbol": "SOL", "name": "Solana",
        "type": "cryptocoin", "group": "coin"}
 GOLD = {"id": "b86c88d4-efe3-11eb-b56f-0691764446a7", "symbol": "XAU", "name": "Gold",
         "type": "commodity", "group": "metal"}
@@ -99,18 +102,34 @@ def test_precision_follows_the_magnitude():
 # --- Platform setup ------------------------------------------------------------------
 
 
-async def test_setup_adds_one_sensor_per_subentry_and_currency(hass):
+def _price_tracker(hass, extra: list[str], *groups: ConfigSubentryData) -> MockConfigEntry:
     entry = MockConfigEntry(
         domain=DOMAIN, version=3, data={"entry_type": "price_tracker"},
-        options={"extra_currencies": ["USD"]},
-        subentries_data=[
-            ConfigSubentryData(data={"asset": slim_asset(a)}, subentry_type="asset",
-                               title=a["name"], unique_id=a["id"])
-            for a in (BTC, GOLD)
-        ],
+        options={"extra_currencies": extra}, subentries_data=list(groups),
     )
     entry.add_to_hass(hass)
     entry.runtime_data = PriceTrackerRuntime(tickers=_Coordinator({}), ecb=_Coordinator(_RATES))
+    return entry
+
+
+def _price_entity(hass, entry, asset: dict, currency: str, device_id=None) -> str:
+    return er.async_get(hass).async_get_or_create(
+        "sensor", DOMAIN, f"{entry.entry_id}_{asset['id']}_price_{currency}",
+        config_entry=entry, device_id=device_id,
+    ).entity_id
+
+
+def _price_device(hass, entry, asset: dict) -> str:
+    return dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"{entry.entry_id}_price_{asset['id']}")},
+    ).id
+
+
+async def test_each_group_adds_the_sensors_of_its_assets_under_its_subentry(hass):
+    entry = _price_tracker(
+        hass, ["USD"], price_group("crypto", BTC, SOL), price_group("metal", GOLD)
+    )
     calls: list = []
     await async_setup_price_entities(
         hass, entry, lambda entities, **kwargs: calls.append((entities, kwargs))
@@ -119,27 +138,43 @@ async def test_setup_adds_one_sensor_per_subentry_and_currency(hass):
         kwargs["config_subentry_id"]: [e.entity_id for e in entities] for entities, kwargs in calls
     }
     subentry_ids = {s.unique_id: s.subentry_id for s in entry.subentries.values()}
-    assert by_subentry[subentry_ids[BTC["id"]]] == [
-        "sensor.bitpanda_bitcoin_btc_eur", "sensor.bitpanda_bitcoin_btc_usd",
-    ]
-    assert by_subentry[subentry_ids[GOLD["id"]]] == [
-        "sensor.bitpanda_gold_xau_eur", "sensor.bitpanda_gold_xau_usd",
-    ]
+    assert by_subentry == {
+        subentry_ids["crypto"]: [
+            "sensor.bitpanda_bitcoin_btc_eur", "sensor.bitpanda_bitcoin_btc_usd",
+            "sensor.bitpanda_solana_sol_eur", "sensor.bitpanda_solana_sol_usd",
+        ],
+        subentry_ids["metal"]: ["sensor.bitpanda_gold_xau_eur", "sensor.bitpanda_gold_xau_usd"],
+    }
 
 
 async def test_setup_removes_sensors_of_a_dropped_currency(hass):
-    entry = MockConfigEntry(domain=DOMAIN, version=3, data={"entry_type": "price_tracker"},
-                            options={"extra_currencies": []})
-    entry.add_to_hass(hass)
-    entry.runtime_data = PriceTrackerRuntime(tickers=_Coordinator({}), ecb=None)
-    ent_reg = er.async_get(hass)
-    usd = ent_reg.async_get_or_create("sensor", DOMAIN, f"{entry.entry_id}_{BTC['id']}_price_USD",
-                                      config_entry=entry)
-    eur = ent_reg.async_get_or_create("sensor", DOMAIN, f"{entry.entry_id}_{BTC['id']}_price_EUR",
-                                      config_entry=entry)
+    entry = _price_tracker(hass, [], price_group("crypto", BTC))
+    usd = _price_entity(hass, entry, BTC, "USD")
+    eur = _price_entity(hass, entry, BTC, "EUR")
     await async_setup_price_entities(hass, entry, lambda entities, **kwargs: None)
-    assert ent_reg.async_get(usd.entity_id) is None
-    assert ent_reg.async_get(eur.entity_id) is not None
+    ent_reg = er.async_get(hass)
+    assert ent_reg.async_get(usd) is None
+    assert ent_reg.async_get(eur) is not None
+
+
+async def test_setup_removes_the_sensors_and_device_of_an_asset_no_longer_tracked(hass):
+    """Gold's sensors and device are registered apart, so neither removal
+    rides on the other."""
+    entry = _price_tracker(hass, ["USD"], price_group("crypto", BTC))
+    gold_eur = _price_entity(hass, entry, GOLD, "EUR")
+    gold_usd = _price_entity(hass, entry, GOLD, "USD")
+    gold_device = _price_device(hass, entry, GOLD)
+    btc_device = _price_device(hass, entry, BTC)
+    btc_eur = _price_entity(hass, entry, BTC, "EUR", btc_device)
+
+    await async_setup_price_entities(hass, entry, lambda entities, **kwargs: None)
+
+    ent_reg, dev_reg = er.async_get(hass), dr.async_get(hass)
+    assert ent_reg.async_get(gold_eur) is None
+    assert ent_reg.async_get(gold_usd) is None
+    assert dev_reg.async_get(gold_device) is None
+    assert ent_reg.async_get(btc_eur) is not None
+    assert dev_reg.async_get(btc_device) is not None
 
 
 # --- display_precision -----------------------------------------------------------------

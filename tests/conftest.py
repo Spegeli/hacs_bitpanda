@@ -2,7 +2,10 @@
 import json
 from pathlib import Path
 
+from homeassistant.config_entries import ConfigSubentryData
 import pytest
+
+from custom_components.bitpanda.assets import slim_asset
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 
@@ -47,3 +50,14 @@ def load_fixture(name: str):
     real portfolio ends up in the repository.
     """
     return json.loads((_FIXTURES / name).read_text(encoding="utf-8"))
+
+
+def price_group(category: str, *assets: dict, title: str | None = None) -> ConfigSubentryData:
+    """A Price Tracker group as the integration stores it: one config subentry
+    per asset category, keyed by the category, holding slim asset records."""
+    return ConfigSubentryData(
+        data={"category": category, "assets": {a["id"]: slim_asset(a) for a in assets}},
+        subentry_type="price_group",
+        title=title or category,
+        unique_id=category,
+    )

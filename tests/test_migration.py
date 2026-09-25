@@ -11,13 +11,14 @@ from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitEr
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.ecb import EcbRates
 from custom_components.bitpanda.migration import (
+    async_adopt_legacy_prices,
     async_migrate_entry,
     free_entity_id,
     legacy_prefix,
     legacy_symbol,
 )
 
-from tests.conftest import load_fixture
+from tests.conftest import load_fixture, price_group
 
 _API = "custom_components.bitpanda.migration.BitpandaApiClient."
 _EUR_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
@@ -163,9 +164,15 @@ async def test_tracked_prices_become_the_price_tracker(hass, legacy_api, no_setu
     [tracker] = _price_trackers(hass)
     assert tracker.unique_id == "price_tracker"
     assert dict(tracker.options) == {"extra_currencies": ["USD"]}
-    # XAU is both the GoldMoney stock and the Gold metal; the legacy API only
-    # ever tracked the metal.
-    assert sorted(s.title for s in tracker.subentries.values()) == ["Bitcoin (BTC)", "Gold (XAU)"]
+    # One group per asset type. XAU is both the GoldMoney stock and the Gold
+    # metal; the legacy API only ever tracked the metal.
+    groups = {s.unique_id: s for s in tracker.subentries.values()}
+    assert {category: group.title for category, group in groups.items()} == {
+        "crypto": "Cryptocurrencies",
+        "metal": "Precious metals",
+    }
+    assert list(groups["crypto"].data["assets"]) == [BTC_ID]
+    assert list(groups["metal"].data["assets"]) == [GOLD_ID]
 
 
 async def test_an_eur_install_adds_no_extra_currency(hass, legacy_api, no_setup):
@@ -501,10 +508,11 @@ async def test_legacy_price_sensors_move_to_the_price_tracker(hass, legacy_api, 
     await hass.async_block_till_done()
 
     [tracker] = _price_trackers(hass)
+    [group] = tracker.subentries.values()
     ent_reg = er.async_get(hass)
     moved = ent_reg.async_get("sensor.bitpanda_bitcoin_btc_usd")
     assert moved.config_entry_id == tracker.entry_id
-    assert moved.config_subentry_id == next(iter(tracker.subentries))
+    assert moved.config_subentry_id == group.subentry_id
     assert moved.unique_id == f"{tracker.entry_id}_{BTC_ID}_price_USD"
     # The adopted entity IS the live USD sensor: no "_2" twin beside it.
     assert ent_reg.async_get("sensor.bitpanda_bitcoin_btc_usd_2") is None
@@ -515,6 +523,66 @@ async def test_legacy_price_sensors_move_to_the_price_tracker(hass, legacy_api, 
         "`sensor.bitpanda_price_tracker_btc_usd` → `sensor.bitpanda_bitcoin_btc_usd`"
         in _message(notify)
     )
+
+
+async def test_each_legacy_price_sensor_moves_into_the_group_of_its_asset(
+    hass, legacy_api, price_api, notify
+):
+    entry = _v1_entry(hass, assets=["BTC", "XAU"])
+    eid = entry.entry_id
+    _legacy_entity(hass, entry, f"{eid}_BTC_price_EUR", "bitpanda_price_tracker_btc_eur")
+    _legacy_entity(hass, entry, f"{eid}_XAU_price_EUR", "bitpanda_price_tracker_xau_eur")
+
+    assert await async_migrate_entry(hass, entry)
+    await hass.async_block_till_done()
+
+    [tracker] = _price_trackers(hass)
+    groups = {s.unique_id: s.subentry_id for s in tracker.subentries.values()}
+    ent_reg = er.async_get(hass)
+    btc = ent_reg.async_get("sensor.bitpanda_bitcoin_btc_eur")
+    gold = ent_reg.async_get("sensor.bitpanda_gold_xau_eur")
+    assert (btc.config_subentry_id, btc.unique_id) == (
+        groups["crypto"], f"{tracker.entry_id}_{BTC_ID}_price_EUR",
+    )
+    assert (gold.config_subentry_id, gold.unique_id) == (
+        groups["metal"], f"{tracker.entry_id}_{GOLD_ID}_price_EUR",
+    )
+
+
+async def test_adoption_skips_an_entity_whose_asset_no_group_tracks(hass):
+    """The import only adopts what it tracks; should the two ever disagree,
+    the legacy entity stays where it is."""
+    source = MockConfigEntry(domain=DOMAIN, version=3, data={"entry_type": "portfolio"})
+    source.add_to_hass(hass)
+    sid = source.entry_id
+    btc = _legacy_entity(hass, source, f"{sid}_BTC_price_EUR", "bitpanda_price_tracker_btc_eur")
+    gold = _legacy_entity(hass, source, f"{sid}_XAU_price_EUR", "bitpanda_price_tracker_xau_eur")
+    items = [
+        {"entity_id": btc, "unique_id": f"{sid}_BTC_price_EUR", "asset_id": BTC_ID,
+         "currency": "EUR", "new_entity_id": None},
+        {"entity_id": gold, "unique_id": f"{sid}_XAU_price_EUR", "asset_id": GOLD_ID,
+         "currency": "EUR", "new_entity_id": None},
+    ]
+    tracker = MockConfigEntry(
+        domain=DOMAIN,
+        version=3,
+        data={"entry_type": "price_tracker",
+              "legacy_adopt": {"source_entry_id": sid, "entities": items}},
+        options={"extra_currencies": []},
+        subentries_data=[price_group("crypto", *_by_symbol(symbol="BTC"))],
+    )
+    tracker.add_to_hass(hass)
+
+    async_adopt_legacy_prices(hass, tracker)
+
+    ent_reg = er.async_get(hass)
+    [group] = tracker.subentries.values()
+    adopted = ent_reg.async_get(btc)
+    assert (adopted.config_entry_id, adopted.config_subentry_id) == (
+        tracker.entry_id, group.subentry_id,
+    )
+    left = ent_reg.async_get(gold)
+    assert (left.config_entry_id, left.unique_id) == (sid, f"{sid}_XAU_price_EUR")
 
 
 async def test_an_unresolvable_price_is_left_alone_and_listed(hass, legacy_api, no_setup, notify):

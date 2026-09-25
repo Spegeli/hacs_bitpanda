@@ -10,14 +10,17 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant
 
+from .assets import slim_asset
 from .const import (
-    CONF_ASSET,
+    CONF_ASSETS,
+    CONF_CATEGORY,
     CONF_CURRENCY,
     CONF_EXTRA_CURRENCIES,
     ENTRY_TYPE_PRICE_TRACKER,
-    SUBENTRY_TYPE_ASSET,
+    SUBENTRY_TYPE_PRICE_GROUP,
     entry_type,
 )
+from .groups import groups_of_type
 
 _REDACTED = "**REDACTED**"
 
@@ -52,15 +55,29 @@ def _portfolio(entry: ConfigEntry, runtime) -> dict[str, Any]:
     return out
 
 
-def _price_tracker(entry: ConfigEntry, runtime) -> dict[str, Any]:
-    assets = [
-        subentry.data[CONF_ASSET]
-        for subentry in entry.subentries.values()
-        if subentry.subentry_type == SUBENTRY_TYPE_ASSET
+def _price_groups(entry: ConfigEntry) -> list[dict[str, Any]]:
+    """Each group's category, title and asset records -- public catalogue
+    data, reduced to the catalogue fields."""
+    return [
+        {
+            "category": group.data[CONF_CATEGORY],
+            "title": group.title,
+            "assets": sorted(
+                (slim_asset(record) for record in group.data[CONF_ASSETS].values()),
+                key=lambda record: (record.get("symbol", ""), record["id"]),
+            ),
+        }
+        for group in sorted(
+            groups_of_type(entry, SUBENTRY_TYPE_PRICE_GROUP),
+            key=lambda group: group.data[CONF_CATEGORY],
+        )
     ]
+
+
+def _price_tracker(entry: ConfigEntry, runtime) -> dict[str, Any]:
     out: dict[str, Any] = {
         "service": "price_tracker",
-        "assets": sorted(f"{a.get('symbol')} ({a.get('id')})" for a in assets),
+        "groups": _price_groups(entry),
         "currencies": ["EUR", *entry.options.get(CONF_EXTRA_CURRENCIES, [])],
     }
     if runtime is None:

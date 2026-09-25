@@ -49,6 +49,16 @@ def test_every_currency_and_entity_name_is_translated():
     }
 
 
+def test_the_price_group_flow_has_its_strings():
+    strings = json.loads((_DIR / "strings.json").read_text(encoding="utf-8"))
+    assert set(strings["config_subentries"]) == {"price_group"}
+    group = strings["config_subentries"]["price_group"]
+    assert set(group["step"]) == {"user", "asset"}
+    assert set(group["abort"]) == {"already_configured", "asset_added"}
+    assert "{asset}" in group["abort"]["asset_added"]
+    assert "{group}" in group["abort"]["asset_added"]
+
+
 def test_every_asset_category_has_a_group_title():
     strings = json.loads((_DIR / "strings.json").read_text(encoding="utf-8"))
     assert set(strings["selector"]["asset_group"]["options"]) == {

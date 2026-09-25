@@ -100,6 +100,14 @@ def total_entity_id(asset: dict) -> str:
     return f"{_ENTITY_ID_PREFIX}{asset_slug(asset)}_wallet_total"
 
 
+def _uuid_after(prefix: str, text: str) -> str | None:
+    """The UUID that `text` consists of after `prefix`, or None."""
+    if not text.startswith(prefix):
+        return None
+    candidate = text[len(prefix):]
+    return candidate if _UUID.fullmatch(candidate) else None
+
+
 def managed_asset_id(entry_id: str, unique_id: str) -> str | None:
     """The asset a wallet, staking or total unique_id of this entry names.
 
@@ -109,10 +117,9 @@ def managed_asset_id(entry_id: str, unique_id: str) -> str | None:
     removes what this returns an asset for.
     """
     for kind in ("wallet", "staking", "total"):
-        prefix = f"{entry_id}_{kind}_"
-        if unique_id.startswith(prefix):
-            candidate = unique_id[len(prefix):]
-            return candidate if _UUID.fullmatch(candidate) else None
+        asset_id = _uuid_after(f"{entry_id}_{kind}_", unique_id)
+        if asset_id is not None:
+            return asset_id
     return None
 
 
@@ -131,13 +138,16 @@ def price_entity_id(asset: dict, currency: str) -> str:
     return f"{_ENTITY_ID_PREFIX}{asset_slug(asset)}_{currency.lower()}"
 
 
-def price_unique_id_currency(entry_id: str, unique_id: str) -> str | None:
-    """The currency of a price unique_id of this entry, or None."""
+def price_key(entry_id: str, unique_id: str) -> tuple[str, str] | None:
+    """(asset id, currency) of a price unique_id of this entry, or None."""
     head, sep, currency = unique_id.rpartition("_price_")
-    prefix = f"{entry_id}_"
-    if not sep or not head.startswith(prefix):
-        return None
-    return currency if _UUID.fullmatch(head[len(prefix):]) else None
+    asset_id = _uuid_after(f"{entry_id}_", head) if sep and currency else None
+    return None if asset_id is None else (asset_id, currency)
+
+
+def price_device_asset_id(entry_id: str, identifier: str) -> str | None:
+    """The asset a price device identifier of this entry names, or None."""
+    return _uuid_after(f"{entry_id}_price_", identifier)
 
 
 # --- Legacy (version 1) default entity IDs ---------------------------------------

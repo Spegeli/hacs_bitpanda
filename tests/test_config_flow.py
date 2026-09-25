@@ -255,24 +255,43 @@ async def test_price_tracker_creates_a_keyless_entry(hass):
 # --- Import (used by the version 1 migration) --------------------------------------
 
 
-async def test_import_creates_the_price_tracker_with_one_subentry_per_asset(hass):
-    btc, gold = _asset("BTC"), _asset("XAU", "commodity")
+async def test_import_creates_the_price_tracker_with_one_group_per_asset_type(hass):
+    btc, sol, gold = _asset("BTC"), _asset("SOL"), _asset("XAU", "commodity")
     adopt = {"source_entry_id": "v1", "entities": []}
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": config_entries.SOURCE_IMPORT},
-        data={"assets": [btc, gold], "extra_currencies": ["USD"], "legacy_adopt": adopt},
+        data={"assets": [btc, gold, sol], "extra_currencies": ["USD"], "legacy_adopt": adopt},
     )
     assert result["type"] == _FLOW.CREATE_ENTRY
     entry = result["result"]
     assert entry.unique_id == "price_tracker"
     assert entry.data["legacy_adopt"] == adopt
     assert dict(entry.options) == {"extra_currencies": ["USD"]}
-    subentries = {s.unique_id: s for s in entry.subentries.values()}
-    assert subentries[btc["id"]].title == "Bitcoin (BTC)"
-    assert subentries[gold["id"]].title == "Gold (XAU)"
-    assert subentries[btc["id"]].subentry_type == "asset"
-    assert dict(subentries[btc["id"]].data) == {"asset": slim_asset(btc)}
+    groups = {s.unique_id: s for s in entry.subentries.values()}
+    assert set(groups) == {"crypto", "metal"}
+    assert {s.subentry_type for s in groups.values()} == {"price_group"}
+    assert groups["crypto"].title == "Cryptocurrencies"
+    assert groups["metal"].title == "Precious metals"
+    assert dict(groups["crypto"].data) == {
+        "category": "crypto",
+        "assets": {btc["id"]: slim_asset(btc), sol["id"]: slim_asset(sol)},
+    }
+    assert dict(groups["metal"].data) == {
+        "category": "metal",
+        "assets": {gold["id"]: slim_asset(gold)},
+    }
+
+
+async def test_imported_groups_are_titled_in_the_language_home_assistant_runs_in(hass):
+    hass.config.language = "de"
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_IMPORT},
+        data={"assets": [_asset("BTC"), _asset("BCI5")]},
+    )
+    titles = {s.unique_id: s.title for s in result["result"].subentries.values()}
+    assert titles == {"crypto": "Kryptowährungen", "index": "Krypto-Indizes"}
 
 
 async def test_import_aborts_when_a_price_tracker_exists(hass):

@@ -7,6 +7,16 @@ from homeassistant.helpers import device_registry as dr
 from .const import DOMAIN
 
 
+def device_identifier(device: dr.DeviceEntry) -> str | None:
+    """The identifier this integration gave `device`, or None.
+
+    Every device it creates carries exactly one: (DOMAIN, identifier).
+    """
+    return next(
+        (identifier for domain, identifier in device.identifiers if domain == DOMAIN), None
+    )
+
+
 def find_entry_device(
     hass: HomeAssistant, entry_id: str, identifier: str
 ) -> dr.DeviceEntry | None:

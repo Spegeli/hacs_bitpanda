@@ -16,7 +16,6 @@ from homeassistant import config_entries
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlowResult,
-    ConfigSubentryData,
     ConfigSubentryFlow,
 )
 from homeassistant.core import callback
@@ -31,12 +30,10 @@ from homeassistant.helpers.selector import (
 )
 
 from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
-from .asset_flow import AssetSubentryFlow
-from .assets import slim_asset
+from .asset_flow import PriceTrackerSubentryFlow
 from .const import (
     API_KEY_URL,
     CONF_API_KEY,
-    CONF_ASSET,
     CONF_CURRENCY,
     CONF_CURRENCY_ID,
     CONF_EXTRA_CURRENCIES,
@@ -52,11 +49,11 @@ from .const import (
     PRICE_TRACKER_TITLE,
     REQUIRED_SCOPES,
     SCOPE_LABELS,
-    SUBENTRY_TYPE_ASSET,
+    SUBENTRY_TYPE_PRICE_GROUP,
     SUPPORTED_CURRENCIES,
     entry_type,
 )
-from .naming import asset_display_label
+from .groups import async_group_titles, price_group_subentries
 from .purge import async_purge_portfolio
 
 _LOGGER = logging.getLogger(__name__)
@@ -121,17 +118,6 @@ def extra_currencies_schema(selected: list[str]) -> vol.Schema:
                 default=[currency.lower() for currency in selected],
             ): _currency_select(list(EXTRA_CURRENCIES), multiple=True)
         }
-    )
-
-
-def asset_subentry_data(asset: dict) -> ConfigSubentryData:
-    """The subentry of one tracked asset: titled with its label, keyed by its id."""
-    record = slim_asset(asset)
-    return ConfigSubentryData(
-        data={CONF_ASSET: record},
-        subentry_type=SUBENTRY_TYPE_ASSET,
-        title=asset_display_label(record),
-        unique_id=record["id"],
     )
 
 
@@ -275,7 +261,9 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_import(self, import_data: dict[str, Any]) -> ConfigFlowResult:
-        """The Price Tracker of a migrated version 1 entry (see migration.py)."""
+        """The Price Tracker of a migrated version 1 entry (see migration.py),
+        its assets in one group per asset type."""
+        titles = await async_group_titles(self.hass)
         await self.async_set_unique_id(ENTRY_TYPE_PRICE_TRACKER)
         self._abort_if_unique_id_configured()
         data: dict[str, Any] = {ENTRY_TYPE: ENTRY_TYPE_PRICE_TRACKER}
@@ -289,10 +277,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     import_data.get(CONF_EXTRA_CURRENCIES)
                 )
             },
-            subentries=[
-                asset_subentry_data(asset)
-                for asset in import_data.get(IMPORT_ASSETS, [])
-            ],
+            subentries=price_group_subentries(import_data.get(IMPORT_ASSETS, []), titles),
         )
 
     # --- Reauth (Portfolio only: the Price Tracker has no key) -------------------
@@ -473,10 +458,11 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_supported_subentry_types(
         cls, config_entry: ConfigEntry
     ) -> dict[str, type[ConfigSubentryFlow]]:
-        """Assets are subentries of the Price Tracker; the Portfolio has none."""
+        """The Price Tracker's groups take assets through "+ Add price
+        tracker"; the Portfolio has no user flow."""
         if entry_type(config_entry) != ENTRY_TYPE_PRICE_TRACKER:
             return {}
-        return {SUBENTRY_TYPE_ASSET: AssetSubentryFlow}
+        return {SUBENTRY_TYPE_PRICE_GROUP: PriceTrackerSubentryFlow}
 
 
 class PriceTrackerOptionsFlow(config_entries.OptionsFlow):

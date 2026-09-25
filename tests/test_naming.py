@@ -10,10 +10,11 @@ from custom_components.bitpanda.naming import (
     portfolio_device_identifier,
     portfolio_entity_id,
     portfolio_unique_id,
+    price_device_asset_id,
     price_device_identifier,
     price_entity_id,
+    price_key,
     price_unique_id,
-    price_unique_id_currency,
     return_key,
     staking_entity_id,
     staking_unique_id,
@@ -107,12 +108,23 @@ def test_managed_asset_id_reads_only_uuid_suffixes_of_this_entry():
     assert managed_asset_id("eid", f"other_wallet_{asset_id}") is None
 
 
-def test_price_unique_id_currency():
+def test_price_key_reads_asset_and_currency_of_this_entry():
     asset_id = BTC["id"]
-    assert price_unique_id_currency("eid", f"eid_{asset_id}_price_USD") == "USD"
-    assert price_unique_id_currency("other", f"eid_{asset_id}_price_USD") is None
+    assert price_key("eid", price_unique_id("eid", asset_id, "USD")) == (asset_id, "USD")
+    assert price_key("other", f"eid_{asset_id}_price_USD") is None
     # A legacy price unique_id carries a symbol, not a UUID.
-    assert price_unique_id_currency("eid", "eid_BTC_price_EUR") is None
+    assert price_key("eid", "eid_BTC_price_EUR") is None
+    assert price_key("eid", f"eid_{asset_id}_price_") is None
+    assert price_key("eid", wallet_unique_id("eid", asset_id)) is None
+
+
+def test_price_device_asset_id_reads_only_price_devices_of_this_entry():
+    asset_id = BTC["id"]
+    assert price_device_asset_id("eid", price_device_identifier("eid", asset_id)) == asset_id
+    assert price_device_asset_id("other", price_device_identifier("eid", asset_id)) is None
+    assert price_device_asset_id("eid", wallet_device_identifier("eid", asset_id)) is None
+    # The legacy "Bitpanda Price Tracker" device.
+    assert price_device_asset_id("eid", "eid_price_tracker") is None
 
 
 def test_legacy_default_object_ids():

@@ -1,173 +1,114 @@
-"""Tests for diagnostics redaction."""
+"""Diagnostics of both services. The API key never appears."""
+from datetime import timedelta
+from types import SimpleNamespace
+
+from homeassistant.config_entries import ConfigEntryState, ConfigSubentryData
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.const import DOMAIN
-from custom_components.bitpanda.coordinator import Holding, PortfolioData
-from custom_components.bitpanda.diagnostics import (
-    async_get_config_entry_diagnostics,
-    build_diagnostics,
-)
+from custom_components.bitpanda.diagnostics import async_get_config_entry_diagnostics
+from custom_components.bitpanda.ecb import EcbRates
+from custom_components.bitpanda.portfolio_model import EarnData, Holding, PortfolioData
+
+_SECRET = "totally-secret-diagnostics-key"
 
 
 class _Coordinator:
-    def __init__(self, data, success=True):
+    def __init__(self, data=None, success=True, interval=None):
         self.data = data
         self.last_update_success = success
+        self.update_interval = interval
 
 
-def test_api_key_is_never_included():
-    result = build_diagnostics(
-        entry_data={"api_key": "super-secret", "currency": "EUR"},
-        options={"tracked_assets": [], "tracked_wallets": [], "asset_cache": {}},
-        portfolio=_Coordinator(None),
-        prices=_Coordinator({}),
-        earn=_Coordinator({}),
-        rewards=_Coordinator({}),
-        history=_Coordinator({}),
-    )
-    assert "super-secret" not in repr(result)
-    assert result["config"]["api_key"] == "**REDACTED**"
-
-
-# --- Fix round 1 --------------------------------------------------------
-#
-# Findings from the task 17 review. See task-17-report.md, "Fix round 1",
-# for the full writeup.
-
-
-def test_portfolio_truthy_branches_with_real_dataclasses():
-    """Populated portfolio data, using the real dataclasses from coordinator.py.
-
-    Both pre-existing tests above pass `portfolio=_Coordinator(None)`, so
-    `portfolio.data.holdings` and `portfolio.data.rate` never execute. This
-    uses the real `PortfolioData`/`Holding` shape (not a fake) so a rename in
-    coordinator.py breaks this test instead of going unnoticed.
-
-    `rate=0.0` is deliberately not just "any" non-None value: it is falsy, so
-    the old `bool(portfolio.data and portfolio.data.rate)` computation would
-    have reported `rate_derived=False` for a rate that had, in fact, been
-    derived. This test fails under that old expression and passes under the
-    `is not None` fix, pinning the exact regression fixed in this round.
-    """
-    data = PortfolioData(
-        holdings={
-            "BTC": Holding(
-                asset_id="BTC", balance=1.0, available=1.0, staked=0.0, value=100.0
-            ),
-            "ETH": Holding(
-                asset_id="ETH", balance=2.0, available=2.0, staked=0.0, value=200.0
-            ),
-        },
-        fiat={},
-        rate=0.0,
-        total=300.0,
-    )
-    result = build_diagnostics(
-        entry_data={"api_key": "k", "currency": "EUR"},
-        options={"tracked_assets": [], "tracked_wallets": [], "asset_cache": {}},
-        portfolio=_Coordinator(data),
-        prices=_Coordinator({}),
-        earn=_Coordinator({}),
-        rewards=_Coordinator({}),
-        history=_Coordinator({}),
-    )
-    assert result["coordinators"]["portfolio"]["holdings_count"] == 2
-    assert result["coordinators"]["portfolio"]["rate_derived"] is True
-
-
-def test_redaction_survives_extra_entry_data_fields():
-    """A future careless `**entry_data` spread must not leak anything either.
-
-    `entry_data` here carries a second secret-looking field beyond `api_key`
-    -- only `build_diagnostics` deciding what to copy out of `entry_data`
-    (rather than spreading it wholesale) keeps this safe.
-    """
-    result = build_diagnostics(
-        entry_data={
-            "api_key": "super-secret",
+def _portfolio_entry(hass, *, loaded: bool) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=3,
+        data={
+            "entry_type": "portfolio",
+            "api_key": _SECRET,
             "currency": "EUR",
-            "currency_id": "some-currency-id",
-            "refresh_token": "also-secret",
-        },
-        options={"tracked_assets": [], "tracked_wallets": [], "asset_cache": {}},
-        portfolio=_Coordinator(None),
-        prices=_Coordinator({}),
-        earn=_Coordinator({}),
-        rewards=_Coordinator({}),
-        history=_Coordinator({}),
-    )
-    assert "super-secret" not in repr(result)
-    assert "also-secret" not in repr(result)
-
-
-async def test_async_get_config_entry_diagnostics_reads_the_real_store(hass):
-    """Exercises the async wrapper against a full seven-key store.
-
-    This is the test that would have caught the exact bug reported after
-    task 16: `diagnostics.py` used to read `wallet_coordinator`, a key the
-    store no longer has, and nothing exercised
-    `async_get_config_entry_diagnostics` until now.
-    """
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={"api_key": "super-secret", "currency": "EUR"},
-        options={
-            "tracked_assets": ["a"],
-            "tracked_wallets": [],
-            "asset_cache": {},
+            "currency_id": "b88b8466-efe3-11eb-b56f-0691764446a7",
+            # A field added later must not leak by default either.
+            "future_field": _SECRET,
         },
     )
-    rewards = _Coordinator({})
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
-        "portfolio_coordinator": _Coordinator(None),
-        "price_coordinator": _Coordinator({}),
-        "earn_coordinator": _Coordinator({}),
-        "rewards_coordinator": rewards,
-        "history_coordinator": _Coordinator({}),
-        "resolver": object(),
-        "currency": "EUR",
+    entry.add_to_hass(hass)
+    if loaded:
+        data = PortfolioData(
+            holdings={"a": Holding("a", 1.0, 1.0, 5.0), "b": Holding("b", 1.0, 1.0, 5.0)}
+        )
+        data.assets = {"a": {"id": "a", "group": "coin"}}
+        entry.runtime_data = SimpleNamespace(
+            portfolio=_Coordinator(data),
+            history=_Coordinator({"DAY": 1.0}),
+            earn=_Coordinator(EarnData(apr={}, offered=frozenset({"a"}))),
+            rewards=_Coordinator(None, success=False),
+        )
+        entry.mock_state(hass, ConfigEntryState.LOADED)
+    return entry
+
+
+async def test_portfolio_diagnostics_report_health_and_never_the_key(hass):
+    result = await async_get_config_entry_diagnostics(hass, _portfolio_entry(hass, loaded=True))
+    assert _SECRET not in repr(result)
+    assert result["service"] == "portfolio"
+    assert result["config"] == {"api_key": "**REDACTED**", "currency": "EUR"}
+    assert result["coordinators"] == {
+        "portfolio": {"last_update_success": True, "holdings": 2, "wallets": 1,
+                      "unnamed_holdings": 1},
+        "history": {"last_update_success": True, "timeframes": 1},
+        "earn": {"last_update_success": True, "offered_assets": 1},
+        "rewards": {"last_update_success": False, "assets_with_rewards": 0},
     }
 
-    result = await async_get_config_entry_diagnostics(hass, entry)
 
-    assert "super-secret" not in repr(result)
-    assert result["config"]["currency"] == "EUR"
-    assert result["options"]["tracked_assets_count"] == 1
-    assert set(result["coordinators"]) == {
-        "portfolio",
-        "prices",
-        "earn",
-        "rewards",
-        "history",
-    }
-    assert "unauthorized" not in result["coordinators"]["rewards"]
-
-
-async def test_diagnostics_of_an_entry_that_is_not_loaded(hass):
-    """Setup failed or reauth is pending -- exactly when diagnostics are
-    wanted -- so there is no per-entry store. Config and options only,
-    instead of a KeyError.
-    """
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={"api_key": "super-secret", "currency": "EUR"},
-        options={
-            "tracked_assets": ["a"],
-            "tracked_wallets": ["w1", "w2"],
-            "asset_cache": {"a": {"id": "a"}},
-        },
-    )
-    # Another entry's store exists, this one's does not.
-    hass.data.setdefault(DOMAIN, {})["some-other-entry"] = {}
-
-    result = await async_get_config_entry_diagnostics(hass, entry)
-
+async def test_portfolio_that_is_not_loaded_reports_its_config_only(hass):
+    """Setup failed or reauth pending: exactly when diagnostics are wanted."""
+    result = await async_get_config_entry_diagnostics(hass, _portfolio_entry(hass, loaded=False))
+    assert _SECRET not in repr(result)
     assert result == {
+        "service": "portfolio",
         "config": {"api_key": "**REDACTED**", "currency": "EUR"},
-        "options": {
-            "tracked_assets_count": 1,
-            "tracked_wallets_count": 2,
-            "asset_cache_size": 1,
-        },
     }
-    assert "super-secret" not in repr(result)
+
+
+def _price_entry(hass, *, extra, ecb) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=3,
+        data={"entry_type": "price_tracker"},
+        options={"extra_currencies": extra},
+        subentries_data=[
+            ConfigSubentryData(
+                data={"asset": {"id": "uuid-btc", "symbol": "BTC", "name": "Bitcoin"}},
+                subentry_type="asset",
+                title="Bitcoin (BTC)",
+                unique_id="uuid-btc",
+            )
+        ],
+    )
+    entry.add_to_hass(hass)
+    entry.runtime_data = SimpleNamespace(
+        tickers=_Coordinator({"uuid-btc": 1.0}, interval=timedelta(seconds=60)), ecb=ecb
+    )
+    entry.mock_state(hass, ConfigEntryState.LOADED)
+    return entry
+
+
+async def test_price_tracker_diagnostics(hass):
+    ecb = _Coordinator(EcbRates(date="2026-09-24", rates={"USD": 1.1}))
+    result = await async_get_config_entry_diagnostics(hass, _price_entry(hass, extra=["USD"], ecb=ecb))
+    assert result == {
+        "service": "price_tracker",
+        "assets": ["BTC (uuid-btc)"],
+        "currencies": ["EUR", "USD"],
+        "tickers": {"last_update_success": True, "priced_assets": 1,
+                    "update_interval_seconds": 60.0},
+        "ecb": {"last_update_success": True, "rate_date": "2026-09-24"},
+    }
+
+
+async def test_price_tracker_without_extra_currencies_has_no_ecb(hass):
+    result = await async_get_config_entry_diagnostics(hass, _price_entry(hass, extra=[], ecb=None))
+    assert result["ecb"] is None

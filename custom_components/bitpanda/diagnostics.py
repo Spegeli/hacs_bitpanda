@@ -1,106 +1,94 @@
-"""Diagnostics support for Bitpanda."""
+"""Diagnostics of both services. The API key never appears.
+
+Only named fields are copied out of an entry -- a field added to it later
+cannot leak by default.
+"""
 from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant
 
 from .const import (
-    CONF_ASSET_CACHE,
+    CONF_ASSET,
     CONF_CURRENCY,
-    CONF_TRACKED_ASSETS,
-    CONF_TRACKED_WALLETS,
-    DOMAIN,
+    CONF_EXTRA_CURRENCIES,
+    ENTRY_TYPE_PRICE_TRACKER,
+    SUBENTRY_TYPE_ASSET,
+    entry_type,
 )
 
 _REDACTED = "**REDACTED**"
 
 
-def _entry_sections(entry_data: dict, options: dict) -> dict[str, Any]:
-    """Config and options, counts only. The API key never appears.
+def _health(coordinator) -> dict[str, Any]:
+    return {"last_update_success": coordinator.last_update_success}
 
-    Copies named fields out of `entry_data` rather than spreading it, so a
-    field added later cannot leak by default.
-    """
-    return {
-        "config": {
-            "api_key": _REDACTED,
-            "currency": entry_data.get(CONF_CURRENCY),
+
+def _portfolio(entry: ConfigEntry, runtime) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "service": "portfolio",
+        "config": {"api_key": _REDACTED, "currency": entry.data.get(CONF_CURRENCY)},
+    }
+    if runtime is None:
+        return out
+    data = runtime.portfolio.data
+    earn = runtime.earn.data
+    out["coordinators"] = {
+        "portfolio": {
+            **_health(runtime.portfolio),
+            "holdings": len(data.holdings) if data else 0,
+            "wallets": len(data.wallet_ids) if data else 0,
+            "unnamed_holdings": len(data.holdings) - len(data.assets) if data else 0,
         },
-        "options": {
-            "tracked_assets_count": len(options.get(CONF_TRACKED_ASSETS, [])),
-            "tracked_wallets_count": len(options.get(CONF_TRACKED_WALLETS, [])),
-            "asset_cache_size": len(options.get(CONF_ASSET_CACHE, {})),
+        "history": {**_health(runtime.history), "timeframes": len(runtime.history.data or {})},
+        "earn": {**_health(runtime.earn), "offered_assets": len(earn.offered) if earn else 0},
+        "rewards": {
+            **_health(runtime.rewards),
+            "assets_with_rewards": len(runtime.rewards.data or {}),
         },
     }
+    return out
 
 
-def build_diagnostics(
-    *,
-    entry_data: dict,
-    options: dict,
-    portfolio,
-    prices,
-    earn,
-    rewards,
-    history,
-) -> dict[str, Any]:
-    """Assemble the diagnostics payload. The API key never appears."""
-    holdings = portfolio.data.holdings if portfolio.data else {}
-    # Explicit `is not None`, not `bool(...)`: a derived rate of exactly 0.0
-    # is falsy, so `bool(portfolio.data and portfolio.data.rate)` would report
-    # "not derived" for a rate that had, in fact, been derived. `derive_rate`
-    # (fx.py) rejects zero and negative amounts, so it never returns 0.0, but
-    # that guarantee lives in another module and this diagnostic must not
-    # silently depend on it.
-    rate_derived = portfolio.data.rate is not None if portfolio.data else False
-    return {
-        **_entry_sections(entry_data, options),
-        "coordinators": {
-            "portfolio": {
-                "last_update_success": portfolio.last_update_success,
-                "holdings_count": len(holdings),
-                "rate_derived": rate_derived,
-            },
-            "prices": {
-                "last_update_success": prices.last_update_success,
-                "priced_assets": len(prices.data or {}),
-            },
-            "earn": {
-                "last_update_success": earn.last_update_success,
-                "products": len(earn.data or {}),
-            },
-            "rewards": {
-                "last_update_success": rewards.last_update_success,
-                "assets_with_rewards": len(rewards.data or {}),
-            },
-            "history": {
-                "last_update_success": history.last_update_success,
-                "timeframes_covered": len(history.data or {}),
-            },
-        },
+def _price_tracker(entry: ConfigEntry, runtime) -> dict[str, Any]:
+    assets = [
+        subentry.data[CONF_ASSET]
+        for subentry in entry.subentries.values()
+        if subentry.subentry_type == SUBENTRY_TYPE_ASSET
+    ]
+    out: dict[str, Any] = {
+        "service": "price_tracker",
+        "assets": sorted(f"{a.get('symbol')} ({a.get('id')})" for a in assets),
+        "currencies": ["EUR", *entry.options.get(CONF_EXTRA_CURRENCIES, [])],
     }
+    if runtime is None:
+        return out
+    tickers = runtime.tickers
+    out["tickers"] = {
+        **_health(tickers),
+        "priced_assets": len(tickers.data or {}),
+        "update_interval_seconds": (
+            tickers.update_interval.total_seconds() if tickers.update_interval else None
+        ),
+    }
+    ecb = runtime.ecb
+    out["ecb"] = (
+        None
+        if ecb is None
+        else {**_health(ecb), "rate_date": ecb.data.date if ecb.data else None}
+    )
+    return out
 
 
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> dict[str, Any]:
-    """Return diagnostics for a config entry.
-
-    An entry that is not loaded -- setup failed, or reauth is pending, which
-    is exactly when diagnostics are wanted -- has no coordinators to report,
-    so it gets config and options only.
-    """
-    store = hass.data.get(DOMAIN, {}).get(entry.entry_id)
-    if store is None:
-        return _entry_sections(dict(entry.data), dict(entry.options))
-    return build_diagnostics(
-        entry_data=dict(entry.data),
-        options=dict(entry.options),
-        portfolio=store["portfolio_coordinator"],
-        prices=store["price_coordinator"],
-        earn=store["earn_coordinator"],
-        rewards=store["rewards_coordinator"],
-        history=store["history_coordinator"],
-    )
+    """An entry that is not loaded -- setup failed, or reauth is pending,
+    which is exactly when diagnostics are wanted -- has no runtime data and
+    reports its configuration only."""
+    runtime = entry.runtime_data if entry.state is ConfigEntryState.LOADED else None
+    if entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER:
+        return _price_tracker(entry, runtime)
+    return _portfolio(entry, runtime)

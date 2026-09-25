@@ -127,7 +127,7 @@ The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stock
 
 - When Bitpanda rejects the stored key — it expired, was revoked, or lacks a scope — Home Assistant asks for a new one (**New Bitpanda API key needed**). Paste it there; every sensor is kept.
 - **⋮ → Reconfigure** on the Portfolio entry replaces the key at any time (leave the key field empty to keep the current one) and changes the currency.
-- ⚠️ **Changing the currency deletes all Portfolio sensors including their history** and recreates them in the new currency, under the same entity IDs. You are asked to confirm first.
+- ⚠️ **Changing the currency deletes all Portfolio sensors including their history** and recreates them in the new currency, under the entity IDs the integration gives them; IDs you renamed are restored only on newer Home Assistant versions. You are asked to confirm first.
 
 ### Entity IDs
 
@@ -210,7 +210,7 @@ Crypto, stocks, ETFs, ETCs, Bitpanda Crypto Indices and tokenized precious metal
 Yes. The Price Tracker always gives EUR and adds one sensor per extra currency you choose under **Configure**.
 
 **How do I change the Portfolio currency?**  
-**⋮ → Reconfigure** on the Bitpanda Portfolio entry. This deletes all Portfolio sensors including their history, because every recorded value was in the old currency; they come back under the same entity IDs.
+**⋮ → Reconfigure** on the Bitpanda Portfolio entry. This deletes all Portfolio sensors including their history, because every recorded value was in the old currency; they come back under the entity IDs the integration gives them, and IDs you renamed are restored only on newer Home Assistant versions.
 
 **Where do the non-EUR prices come from?**  
 Bitpanda's price endpoint only answers in EUR. The Price Tracker converts with the ECB's daily reference rates, published once per working day around 16:00 CET; at weekends and on holidays the last rate stays in use. The `rate_date` attribute shows which day's rate a price uses.

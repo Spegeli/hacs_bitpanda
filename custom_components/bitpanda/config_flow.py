@@ -17,6 +17,7 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlowResult,
     ConfigSubentryData,
+    ConfigSubentryFlow,
 )
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -30,6 +31,7 @@ from homeassistant.helpers.selector import (
 )
 
 from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
+from .asset_flow import AssetSubentryFlow
 from .assets import slim_asset
 from .const import (
     API_KEY_URL,
@@ -460,6 +462,16 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_supports_options_flow(cls, config_entry: ConfigEntry) -> bool:
         """Only the Price Tracker has options: the Portfolio tracks everything."""
         return entry_type(config_entry) == ENTRY_TYPE_PRICE_TRACKER
+
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls, config_entry: ConfigEntry
+    ) -> dict[str, type[ConfigSubentryFlow]]:
+        """Assets are subentries of the Price Tracker; the Portfolio has none."""
+        if entry_type(config_entry) != ENTRY_TYPE_PRICE_TRACKER:
+            return {}
+        return {SUBENTRY_TYPE_ASSET: AssetSubentryFlow}
 
 
 class PriceTrackerOptionsFlow(config_entries.OptionsFlow):

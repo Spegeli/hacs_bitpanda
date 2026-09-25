@@ -286,7 +286,7 @@ class StakingSensor(_WalletPart):
         apr = earn.apr.get(self._asset_id) if earn is not None else None
         if apr is not None:
             # The API reports a fraction: 0.0544 means 5.44 %.
-            attrs["apr_percent"] = round(apr * 100, 2)
+            attrs["apr_percent"] = round(apr * 100, DECIMALS)
         # After a failed refresh `data` still holds the last complete totals;
         # a listing that could not be paged completely never replaces them.
         rewards = (self._rewards.data or {}).get(self._asset_id)

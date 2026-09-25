@@ -164,6 +164,15 @@ def test_staking_is_the_staked_value_with_earn_attributes():
     }
 
 
+def test_apr_percent_keeps_every_decimal_the_api_sends():
+    """Rounded to DECIMALS (8), like every other computed figure -- 2 decimals
+    would turn 0.05125 into 5.12 and quietly drop the last digit."""
+    earn = _Coordinator(EarnData(apr={VSN["id"]: 0.05125}, offered=frozenset({VSN["id"]})))
+    sensor = StakingSensor(_portfolio(**{VSN["id"]: _vsn()}), earn, _Coordinator(None),
+                           "eid", "EUR", VSN)
+    assert sensor.extra_state_attributes["apr_percent"] == 5.125
+
+
 def test_staking_without_earn_or_reward_data_leaves_those_attributes_out():
     """A failed rewards refresh before the first success: attributes absent,
     never a partial recount."""

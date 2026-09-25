@@ -1,4 +1,5 @@
 """Both services set up, reload and unload end to end (API mocked)."""
+import asyncio
 from datetime import timedelta
 from types import MappingProxyType
 from unittest.mock import AsyncMock, patch
@@ -645,3 +646,47 @@ async def test_the_device_page_refuses_to_delete_a_held_wallet(
     assert not response["success"]
     assert response["error"]["message"] == "Failed to remove device entry, rejected by integration"
     assert dr.async_get(hass).async_get(wallet.id) is not None
+
+
+async def test_deleting_a_sold_wallet_in_a_group_removes_the_emptied_group(
+    hass, portfolio_api, hass_ws_client
+):
+    """The hook (__init__.py) only schedules a reload; the emptied group
+    disappears at that reload's first reconcile, but only if the reconcile
+    runs after the websocket handler has removed the device and its sensors.
+    A real /portfolio request suspends there, so this mock does too --
+    without the yield, the reconcile would run first and the group would
+    only go on the refresh after this one."""
+    entry = _portfolio_entry(hass)
+    held = portfolio_api.return_value
+    portfolio_api.return_value = [
+        *held,
+        {
+            "asset_id": GOLD["id"],
+            "balance": {"value": "1.00000000"},
+            "available_balance": {"value": "1.00000000"},
+            "currency_balance": {"value": "3000.00"},
+        },
+    ]
+    await _setup(hass, entry)
+    assert [sub.unique_id for sub in entry.subentries.values()] == ["crypto", "metal"]
+    wallet = _own_device(hass, entry, "wallet", GOLD)
+
+    sold = [e for e in portfolio_api.return_value if e.get("asset_id") != GOLD["id"]]
+
+    async def _sold_after_a_yield(*_args, **_kwargs):
+        await asyncio.sleep(0)
+        return sold
+
+    portfolio_api.side_effect = _sold_after_a_yield
+    await _next_refresh(hass)
+    # One miss only (WALLET_REMOVAL_MISSES is 3): the wallet and its group
+    # are untouched, so the device page below still finds them.
+    assert [sub.unique_id for sub in entry.subentries.values()] == ["crypto", "metal"]
+
+    response = await _remove_through_the_device_page(hass, hass_ws_client, entry, wallet)
+    await hass.async_block_till_done()
+
+    assert response["success"]
+    assert dr.async_get(hass).async_get(wallet.id) is None
+    assert [sub.unique_id for sub in entry.subentries.values()] == ["crypto"]

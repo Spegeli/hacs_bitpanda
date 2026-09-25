@@ -242,6 +242,9 @@ async def async_remove_config_entry_device(
         return False
     # The wallet manager keeps a wallet until its asset has been missing from
     # several refreshes, and would not create it again if the asset were
-    # bought back in that time. A reload starts it afresh.
+    # bought back in that time. A reload starts it afresh. If this was the
+    # last wallet of its group, the emptied group follows at the reload's
+    # first reconcile -- once the websocket handler's device removal above
+    # has already run (see test_deleting_a_sold_wallet_in_a_group_removes_the_emptied_group).
     hass.config_entries.async_schedule_reload(entry_id)
     return True

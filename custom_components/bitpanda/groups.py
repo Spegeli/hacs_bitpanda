@@ -3,8 +3,12 @@
 Home Assistant shows every config subentry of an entry as a group on the
 integration page, with the subentry's devices inside. A group stands for one
 asset category (assets.asset_category) and carries it as its unique_id. Its
-title is set once, in Home Assistant's language, when the group is created,
-and never rewritten; newer Home Assistant versions let the user rename it.
+title is set once, in Home Assistant's language, when the group is created.
+At every later setup, a group still titled one of this integration's own
+default titles for its category -- in any language it ships -- but not the
+one for the current language, is retitled to the current language
+(async_retitle_groups_to_current_language). A title the user chose is never
+touched; newer Home Assistant versions also let the user rename a group.
 
 The Price Tracker keeps its tracked assets in its groups (type price_group):
 each group's data holds the slim records of its assets by asset id.
@@ -16,6 +20,7 @@ them as wallets arrive and removes them once they hold nothing.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
@@ -35,6 +40,10 @@ from .const import (
 
 _TITLE_KEY = f"component.{DOMAIN}.selector.asset_group.options."
 
+# Read once per process: the file names under here are this integration's own
+# shipped languages, and do not change at runtime.
+_TRANSLATIONS_DIR = Path(__file__).parent / "translations"
+
 
 async def async_group_titles(hass: HomeAssistant) -> dict[str, str]:
     """Category -> group title, in the language Home Assistant runs in.
@@ -49,6 +58,64 @@ async def async_group_titles(hass: HomeAssistant) -> dict[str, str]:
         category: translations.get(f"{_TITLE_KEY}{category}", category)
         for category in (*ASSET_CATEGORY_FILTERS, CATEGORY_OTHER)
     }
+
+
+def _shipped_languages() -> list[str]:
+    """Language codes this integration ships a translations file for, from
+    the file names in translations/. Blocking I/O -- call through the executor."""
+    return sorted(path.stem for path in _TRANSLATIONS_DIR.glob("*.json"))
+
+
+async def async_known_group_titles(hass: HomeAssistant) -> dict[str, set[str]]:
+    """Category -> every group title this integration has ever shipped as its
+    default, in any language it ships (translations/*.json; English is
+    en.json). Tells a shipped default title apart from one the user chose.
+
+    The set of shipped languages is discovered from disk (in the executor,
+    never blocking the event loop) rather than hard-coded, so a future
+    language added under translations/ is picked up without a code change.
+    """
+    languages = await hass.async_add_executor_job(_shipped_languages)
+    known: dict[str, set[str]] = {
+        category: set() for category in (*ASSET_CATEGORY_FILTERS, CATEGORY_OTHER)
+    }
+    for language in languages:
+        translations = await async_get_translations(hass, language, "selector", {DOMAIN})
+        for category in known:
+            title = translations.get(f"{_TITLE_KEY}{category}")
+            if title is not None:
+                known[category].add(title)
+    return known
+
+
+async def async_retitle_groups_to_current_language(
+    hass: HomeAssistant, entry: ConfigEntry, subentry_type: str
+) -> None:
+    """Retitle every `subentry_type` group of `entry` that is still titled one
+    of this integration's own default group titles for its category -- in any
+    language it ships -- to the title for Home Assistant's current language.
+    A title the user chose, one that is not a shipped default for the
+    group's category, is never touched.
+
+    Call this once at every setup of the Price Tracker and the Portfolio,
+    before the entry's update listener is registered: the Price Tracker
+    reloads on any change to the entry, subentries included, so retitling
+    after that listener exists would reload the entry it just finished
+    setting up.
+
+    Accepted edge case: a user who renamed a group to exactly a shipped
+    default title of the same category, in another language, ends up
+    retitled too -- from the group's own data there is no way to tell that
+    apart from a default title that simply predates a later language change.
+    """
+    current = await async_group_titles(hass)
+    known = await async_known_group_titles(hass)
+    for group in groups_of_type(entry, subentry_type):
+        target = current.get(group.unique_id)
+        if target is None or group.title == target:
+            continue
+        if group.title in known.get(group.unique_id, set()):
+            hass.config_entries.async_update_subentry(entry, group, title=target)
 
 
 def groups_of_type(entry: ConfigEntry, subentry_type: str) -> list[ConfigSubentry]:

@@ -24,12 +24,14 @@ from .const import (
     ENTRY_TYPE_PRICE_TRACKER,
     REFRESH_MIN_COOLDOWN,
     SUBENTRY_TYPE_PRICE_GROUP,
+    SUBENTRY_TYPE_WALLET_GROUP,
     entry_type,
 )
 from .devices import device_identifier
 from .groups import (
     async_group_titles,
     async_remove_asset_from_group,
+    async_retitle_groups_to_current_language,
     groups_of_type,
     tracked_assets,
 )
@@ -63,7 +65,17 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up one of the two services."""
-    if entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER:
+    is_price_tracker = entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER
+    # Before anything else, and before the update listener below: the Price
+    # Tracker's listener reloads on any change to the entry, subentries
+    # included, so retitling after it existed would reload the entry this
+    # same call is setting up.
+    await async_retitle_groups_to_current_language(
+        hass,
+        entry,
+        SUBENTRY_TYPE_PRICE_GROUP if is_price_tracker else SUBENTRY_TYPE_WALLET_GROUP,
+    )
+    if is_price_tracker:
         entry.runtime_data = await _async_start_price_tracker(hass, entry)
         # Options, groups and data all change what it tracks: rebuild on any change.
         reload_listener = _async_reload

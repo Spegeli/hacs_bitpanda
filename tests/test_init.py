@@ -22,7 +22,7 @@ from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.devices import find_entry_device
 from custom_components.bitpanda.ecb import EcbRates
 
-from tests.conftest import device_names_in_subentry, load_fixture, price_group
+from tests.conftest import device_names_in_subentry, load_fixture, price_group, wallet_group
 
 _CLIENT = "custom_components.bitpanda.api.BitpandaApiClient."
 _EUR_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
@@ -74,11 +74,14 @@ def price_api():
         yield ticker, ecb
 
 
-def _portfolio_entry(hass, *, api_key: str = "key") -> MockConfigEntry:
+def _portfolio_entry(
+    hass, *groups: ConfigSubentryData, api_key: str = "key"
+) -> MockConfigEntry:
     entry = MockConfigEntry(
         domain=DOMAIN, version=3, unique_id="portfolio", title="Bitpanda Portfolio",
         data={"entry_type": "portfolio", "api_key": api_key, "currency": "EUR",
               "currency_id": _EUR_ID},
+        subentries_data=list(groups),
     )
     entry.add_to_hass(hass)
     return entry
@@ -462,6 +465,76 @@ async def test_the_refresh_service_lives_while_any_entry_is_loaded(hass, portfol
     assert hass.services.has_service(DOMAIN, "refresh")
     assert await hass.config_entries.async_unload(tracker.entry_id)
     assert not hass.services.has_service(DOMAIN, "refresh")
+
+
+# --- Task 24: groups follow Home Assistant's language at setup -----------------
+
+
+async def test_a_price_tracker_group_is_retitled_to_the_new_language_at_setup(
+    hass, price_api
+):
+    ticker, _ = price_api
+    hass.config.language = "de"
+    entry = _price_entry(
+        hass, [],
+        price_group("crypto", BTC, title="Cryptocurrencies"),
+        price_group("metal", GOLD, title="Meine Coins"),
+    )
+    await _setup(hass, entry)
+    assert _group(entry, "crypto").title == "Kryptowährungen"
+    assert _group(entry, "metal").title == "Meine Coins"
+    # One ticker call per tracked asset (BTC, GOLD): retitled before the
+    # update listener exists, so no reload followed with a second round.
+    assert ticker.call_count == 2
+
+
+async def test_a_price_tracker_group_already_in_the_current_language_is_untouched(
+    hass, price_api
+):
+    ticker, _ = price_api
+    hass.config.language = "de"
+    entry = _price_entry(hass, [], price_group("crypto", BTC, title="Kryptowährungen"))
+    group_before = _group(entry, "crypto")
+
+    with patch.object(
+        hass.config_entries, "async_update_subentry",
+        wraps=hass.config_entries.async_update_subentry,
+    ) as spy:
+        await _setup(hass, entry)
+
+    spy.assert_not_called()
+    assert _group(entry, "crypto") is group_before
+    assert _group(entry, "crypto").title == "Kryptowährungen"
+    assert ticker.call_count == 1
+
+
+async def test_a_portfolio_wallet_group_is_retitled_to_the_new_language_at_setup(
+    hass, portfolio_api
+):
+    hass.config.language = "de"
+    entry = _portfolio_entry(hass, wallet_group("crypto", title="Cryptocurrencies"))
+    await _setup(hass, entry)
+    assert _group(entry, "crypto").title == "Kryptowährungen"
+    assert portfolio_api.call_count == 1
+
+
+async def test_a_portfolio_wallet_group_already_in_the_current_language_is_untouched(
+    hass, portfolio_api
+):
+    hass.config.language = "de"
+    entry = _portfolio_entry(hass, wallet_group("crypto", title="Kryptowährungen"))
+    group_before = _group(entry, "crypto")
+
+    with patch.object(
+        hass.config_entries, "async_update_subentry",
+        wraps=hass.config_entries.async_update_subentry,
+    ) as spy:
+        await _setup(hass, entry)
+
+    spy.assert_not_called()
+    assert _group(entry, "crypto") is group_before
+    assert _group(entry, "crypto").title == "Kryptowährungen"
+    assert portfolio_api.call_count == 1
 
 
 # --- Deleting a device from its device page ------------------------------------------

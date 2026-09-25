@@ -162,7 +162,7 @@ This release moves to Bitpanda's new Public API and adds Earn data. If you're up
 | 24h price change missing | The Recorder integration must be active and have at least 24 hours of history |
 | Wallet not visible | Add it via the integration's options menu (**Add wallet**) |
 | Portfolio sensor missing | Add at least one wallet first — the portfolio sensor only appears when wallets are tracked |
-| Price shows `unknown` and a `conversion` attribute | Your display currency is not EUR and your account holds neither cash nor any asset to derive an exchange rate from — see the FAQ below |
+| Price shows `unknown` and a `conversion` attribute | Your display currency is not EUR and your account holds neither cash nor any single asset worth at least 50 EUR to derive an exchange rate from — see the FAQ below |
 | "Reauthentication required" | The key expired, was revoked, or lacks a scope — open the notification and paste a new key |
 | Setup says permissions are missing | Create a new key with all three scopes — scopes cannot be added to an existing key |
 | Dialogs show raw text like `missing_scopes` | Reload the browser tab (`Ctrl+F5` / `Cmd+Shift+R`) — your browser cached the old translation strings |
@@ -185,7 +185,7 @@ Remove the integration and re-add it — you can choose the currency during setu
 Yes. The integration only requires three read scopes — Guthaben (Balance), Transaktion (Transaction) and Earn (Read) — and never calls a write endpoint; it cannot place trades or move funds. The key is never logged, and diagnostics keep it redacted. It is stored locally in Home Assistant and never transmitted to third parties.
 
 **Why are prices converted rather than quoted in my currency?**  
-Bitpanda's price endpoint only returns EUR. For any other display currency, the integration derives a conversion rate from your own portfolio, valued once in EUR and once in your currency — from your cash balance, or, if you hold no cash, from your largest holding. Rates derived from a cash balance landed within about half a percent of ECB reference rates in testing. Only an account with neither cash nor holdings has nothing to derive a rate from; prices of assets you don't hold then show no value rather than an EUR figure under your currency, and the price sensor's `conversion` attribute says why.
+Bitpanda's price endpoint only returns EUR. For any other display currency, the integration derives a conversion rate from your own portfolio, valued once in EUR and once in your currency — from your cash balance, or, if you hold no cash, from your largest holding — provided it is worth at least 50 EUR, because portfolio values are rounded to cents and a smaller holding would give a visibly wrong rate. Rates derived from a cash balance landed within about half a percent of ECB reference rates in testing. Only an account with neither cash nor a holding of at least 50 EUR has nothing to derive a rate from; prices of assets you don't hold then show no value rather than an EUR figure under your currency, and the price sensor's `conversion` attribute says why.
 
 **What happens when my API key expires?**  
 Bitpanda API keys expire after one year. When Bitpanda rejects the stored key, Home Assistant shows **Reauthentication required** for the Bitpanda integration — open it and paste a new key. Every tracked asset and sensor is kept. You can also replace the key any time via the entry's **⋮ menu → Reconfigure**.

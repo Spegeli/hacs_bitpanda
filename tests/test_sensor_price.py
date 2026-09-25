@@ -44,8 +44,9 @@ _USD_RATE = 1.13755257  # the same measured USD rate used elsewhere in this suit
 # currency (see test_coordinator_price.py), so the attribute must not claim
 # an EUR price is shown.
 _NO_RATE_MESSAGE = (
-    "unavailable - no cash or holding in the portfolio to derive an exchange "
-    "rate from, so prices of assets you do not hold are not shown"
+    "unavailable - no cash, and no holding worth at least 50 EUR, in the "
+    "portfolio to derive an exchange rate from, so prices of assets you do "
+    "not hold are not shown"
 )
 
 

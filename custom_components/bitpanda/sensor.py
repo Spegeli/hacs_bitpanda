@@ -280,9 +280,9 @@ class BitpandaPriceSensor(CoordinatorEntity, SensorEntity):
                 # /tickers answers in EUR only, and an EUR figure under this
                 # sensor's unit would be off by the exchange rate.
                 attrs["conversion"] = (
-                    "unavailable - no cash or holding in the portfolio to "
-                    "derive an exchange rate from, so prices of assets you "
-                    "do not hold are not shown"
+                    "unavailable - no cash, and no holding worth at least 50 "
+                    "EUR, in the portfolio to derive an exchange rate from, so "
+                    "prices of assets you do not hold are not shown"
                 )
             else:
                 attrs["conversion_rate"] = round(rate, 8)

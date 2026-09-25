@@ -13,6 +13,8 @@ from __future__ import annotations
 import logging
 import math
 
+from .const import MIN_PORTFOLIO_DERIVED_VALUE
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -90,14 +92,20 @@ def derive_rate(
     soon as the two responses list several in a different order. Without a
     usable fiat pair (no cash at all, a zero balance, cash parked in Cash
     Plus) the ratio of the largest holding's `currency_balance` in both
-    responses serves instead, at no extra request. Only an account with
-    neither has no rate.
+    responses serves instead, at no extra request -- but only a holding worth
+    at least MIN_PORTFOLIO_DERIVED_VALUE in EUR, because those values are
+    rounded to cents and a small one yields a rate that is plainly wrong.
+    Without either there is no rate: unheld prices then show no value, which
+    beats a wrong one.
     """
     pair = _largest_pair(_fiat_amounts(eur_entries), _fiat_amounts(target_entries))
     if pair is None:
-        pair = _largest_pair(
-            _asset_values(eur_entries), _asset_values(target_entries)
-        )
+        large_enough = {
+            asset_id: value
+            for asset_id, value in _asset_values(eur_entries).items()
+            if value >= MIN_PORTFOLIO_DERIVED_VALUE
+        }
+        pair = _largest_pair(large_enough, _asset_values(target_entries))
     if pair is None:
         _LOGGER.debug("No cash or holding to derive a currency rate from")
         return None

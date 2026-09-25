@@ -50,3 +50,12 @@ PRICE_BUDGET_SHARE = 0.6
 PORTFOLIO_TIMEFRAMES = ["DAY", "WEEK", "MONTH", "SIX_MONTH", "YEAR"]
 
 DEFAULT_CURRENCY = "EUR"
+
+# Portfolio amounts (`currency_balance`) are rounded to cents. A figure derived
+# from one -- a held asset's unit price (value / balance) or, without cash, the
+# exchange rate (the same holding valued in two currencies) -- is only trusted
+# from a value of 50 upwards, where the rounding stays near 0.01 %. Below it the
+# error grows to whole percent (0.04 over 9.41652 units lies anywhere in a
+# +-12 % band; 0.04 EUR shown as 0.05 USD claims a rate of 1.25), and dust valued
+# at 0.00 would publish a price of 0.
+MIN_PORTFOLIO_DERIVED_VALUE = 50.0

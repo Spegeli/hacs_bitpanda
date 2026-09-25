@@ -16,6 +16,7 @@ from .const import (
     EARN_UPDATE_INTERVAL,
     EUR_CURRENCY_ID,
     HOURLY_READ_BUDGET,
+    MIN_PORTFOLIO_DERIVED_VALUE,
     PORTFOLIO_TIMEFRAMES,
     PORTFOLIO_UPDATE_INTERVAL,
     PRICE_BUDGET_SHARE,
@@ -165,12 +166,8 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
 # It is a warning threshold, never a cap — see price_interval.
 _SLOW_PRICE_INTERVAL = timedelta(minutes=30)
 
-# A held asset's unit price is its portfolio value over its balance, and that
-# value is rounded to cents. From a value of 50 in the display currency the
-# rounding error stays near 0.01 %; below it grows to whole percent (0.04 over
-# 9.41652 units is anywhere in a +-12 % band), and dust valued at 0.00 would
-# publish a price of 0. Smaller holdings are priced from the ticker instead.
-_MIN_PORTFOLIO_PRICED_VALUE = 50.0
+# A held asset is priced from the portfolio only from MIN_PORTFOLIO_DERIVED_VALUE
+# upwards (see const.py for why); smaller holdings are priced from the ticker.
 
 # The API quotes prices and amounts as 8-decimal strings. Anything computed
 # from them -- a converted or derived price, a sum of rewards -- is rounded to
@@ -270,7 +267,7 @@ class PriceCoordinator(DataUpdateCoordinator[dict]):
                 and holding is not None
                 and holding.balance > 0
                 and holding.value is not None
-                and holding.value >= _MIN_PORTFOLIO_PRICED_VALUE
+                and holding.value >= MIN_PORTFOLIO_DERIVED_VALUE
             )
 
         needed = [a for a in self._tracked if not _priceable_from_portfolio(a)]

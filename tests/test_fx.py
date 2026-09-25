@@ -137,6 +137,22 @@ def test_derive_rate_skips_holdings_valued_at_zero():
     assert derive_rate(eur_side, usd_side) == 951.54 / 836.46
 
 
+def test_derive_rate_refuses_a_fallback_holding_too_small_for_its_rounding():
+    """currency_balance is rounded to cents. A 0.04 EUR holding shown as 0.05
+    USD would claim a rate of 1.25 against a true ~1.14 -- a wrong rate
+    applied to every converted price. Below the bound there is no rate, and
+    unheld prices show no value rather than a wrong one.
+    """
+    eur_side = [_asset("tiny", "0.04")]
+    usd_side = [_asset("tiny", "0.05")]
+    assert derive_rate(eur_side, usd_side) is None
+
+
+def test_derive_rate_fallback_bound_is_inclusive_at_fifty():
+    assert derive_rate([_asset("a", "49.99")], [_asset("a", "56.87")]) is None
+    assert derive_rate([_asset("a", "50.00")], [_asset("a", "56.88")]) == 56.88 / 50.00
+
+
 def test_derive_rate_is_none_with_neither_cash_nor_holdings():
     assert derive_rate([], []) is None
     assert derive_rate([_asset("dust", "0.00")], [_asset("dust", "0.00")]) is None

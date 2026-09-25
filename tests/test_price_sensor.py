@@ -74,12 +74,14 @@ def test_last_rates_are_used_after_a_failed_ecb_refresh():
     assert sensor.extra_state_attributes["rate_date"] == "2026-09-24"
 
 
-def test_without_rates_the_sensor_says_why_instead_of_showing_eur():
+def test_without_rates_the_sensor_publishes_a_status_key_instead_of_a_value():
     sensor = _sensor("USD", rates=None)
     assert sensor.available is True
     assert sensor.native_value is None
     assert "conversion_rate" not in sensor.extra_state_attributes
-    assert sensor.extra_state_attributes["conversion"]
+    # A status key, translated through state_attributes.conversion.state --
+    # never a raw English sentence.
+    assert sensor.extra_state_attributes["conversion"] == "no_rate"
 
 
 def test_a_failing_ticker_makes_only_that_asset_unavailable():

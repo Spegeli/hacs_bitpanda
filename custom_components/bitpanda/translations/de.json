@@ -296,6 +296,12 @@
           "price_24h_ago": {
             "name": "24 h: Preis davor"
           },
+          "conversion": {
+            "name": "Umrechnung: Status",
+            "state": {
+              "no_rate": "Noch kein Umrechnungskurs geladen"
+            }
+          },
           "conversion_rate": {
             "name": "Umrechnung: Kurs"
           },

@@ -296,6 +296,12 @@
           "price_24h_ago": {
             "name": "24 h: price before"
           },
+          "conversion": {
+            "name": "Conversion: status",
+            "state": {
+              "no_rate": "No exchange rate loaded yet"
+            }
+          },
           "conversion_rate": {
             "name": "Conversion: rate"
           },

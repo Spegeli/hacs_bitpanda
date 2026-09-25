@@ -40,8 +40,6 @@ from .price_coordinator import PriceTrackerRuntime, convert_price
 
 _LOGGER = logging.getLogger(__name__)
 
-_NO_RATE = "no ECB exchange rate for this currency has been loaded yet"
-
 
 def display_precision(value: float | None) -> int:
     """Return decimals to display for a price.
@@ -182,7 +180,9 @@ class PriceSensor(CoordinatorEntity, SensorEntity):
         if self._currency != "EUR":
             rate = self._rate
             if rate is None:
-                attrs["conversion"] = _NO_RATE
+                # A status key, translated through state_attributes.conversion.state
+                # (entity.sensor.price in strings.json) -- never a raw sentence.
+                attrs["conversion"] = "no_rate"
             else:
                 attrs["conversion_rate"] = rate
                 attrs["rate_date"] = self._rates.date

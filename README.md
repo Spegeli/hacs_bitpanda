@@ -154,7 +154,7 @@ Home Assistant lists these in the entity's Details view under translated names g
 | Total | `asset`, `asset_name`, `units` (whole position), `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
 | Portfolio Cash Plus | `eur`, `usd`, `gbp` — the amount of each held Cash Plus product in its own currency |
 | Price (EUR) | `asset`, `asset_name`, `trading_pair`, `change_24h_pct`, `price_24h_ago` |
-| Price (other currencies) | as EUR, plus `conversion_rate`, `rate_date`, `rate_source` (`ECB`) |
+| Price (other currencies) | as EUR, plus `conversion` (status `no_rate` until the first ECB rate is loaded), `conversion_rate`, `rate_date`, `rate_source` (`ECB`) |
 
 ---
 

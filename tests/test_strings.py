@@ -172,18 +172,28 @@ def _cash_plus_portfolio_data() -> PortfolioData:
 
 def _attribute_scenarios() -> list[tuple[str, dict]]:
     """(translation_key, published attributes) for every sensor class that
-    publishes attributes."""
+    publishes attributes. A translation_key may appear more than once, when
+    different sensor states publish different, mutually exclusive attributes
+    (PriceSensor's `conversion` vs. `conversion_rate`/`rate_date`/
+    `rate_source`, depending on whether an ECB rate has loaded yet) -- the
+    test unions every scenario sharing a key before comparing it to that
+    key's labels, so this still proves each one has a label."""
     wallet_coordinator = _Coordinator(_wallet_portfolio_data())
     rewards = _Coordinator({_VSN["id"]: RewardTotals(
         gross=12.0, fee=2.4, net=9.6, count=3, last_at="2026-09-22T17:16:35Z")})
     earn = _Coordinator(EarnData(apr={_VSN["id"]: 0.0544}, offered=frozenset({_VSN["id"]})))
 
-    price = PriceSensor(
+    price_with_rate = PriceSensor(
         _Coordinator({_BTC["id"]: 100.0}),
         _Coordinator(EcbRates(date="2026-09-24", rates={"USD": 1.1367})),
         "eid", _BTC, "USD",
     )
-    price._price_24h_ago = 90.0
+    price_with_rate._price_24h_ago = 90.0
+
+    # No rate loaded yet: the mutually exclusive `conversion` status branch.
+    price_without_rate = PriceSensor(
+        _Coordinator({_BTC["id"]: 100.0}), _Coordinator(None), "eid", _BTC, "USD",
+    )
 
     return [
         ("wallet", WalletSensor(
@@ -195,7 +205,8 @@ def _attribute_scenarios() -> list[tuple[str, dict]]:
         ("wallet_total", WalletTotalSensor(
             wallet_coordinator, "eid", "EUR", _VSN
         ).extra_state_attributes),
-        ("price", price.extra_state_attributes),
+        ("price", price_with_rate.extra_state_attributes),
+        ("price", price_without_rate.extra_state_attributes),
         ("cash_plus", PortfolioCashPlusSensor(
             _Coordinator(_cash_plus_portfolio_data()), "eid", "EUR"
         ).extra_state_attributes),
@@ -206,9 +217,32 @@ def test_every_published_attribute_has_a_translated_label():
     strings = json.loads((_DIR / "strings.json").read_text(encoding="utf-8"))
     english = json.loads((_DIR / "translations/en.json").read_text(encoding="utf-8"))
 
+    published: dict[str, set[str]] = {}
     for translation_key, attrs in _attribute_scenarios():
+        published.setdefault(translation_key, set()).update(attrs)
+
+    for translation_key, attrs in published.items():
         labels = strings["entity"]["sensor"][translation_key]["state_attributes"]
-        assert set(attrs) == set(labels), translation_key
+        assert attrs == set(labels), translation_key
         assert english["entity"]["sensor"][translation_key]["state_attributes"] == labels, (
             translation_key
         )
+
+
+def test_the_conversion_status_has_a_translated_name_and_state():
+    """`conversion` is a status key, not a raw sentence: its own name plus a
+    `state` translation for `no_rate` -- the only value it ever takes."""
+    strings = json.loads((_DIR / "strings.json").read_text(encoding="utf-8"))
+    english = json.loads((_DIR / "translations/en.json").read_text(encoding="utf-8"))
+    german = json.loads((_DIR / "translations/de.json").read_text(encoding="utf-8"))
+
+    expected_en = {
+        "name": "Conversion: status",
+        "state": {"no_rate": "No exchange rate loaded yet"},
+    }
+    assert strings["entity"]["sensor"]["price"]["state_attributes"]["conversion"] == expected_en
+    assert english["entity"]["sensor"]["price"]["state_attributes"]["conversion"] == expected_en
+    assert german["entity"]["sensor"]["price"]["state_attributes"]["conversion"] == {
+        "name": "Umrechnung: Status",
+        "state": {"no_rate": "Noch kein Umrechnungskurs geladen"},
+    }

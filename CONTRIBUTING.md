@@ -13,7 +13,7 @@ By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## What cannot be added
 
-Crypto, stocks, ETFs, ETCs, Bitpanda Crypto Indices and tokenized precious metals are all supported, for both price tracking and wallets — 14,051 assets across six catalogue categories (see the README's Supported Assets table). The three Cash Plus products (`fiat_earn` group) are the only catalogue entries left out: Cash Plus is an interest-bearing cash product, not a priced asset, so there is no ticker for it.
+Crypto, stocks, ETFs, ETCs, Bitpanda Crypto Indices and tokenized precious metals are all supported, for both price tracking and wallets — 14,051 assets across six catalogue categories (see the README's Supported Assets table). The three Cash Plus products (`fiat_earn` group) are the only catalogue entries left out. They do have tickers (BCPEUR, BCPUSD, BCPGBP), but they are cash equivalents — one unit is one unit of its currency, and interest arrives as separate operations — so tracking their price adds nothing.
 
 Fiat currencies are not wallets. A fiat balance is available as the `cash` attribute of the Portfolio Total sensor, not as its own entity.
 
@@ -53,11 +53,13 @@ Everything lives in `custom_components/bitpanda/`:
 | `diagnostics.py` | Config entry diagnostics |
 | `strings.json`, `translations/` | UI strings |
 
-Five `DataUpdateCoordinator` instances handle polling: Portfolio and History every 5 minutes, Price every 60 seconds for assets you don't hold (an asset you do hold is priced from the Portfolio coordinator's own data, so effectively every 5 minutes — see coordinator.py's PriceCoordinator), Earn every 24 hours, Rewards every hour. Add new API reads to an existing coordinator rather than polling from a sensor.
+Five `DataUpdateCoordinator` instances handle polling: Portfolio and History every 5 minutes, Price every 60 seconds for assets priced from the ticker (an asset you hold worth at least 50 in the display currency is priced from the Portfolio coordinator's own data instead, so effectively every 5 minutes — see coordinator.py's PriceCoordinator), Earn every 24 hours, Rewards every hour. Add new API reads to an existing coordinator rather than polling from a sensor.
 
 ## Things that are easy to get wrong
 
-**Every price string carries exactly 8 decimals.** `90.93000000` for a stock, `0.00000032` for a micro-cap — the API always emits 8 decimal places, for every asset. Display precision is derived from the price's magnitude (`sensor.py`'s `display_precision`), never by counting the string's digits.
+**Every ticker price string carries exactly 8 decimals.** `90.93000000` for a stock, `0.00000032` for a micro-cap — the API always emits 8 decimal places, for every asset. Display precision is derived from the price's magnitude (`sensor.py`'s `display_precision`), never by counting the string's digits. Prices derived from the portfolio are rounded to 8 decimals too, but only as precise as the cent-rounded value they come from — which is why holdings worth less than 50 are priced from the ticker.
+
+**`/operations` cursors need milliseconds.** The server ignores a cursor whose timestamp has no fractional seconds and silently answers with page 1 — yet emits such cursors itself. `api.py` rewrites them (`normalize_operations_cursor`), and `_paginate` raises rather than return a partial listing when a cursor repeats. Never loosen that into "return what we have": a partial history publishes wrong lifetime totals as fact.
 
 **A symbol is not an id.** The 14,000-asset catalogue lets one symbol name several assets — `XAU` is both Gold (a tokenized metal) and GoldMoney Inc (a stock). Always resolve to, cache and compare by asset id, never the bare symbol.
 

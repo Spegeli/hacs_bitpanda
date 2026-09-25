@@ -1,4 +1,4 @@
-"""Tests for earn APR mapping and reward aggregation."""
+"""Tests for reward aggregation."""
 import asyncio
 import base64
 
@@ -14,14 +14,9 @@ from custom_components.bitpanda.api import (
     BitpandaAuthError,
 )
 from custom_components.bitpanda.const import API_BASE_URL, DOMAIN
-from custom_components.bitpanda.coordinator import (
-    EarnCoordinator,
-    Holding,
-    PortfolioData,
-    map_earn_configs,
-)
 from custom_components.bitpanda.portfolio_coordinator import RewardsCoordinator
-from custom_components.bitpanda.sensor import BitpandaWalletSensor
+from custom_components.bitpanda.portfolio_model import Holding, PortfolioData
+from custom_components.bitpanda.portfolio_sensor import StakingSensor
 
 
 def _reward(asset_id, gross, fee, credited_at, owner="staking-service"):
@@ -38,23 +33,6 @@ def _reward(asset_id, gross, fee, credited_at, owner="staking-service"):
             }
         ],
     }
-
-
-def test_map_earn_configs_keys_by_asset():
-    configs = [
-        {"asset_id": "a1", "annual_percentage_rate": 0.0544, "enabled": True,
-         "soldout": False},
-        {"asset_id": "a2", "annual_percentage_rate": 0.07, "enabled": True,
-         "soldout": False},
-    ]
-    assert map_earn_configs(configs) == {"a1": 0.0544, "a2": 0.07}
-
-
-def test_map_earn_configs_keeps_soldout_products():
-    """soldout and enabled are separate flags; a soldout product still has a rate."""
-    configs = [{"asset_id": "a1", "annual_percentage_rate": 0.0857,
-                "enabled": True, "soldout": True}]
-    assert map_earn_configs(configs) == {"a1": 0.0857}
 
 
 # ---------------------------------------------------------------------------
@@ -142,22 +120,15 @@ class _Coordinator:
         self.last_update_success = True
 
 
-def _vsn_wallet_sensor(rewards) -> BitpandaWalletSensor:
+def _vsn_staking_sensor(rewards) -> StakingSensor:
     portfolio = _Coordinator(
         PortfolioData(
-            holdings={
-                "vsn": Holding(asset_id="vsn", balance=100.0, available=0.0,
-                               staked=100.0, value=4.0)
-            }
+            holdings={"vsn": Holding(asset_id="vsn", balance=100.0, available=0.0, value=4.0)}
         )
     )
-
-    class _Entry:
-        entry_id = "entry1"
-
-    return BitpandaWalletSensor(
-        portfolio, _Coordinator({}), rewards, _Entry(),
-        asset={"id": "vsn", "symbol": "VSN"}, currency="EUR",
+    return StakingSensor(
+        portfolio, _Coordinator(None), rewards, "entry1", "EUR",
+        {"id": "vsn", "symbol": "VSN"},
     )
 
 
@@ -176,8 +147,8 @@ async def test_rewards_paging_failure_leaves_rewards_attributes_absent(hass):
 
     assert rewards.last_update_success is False
     assert rewards.data is None
-    attrs = _vsn_wallet_sensor(rewards).extra_state_attributes
-    assert attrs["balance"] == 100.0
+    attrs = _vsn_staking_sensor(rewards).extra_state_attributes
+    assert attrs["units"] == 100.0
     assert not [key for key in attrs if key.startswith("rewards_")]
 
 
@@ -207,34 +178,6 @@ async def test_rewards_paging_failure_keeps_the_last_complete_totals(hass):
             await rewards.async_refresh()
 
     assert rewards.last_update_success is False
-    attrs = _vsn_wallet_sensor(rewards).extra_state_attributes
+    attrs = _vsn_staking_sensor(rewards).extra_state_attributes
     assert attrs["rewards_count"] == 2
     assert abs(attrs["rewards_gross"] - (20.67399483 + 20.68994769)) < 1e-8
-
-
-# ---------------------------------------------------------------------------
-# EarnCoordinator._async_update_data
-# ---------------------------------------------------------------------------
-
-
-class _FakeEarnClient:
-    """Fake API client with a controllable async_get_earn_configs."""
-
-    def __init__(self, configs=None, error=None):
-        self._configs = configs or []
-        self._error = error
-
-    async def async_get_earn_configs(self):
-        if self._error is not None:
-            raise self._error
-        return self._configs
-
-
-async def test_earn_coordinator_raises_config_entry_auth_failed_on_401():
-    client = _FakeEarnClient(
-        error=BitpandaAuthError("Unauthorized for /earn/configs")
-    )
-    coordinator = EarnCoordinator(hass=None, entry=None, client=client)
-
-    with pytest.raises(ConfigEntryAuthFailed):
-        await coordinator._async_update_data()

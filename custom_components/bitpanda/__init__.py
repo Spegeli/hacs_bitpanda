@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from time import monotonic
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import entity_registry as er
@@ -16,29 +16,39 @@ from .api import (
     BitpandaAuthError,
     BitpandaRateLimitError,
 )
-from .assets import AssetResolver, legacy_candidates, pick_legacy
+from .assets import AssetDirectory, AssetResolver, legacy_candidates, pick_legacy
 from .const import (
     CONF_API_KEY,
+    CONF_ASSET,
     CONF_ASSET_CACHE,
     CONF_CURRENCY,
     CONF_CURRENCY_ID,
+    CONF_EXTRA_CURRENCIES,
     CONF_TRACKED_ASSETS,
     CONF_TRACKED_WALLETS,
     DOMAIN,
+    ENTRY_TYPE_PRICE_TRACKER,
     EUR_CURRENCY_ID,
     REFRESH_MIN_COOLDOWN,
+    SUBENTRY_TYPE_ASSET,
+    entry_type,
 )
-from .coordinator import (
+from .naming import asset_display_label
+from .portfolio_coordinator import (
     EarnCoordinator,
     HistoryCoordinator,
     PortfolioCoordinator,
-    PriceCoordinator,
+    PortfolioRuntime,
     RewardsCoordinator,
 )
+from .price_coordinator import EcbCoordinator, PriceTrackerRuntime, TickerCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
+
+# Records of held assets, shared across reloads of the Portfolio entry.
+_ASSET_DIRECTORY_KEY = f"{DOMAIN}_asset_directory"
 
 # The v1 options flow built wallet ids from the legacy /asset-wallets nesting:
 # "{category}_{symbol}" for a flat category, "{category}_{sub}_{symbol}" for a
@@ -358,111 +368,125 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Bitpanda from a config entry."""
-    client = BitpandaApiClient(
-        entry.data[CONF_API_KEY], async_get_clientsession(hass)
-    )
-    currency_id = entry.data.get(CONF_CURRENCY_ID, EUR_CURRENCY_ID)
-    currency = entry.data.get(CONF_CURRENCY, "EUR")
-    resolver = AssetResolver(client, entry.options.get(CONF_ASSET_CACHE, {}))
-
-    portfolio = PortfolioCoordinator(hass, entry, client, currency_id)
-    prices = PriceCoordinator(hass, entry, client, portfolio, currency_id)
-    earn = EarnCoordinator(hass, entry, client)
-    rewards = RewardsCoordinator(hass, entry, client)
-    history = HistoryCoordinator(hass, entry, client, currency_id)
-
-    prices.set_tracked(entry.options.get(CONF_TRACKED_ASSETS, []))
-
-    await portfolio.async_config_entry_first_refresh()
-    await prices.async_config_entry_first_refresh()
-    # Earn, rewards and history are additive. A failure there must not block
-    # setup, so they refresh without raising ConfigEntryNotReady -- unlike
-    # async_config_entry_first_refresh(), plain async_refresh() never raises
-    # it, even on total failure; it only marks last_update_success False. A
-    # 401 from any of them is different: DataUpdateCoordinator._async_refresh
-    # catches the ConfigEntryAuthFailed each coordinator raises for it and
-    # calls config_entry.async_start_reauth_if_available(hass) itself, so the
-    # reauth prompt appears even though only portfolio and prices went
-    # through async_config_entry_first_refresh() above.
-    await earn.async_refresh()
-    await rewards.async_refresh()
-    await history.async_refresh()
-
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = {
-        "portfolio_coordinator": portfolio,
-        "price_coordinator": prices,
-        "earn_coordinator": earn,
-        "rewards_coordinator": rewards,
-        "history_coordinator": history,
-        "resolver": resolver,
-        "currency": currency,
-    }
-
+    """Set up one of the two services."""
+    if entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER:
+        entry.runtime_data = await _async_start_price_tracker(hass, entry)
+    else:
+        entry.runtime_data = await _async_start_portfolio(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(async_update_options))
-
+    # Options, subentries and data all change what exists: rebuild on any change.
+    entry.async_on_unload(entry.add_update_listener(_async_reload))
     _async_register_refresh_service(hass)
-
     return True
 
 
-def _refresh_cooldown(stores: list[dict]) -> float:
-    """Seconds between two accepted `bitpanda.refresh` calls.
+async def _async_start_portfolio(hass: HomeAssistant, entry: ConfigEntry) -> PortfolioRuntime:
+    session = async_get_clientsession(hass)
+    client = BitpandaApiClient(entry.data[CONF_API_KEY], session)
+    # Asset lookups are public: keyless, and the records outlive reloads.
+    directory = AssetDirectory(
+        BitpandaApiClient(None, session), hass.data.setdefault(_ASSET_DIRECTORY_KEY, {})
+    )
+    currency_id = entry.data[CONF_CURRENCY_ID]
+    runtime = PortfolioRuntime(
+        portfolio=PortfolioCoordinator(hass, entry, client, currency_id, directory),
+        history=HistoryCoordinator(hass, entry, client, currency_id),
+        earn=EarnCoordinator(hass, entry, client),
+        rewards=RewardsCoordinator(hass, entry, client),
+    )
+    await runtime.portfolio.async_config_entry_first_refresh()
+    # Earn, rewards and history are additive: a failure there must not block
+    # setup, so they refresh with async_refresh(), which never raises
+    # ConfigEntryNotReady. A 401 from any of them still reaches the reauth
+    # dialog: DataUpdateCoordinator catches the ConfigEntryAuthFailed each
+    # raises and starts reauth itself.
+    await runtime.earn.async_refresh()
+    await runtime.rewards.async_refresh()
+    await runtime.history.async_refresh()
+    return runtime
 
-    The price coordinator's current interval, never below
-    REFRESH_MIN_COOLDOWN. Every accepted call costs one or two portfolio
-    requests plus a ticker request per asset the portfolio cannot price, and
-    the price interval is what keeps exactly that inside the hourly read
-    budget -- stretching as more assets are tracked. A shorter cooldown would
-    let an automation drive requests above the normal polling rate.
-    """
+
+async def _async_start_price_tracker(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> PriceTrackerRuntime:
+    session = async_get_clientsession(hass)
+    tracked = {
+        subentry.data[CONF_ASSET]["id"]: asset_display_label(subentry.data[CONF_ASSET])
+        for subentry in entry.subentries.values()
+        if subentry.subentry_type == SUBENTRY_TYPE_ASSET
+    }
+    tickers = TickerCoordinator(hass, entry, BitpandaApiClient(None, session), tracked)
+    ecb = (
+        EcbCoordinator(hass, entry, session)
+        if entry.options.get(CONF_EXTRA_CURRENCIES)
+        else None
+    )
+    await tickers.async_config_entry_first_refresh()
+    if ecb is not None:
+        # Not a first refresh: without rates the EUR sensors still work and
+        # the other currencies say why they have no value.
+        await ecb.async_refresh()
+    return PriceTrackerRuntime(tickers=tickers, ecb=ecb)
+
+
+async def _async_reload(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _loaded_runtimes(hass: HomeAssistant) -> list:
+    return [
+        entry.runtime_data
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.state is ConfigEntryState.LOADED
+    ]
+
+
+def _refresh_cooldown(runtimes: list) -> float:
+    """Seconds between two accepted `bitpanda.refresh` calls: the ticker
+    interval, never below REFRESH_MIN_COOLDOWN. A shorter cooldown would let
+    an automation drive ticker requests above the budgeted polling rate."""
     seconds = REFRESH_MIN_COOLDOWN.total_seconds()
-    for store in stores:
-        interval = store["price_coordinator"].update_interval
-        if interval is not None:
-            seconds = max(seconds, interval.total_seconds())
+    for runtime in runtimes:
+        if isinstance(runtime, PriceTrackerRuntime):
+            interval = runtime.tickers.update_interval
+            if interval is not None:
+                seconds = max(seconds, interval.total_seconds())
     return seconds
 
 
 @callback
 def _async_register_refresh_service(hass: HomeAssistant) -> None:
-    """Register `bitpanda.refresh` once, shared by every loaded entry."""
+    """Register `bitpanda.refresh` once, shared by both services."""
     if hass.services.has_service(DOMAIN, "refresh"):
         return
 
-    # Empty until the first accepted call. The monotonic clock can start
-    # near zero after a boot, so a pretend earlier call at time 0 would turn
-    # the very first call away.
+    # Empty until the first accepted call: the monotonic clock can start near
+    # zero after a boot.
     last_accepted: dict[str, float] = {}
 
     async def handle_refresh(call: ServiceCall) -> None:
-        stores = list(hass.data.get(DOMAIN, {}).values())
+        runtimes = _loaded_runtimes(hass)
         now = monotonic()
         previous = last_accepted.get("time")
-        if previous is not None and now - previous < _refresh_cooldown(stores):
+        if previous is not None and now - previous < _refresh_cooldown(runtimes):
             _LOGGER.debug("Refresh cooldown active, ignoring call")
             return
         last_accepted["time"] = now
-        for store in stores:
-            await store["portfolio_coordinator"].async_request_refresh()
-            await store["price_coordinator"].async_request_refresh()
+        for runtime in runtimes:
+            if isinstance(runtime, PortfolioRuntime):
+                await runtime.portfolio.async_request_refresh()
+            else:
+                await runtime.tickers.async_request_refresh()
 
     hass.services.async_register(DOMAIN, "refresh", handle_refresh)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-    if unload_ok := await hass.config_entries.async_unload_platforms(
-        entry, PLATFORMS
+    """Unload an entry; the refresh service goes with the last one."""
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok and not any(
+        other.entry_id != entry.entry_id and other.state is ConfigEntryState.LOADED
+        for other in hass.config_entries.async_entries(DOMAIN)
     ):
-        hass.data[DOMAIN].pop(entry.entry_id)
-        if not hass.data[DOMAIN]:
-            hass.services.async_remove(DOMAIN, "refresh")
+        hass.services.async_remove(DOMAIN, "refresh")
     return unload_ok
-
-
-async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload when options change."""
-    await hass.config_entries.async_reload(entry.entry_id)

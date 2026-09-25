@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+import math
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -157,6 +158,11 @@ async def collect_returns(
     otherwise five 401s would read as "No portfolio history could be
     fetched" (an UpdateFailed) and the caller would never see the
     BitpandaAuthError it needs to start reauth.
+
+    The API sends return_percentage as a JSON string today (observed
+    2026-09-25); plain numbers are still accepted in case that changes back.
+    Either way the value must parse to a finite float or it is dropped, same
+    as any other unusable value -- a missing timeframe, not a bad one.
     """
     out: dict[str, float] = {}
     failures = 0
@@ -177,7 +183,16 @@ async def collect_returns(
             # stored as 1.0 — data that looks real. A dropped key is honest.
             continue
         if isinstance(value, (int, float)):
-            out[timeframe] = float(value)
+            parsed = float(value)
+        elif isinstance(value, str):
+            try:
+                parsed = float(value.strip())
+            except ValueError:
+                continue
+        else:
+            continue
+        if math.isfinite(parsed):
+            out[timeframe] = parsed
 
     # Raise only when every *request* failed. Returning {} normally would
     # leave last_update_success True, making a dead endpoint indistinguishable

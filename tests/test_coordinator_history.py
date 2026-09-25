@@ -79,6 +79,59 @@ async def test_collect_returns_drops_a_boolean_percentage():
     assert len(result) == len(PORTFOLIO_TIMEFRAMES) - 1
 
 
+async def test_collect_returns_parses_a_numeric_string_percentage():
+    """The API now sends return_percentage as a JSON string; numbers must
+    still work too, so each timeframe here uses a different value shape."""
+    values = {
+        "DAY": "0.73",
+        "WEEK": " 7.22 ",
+        "MONTH": 1.5,
+        "SIX_MONTH": 2,
+        "YEAR": "3.14",
+    }
+    with mock_aiohttp_client() as mocker:
+        for timeframe in PORTFOLIO_TIMEFRAMES:
+            mocker.get(
+                f"{API_BASE_URL}/portfolio-history?timeframe={timeframe}",
+                json={"data": {"return_percentage": values[timeframe]}},
+            )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            result = await collect_returns(client, None)
+    assert result == {
+        "DAY": 0.73,
+        "WEEK": 7.22,
+        "MONTH": 1.5,
+        "SIX_MONTH": 2.0,
+        "YEAR": 3.14,
+    }
+
+
+async def test_collect_returns_drops_unparsable_or_non_finite_percentage_strings():
+    """A string must parse to a finite number or the timeframe is dropped,
+    same as today's rule for every other unusable value."""
+    values = {
+        "DAY": "n/a",
+        "WEEK": "nan",
+        "MONTH": "inf",
+        "SIX_MONTH": 1.0,
+        "YEAR": 1.0,
+    }
+    with mock_aiohttp_client() as mocker:
+        for timeframe in PORTFOLIO_TIMEFRAMES:
+            mocker.get(
+                f"{API_BASE_URL}/portfolio-history?timeframe={timeframe}",
+                json={"data": {"return_percentage": values[timeframe]}},
+            )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            result = await collect_returns(client, None)
+    assert "DAY" not in result
+    assert "WEEK" not in result
+    assert "MONTH" not in result
+    assert result == {"SIX_MONTH": 1.0, "YEAR": 1.0}
+
+
 async def test_collect_returns_is_quiet_when_history_is_genuinely_empty():
     """All five answer, none carries a usable value. Not an outage."""
     with mock_aiohttp_client() as mocker:

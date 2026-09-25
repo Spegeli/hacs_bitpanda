@@ -87,10 +87,16 @@ class BitpandaApiClient:
     Read-only. No method here may call a write endpoint.
     """
 
-    def __init__(self, api_key: str, session: aiohttp.ClientSession) -> None:
-        self._api_key = api_key
+    def __init__(self, api_key: str | None, session: aiohttp.ClientSession) -> None:
+        """`api_key=None` builds a keyless client for the public endpoints.
+
+        /currencies, /assets and /tickers answer without a key. A keyless
+        client sends no x-api-key header at all, so public lookups never
+        carry the key and never count against its read budget. The key lives
+        only inside the header dict -- no second copy on the instance.
+        """
         self._session = session
-        self._headers = {"x-api-key": api_key}
+        self._headers = {"x-api-key": api_key} if api_key else {}
 
     async def _request(self, path: str, params: dict[str, Any] | None = None) -> Any:
         """Perform one GET and return the decoded body.

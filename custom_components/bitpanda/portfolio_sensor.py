@@ -144,6 +144,19 @@ class PortfolioCashPlusSensor(_PortfolioFigure):
     def _figure(self, data: PortfolioData) -> float | None:
         return data.cash_plus
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Each held Cash Plus product's own amount, keyed by currency code.
+
+        Empty whenever `cash_plus_amounts` is None -- the state (`cash_plus`
+        itself) is unknown for the same reason -- or when nothing is held:
+        never a partial mapping.
+        """
+        data = self.coordinator.data
+        if data is None:
+            return {}
+        return data.cash_plus_amounts or {}
+
 
 class PortfolioReturnSensor(CoordinatorEntity, SensorEntity):
     """The portfolio's return over one timeframe, in percent."""

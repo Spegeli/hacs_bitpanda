@@ -24,6 +24,20 @@ def to_float(container: dict | None, key: str = "value") -> float | None:
         return None
 
 
+def _cash_plus_currency_code(symbol: str) -> str:
+    """The currency code a Cash Plus product's amount is keyed by.
+
+    `BCP` plus exactly three letters names the product's currency
+    (`BCPEUR` -> `eur`, 1:1 with EUR regardless of the Portfolio currency).
+    Any other shape -- a future product Bitpanda names differently -- falls
+    back to the whole symbol, lowercased, so it still gets some key rather
+    than being dropped.
+    """
+    if len(symbol) == 6 and symbol.startswith("BCP") and symbol[3:].isalpha():
+        return symbol[3:].lower()
+    return symbol.lower()
+
+
 @dataclass
 class Holding:
     """One asset position. `value` is the whole position in the Portfolio
@@ -128,6 +142,27 @@ class PortfolioData:
                     return None
                 amount += holding.value
         return round(amount, DECIMALS)
+
+    @property
+    def cash_plus_amounts(self) -> dict[str, float] | None:
+        """Each held Cash Plus product's own amount, in its own currency.
+
+        A Cash Plus balance is 1:1 with its product's currency no matter
+        which currency the Portfolio displays -- a EUR account shown in USD
+        still holds EUR Cash Plus. None under exactly the conditions that
+        make `cash_plus` None -- an unclassified holding, an unparsed entry,
+        or a Cash Plus holding with an unknown value -- so the attributes
+        never carry a partial mapping alongside an unknown state.
+        """
+        if self.cash_plus is None:
+            return None
+        amounts: dict[str, float] = {}
+        for asset_id, holding in self.holdings.items():
+            if not self.is_cash_plus(asset_id):
+                continue
+            symbol = self.assets[asset_id].get("symbol", "")
+            amounts[_cash_plus_currency_code(symbol)] = round(holding.balance, 2)
+        return amounts
 
     @property
     def wallet_ids(self) -> list[str]:

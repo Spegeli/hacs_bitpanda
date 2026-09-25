@@ -14,6 +14,8 @@ from tests.conftest import load_fixture
 
 VSN = "1f051b7c-5980-6dda-9d3d-cf107d8d4bfb"
 BCPEUR = "1edf9721-e545-644c-9796-ae5b69a774d7"
+BCPUSD = "1edf9721-e545-644c-9796-ae5b69a774d8"
+BCPGBP = "1edf9721-e545-644c-9796-ae5b69a774d9"
 EUR_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
 
 
@@ -190,6 +192,64 @@ def test_unresolved_holding_is_no_wallet():
     data = _data({BCPEUR: {"id": BCPEUR, "group": "fiat_earn"}})
     assert data.is_cash_plus(VSN) is None
     assert data.wallet_ids == []
+
+
+# --- PortfolioData: cash_plus_amounts ---------------------------------------------
+
+
+def _cash_plus_asset(asset_id: str, symbol: str) -> dict:
+    return {"id": asset_id, "symbol": symbol, "group": "fiat_earn"}
+
+
+def test_cash_plus_amounts_reports_the_held_products_own_units():
+    data = parse_portfolio([_asset_entry(BCPEUR, "100.0", "100.0", "114.20")])
+    data.assets = {BCPEUR: _cash_plus_asset(BCPEUR, "BCPEUR")}
+    assert data.cash_plus_amounts == {"eur": 100.0}
+
+
+def test_cash_plus_amounts_has_one_key_per_held_product():
+    data = parse_portfolio(
+        [
+            _asset_entry(BCPEUR, "100.0", "100.0", "100.00"),
+            _asset_entry(BCPUSD, "50.0", "50.0", "43.12"),
+            _asset_entry(BCPGBP, "25.0", "25.0", "28.80"),
+        ]
+    )
+    data.assets = {
+        BCPEUR: _cash_plus_asset(BCPEUR, "BCPEUR"),
+        BCPUSD: _cash_plus_asset(BCPUSD, "BCPUSD"),
+        BCPGBP: _cash_plus_asset(BCPGBP, "BCPGBP"),
+    }
+    assert data.cash_plus_amounts == {"eur": 100.0, "usd": 50.0, "gbp": 25.0}
+
+
+def test_cash_plus_amounts_uses_the_whole_symbol_for_a_non_standard_product():
+    """A future Cash Plus product not shaped BCP + three letters falls back
+    to its whole symbol, lowercased, rather than being dropped."""
+    data = parse_portfolio([_asset_entry(BCPEUR, "10.0", "10.0", "10.00")])
+    data.assets = {BCPEUR: _cash_plus_asset(BCPEUR, "BCPX")}
+    assert data.cash_plus_amounts == {"bcpx": 10.0}
+
+
+def test_cash_plus_amounts_is_empty_without_cash_plus_holdings():
+    data = parse_portfolio([_asset_entry(VSN, "1.0", "1.0", "5.00")])
+    data.assets = {VSN: {"id": VSN, "group": "token"}}
+    assert data.cash_plus_amounts == {}
+
+
+def test_cash_plus_amounts_is_unknown_with_an_unclassified_holding():
+    assert _data({VSN: {"id": VSN, "group": "token"}}).cash_plus_amounts is None
+
+
+def test_cash_plus_amounts_is_unknown_with_an_unparsed_entry():
+    data = parse_portfolio(
+        [
+            _asset_entry(VSN, "100.0", "25.0", "200.00"),
+            {"asset_id": BCPEUR, "balance": {"value": "x"}},
+        ]
+    )
+    data.assets = {VSN: {"id": VSN, "group": "token"}}
+    assert data.cash_plus_amounts is None
 
 
 # --- Earn ------------------------------------------------------------------------

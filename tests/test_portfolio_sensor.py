@@ -85,6 +85,36 @@ def test_cash_and_cash_plus():
         "sensor.bitpanda_portfolio_cash_plus", 50.0)
 
 
+def test_cash_plus_attributes_show_each_held_products_own_amount():
+    coordinator = _Coordinator(_data(**{BCPEUR["id"]: Holding(
+        asset_id=BCPEUR["id"], balance=100.0, available=100.0, value=114.2)}))
+    sensor = PortfolioCashPlusSensor(coordinator, "eid", "EUR")
+    assert sensor.extra_state_attributes == {"eur": 100.0}
+
+
+def test_cash_plus_attributes_are_empty_without_cash_plus_holdings():
+    coordinator = _Coordinator(_data(**{VSN["id"]: _vsn()}))
+    sensor = PortfolioCashPlusSensor(coordinator, "eid", "EUR")
+    assert sensor.extra_state_attributes == {}
+
+
+def test_cash_plus_attributes_are_empty_when_cash_plus_itself_is_unknown():
+    """An unclassified holding makes `cash_plus` itself None; the state stays
+    unchanged (still None) and the attributes publish nothing, never a
+    partial mapping."""
+    unknown_id = "unresolved-asset-id"
+    data = PortfolioData(
+        holdings={
+            unknown_id: Holding(asset_id=unknown_id, balance=10.0, available=10.0, value=10.0)
+        },
+        cash=10.0,
+    )
+    data.assets = {}
+    sensor = PortfolioCashPlusSensor(_Coordinator(data), "eid", "EUR")
+    assert sensor.native_value is None
+    assert sensor.extra_state_attributes == {}
+
+
 def test_cash_is_unavailable_when_a_fiat_entry_could_not_be_read():
     """`PortfolioData.cash` is None, never 0, when a fiat balance failed to
     parse -- the Cash sensor must go unavailable, not show a quietly low

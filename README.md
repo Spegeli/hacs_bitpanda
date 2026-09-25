@@ -28,7 +28,7 @@ The integration offers two services. Set up either or both — each one once.
   - **Total** — the whole position, with invested amount, average buy price and total return
   - Staking and Total appear as soon as something is staked or Bitpanda offers an Earn product for the asset, and stay while either is true
 - The wallets appear in groups by asset type, such as Cryptocurrencies or Precious metals, named in the language Home Assistant runs in. The Portfolio device stays outside the groups (newer Home Assistant versions list it above them). Groups come and go with your holdings — there is nothing to add. Deleting a group (**⋮ → Delete**) only hides it until the next refresh while you still hold those assets: the group and its wallets come back, under the entity IDs the integration gives them; IDs you renamed yourself, and other customisations, survive only on newer Home Assistant versions
-- The wallet of an asset you no longer hold can be deleted from its device page (**⋮ → Delete**) instead of waiting for it to go. The Portfolio device and the wallets of assets you hold cannot be deleted: they would come straight back
+- The wallet of an asset you no longer hold can be deleted from its device page (**⋮ → Delete**) instead of waiting for it to go. The Portfolio device and the wallets of assets you hold cannot be deleted: they would come straight back, and the dialog explains why
 - Updates every 5 minutes; Earn products every 24 hours; rewards every hour
 
 ### Bitpanda Price Tracker

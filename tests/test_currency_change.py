@@ -98,6 +98,7 @@ async def test_a_currency_change_recreates_the_sensors_without_the_old_history(
     assert _WALLET in entity_ids
     assert await _history(hass, _WALLET) == [("50.0", "EUR")]
     calls = portfolio_api.call_count
+    [group] = entry.subentries.values()
 
     result = await entry.start_reconfigure_flow(hass)
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"currency": "usd"})
@@ -109,6 +110,11 @@ async def test_a_currency_change_recreates_the_sensors_without_the_old_history(
     assert entry.state is ConfigEntryState.LOADED
     assert entry.data["currency"] == "USD"
     assert _entity_ids(hass, entry) == entity_ids
+    # The purge (purge.py) removes entities and devices, not the wallet
+    # group's subentry; the reload then refills the same group.
+    [after] = entry.subentries.values()
+    assert (after.subentry_id, after.title) == (group.subentry_id, group.title)
+    assert er.async_get(hass).async_get(_WALLET).config_subentry_id == after.subentry_id
     assert hass.states.get(_WALLET).attributes["unit_of_measurement"] == "USD"
     # One reload: one more /portfolio request, now in the new currency.
     assert portfolio_api.call_count == calls + 1

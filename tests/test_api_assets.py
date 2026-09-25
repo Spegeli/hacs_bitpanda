@@ -6,6 +6,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp
 
 from custom_components.bitpanda.api import (
     BitpandaApiClient,
+    BitpandaApiError,
     BitpandaAuthError,
     BitpandaRateLimitError,
 )
@@ -63,14 +64,19 @@ async def test_get_assets_follows_pagination():
 
 
 @pytest.mark.timeout(5)
-async def test_paginate_stops_when_cursor_does_not_advance():
+async def test_paginate_raises_when_cursor_does_not_advance():
     """The server emits cursors it then ignores, re-serving the same page.
 
-    `asyncio.wait_for` alone cannot bound this: the mock never awaits a real
-    unresolved Future (no socket I/O), so a stuck loop never yields to the
-    event loop and cooperative cancellation never gets delivered. Only
-    pytest-timeout's signal-based (preemptive) timeout actually interrupts
-    it, hence the marker.
+    Stopping there quietly would hand back page 1 as if it were the whole
+    listing -- exactly how lifetime reward totals were once published at a
+    fraction of their true value -- so a cursor that was already sent raises
+    instead, after the second request.
+
+    `asyncio.wait_for` alone cannot bound a regression here: the mock never
+    awaits a real unresolved Future (no socket I/O), so a stuck loop never
+    yields to the event loop and cooperative cancellation never gets
+    delivered. Only pytest-timeout's signal-based (preemptive) timeout
+    actually interrupts it, hence the marker.
     """
     with mock_aiohttp_client() as mocker:
         mocker.get(
@@ -85,9 +91,9 @@ async def test_paginate_stops_when_cursor_does_not_advance():
         )
         async with mocker.create_session(asyncio.get_running_loop()) as session:
             client = BitpandaApiClient("key", session)
-            result = await asyncio.wait_for(client.async_get_assets(), timeout=5)
+            with pytest.raises(BitpandaApiError, match="/assets"):
+                await asyncio.wait_for(client.async_get_assets(), timeout=5)
             assert mocker.call_count == 2
-    assert [a["id"] for a in result] == ["a"]
 
 
 # --- async_list_assets ---------------------------------------------------

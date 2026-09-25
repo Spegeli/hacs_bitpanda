@@ -10,12 +10,13 @@ pytest_plugins = "pytest_homeassistant_custom_component"
 def pytest_configure(config):
     """Fail loudly if pytest-timeout is missing.
 
-    `test_paginate_stops_when_cursor_does_not_advance` is guarded by
-    `@pytest.mark.timeout`, because a regression in the stuck-cursor guard
-    spins without ever yielding to the event loop — `asyncio.wait_for` cannot
-    cancel it, so only an out-of-band signal stops the run. Without the plugin
-    that marker is an unknown mark: pytest warns and carries on, and the test
-    hangs the suite instead of failing it.
+    The pagination tests (`test_paginate_raises_when_cursor_does_not_advance`
+    and `tests/test_api_pagination.py`) are guarded by `@pytest.mark.timeout`,
+    because a regression in the cursor-loop guards spins without ever
+    yielding to the event loop — `asyncio.wait_for` cannot cancel it, so only
+    an out-of-band signal stops the run. Without the plugin that marker is an
+    unknown mark: pytest warns and carries on, and the test hangs the suite
+    instead of failing it.
 
     `--strict-markers` would express the same requirement, but only from the
     command line. Measured in this plugin stack: passed as a CLI flag it fails

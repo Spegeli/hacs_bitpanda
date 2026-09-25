@@ -2,7 +2,11 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+from collections.abc import Callable
+from datetime import datetime
 import logging
+import re
 from typing import Any
 
 import aiohttp
@@ -10,6 +14,49 @@ import aiohttp
 from .const import API_BASE_URL, API_TIMEOUT, MAX_PAGE_SIZE, REQUIRED_SCOPES
 
 _LOGGER = logging.getLogger(__name__)
+
+# Hard stop for one paginated listing. The largest real walk is the whole
+# 14,054-asset catalogue, 141 pages of 100; a five-year operation history took
+# 13. 500 pages (50,000 records) leaves a wide margin above both, and even an
+# /operations history that long, re-read at the hourly rewards cadence, stays
+# inside the hourly read budget next to the share reserved for prices.
+_MAX_PAGES = 500
+
+# The only cursor shape /operations mishandles: a whole-second UTC timestamp.
+_WHOLE_SECOND_TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+
+
+def normalize_operations_cursor(cursor: str) -> str:
+    """Return an /operations cursor in the form the server honours.
+
+    /operations cursors are base64 of an ISO-8601 timestamp meaning "records
+    strictly older than this". The server silently ignores a cursor whose
+    timestamp has no fractional seconds and answers with page 1 and a 200 --
+    yet it emits exactly such cursors itself whenever a page boundary falls on
+    a whole second. The same instant with ".000" added is honoured.
+
+    Anything that does not decode to such a timestamp is returned unchanged.
+    The rewritten cursor is 24 ASCII bytes of digits, "-", ":", "T", "." and
+    "Z", which always base64-encode to 32 plain letters and digits: no padding,
+    and none of the characters on which the standard and URL-safe alphabets
+    differ, so it takes the same form whichever of them the server uses.
+    """
+    if not isinstance(cursor, str):
+        return cursor
+    try:
+        decoded = base64.b64decode(
+            cursor + "=" * (-len(cursor) % 4), validate=True
+        ).decode("ascii")
+        # Shape first: fromisoformat alone would also accept forms (no
+        # seconds, an offset) where appending ".000" makes no sense.
+        if not _WHOLE_SECOND_TIMESTAMP.fullmatch(decoded):
+            return cursor
+        datetime.fromisoformat(decoded)
+    except ValueError:
+        # binascii.Error (not base64), UnicodeDecodeError (not text) and an
+        # impossible date all subclass ValueError.
+        return cursor
+    return base64.b64encode(f"{decoded[:-1]}.000Z".encode("ascii")).decode("ascii")
 
 
 class BitpandaApiError(Exception):
@@ -85,20 +132,34 @@ class BitpandaApiClient:
             _LOGGER.error("Could not decode response from %s", path)
             raise BitpandaApiError(f"Could not decode response from {path}") from None
 
-    async def _paginate(self, path: str, params: dict[str, Any]) -> list[dict]:
-        """Collect every page of a cursor-paginated endpoint.
+    async def _paginate(
+        self,
+        path: str,
+        params: dict[str, Any],
+        *,
+        cursor_fix: Callable[[str], str] | None = None,
+    ) -> list[dict]:
+        """Collect every page of a cursor-paginated endpoint, or raise.
 
-        Deduplicates by id: pages can overlap by one record.
+        Deduplicates by id: pages can overlap by one record. `cursor_fix`
+        rewrites each `next_cursor` before it is sent (see
+        `normalize_operations_cursor`).
+
+        Never returns a partial listing. A cursor that was already sent means
+        the server is re-serving pages it has answered before -- /operations
+        does exactly that for cursors it ignores -- so following it loops until
+        rate-limited, and stopping there quietly would pass off the pages so
+        far as the whole listing. That, a listing longer than _MAX_PAGES, and a
+        page that announces another without a cursor all raise instead: a
+        failed update is honest, a truncated total published as fact is not.
         """
         params = dict(params)
         params.setdefault("page_size", MAX_PAGE_SIZE)
         out: list[dict] = []
         seen: set[str] = set()
-        cursor: str | None = None
+        sent_cursors: set[str] = set()
 
-        while True:
-            if cursor:
-                params["cursor"] = cursor
+        for _ in range(_MAX_PAGES):
             body = await self._request(path, params)
             for item in body.get("data") or []:
                 key = item.get("id")
@@ -111,14 +172,21 @@ class BitpandaApiClient:
                 out.append(item)
             if not body.get("has_next_page"):
                 return out
-            next_cursor = body.get("next_cursor")
-            # Stop on a missing cursor, and on one that has not moved. The
-            # server is known to emit cursors it then ignores, returning the
-            # same page again; without this guard the loop never terminates
-            # and blocks the event loop.
-            if not next_cursor or next_cursor == cursor:
-                return out
-            cursor = next_cursor
+            cursor = body.get("next_cursor")
+            if not cursor:
+                raise BitpandaApiError(
+                    f"{path} announced another page but sent no cursor"
+                )
+            if cursor_fix is not None:
+                cursor = cursor_fix(cursor)
+            if cursor in sent_cursors:
+                raise BitpandaApiError(
+                    f"{path} repeated a page cursor; its listing is incomplete"
+                )
+            sent_cursors.add(cursor)
+            params["cursor"] = cursor
+
+        raise BitpandaApiError(f"{path} returned more than {_MAX_PAGES} pages")
 
     async def async_get_currencies(self) -> list[dict]:
         """List all fiat currencies. Not paginated."""
@@ -215,18 +283,21 @@ class BitpandaApiClient:
     ) -> list[dict]:
         """Operation history, optionally windowed by date.
 
-        `from` and `to` are undocumented on the hosted docs but work, and are
-        preferred over cursor paging: the server emits cursors without
-        milliseconds and then ignores them, so a cursor loop can stall on
-        page one. Requires a key with all read scopes; a portfolio-capable key
-        gets 401.
+        `from` and `to` are undocumented on the hosted docs but work. Every
+        cursor goes through `normalize_operations_cursor`: this endpoint emits
+        whole-second cursors that it then ignores, which without the rewrite
+        stalls or cycles on the first pages.
+
+        Needs the Transaktion (Transaction) scope; a key without it gets 401.
         """
         params: dict[str, Any] = {}
         if from_ts:
             params["from"] = from_ts
         if to_ts:
             params["to"] = to_ts
-        return await self._paginate("/operations", params)
+        return await self._paginate(
+            "/operations", params, cursor_fix=normalize_operations_cursor
+        )
 
     async def async_missing_scopes(self) -> list[str]:
         """Return the required scopes this key lacks, in REQUIRED_SCOPES order.

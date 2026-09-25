@@ -117,11 +117,6 @@ class PortfolioTotalSensor(_PortfolioFigure):
     def _figure(self, data: PortfolioData) -> float | None:
         return data.total
 
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        data = self.coordinator.data
-        return {"wallet_count": len(data.wallet_ids) if data else 0}
-
 
 class PortfolioCashSensor(_PortfolioFigure):
     """Sum of the fiat balances (`balance`: locked fiat is still cash)."""

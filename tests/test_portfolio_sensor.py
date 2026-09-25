@@ -63,7 +63,7 @@ def test_devices_are_named_after_the_service_and_the_asset():
 # --- Portfolio device -------------------------------------------------------------
 
 
-def test_total_value_is_the_whole_account_with_a_wallet_count():
+def test_total_value_is_the_whole_account_with_no_attributes():
     coordinator = _Coordinator(_data(**{VSN["id"]: _vsn(), BCPEUR["id"]: Holding(
         asset_id=BCPEUR["id"], balance=50.0, available=50.0, value=50.0)}))
     sensor = PortfolioTotalSensor(coordinator, "eid", "EUR")
@@ -72,7 +72,7 @@ def test_total_value_is_the_whole_account_with_a_wallet_count():
     assert sensor.translation_key == "total_value"
     assert sensor.native_unit_of_measurement == "EUR"
     assert sensor.native_value == 260.0
-    assert sensor.extra_state_attributes == {"wallet_count": 1}
+    assert sensor.extra_state_attributes is None
 
 
 def test_cash_and_cash_plus():

@@ -204,11 +204,21 @@ def _async_register_refresh_service(hass: HomeAssistant) -> None:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload an entry; the refresh service goes with the last one."""
+    """Unload an entry; the refresh service goes with the last one.
+
+    Some tests mark an entry LOADED (or patch its setup) without going
+    through _async_register_refresh_service, so the service was never
+    registered; has_service avoids Home Assistant's own "Unable to remove
+    unknown service" warning for those.
+    """
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok and not any(
-        other.entry_id != entry.entry_id and other.state is ConfigEntryState.LOADED
-        for other in hass.config_entries.async_entries(DOMAIN)
+    if (
+        unload_ok
+        and hass.services.has_service(DOMAIN, "refresh")
+        and not any(
+            other.entry_id != entry.entry_id and other.state is ConfigEntryState.LOADED
+            for other in hass.config_entries.async_entries(DOMAIN)
+        )
     ):
         hass.services.async_remove(DOMAIN, "refresh")
     return unload_ok

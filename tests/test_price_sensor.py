@@ -142,7 +142,7 @@ async def test_setup_removes_sensors_of_a_dropped_currency(hass):
     assert ent_reg.async_get(eur.entity_id) is not None
 
 
-# --- display_precision (moved from tests/test_sensor_price.py) -----------------------
+# --- display_precision -----------------------------------------------------------------
 
 
 def test_precision_for_large_values():

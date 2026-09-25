@@ -86,9 +86,9 @@ def test_cash_and_cash_plus():
 
 
 def test_cash_is_unavailable_when_a_fiat_entry_could_not_be_read():
-    """Task 3 ruling: `PortfolioData.cash` is None, never 0, when a fiat
-    balance failed to parse -- the Cash sensor must go unavailable, not show
-    a quietly low total."""
+    """`PortfolioData.cash` is None, never 0, when a fiat balance failed to
+    parse -- the Cash sensor must go unavailable, not show a quietly low
+    total."""
     coordinator = _Coordinator(PortfolioData(cash=None))
     sensor = PortfolioCashSensor(coordinator, "eid", "EUR")
     assert sensor.native_value is None

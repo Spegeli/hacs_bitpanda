@@ -98,12 +98,12 @@ async def test_paginate_raises_when_cursor_does_not_advance():
 
 # --- async_list_assets ---------------------------------------------------
 #
-# Builds the options flow's category pickers. The mock's own URL matching is
-# a subset match (every param in the registration must be present in the
-# request, but extra params on the request still match) -- see
-# AiohttpClientMockResponse.match_request -- so an accidental extra
-# parameter would pass unnoticed there. The exact query string is asserted
-# directly from mocker.mock_calls instead (task-23-brief.md, Step 6).
+# Builds the category pickers of the "Add price tracker" subentry flow. The
+# mock's own URL matching is a subset match (every param in the registration
+# must be present in the request, but extra params on the request still
+# match) -- see AiohttpClientMockResponse.match_request -- so an accidental
+# extra parameter would pass unnoticed there. The exact query string is
+# asserted directly from mocker.mock_calls instead.
 
 
 async def test_list_assets_sends_exactly_type_group_and_page_size():

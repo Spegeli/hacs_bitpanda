@@ -229,11 +229,9 @@ async def test_fiat_wallets_are_never_looked_up(hass, legacy_api, no_setup):
 
 async def test_a_bare_prefix_wallet_id_never_lists_the_whole_catalogue(hass, legacy_api, no_setup):
     """`legacy_symbol("cryptocoin_")` is `""`. Without the empty-symbol guard
-    (moved into migration.py's own `_resolve`, since `AssetResolver` -- which
-    used to carry it -- is gone), an empty `symbol` would drop the query
+    in the migration's symbol lookup, an empty `symbol` would drop the query
     filter entirely and page through the whole ~14,000-asset catalogue
-    instead of finding nothing. Replaces the deleted resolver test's coverage
-    of the same guard.
+    instead of finding nothing.
     """
     _, assets = legacy_api
     assert await async_migrate_entry(hass, _v1_entry(hass, wallets=["cryptocoin_"]))
@@ -285,7 +283,7 @@ def test_legacy_symbol_of_bare_symbol():
 def test_legacy_symbol_with_unrecognized_prefix_is_returned_unchanged():
     """No known legacy category is "stock_". The whole string is handed to
     resolution unchanged, which is expected to fail and be dropped rather
-    than being misparsed into a wrong symbol (see task-16-report.md, check 3).
+    than being misparsed into a wrong symbol.
     """
     assert legacy_symbol("stock_AAPL") == "stock_AAPL"
 
@@ -635,7 +633,7 @@ async def test_an_interrupted_migration_can_run_again(hass, legacy_api, no_setup
 
 
 async def test_an_empty_currency_list_aborts_the_migration(hass, legacy_api, no_setup):
-    """R12: an empty (or EUR-less) /currencies answer must not fall back to EUR.
+    """An empty (or EUR-less) /currencies answer must not fall back to EUR.
 
     Such an answer means the list itself cannot be trusted, so the migration
     aborts with nothing changed and retries at the next start, exactly like a

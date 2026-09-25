@@ -36,8 +36,8 @@ def test_is_legacy_supported_false_for_a_stock():
 # --- pick_legacy --------------------------------------------------------------
 #
 # Uses the real XAU (stock + metal) and BNB (stock + coin) pairs committed to
-# tests/fixtures/assets-sample.json -- the exact collision measured live
-# (task-23-brief.md) that pointed a migrated gold wallet at a stock.
+# tests/fixtures/assets-sample.json -- the exact collision, measured live, that
+# once pointed a migrated gold wallet at a stock.
 
 
 def test_pick_legacy_xau_bare_symbol_gives_the_metal():
@@ -68,7 +68,7 @@ def test_pick_legacy_fiat_prefix_is_always_none():
 
 def test_pick_legacy_two_legacy_survivors_is_none():
     """Contrived: the real catalogue has zero symbol collisions within the
-    legacy-supported types alone (task-23-brief.md), so this is synthesised.
+    legacy-supported types alone, so this is synthesised.
     Dropping with a warning beats silently guessing.
     """
     candidates = [
@@ -94,11 +94,11 @@ def test_pick_legacy_only_a_stock_candidate_is_none():
 
 def test_pick_legacy_narrows_by_prefix_between_two_legacy_types():
     """Synthetic: the real catalogue has zero symbols shared between two
-    legacy-supported types (task-23-brief.md), so this pins the prefix
-    narrowing itself (crypto/metal/index) rather than relying on real data to
-    exercise it (task-23-review.md, finding 12, mutation b2). Without the
-    narrowing, both `cryptocoin_` and `commodity_metal_` would see two
-    legacy-supported survivors and return None instead of the right one.
+    legacy-supported types, so this pins the prefix narrowing itself
+    (crypto/metal/index) rather than relying on real data to exercise it.
+    Without the narrowing, both `cryptocoin_` and `commodity_metal_` would
+    see two legacy-supported survivors and return None instead of the right
+    one.
     """
     crypto = _asset("DUP", "id-crypto", "cryptocoin", "coin")
     metal = _asset("DUP", "id-metal", "commodity", "metal")

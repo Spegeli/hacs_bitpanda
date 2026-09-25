@@ -38,7 +38,6 @@ def _reward(asset_id, gross, fee, credited_at, owner="staking-service"):
 # ---------------------------------------------------------------------------
 # RewardsCoordinator._async_update_data
 #
-# Same construction trick as PriceCoordinator (see test_coordinator_price.py):
 # DataUpdateCoordinator.__init__ only stores `hass`, so hass=None/entry=None
 # is enough to drive _async_update_data() directly, without a running Home
 # Assistant instance.
@@ -72,7 +71,7 @@ async def test_rewards_coordinator_returns_totals_from_operations():
 
 
 async def test_rewards_coordinator_raises_config_entry_auth_failed_on_401():
-    """Task 21 requires every scope at setup, so a 401 here means the key
+    """Setup requires every scope, so a 401 here means the key
     expired, was revoked, or predates that requirement (a migrated legacy
     key). Every case is answered by a new key, so this must raise
     ConfigEntryAuthFailed and let Home Assistant start the reauth flow --

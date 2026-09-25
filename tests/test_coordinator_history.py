@@ -121,7 +121,6 @@ async def test_collect_returns_reraises_auth_error_instead_of_counting_it():
 # ---------------------------------------------------------------------------
 # HistoryCoordinator._async_update_data
 #
-# Same construction trick as PriceCoordinator (see test_coordinator_price.py):
 # DataUpdateCoordinator.__init__ only stores `hass`, so hass=None/entry=None
 # is enough to drive _async_update_data() directly.
 # ---------------------------------------------------------------------------

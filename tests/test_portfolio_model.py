@@ -13,7 +13,6 @@ from custom_components.bitpanda.portfolio_model import (
 from tests.conftest import load_fixture
 
 VSN = "1f051b7c-5980-6dda-9d3d-cf107d8d4bfb"
-BTC = "b86c034b-efe3-11eb-b56f-0691764446a7"
 BCPEUR = "1edf9721-e545-644c-9796-ae5b69a774d7"
 EUR_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
 
@@ -209,7 +208,7 @@ def test_parse_earn_configs_counts_sold_out_products_but_not_disabled_ones():
     assert earn.apr == {"a": 0.05, "b": 0.04}
 
 
-# --- The staking existence rule (spec §2.4) ------------------------------------
+# --- When a wallet has Staking and Total sensors ---------------------------------
 
 
 def _holding(staked: float) -> Holding:
@@ -232,7 +231,7 @@ def test_staking_is_unknown_without_stake_and_without_earn_data():
     assert staking_applies(_holding(0.0), None) is None
 
 
-# --- Rewards: sum_rewards and _is_later (moved from coordinator.py) ------------
+# --- Rewards: sum_rewards and _is_later ----------------------------------------
 
 
 def _reward(asset_id, gross, fee, credited_at, owner="staking-service"):

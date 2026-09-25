@@ -123,6 +123,18 @@ async def test_staking_leaves_when_nothing_is_staked_and_no_product_is_offered(h
     assert not harness.manager.has_total(VSN["id"])
 
 
+async def test_unknown_earn_never_creates_staking(hass):
+    """Nothing staked and no current Earn catalogue: whether the asset is
+    offered cannot be told, and unknown never creates. A catalogue from an
+    earlier success does not count once the last refresh failed."""
+    harness = _Harness(hass)
+    harness.runtime.earn.data = EarnData(apr={}, offered=frozenset({VSN["id"]}))
+    harness.runtime.earn.last_update_success = False
+    await harness.refresh(_data(_holding(VSN)))
+    assert harness.entity_ids() == {"sensor.bitpanda_vision_vsn_wallet"}
+    assert not harness.manager.has_total(VSN["id"])
+
+
 async def test_staking_stays_while_the_earn_catalogue_is_unknown(hass):
     harness = _Harness(hass)
     await harness.refresh(_data(_holding(VSN, staked=4.0)))
@@ -164,9 +176,9 @@ async def test_an_unnamed_holding_is_not_a_miss(hass):
 
 
 async def test_an_unparsable_holding_is_not_a_miss(hass):
-    """Task 3 ruling: an asset in `unparsed_assets` is still held, so it must
-    not count towards the 3-miss removal even though it is absent from
-    `data.holdings` (its record could not be read this refresh)."""
+    """An asset in `unparsed_assets` is still held, so it must not count
+    towards the 3-miss removal even though it is absent from `data.holdings`
+    (its /portfolio entry could not be read this refresh)."""
     harness = _Harness(hass)
     await harness.refresh(_data(_holding(VSN)))
     for _ in range(3):
@@ -224,7 +236,7 @@ async def test_the_earn_catalogue_keeps_refreshing_without_staking_sensors(hass)
     The Earn coordinator's only other listeners are StakingSensors, so an
     entry with none registered (nothing staked, nothing offered) must not
     freeze the catalogue at its setup-time answer forever -- an asset that
-    later becomes offered still needs to gain Staking/Total (spec §2.4)."""
+    later becomes offered still needs to gain Staking/Total."""
     entry = MockConfigEntry(
         domain=DOMAIN, version=3, data={"entry_type": "portfolio", "currency": "EUR"},
     )

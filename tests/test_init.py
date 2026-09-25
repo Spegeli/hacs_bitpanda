@@ -151,6 +151,26 @@ def _reauth_flows(hass) -> list[dict]:
     ]
 
 
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [("async_get_earn_configs", "/earn/configs"), ("async_get_operations", "/operations")],
+)
+async def test_an_earn_or_operations_401_keeps_the_portfolio_loaded_and_asks_for_a_key(
+    hass, portfolio_api, method, path
+):
+    """Earn and rewards only add to the Portfolio. A key they reject -- such
+    as a migrated legacy key without the Earn or Transaction scope -- leaves
+    the Portfolio running and asks for a new key."""
+    entry = _portfolio_entry(hass)
+    rejected = AsyncMock(side_effect=BitpandaAuthError(f"Unauthorized for {path}"))
+    with patch(f"{_CLIENT}{method}", rejected):
+        await _setup(hass, entry)
+    rejected.assert_awaited()
+    assert entry.state is ConfigEntryState.LOADED
+    assert len(_reauth_flows(hass)) == 1
+    assert _value(hass, "sensor.bitpanda_vision_vsn_wallet") == 50.0
+
+
 async def test_reauth_with_the_same_key_revives_a_portfolio_stopped_by_a_401(
     hass, portfolio_api
 ):

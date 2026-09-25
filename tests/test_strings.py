@@ -2,6 +2,8 @@
 import json
 from pathlib import Path
 
+from custom_components.bitpanda.assets import ASSET_CATEGORY_FILTERS, CATEGORY_OTHER
+
 _DIR = Path(__file__).parent.parent / "custom_components" / "bitpanda"
 _FILES = ("strings.json", "translations/en.json", "translations/de.json")
 
@@ -44,4 +46,11 @@ def test_every_currency_and_entity_name_is_translated():
     assert set(strings["entity"]["sensor"]) == {
         "total_value", "cash", "cash_plus", "return_day", "return_week",
         "return_month", "return_six_month", "return_year", "staking", "wallet_total",
+    }
+
+
+def test_every_asset_category_has_a_group_title():
+    strings = json.loads((_DIR / "strings.json").read_text(encoding="utf-8"))
+    assert set(strings["selector"]["asset_group"]["options"]) == {
+        *ASSET_CATEGORY_FILTERS, CATEGORY_OTHER,
     }

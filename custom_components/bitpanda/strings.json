@@ -123,6 +123,17 @@
         "metal": "Precious metals"
       }
     },
+    "asset_group": {
+      "options": {
+        "crypto": "Cryptocurrencies",
+        "stock": "Stocks",
+        "etf": "ETFs",
+        "etc": "ETCs",
+        "index": "Crypto indices",
+        "metal": "Precious metals",
+        "other": "Other"
+      }
+    },
     "currency": {
       "options": {
         "chf": "Swiss Franc (CHF)",

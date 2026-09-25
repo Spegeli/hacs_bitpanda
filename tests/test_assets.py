@@ -1,5 +1,14 @@
 """Tests for symbol resolution, disambiguation and categorisation."""
-from custom_components.bitpanda.assets import asset_label, is_legacy_supported, pick_legacy
+import pytest
+
+from custom_components.bitpanda.assets import (
+    ASSET_CATEGORY_FILTERS,
+    CATEGORY_OTHER,
+    asset_category,
+    asset_label,
+    is_legacy_supported,
+    pick_legacy,
+)
 
 from tests.conftest import load_fixture
 
@@ -142,3 +151,46 @@ def test_asset_label_without_isin():
 def test_asset_label_falls_back_to_symbol_when_name_is_empty():
     asset = {"name": "", "symbol": "XYZ"}
     assert asset_label(asset) == "XYZ / XYZ"
+
+
+# --- asset_category ----------------------------------------------------------
+#
+# Every catalogue family in tests/fixtures/assets-sample.json, measured live:
+# stocks, ETFs and ETCs each come in two families, crypto in several groups.
+
+
+@pytest.mark.parametrize(
+    ("symbol", "type_", "category"),
+    [
+        ("BTC", "cryptocoin", "crypto"),  # group coin
+        ("GHST", "cryptocoin", "crypto"),  # group token
+        ("BTC2L", "cryptocoin", "crypto"),  # group leveraged_token
+        ("517", "equity_security", "stock"),  # group equity_stock
+        ("ESSITYB", "security", "stock"),  # group stock
+        ("EXIA", "equity_security", "etf"),  # group equity_etf
+        ("XMTH", "equity_security", "etf"),  # group equity_complex_etf
+        ("SXR8", "security", "etf"),  # group etf
+        ("PPFB", "equity_security", "etc"),  # group equity_complex_etc
+        ("ALUMINIUM", "security", "etc"),  # group etc
+        ("BCI5", "index", "index"),
+        ("XAU", "commodity", "metal"),
+        ("BCPEUR", "security", "other"),  # Cash Plus, group fiat_earn
+    ],
+)
+def test_asset_category_of_every_catalogue_family(symbol, type_, category):
+    asset = next(a for a in _catalogue() if a["symbol"] == symbol and a["type"] == type_)
+    assert asset_category(asset) == category
+
+
+def test_asset_category_is_other_where_no_filter_fits():
+    assert CATEGORY_OTHER == "other"
+    assert asset_category({"type": "commodity", "group": "energy"}) == "other"
+    assert asset_category({"type": "equity_security"}) == "other"
+    assert asset_category({}) == "other"
+
+
+def test_every_filter_sorts_into_its_own_category():
+    """No category's filter is claimed by an earlier category first."""
+    for category, filters in ASSET_CATEGORY_FILTERS.items():
+        for type_, group in filters:
+            assert asset_category({"type": type_, "group": group or "any"}) == category

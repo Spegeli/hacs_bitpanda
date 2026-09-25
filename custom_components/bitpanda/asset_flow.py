@@ -20,27 +20,9 @@ from homeassistant.helpers.selector import (
 from homeassistant.util import dt as dt_util
 
 from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
-from .assets import asset_label, slim_asset
+from .assets import ASSET_CATEGORY_FILTERS, asset_label, slim_asset
 from .const import CONF_ASSET, DOMAIN
 from .naming import asset_display_label
-
-# Every filter was verified live on 2026-09-24. Together they cover 14,051 of
-# 14,054 catalogue assets -- the three left out are security/fiat_earn (Cash
-# Plus), a cash equivalent. Stocks exist in two families, equity_security/
-# equity_stock and security/stock, often the same company twice; both are
-# genuine, priced listings, so a category can merge several filters.
-ASSET_CATEGORY_FILTERS: dict[str, list[tuple[str, str | None]]] = {
-    "crypto": [("cryptocoin", None)],
-    "stock": [("equity_security", "equity_stock"), ("security", "stock")],
-    "etf": [
-        ("equity_security", "equity_etf"),
-        ("equity_security", "equity_complex_etf"),
-        ("security", "etf"),
-    ],
-    "etc": [("equity_security", "equity_complex_etc"), ("security", "etc")],
-    "index": [("index", None)],
-    "metal": [("commodity", "metal")],
-}
 
 # The stock listing alone is ~103 requests; a day-old catalogue is current
 # enough for picking an asset.

@@ -1,4 +1,4 @@
-"""Asset records: legacy symbol resolution, holding metadata, list labels.
+"""Asset records: categories, legacy symbol resolution, holding metadata, list labels.
 
 Every endpoint except /assets and /currencies works on UUIDs. A symbol does
 not uniquely name an asset (`XAU` is both a stock and a metal), so nothing
@@ -18,10 +18,44 @@ _LOGGER = logging.getLogger(__name__)
 # record -- trading flags -- would only cost memory.
 CATALOGUE_FIELDS = ("id", "symbol", "name", "isin", "type", "group")
 
+# The asset types the integration tells apart, each with the catalogue
+# filters -- (type, group), group None for any -- that list it. Every filter
+# was verified live on 2026-09-24. Together they cover 14,051 of 14,054
+# catalogue assets -- the three left out are security/fiat_earn (Cash Plus),
+# a cash equivalent. Stocks exist in two families, equity_security/
+# equity_stock and security/stock, often the same company twice; both are
+# genuine, priced listings, so a category can merge several filters.
+ASSET_CATEGORY_FILTERS: dict[str, list[tuple[str, str | None]]] = {
+    "crypto": [("cryptocoin", None)],
+    "stock": [("equity_security", "equity_stock"), ("security", "stock")],
+    "etf": [
+        ("equity_security", "equity_etf"),
+        ("equity_security", "equity_complex_etf"),
+        ("security", "etf"),
+    ],
+    "etc": [("equity_security", "equity_complex_etc"), ("security", "etc")],
+    "index": [("index", None)],
+    "metal": [("commodity", "metal")],
+}
+
+# The category of an asset no filter above lists, such as Cash Plus.
+CATEGORY_OTHER = "other"
+
 
 def slim_asset(asset: dict) -> dict:
     """A catalogue record reduced to CATALOGUE_FIELDS."""
     return {key: asset[key] for key in CATALOGUE_FIELDS if key in asset}
+
+
+def asset_category(asset: dict) -> str:
+    """The first category of ASSET_CATEGORY_FILTERS with a filter the record
+    matches (its type, and its group where the filter names one);
+    CATEGORY_OTHER when no filter does."""
+    for category, filters in ASSET_CATEGORY_FILTERS.items():
+        for type_, group in filters:
+            if asset.get("type") == type_ and (group is None or asset.get("group") == group):
+                return category
+    return CATEGORY_OTHER
 
 
 class AssetDirectory:

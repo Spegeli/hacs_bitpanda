@@ -7,6 +7,7 @@ from time import monotonic
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -232,6 +233,17 @@ async def async_remove_config_entry_device(
     Refused only where the device would come straight back: the Portfolio
     device, and the wallet of an asset the Portfolio holds. Deleting a price
     device stops tracking its asset.
+
+    Both refusals raise a translated HomeAssistantError instead of returning
+    False. Home Assistant's device-removal websocket handler
+    (websocket_remove_config_entry_from_device in
+    components/config/device_registry.py) awaits this hook with no
+    try/except of its own, so the exception propagates to
+    ActiveConnection.async_handle_exception, which reads a HomeAssistantError's
+    translation_domain/translation_key/translation_placeholders, resolves the
+    message (English, via the cached "exceptions" strings) and sends all of
+    it to the frontend -- identical at this integration's 2025.5.0 floor and
+    in a 2026.9.3 test image.
     """
     identifier = device_identifier(device_entry)
     if identifier is None:
@@ -243,13 +255,23 @@ async def async_remove_config_entry_device(
             async_remove_asset_from_group(hass, config_entry, asset_id)
         return True
     if identifier == portfolio_device_identifier(entry_id):
-        return False
+        raise HomeAssistantError(
+            translation_domain=DOMAIN, translation_key="portfolio_device_not_removable"
+        )
     asset_id = wallet_device_asset_id(entry_id, identifier)
     if asset_id is None or config_entry.state is not ConfigEntryState.LOADED:
         return True
     runtime: PortfolioRuntime = config_entry.runtime_data
     if asset_id in runtime.portfolio.data.held:
-        return False
+        record = runtime.portfolio.data.assets.get(asset_id)
+        asset_label = (
+            asset_display_label(record) if record is not None else device_entry.name
+        )
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="held_wallet_not_removable",
+            translation_placeholders={"asset": asset_label},
+        )
     # The wallet manager keeps a wallet until its asset has been missing from
     # several refreshes, and would not create it again if the asset were
     # bought back in that time. A reload starts it afresh, and its emptied

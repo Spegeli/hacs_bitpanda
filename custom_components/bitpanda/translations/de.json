@@ -18,7 +18,7 @@
       },
       "currency": {
         "title": "Portfolio-Währung",
-        "description": "Bitpanda meldet alle Werte deines Portfolios in dieser Währung. Du kannst sie später über Neu konfigurieren ändern, dabei werden aber alle Portfolio-Sensoren samt Verlauf gelöscht.",
+        "description": "Bitpanda meldet alle Werte deines Portfolios in dieser Währung. Du kannst sie später über Neu konfigurieren ändern.",
         "data": {
           "currency": "Währung"
         }
@@ -39,7 +39,7 @@
       },
       "reconfigure": {
         "title": "Bitpanda Portfolio neu konfigurieren",
-        "description": "Um den gespeicherten API-Schlüssel zu ersetzen, füge einen neuen von [{api_key_url}]({api_key_url}) ein; er braucht Guthaben, Transaktion und Earn (Read). Lass das Feld leer, um den aktuellen Schlüssel zu behalten.",
+        "description": "Um den gespeicherten API-Schlüssel zu ersetzen, füge einen neuen von [{api_key_url}]({api_key_url}) ein; er braucht Guthaben, Transaktion und Earn (Read). Lass das Feld leer, um den aktuellen Schlüssel zu behalten. Eine Änderung der Währung löscht alle Portfolio-Sensoren samt Verlauf; das bestätigst du im nächsten Schritt.",
         "data": {
           "api_key": "Neuer API-Schlüssel",
           "currency": "Währung"
@@ -191,6 +191,14 @@
       "wallet_total": {
         "name": "Gesamt"
       }
+    }
+  },
+  "exceptions": {
+    "portfolio_device_not_removable": {
+      "message": "Das Gerät „Portfolio“ gehört zum Dienst Bitpanda Portfolio und lässt sich nicht einzeln löschen. Um es zu entfernen, lösche den Eintrag „Bitpanda Portfolio“."
+    },
+    "held_wallet_not_removable": {
+      "message": "Du hältst {asset} noch, daher käme dieses Wallet sofort zurück. Es wird automatisch entfernt, sobald du es nicht mehr hältst."
     }
   }
 }

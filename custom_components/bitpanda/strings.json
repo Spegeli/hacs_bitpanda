@@ -18,7 +18,7 @@
       },
       "currency": {
         "title": "Portfolio currency",
-        "description": "Bitpanda reports every value of your portfolio in this currency. You can change it later with Reconfigure, but that deletes all Portfolio sensors including their history.",
+        "description": "Bitpanda reports every value of your portfolio in this currency. You can change it later with Reconfigure.",
         "data": {
           "currency": "Currency"
         }
@@ -39,7 +39,7 @@
       },
       "reconfigure": {
         "title": "Reconfigure Bitpanda Portfolio",
-        "description": "To replace the stored API key, paste a new one from [{api_key_url}]({api_key_url}); it needs Guthaben (Balance), Transaktion (Transaction) and Earn (Read). Leave the field empty to keep the current key.",
+        "description": "To replace the stored API key, paste a new one from [{api_key_url}]({api_key_url}); it needs Guthaben (Balance), Transaktion (Transaction) and Earn (Read). Leave the field empty to keep the current key. Changing the currency deletes all Portfolio sensors including their history; you confirm this in the next step.",
         "data": {
           "api_key": "New API key",
           "currency": "Currency"
@@ -191,6 +191,14 @@
       "wallet_total": {
         "name": "Total"
       }
+    }
+  },
+  "exceptions": {
+    "portfolio_device_not_removable": {
+      "message": "The Portfolio device is part of the Bitpanda Portfolio service and cannot be deleted on its own. To remove it, delete the Bitpanda Portfolio entry."
+    },
+    "held_wallet_not_removable": {
+      "message": "You still hold {asset}, so this wallet would come straight back. It is removed automatically once you no longer hold it."
     }
   }
 }

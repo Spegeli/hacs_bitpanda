@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentry, ConfigSubentryData
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
@@ -552,9 +553,13 @@ async def test_any_other_device_of_the_price_tracker_may_be_deleted(hass, price_
 async def test_the_portfolio_device_cannot_be_deleted(hass, portfolio_api):
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
-    assert not await async_remove_config_entry_device(
-        hass, entry, _own_device(hass, entry, "portfolio")
-    )
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await async_remove_config_entry_device(
+            hass, entry, _own_device(hass, entry, "portfolio")
+        )
+    assert exc_info.value.translation_domain == DOMAIN
+    assert exc_info.value.translation_key == "portfolio_device_not_removable"
+    assert exc_info.value.translation_placeholders is None
 
 
 async def test_the_wallet_of_a_held_asset_cannot_be_deleted(hass, portfolio_api):
@@ -563,14 +568,21 @@ async def test_the_wallet_of_a_held_asset_cannot_be_deleted(hass, portfolio_api)
     await _setup(hass, entry)
     calls = portfolio_api.call_count
 
-    assert not await async_remove_config_entry_device(
-        hass, entry, _own_device(hass, entry, "wallet", VSN)
-    )
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await async_remove_config_entry_device(
+            hass, entry, _own_device(hass, entry, "wallet", VSN)
+        )
     await hass.async_block_till_done()
     assert portfolio_api.call_count == calls
+    assert exc_info.value.translation_domain == DOMAIN
+    assert exc_info.value.translation_key == "held_wallet_not_removable"
+    assert exc_info.value.translation_placeholders == {"asset": "Vision (VSN)"}
 
 
 async def test_a_holding_whose_balances_cannot_be_read_is_still_held(hass, portfolio_api):
+    """BTC's balance never parses, so it has no record in data.assets: the
+    error falls back to naming the wallet from its device instead of
+    naming.asset_display_label."""
     portfolio_api.return_value = [
         *portfolio_api.return_value,
         {"asset_id": BTC["id"], "balance": {"value": "unreadable"}},
@@ -579,7 +591,10 @@ async def test_a_holding_whose_balances_cannot_be_read_is_still_held(hass, portf
     await _setup(hass, entry)
     wallet = _add_device(hass, entry, "Bitcoin (BTC) Wallet", "wallet", BTC)
 
-    assert not await async_remove_config_entry_device(hass, entry, wallet)
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await async_remove_config_entry_device(hass, entry, wallet)
+    assert exc_info.value.translation_key == "held_wallet_not_removable"
+    assert exc_info.value.translation_placeholders == {"asset": "Bitcoin (BTC) Wallet"}
 
 
 async def test_the_wallet_of_an_asset_no_longer_held_may_be_deleted(hass, portfolio_api):
@@ -613,7 +628,8 @@ async def test_a_portfolio_that_is_not_loaded_refuses_only_its_portfolio_device(
     portfolio = _add_device(hass, entry, "Portfolio", "portfolio")
     wallet = _add_device(hass, entry, "Vision (VSN) Wallet", "wallet", VSN)
     with patch.object(hass.config_entries, "async_schedule_reload") as reload:
-        assert not await async_remove_config_entry_device(hass, entry, portfolio)
+        with pytest.raises(HomeAssistantError):
+            await async_remove_config_entry_device(hass, entry, portfolio)
         assert await async_remove_config_entry_device(hass, entry, wallet)
     reload.assert_not_called()
 
@@ -634,6 +650,32 @@ async def test_the_device_page_deletes_a_price_device(hass, price_api, hass_ws_c
     assert ticker.call_count == 3
 
 
+async def test_the_device_page_refuses_to_delete_the_portfolio_device(
+    hass, portfolio_api, hass_ws_client
+):
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    device = _own_device(hass, entry, "portfolio")
+
+    response = await _remove_through_the_device_page(hass, hass_ws_client, entry, device)
+
+    assert not response["success"]
+    # HomeAssistantError.__str__ resolves translation_key against the cached
+    # "exceptions" strings and rstrip(".")s the result (homeassistant.helpers.
+    # translation.async_get_exception_message) -- verified identical at the
+    # 2025.5.0 floor and in the 2026.9.3 test image -- so the trailing "."
+    # from strings.json is not part of what the frontend shows.
+    assert response["error"]["message"] == (
+        "The Portfolio device is part of the Bitpanda Portfolio service and "
+        "cannot be deleted on its own. To remove it, delete the Bitpanda "
+        "Portfolio entry"
+    )
+    assert response["error"]["translation_domain"] == DOMAIN
+    assert response["error"]["translation_key"] == "portfolio_device_not_removable"
+    assert response["error"]["translation_placeholders"] is None
+    assert dr.async_get(hass).async_get(device.id) is not None
+
+
 async def test_the_device_page_refuses_to_delete_a_held_wallet(
     hass, portfolio_api, hass_ws_client
 ):
@@ -644,7 +686,14 @@ async def test_the_device_page_refuses_to_delete_a_held_wallet(
     response = await _remove_through_the_device_page(hass, hass_ws_client, entry, wallet)
 
     assert not response["success"]
-    assert response["error"]["message"] == "Failed to remove device entry, rejected by integration"
+    # Same rstrip(".") behaviour as above -- see that test's comment.
+    assert response["error"]["message"] == (
+        "You still hold Vision (VSN), so this wallet would come straight "
+        "back. It is removed automatically once you no longer hold it"
+    )
+    assert response["error"]["translation_domain"] == DOMAIN
+    assert response["error"]["translation_key"] == "held_wallet_not_removable"
+    assert response["error"]["translation_placeholders"] == {"asset": "Vision (VSN)"}
     assert dr.async_get(hass).async_get(wallet.id) is not None
 
 

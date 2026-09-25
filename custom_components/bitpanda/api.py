@@ -106,6 +106,11 @@ class BitpandaApiClient:
         and a line per failed request would flood the log during an outage.
         Never attach the exception chain to the log record: tracebacks can
         carry the API key.
+
+        Redirects are never followed: when one leaves the origin, aiohttp
+        drops only an Authorization header, so the x-api-key header would
+        travel on to whatever host the redirect names. The API does not
+        redirect, so a 3xx answer is an error.
         """
         url = f"{API_BASE_URL}{path}"
         try:
@@ -114,7 +119,11 @@ class BitpandaApiClient:
                 headers=self._headers,
                 params=params,
                 timeout=aiohttp.ClientTimeout(total=API_TIMEOUT),
+                allow_redirects=False,
             ) as response:
+                if 300 <= response.status < 400:
+                    _LOGGER.debug("HTTP %s redirect from %s", response.status, path)
+                    raise BitpandaApiError(f"Unexpected redirect from {path}")
                 if response.status in (401, 403):
                     raise BitpandaAuthError(f"Unauthorized for {path}")
                 if response.status == 429:

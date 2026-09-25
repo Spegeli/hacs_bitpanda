@@ -1,8 +1,11 @@
 """Tests for ticker, portfolio and portfolio history."""
 import asyncio
 import logging
+from unittest.mock import patch
 
 import aiohttp
+from aiohttp import web
+from aiohttp.test_utils import TestServer
 import pytest
 from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client
 
@@ -138,6 +141,66 @@ async def test_request_failures_are_logged_at_debug_only(caplog):
     assert {r.levelno for r in records} == {logging.DEBUG}
     assert all(r.exc_info is None for r in records)
     assert secret not in caplog.text
+
+
+async def test_a_redirect_is_an_error():
+    """The API never redirects: a 3xx fails with a fixed message instead of
+    passing off whatever body came with it."""
+    secret = "totally-secret-key"
+    with mock_aiohttp_client() as mocker:
+        mocker.get(
+            f"{API_BASE_URL}/portfolio",
+            status=302,
+            headers={"Location": "https://elsewhere.example/collect"},
+            json={"data": [{"asset_id": "a"}]},
+        )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient(secret, session)
+            with pytest.raises(BitpandaApiError) as raised:
+                await client.async_get_portfolio()
+    assert str(raised.value) == "Unexpected redirect from /portfolio"
+    assert secret not in str(raised.value)
+
+
+async def _error_of(request) -> str | None:
+    try:
+        await request
+    except BitpandaApiError as err:
+        return str(err)
+    return None
+
+
+async def test_the_key_never_follows_a_redirect_to_another_host(socket_enabled):
+    """When a redirect leaves the origin, aiohttp drops an Authorization
+    header but forwards x-api-key to the new host -- so the client must not
+    follow redirects at all. Two local servers stand in for Bitpanda and for
+    the host a redirect points to."""
+    secret = "totally-secret-key"
+    received: list[str | None] = []
+
+    async def collect(request: web.Request) -> web.Response:
+        received.append(request.headers.get("x-api-key"))
+        return web.json_response({"data": []})
+
+    elsewhere = web.Application()
+    elsewhere.router.add_get("/collect", collect)
+    async with TestServer(elsewhere) as elsewhere_server:
+
+        async def redirect(request: web.Request) -> web.Response:
+            raise web.HTTPFound(str(elsewhere_server.make_url("/collect")))
+
+        bitpanda = web.Application()
+        bitpanda.router.add_get("/v1/portfolio", redirect)
+        async with TestServer(bitpanda) as bitpanda_server, aiohttp.ClientSession() as session:
+            client = BitpandaApiClient(secret, session)
+            with patch(
+                "custom_components.bitpanda.api.API_BASE_URL",
+                str(bitpanda_server.make_url("/v1")),
+            ):
+                error = await _error_of(client.async_get_portfolio())
+
+    assert received == []
+    assert error == "Unexpected redirect from /portfolio"
 
 
 async def test_null_data_becomes_an_empty_result():

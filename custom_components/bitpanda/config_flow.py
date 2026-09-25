@@ -55,6 +55,7 @@ from .const import (
     entry_type,
 )
 from .naming import asset_display_label
+from .purge import async_purge_portfolio
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -140,6 +141,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         self._api_key: str | None = None
         self._currency_ids: dict[str, str] = {}
+        self._pending_currency: str | None = None
 
     # --- Service menu -----------------------------------------------------
 
@@ -345,29 +347,103 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     # --- Reconfigure (Portfolio only) ------------------------------------------------
 
+    def _reconfigure_schema(self, currency: str) -> vol.Schema:
+        """Key optional and never pre-filled; currency pre-filled.
+
+        `currency` arrives upper (stored form); the selector itself works in
+        lowercase (hassfest), so the default passed here is lower-cased too --
+        otherwise the pre-filled value would not match any option.
+        """
+        return vol.Schema(
+            {
+                vol.Optional(CONF_API_KEY): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                ),
+                vol.Required(CONF_CURRENCY, default=currency.lower()): _currency_select(
+                    list(SUPPORTED_CURRENCIES)
+                ),
+            }
+        )
+
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Replace the key, change the currency, or both.
+
+        A currency change goes through async_step_confirm_currency: it
+        deletes every Portfolio sensor with its history.
+        """
         entry = self._get_reconfigure_entry()
         if entry_type(entry) != ENTRY_TYPE_PORTFOLIO:
             return self.async_abort(reason="no_reconfigure")
+        current = entry.data.get(CONF_CURRENCY, DEFAULT_CURRENCY)
         errors: dict[str, str] = {}
         placeholders: dict[str, str] = {"api_key_url": API_KEY_URL}
         if user_input is not None:
-            api_key = user_input[CONF_API_KEY].strip()
+            api_key = (user_input.get(CONF_API_KEY) or "").strip()
+            # The form value travels lowercase (hassfest); stored upper again,
+            # like every other currency in this flow.
+            currency = user_input[CONF_CURRENCY].upper()
             try:
-                errors, extra = await self._async_validate_key(api_key)
+                if api_key:
+                    errors, extra = await self._async_validate_key(api_key)
+                    placeholders.update(extra)
+                if not errors and currency != current:
+                    self._currency_ids = await self._async_currency_ids()
+                    if currency not in self._currency_ids:
+                        errors = {"base": "cannot_connect"}
+            except BitpandaRateLimitError:
+                errors = {"base": "rate_limited"}
+            except BitpandaApiError:
+                errors = {"base": "cannot_connect"}
             except Exception as err:  # noqa: BLE001 - a form error, never a traceback
                 _log_unexpected("reconfigure", err)
-                errors, extra = {"base": "unknown"}, {}
-            placeholders.update(extra)
+                errors = {"base": "unknown"}
             if not errors:
-                return self._async_replace_key(entry, api_key, "reconfigure_successful")
+                if currency != current:
+                    self._api_key = api_key or None
+                    self._pending_currency = currency
+                    return await self.async_step_confirm_currency()
+                if api_key:
+                    return self._async_replace_key(entry, api_key, "reconfigure_successful")
+                return self.async_abort(reason="no_changes")
+            current = currency
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=_KEY_SCHEMA,
+            data_schema=self._reconfigure_schema(current),
             errors=errors,
             description_placeholders=placeholders,
+        )
+
+    async def async_step_confirm_currency(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Warn, then delete every Portfolio sensor with its history.
+
+        Closing the dialog is the way back: nothing has changed until this
+        step is submitted.
+        """
+        entry = self._get_reconfigure_entry()
+        if user_input is None:
+            return self.async_show_form(
+                step_id="confirm_currency",
+                data_schema=vol.Schema({}),
+                description_placeholders={
+                    "old": entry.data.get(CONF_CURRENCY, DEFAULT_CURRENCY),
+                    "new": self._pending_currency,
+                },
+            )
+        updates: dict[str, Any] = {
+            CONF_CURRENCY: self._pending_currency,
+            CONF_CURRENCY_ID: self._currency_ids[self._pending_currency],
+        }
+        if self._api_key:
+            updates[CONF_API_KEY] = self._api_key
+        await async_purge_portfolio(self.hass, entry)
+        # The purge unloaded the entry, which removed its update listener:
+        # this reload is the only one.
+        return self.async_update_reload_and_abort(
+            entry, data_updates=updates, reason="currency_changed"
         )
 
     # --- Options and subentries --------------------------------------------------------

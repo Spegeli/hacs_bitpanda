@@ -354,20 +354,161 @@ async def test_reauth_unexpected_error_shows_unknown(hass, caplog):
     assert "secret-x" not in caplog.text
 
 
-# --- Reconfigure (key only until Task 8) ------------------------------------------------
+# --- Reconfigure: key and currency ----------------------------------------------------
+#
+# The currency selector travels lowercase (hassfest's translation-key
+# validator rejects uppercase option keys), so every submitted currency here
+# is lowercase; stored data and the confirm step's placeholders stay
+# uppercase, like everywhere else in this flow.
+
+_PURGE = "custom_components.bitpanda.config_flow.async_purge_portfolio"
 
 
-async def test_reconfigure_replaces_the_key(hass):
+async def _reconfigure(hass, entry, user_input, *, missing=()):
+    result = await entry.start_reconfigure_flow(hass)
+    with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=list(missing))), patch(
+        f"{_CLIENT}async_get_currencies", AsyncMock(return_value=load_fixture("currencies.json"))
+    ):
+        return await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
+
+
+async def test_reconfigure_form_prefills_the_currency_but_never_the_key(hass):
+    entry = _portfolio_entry(api_key="stored-secret-key", currency="USD", currency_id=_USD_ID)
+    entry.add_to_hass(hass)
+    result = await entry.start_reconfigure_flow(hass)
+    defaults = result["data_schema"]({})
+    assert defaults["currency"] == "usd"
+    assert "api_key" not in defaults
+    assert "stored-secret-key" not in repr(result)
+
+
+async def test_reconfigure_missing_scopes_reshows_form_without_leaking_key(hass, caplog):
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    secret = "totally-secret-reconfigure-key"
+    result = await _reconfigure(
+        hass, entry, {"api_key": secret, "currency": "eur"}, missing=("earn",)
+    )
+    assert result["step_id"] == "reconfigure"
+    assert result["errors"]["base"] == "missing_scopes"
+    assert result["description_placeholders"]["api_key_url"] == API_KEY_URL
+    assert result["description_placeholders"]["missing_scopes"] == "Earn (Read)"
+    assert entry.data["api_key"] == "key"
+    assert secret not in repr(result["description_placeholders"])
+    assert secret not in caplog.text
+
+
+async def test_reconfigure_unexpected_error_shows_unknown(hass, caplog):
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    secret = "totally-secret-key"
+    result = await entry.start_reconfigure_flow(hass)
+    with patch(
+        f"{_CLIENT}async_missing_scopes",
+        AsyncMock(side_effect=RuntimeError(f"detail with {secret}")),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": secret, "currency": "eur"}
+        )
+    assert result["errors"]["base"] == "unknown"
+    records = [r for r in caplog.records if r.name == "custom_components.bitpanda.config_flow"]
+    assert any("RuntimeError" in r.getMessage() for r in records)
+    assert all(r.exc_info is None for r in records)
+    assert secret not in caplog.text
+    assert entry.data["api_key"] == "key"
+
+
+async def test_reconfigure_with_nothing_changed_aborts(hass):
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    result = await _reconfigure(hass, entry, {"currency": "eur"})
+    assert result["reason"] == "no_changes"
+    assert entry.data["api_key"] == "key"
+
+
+async def test_reconfigure_key_only_keeps_the_currency(hass):
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    with patch("homeassistant.config_entries.ConfigEntries.async_schedule_reload") as reload:
+        result = await _reconfigure(hass, entry, {"api_key": " new \n", "currency": "eur"})
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data["api_key"] == "new"
+    assert entry.data["currency"] == "EUR"
+    reload.assert_called_once()
+
+
+async def test_reconfigure_key_only_with_a_listener_lets_the_listener_reload(hass):
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    listener = AsyncMock()
+    entry.add_update_listener(listener)
+    with patch("homeassistant.config_entries.ConfigEntries.async_schedule_reload") as reload:
+        result = await _reconfigure(hass, entry, {"api_key": " new \n", "currency": "eur"})
+        await hass.async_block_till_done()
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data["api_key"] == "new"
+    listener.assert_called_once()
+    reload.assert_not_called()
+
+
+async def test_reconfigure_bad_key_stays_on_the_form_with_the_currency_kept(hass):
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    result = await _reconfigure(
+        hass, entry, {"api_key": "partial", "currency": "usd"}, missing=("earn",)
+    )
+    assert result["step_id"] == "reconfigure"
+    assert result["errors"]["base"] == "missing_scopes"
+    assert result["data_schema"]({})["currency"] == "usd"
+    assert result["description_placeholders"]["api_key_url"] == API_KEY_URL
+
+
+async def test_currency_change_asks_for_confirmation_first(hass):
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    with patch(_PURGE, AsyncMock()) as purge:
+        result = await _reconfigure(hass, entry, {"currency": "usd"})
+    assert result["step_id"] == "confirm_currency"
+    assert result["description_placeholders"] == {"old": "EUR", "new": "USD"}
+    purge.assert_not_called()
+    assert entry.data["currency"] == "EUR"
+
+
+async def test_confirmed_currency_change_purges_then_stores_and_reloads(hass):
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    with patch(_PURGE, AsyncMock()) as purge, patch(
+        "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
+    ) as reload:
+        result = await _reconfigure(hass, entry, {"api_key": "new", "currency": "usd"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["reason"] == "currency_changed"
+    purge.assert_awaited_once_with(hass, entry)
+    reload.assert_called_once()
+    assert entry.data["currency"] == "USD"
+    assert entry.data["currency_id"] == _USD_ID
+    assert entry.data["api_key"] == "new"
+
+
+async def test_confirmed_currency_change_without_a_new_key_keeps_the_old_one(hass):
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    with patch(_PURGE, AsyncMock()), patch(
+        "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
+    ):
+        result = await _reconfigure(hass, entry, {"currency": "chf"})
+        await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert entry.data["api_key"] == "key"
+    assert entry.data["currency"] == "CHF"
+
+
+async def test_currency_listing_failure_maps_to_cannot_connect(hass):
     entry = _portfolio_entry()
     entry.add_to_hass(hass)
     result = await entry.start_reconfigure_flow(hass)
-    assert result["description_placeholders"]["api_key_url"] == API_KEY_URL
-    with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=[])), patch(
-        "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
-    ):
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"api_key": "new"})
-    assert result["reason"] == "reconfigure_successful"
-    assert entry.data["api_key"] == "new"
+    with patch(f"{_CLIENT}async_get_currencies", AsyncMock(side_effect=BitpandaApiError("x"))):
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"currency": "usd"})
+    assert result["errors"]["base"] == "cannot_connect"
 
 
 async def test_the_price_tracker_has_nothing_to_reconfigure(hass):

@@ -257,6 +257,18 @@ def test_pick_legacy_narrows_by_prefix_between_two_legacy_types():
     assert pick_legacy(candidates, None) is None
 
 
+def test_pick_legacy_index_wallet_prefix_narrows_to_the_index():
+    """`index_index_` is the prefix the legacy flow really stored for index
+    wallets (index -> index nesting). Synthetic three-way collision, for the
+    same reason as the test above: only the narrowing can pick the index.
+    """
+    crypto = _asset("DUP", "id-crypto", "cryptocoin", "coin")
+    metal = _asset("DUP", "id-metal", "commodity", "metal")
+    index = _asset("DUP", "id-index", "index", "index")
+
+    assert pick_legacy([crypto, metal, index], "index_index_") == index
+
+
 # --- category_of ---------------------------------------------------------
 
 

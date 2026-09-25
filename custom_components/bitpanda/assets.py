@@ -82,7 +82,9 @@ def legacy_candidates(candidates: list[dict], prefix: str | None) -> list[dict]:
         return [a for a in survivors if a.get("type") == "cryptocoin"]
     if prefix in ("commodity_metal_", "metal_"):
         return [a for a in survivors if a.get("group") == "metal"]
-    if prefix in ("index_", "index_wallet_"):
+    # "index_index_" is what the legacy flow stored; the other two are
+    # tolerance only (see _LEGACY_PREFIXES in __init__.py).
+    if prefix in ("index_index_", "index_", "index_wallet_"):
         return [a for a in survivors if a.get("type") == "index"]
     # prefix is None for a bare symbol (what v1 price trackers stored) --
     # only the legacy-supported-type filter above applies.

@@ -39,13 +39,20 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
-# v1 wallet ids were "{category}_{symbol}", where the category itself could
-# contain an underscore, e.g. "commodity_metal_XAU" or "index_wallet_BCI5".
+# The v1 options flow built wallet ids from the legacy /asset-wallets nesting:
+# "{category}_{symbol}" for a flat category, "{category}_{sub}_{symbol}" for a
+# nested one. Crypto was flat, metals sat under commodity -> metal and indices
+# under index -> index, and fiat came from a separate listing -- so the ids it
+# produced are "cryptocoin_BTC", "commodity_metal_XAU", "index_index_BCI5" and
+# "fiat_EUR". "index_wallet_", "index_" and "metal_" were never produced; they
+# stay as tolerance for hand-edited entries.
+#
 # Order matters: this is checked longest/most-specific first, or a shorter
-# prefix that is itself a prefix of a longer one ("index_" / "index_wallet_")
-# would strip first and leave a mangled symbol ("wallet_BCI5").
+# prefix that is itself a prefix of a longer one ("index_" / "index_index_")
+# would strip first and leave a symbol that does not exist ("index_BCI5").
 _LEGACY_PREFIXES = (
     "commodity_metal_",
+    "index_index_",
     "index_wallet_",
     "cryptocoin_",
     "fiat_",
@@ -96,15 +103,15 @@ def v2_unique_id(
     it belongs to another config entry, or when its asset did not resolve.
 
     The wallet check runs before the price check -- a wallet unique_id is
-    `f"{entry_id}_wallet_{wallet_id}"`, and `wallet_id` itself can start with
-    "wallet_" (`index_wallet_BCI5`'s stored id is `index_wallet_BCI5`) -- but
-    a wallet-prefix match is not proof either: a price sensor's own asset
-    symbol could itself start with "wallet_" (`eid_wallet_XYZ_price_EUR`), so
-    a miss in `wallet_map` falls through to the price pattern below instead
-    of returning None outright. The reverse direction cannot be fooled the
-    same way: a wallet unique_id never contains the literal substring
-    "_price_", so nothing here is ever misparsed as a wallet by the price
-    check.
+    `f"{entry_id}_wallet_{wallet_id}"` with the whole prefixed v1 wallet id
+    embedded (`eid_wallet_index_index_BCI5`, `eid_wallet_commodity_metal_XAU`),
+    which `wallet_map` is keyed by -- but a wallet-prefix match is not proof
+    either: a price sensor's own asset symbol could itself start with
+    "wallet_" (`eid_wallet_XYZ_price_EUR`), so a miss in `wallet_map` falls
+    through to the price pattern below instead of returning None outright.
+    The reverse direction cannot be fooled the same way: a wallet unique_id
+    never contains the literal substring "_price_", so nothing here is ever
+    misparsed as a wallet by the price check.
     """
     wallet_prefix = f"{entry_id}_wallet_"
     if unique_id.startswith(wallet_prefix):

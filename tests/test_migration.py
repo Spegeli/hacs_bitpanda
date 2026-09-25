@@ -55,16 +55,37 @@ def _v1_entry(**option_overrides) -> MockConfigEntry:
 
 
 # --- legacy_symbol -----------------------------------------------------------
+#
+# Every id below is in a format the legacy options flow actually produced. It
+# built wallet ids from the legacy /asset-wallets nesting: "{category}_{symbol}"
+# for a flat category and "{category}_{sub}_{symbol}" for a nested one. Crypto
+# was flat; metals sat under commodity -> metal and indices under
+# index -> index (verified against the live legacy API). So the formats are
+# cryptocoin_<SYM>, commodity_metal_<SYM>, index_index_<SYM>, plus fiat_<SYM>
+# from the separate fiat wallet listing.
 
 
 def test_legacy_symbol_from_two_part_id():
     assert legacy_symbol("fiat_EUR") == "EUR"
-    assert legacy_symbol("index_BCI5") == "BCI5"
+    assert legacy_symbol("cryptocoin_BTC") == "BTC"
 
 
 def test_legacy_symbol_from_three_part_id():
     assert legacy_symbol("commodity_metal_XAU") == "XAU"
+    assert legacy_symbol("index_index_BCI5") == "BCI5"
+
+
+def test_legacy_symbol_tolerates_prefixes_the_legacy_flow_never_produced():
+    """Defensive only: `index_`, `index_wallet_` and `metal_` never came out
+    of the legacy options flow (see the section comment above), but they
+    still strip cleanly rather than leave a mangled symbol behind.
+    """
+    assert legacy_symbol("index_BCI5") == "BCI5"
+    assert legacy_prefix("index_BCI5") == "index_"
     assert legacy_symbol("index_wallet_BCI5") == "BCI5"
+    assert legacy_prefix("index_wallet_BCI5") == "index_wallet_"
+    assert legacy_symbol("metal_XAU") == "XAU"
+    assert legacy_prefix("metal_XAU") == "metal_"
 
 
 def test_legacy_symbol_keeps_symbols_containing_underscores():
@@ -93,12 +114,14 @@ def test_legacy_symbol_with_unrecognized_prefix_is_returned_unchanged():
 
 def test_legacy_prefix_of_two_part_id():
     assert legacy_prefix("fiat_EUR") == "fiat_"
-    assert legacy_prefix("index_BCI5") == "index_"
+    assert legacy_prefix("cryptocoin_BTC") == "cryptocoin_"
 
 
 def test_legacy_prefix_of_three_part_id_prefers_the_longer_match():
     assert legacy_prefix("commodity_metal_XAU") == "commodity_metal_"
-    assert legacy_prefix("index_wallet_BCI5") == "index_wallet_"
+    # "index_" is itself a prefix of "index_index_": matching it first would
+    # leave the symbol "index_BCI5", which does not exist.
+    assert legacy_prefix("index_index_BCI5") == "index_index_"
 
 
 def test_legacy_prefix_of_bare_symbol_is_none():
@@ -130,7 +153,12 @@ def test_v2_unique_id_maps_crypto_wallet():
 
 def test_v2_unique_id_maps_index_wallet():
     assert (
-        v2_unique_id("eid_wallet_index_BCI5", "eid", {}, {"index_BCI5": "uuid-bci5"})
+        v2_unique_id(
+            "eid_wallet_index_index_BCI5",
+            "eid",
+            {},
+            {"index_index_BCI5": "uuid-bci5"},
+        )
         == "eid_wallet_uuid-bci5"
     )
 
@@ -341,7 +369,7 @@ async def test_migrate_entry_updates_registry_unique_ids_and_preserves_entity_id
 ):
     entry = _v1_entry(
         tracked_assets=["BTC"],
-        tracked_wallets=["cryptocoin_BTC", "index_BCI5"],
+        tracked_wallets=["cryptocoin_BTC", "index_index_BCI5"],
     )
     entry.add_to_hass(hass)
     eid = entry.entry_id
@@ -364,7 +392,7 @@ async def test_migrate_entry_updates_registry_unique_ids_and_preserves_entity_id
     index_wallet = ent_reg.async_get_or_create(
         "sensor",
         DOMAIN,
-        f"{eid}_wallet_index_BCI5",
+        f"{eid}_wallet_index_index_BCI5",
         config_entry=entry,
         suggested_object_id="bci5_wallet",
     )
@@ -417,6 +445,50 @@ async def test_migrate_entry_updates_registry_unique_ids_and_preserves_entity_id
     assert updated_portfolio is not None
     assert updated_portfolio.entity_id == portfolio_entity_id
     assert updated_portfolio.unique_id == f"{eid}_portfolio_total"
+
+
+async def test_migrate_entry_keeps_a_legacy_index_wallet(hass):
+    """The issue-#7 users' case, end to end, in the exact form the legacy
+    flow stored it: `index_index_BCI5`, from the index -> index nesting of
+    the legacy /asset-wallets response. The migration runs once, so a wallet
+    it drops here can never be restored by a later release.
+    """
+    bci5 = next(
+        a for a in load_fixture("assets-sample.json") if a["symbol"] == "BCI5"
+    )
+    entry = _v1_entry(tracked_wallets=["index_index_BCI5"])
+    entry.add_to_hass(hass)
+    eid = entry.entry_id
+
+    ent_reg = er.async_get(hass)
+    wallet = ent_reg.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        f"{eid}_wallet_index_index_BCI5",
+        config_entry=entry,
+        suggested_object_id="bci5_wallet",
+    )
+    entity_id = wallet.entity_id
+
+    mock_get_assets = _get_assets_by_symbol({"BCI5": bci5})
+    with patch(
+        "custom_components.bitpanda.BitpandaApiClient.async_get_currencies",
+        AsyncMock(return_value=load_fixture("currencies.json")),
+    ), patch(
+        "custom_components.bitpanda.BitpandaApiClient.async_get_assets",
+        mock_get_assets,
+    ):
+        assert await async_migrate_entry(hass, entry) is True
+
+    mock_get_assets.assert_called_once_with(symbol="BCI5")
+    assert entry.version == 2
+    assert entry.options["tracked_wallets"] == [bci5["id"]]
+    assert entry.options["asset_cache"][bci5["id"]]["symbol"] == "BCI5"
+
+    migrated = ent_reg.async_get(entity_id)
+    assert migrated is not None
+    assert migrated.entity_id == entity_id
+    assert migrated.unique_id == f"{eid}_wallet_{bci5['id']}"
 
 
 async def test_migrate_entry_leaves_unresolvable_wallet_registry_entry_in_place(hass):

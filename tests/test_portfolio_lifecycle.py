@@ -17,6 +17,7 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.groups import async_get_or_create_wallet_group
+from custom_components.bitpanda.naming import asset_display_label, wallet_entity_id
 from custom_components.bitpanda.portfolio_coordinator import PortfolioRuntime
 from custom_components.bitpanda.portfolio_model import EarnData, Holding, PortfolioData
 from custom_components.bitpanda.portfolio_sensor import (
@@ -132,6 +133,24 @@ class _Harness:
 
     def subentry_of(self, entity_id: str) -> str | None:
         return er.async_get(self.hass).async_get(entity_id).config_subentry_id
+
+    def register_wallet(self, asset: dict, category: str) -> ConfigSubentry:
+        """A wallet left from before a restart: its device and Wallet sensor,
+        registered in the group of `category`, which is returned."""
+        eid = self.entry.entry_id
+        group = async_get_or_create_wallet_group(self.hass, self.entry, category, _TITLES)
+        device = dr.async_get(self.hass).async_get_or_create(
+            config_entry_id=eid,
+            config_subentry_id=group.subentry_id,
+            identifiers={(DOMAIN, f"{eid}_wallet_{asset['id']}")},
+            name=f"{asset_display_label(asset)} Wallet",
+        )
+        er.async_get(self.hass).async_get_or_create(
+            "sensor", DOMAIN, f"{eid}_wallet_{asset['id']}", config_entry=self.entry,
+            config_subentry_id=group.subentry_id, device_id=device.id,
+            suggested_object_id=wallet_entity_id(asset).split(".", 1)[1],
+        )
+        return group
 
 
 async def test_a_held_asset_gets_its_wallet_device(hass):
@@ -329,25 +348,32 @@ async def test_a_group_stays_while_it_holds_a_wallet(hass):
     One from before -- here of an asset sold since -- still sits in its
     group, and the group stays until that wallet is gone."""
     harness = _Harness(hass)
-    eid = harness.entry.entry_id
-    metal = async_get_or_create_wallet_group(hass, harness.entry, "metal", _TITLES)
-    device = dr.async_get(hass).async_get_or_create(
-        config_entry_id=eid,
-        config_subentry_id=metal.subentry_id,
-        identifiers={(DOMAIN, f"{eid}_wallet_{GOLD['id']}")},
-        name="Gold (XAU) Wallet",
-    )
-    er.async_get(hass).async_get_or_create(
-        "sensor", DOMAIN, f"{eid}_wallet_{GOLD['id']}", config_entry=harness.entry,
-        config_subentry_id=metal.subentry_id, device_id=device.id,
-        suggested_object_id="bitpanda_gold_xau_wallet",
-    )
+    harness.register_wallet(GOLD, "metal")
     for _ in range(2):
         await harness.refresh(_data(_holding(VSN)))
     assert set(harness.groups()) == {"crypto", "metal"}
     await harness.refresh(_data(_holding(VSN)))
     assert set(harness.groups()) == {"crypto"}
     assert harness.devices() == {"Vision (VSN) Wallet"}
+
+
+async def test_a_wallet_stays_in_the_group_it_sits_in(hass, caplog):
+    """VSN's wallet sits in the metal group from before a restart, while its
+    record now says crypto -- as when Bitpanda files an asset under another
+    type. It stays where it is: its device never moves between groups, no
+    crypto group appears for it, and the metal group is kept."""
+    harness = _Harness(hass)
+    metal = harness.register_wallet(VSN, "metal")
+
+    for _ in range(2):
+        await harness.refresh(_data(_holding(VSN, staked=4.0)))
+
+    assert harness.groups() == {"metal": "Precious metals"}
+    assert {entity_id: harness.subentry_of(entity_id) for entity_id in VSN_ENTITIES} == {
+        entity_id: metal.subentry_id for entity_id in VSN_ENTITIES
+    }
+    assert harness.group_devices("metal") == {"Vision (VSN) Wallet"}
+    assert "assigns an existing device to a different config subentry" not in caplog.text
 
 
 async def test_the_wallets_of_a_deleted_group_come_back_in_a_new_group(hass):

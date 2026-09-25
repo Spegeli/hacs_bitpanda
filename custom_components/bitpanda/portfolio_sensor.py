@@ -369,7 +369,9 @@ class PortfolioEntityManager:
     Each wallet goes, with its Staking and Total sensors, into the wallet
     group (a config subentry) of its asset's category: created when the
     first wallet of that category arrives, removed once no wallet is left in
-    it. The Portfolio device stays outside every group. A group the user
+    it. A wallet already in a group stays there, even when Bitpanda files its
+    asset under another type later: a device never moves between groups.
+    The Portfolio device stays outside every group. A group the user
     deleted took its devices and entities along; the next refresh brings
     back the wallets of assets still held, in a new group and under the same
     entity IDs, without reloading the entry.
@@ -388,7 +390,7 @@ class PortfolioEntityManager:
         self._runtime = runtime
         self._currency = currency
         self._add_entities = add_entities
-        # Asset id -> the category of the group its wallet was added to.
+        # Asset id -> the category of the wallet group its sensors sit in.
         self._wallets: dict[str, str] = {}
         self._staking: set[str] = set()
         self._misses: dict[str, int] = {}
@@ -407,6 +409,21 @@ class PortfolioEntityManager:
                 kind = reg_entry.unique_id[len(entry_id) + 1 :].split("_", 1)[0]
                 out.setdefault(asset_id, set()).add(kind)
         return out
+
+    def _registered_category(self, asset_id: str) -> str | None:
+        """The category of the wallet group the sensors of `asset_id` are
+        registered in; None while they are in none (a wallet migrated from
+        version 1) or not registered at all."""
+        entry_id = self._entry.entry_id
+        ent_reg = er.async_get(self._hass)
+        for unique_id in (make(entry_id, asset_id) for make in _UNIQUE_IDS.values()):
+            entity_id = ent_reg.async_get_entity_id("sensor", DOMAIN, unique_id)
+            if entity_id is None:
+                continue
+            group = self._entry.subentries.get(ent_reg.async_get(entity_id).config_subentry_id)
+            if group is not None and group.subentry_type == SUBENTRY_TYPE_WALLET_GROUP:
+                return group.unique_id
+        return None
 
     def _current_earn(self) -> EarnData | None:
         earn = self._runtime.earn
@@ -445,7 +462,12 @@ class PortfolioEntityManager:
             asset = data.assets[asset_id]
             entities: list[SensorEntity] = []
             if asset_id not in self._wallets:
-                self._wallets[asset_id] = asset_category(asset)
+                # A wallet registered in a group stays in it, whatever its
+                # asset's category says now. Moving its device to another
+                # group would list it in both on Home Assistant 2025.5;
+                # 2026.9 warns about such a move, and 2027.8 will refuse it.
+                sits_in = self._registered_category(asset_id)
+                self._wallets[asset_id] = asset_category(asset) if sits_in is None else sits_in
                 entities.append(
                     WalletSensor(portfolio, entry_id, self._currency, asset, self.has_total)
                 )

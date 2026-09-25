@@ -3,15 +3,20 @@
 Home Assistant shows every config subentry of an entry as a group on the
 integration page, with the subentry's devices inside. A group stands for one
 asset category (assets.asset_category) and carries it as its unique_id. Its
-title is set once, in Home Assistant's language, when the group is created;
-the user may rename it afterwards.
+title is set once, in Home Assistant's language, when the group is created,
+and never rewritten; newer Home Assistant versions let the user rename it.
 
 The Price Tracker keeps its tracked assets in its groups (type price_group):
 each group's data holds the slim records of its assets by asset id.
+
+The Portfolio's wallet manager keeps its wallet devices in groups of type
+wallet_group, which hold nothing but their category: the manager creates
+them as wallets arrive and removes them once they hold nothing.
 """
 from __future__ import annotations
 
 from collections.abc import Iterable
+from types import MappingProxyType
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry, ConfigSubentry, ConfigSubentryData
@@ -19,7 +24,13 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.translation import async_get_translations
 
 from .assets import ASSET_CATEGORY_FILTERS, CATEGORY_OTHER, asset_category, slim_asset
-from .const import CONF_ASSETS, CONF_CATEGORY, DOMAIN, SUBENTRY_TYPE_PRICE_GROUP
+from .const import (
+    CONF_ASSETS,
+    CONF_CATEGORY,
+    DOMAIN,
+    SUBENTRY_TYPE_PRICE_GROUP,
+    SUBENTRY_TYPE_WALLET_GROUP,
+)
 
 _TITLE_KEY = f"component.{DOMAIN}.selector.asset_group.options."
 
@@ -132,3 +143,21 @@ def async_remove_asset_from_group(hass: HomeAssistant, entry: ConfigEntry, asset
         )
     else:
         hass.config_entries.async_remove_subentry(entry, group.subentry_id)
+
+
+@callback
+def async_get_or_create_wallet_group(
+    hass: HomeAssistant, entry: ConfigEntry, category: str, titles: dict[str, str]
+) -> ConfigSubentry:
+    """The Portfolio's wallet group of `category`; created, titled from
+    `titles` (see async_group_titles), when there is none yet."""
+    group = group_of_category(entry, SUBENTRY_TYPE_WALLET_GROUP, category)
+    if group is None:
+        group = ConfigSubentry(
+            data=MappingProxyType({CONF_CATEGORY: category}),
+            subentry_type=SUBENTRY_TYPE_WALLET_GROUP,
+            title=titles[category],
+            unique_id=category,
+        )
+        hass.config_entries.async_add_subentry(entry, group)
+    return group

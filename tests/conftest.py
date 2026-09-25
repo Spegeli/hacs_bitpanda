@@ -61,3 +61,14 @@ def price_group(category: str, *assets: dict, title: str | None = None) -> Confi
         title=title or category,
         unique_id=category,
     )
+
+
+def wallet_group(category: str, title: str | None = None) -> ConfigSubentryData:
+    """A Portfolio wallet group as the integration stores it: one config
+    subentry per asset category, keyed by the category, holding just that."""
+    return ConfigSubentryData(
+        data={"category": category},
+        subentry_type="wallet_group",
+        title=title or category,
+        unique_id=category,
+    )

@@ -16,14 +16,17 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .assets import asset_category
 from .const import (
     CONF_CURRENCY,
     DEFAULT_CURRENCY,
     DOMAIN,
     PORTFOLIO_TIMEFRAMES,
+    SUBENTRY_TYPE_WALLET_GROUP,
     WALLET_REMOVAL_MISSES,
 )
-from .devices import find_entry_device
+from .devices import find_entry_device, subentry_devices
+from .groups import async_get_or_create_wallet_group, group_of_category, groups_of_type
 from .naming import (
     asset_display_label,
     managed_asset_id,
@@ -348,7 +351,8 @@ _UNIQUE_IDS = {
 
 
 class PortfolioEntityManager:
-    """Adds and removes wallet devices as holdings appear and disappear.
+    """Adds and removes wallet devices as holdings appear and disappear, and
+    keeps them in groups by asset type.
 
     Runs after every portfolio refresh; a failed refresh changes nothing.
     A holding absent from WALLET_REMOVAL_MISSES consecutive successful
@@ -356,6 +360,14 @@ class PortfolioEntityManager:
     1 whose asset is no longer held included. Only unique_ids that name an
     asset UUID are ever removed (naming.managed_asset_id): a legacy wallet
     the migration could not resolve is left for the user.
+
+    Each wallet goes, with its Staking and Total sensors, into the wallet
+    group (a config subentry) of its asset's category: created when the
+    first wallet of that category arrives, removed once no wallet is left in
+    it. The Portfolio device stays outside every group. A group the user
+    deleted took its devices and entities along; the next refresh brings
+    back the wallets of assets still held, in a new group and under the same
+    entity IDs, without reloading the entry.
     """
 
     def __init__(
@@ -364,14 +376,15 @@ class PortfolioEntityManager:
         entry: ConfigEntry,
         runtime: PortfolioRuntime,
         currency: str,
-        add_entities: Callable[[list[SensorEntity]], None],
+        add_entities: Callable[..., None],
     ) -> None:
         self._hass = hass
         self._entry = entry
         self._runtime = runtime
         self._currency = currency
         self._add_entities = add_entities
-        self._wallets: set[str] = set()
+        # Asset id -> the category of the group its wallet was added to.
+        self._wallets: dict[str, str] = {}
         self._staking: set[str] = set()
         self._misses: dict[str, int] = {}
 
@@ -416,16 +429,19 @@ class PortfolioEntityManager:
         data: PortfolioData | None = portfolio.data
         if not portfolio.last_update_success or data is None:
             return
+        self._forget_wallets_without_group()
         entry_id = self._entry.entry_id
         registered = self._registered()
         earn = self._current_earn()
-        new: list[SensorEntity] = []
+        # Category -> the sensors to add to its group.
+        new: dict[str, list[SensorEntity]] = {}
 
         for asset_id in data.wallet_ids:
             asset = data.assets[asset_id]
+            entities: list[SensorEntity] = []
             if asset_id not in self._wallets:
-                self._wallets.add(asset_id)
-                new.append(
+                self._wallets[asset_id] = asset_category(asset)
+                entities.append(
                     WalletSensor(portfolio, entry_id, self._currency, asset, self.has_total)
                 )
             applies = staking_applies(data.holdings[asset_id], earn)
@@ -433,16 +449,18 @@ class PortfolioEntityManager:
             wanted = applies is True or (applies is None and "staking" in kinds)
             if wanted and asset_id not in self._staking:
                 self._staking.add(asset_id)
-                new.append(
+                entities.append(
                     StakingSensor(
                         portfolio, self._runtime.earn, self._runtime.rewards,
                         entry_id, self._currency, asset,
                     )
                 )
-                new.append(WalletTotalSensor(portfolio, entry_id, self._currency, asset))
+                entities.append(WalletTotalSensor(portfolio, entry_id, self._currency, asset))
             elif applies is False and (asset_id in self._staking or kinds & {"staking", "total"}):
                 self._staking.discard(asset_id)
                 self._remove(asset_id, ("staking", "total"), device=False)
+            if entities:
+                new.setdefault(self._wallets[asset_id], []).extend(entities)
 
         # An asset whose balances could not be read this refresh has no entry
         # in `data.holdings`, yet counts as held (PortfolioData.held), never
@@ -450,18 +468,51 @@ class PortfolioEntityManager:
         held = data.held
         for asset_id in held:
             self._misses.pop(asset_id, None)
-        for asset_id in (set(registered) | self._wallets) - held:
+        for asset_id in (set(registered) | set(self._wallets)) - held:
             misses = self._misses.get(asset_id, 0) + 1
             if misses < WALLET_REMOVAL_MISSES:
                 self._misses[asset_id] = misses
                 continue
             self._misses.pop(asset_id, None)
-            self._wallets.discard(asset_id)
+            self._wallets.pop(asset_id, None)
             self._staking.discard(asset_id)
             self._remove(asset_id, ("wallet", "staking", "total"), device=True)
 
-        if new:
-            self._add_entities(new)
+        # One call per group: the group must exist before its sensors are
+        # added, and the registry files each sensor and its device under it --
+        # moving a sensor that is registered already, such as a migrated one.
+        for category, entities in new.items():
+            group = async_get_or_create_wallet_group(
+                self._hass, self._entry, category, self._runtime.group_titles
+            )
+            self._add_entities(entities, config_subentry_id=group.subentry_id)
+        self._remove_empty_groups()
+
+    def _forget_wallets_without_group(self) -> None:
+        """Forget every tracked wallet whose group is gone -- deleted by the
+        user, its devices and entities with it -- so that this refresh adds
+        the wallet again, as if it were new."""
+        for asset_id, category in list(self._wallets.items()):
+            if group_of_category(self._entry, SUBENTRY_TYPE_WALLET_GROUP, category) is None:
+                del self._wallets[asset_id]
+                self._staking.discard(asset_id)
+
+    def _remove_empty_groups(self) -> None:
+        """Remove every wallet group that no tracked wallet belongs to and
+        that holds no device of this entry any more.
+
+        A wallet this manager does not track yet -- one registered before a
+        restart, whose asset is unnamed for now or has been sold since --
+        still has its device in its group, and keeps the group until it goes.
+        """
+        entry_id = self._entry.entry_id
+        in_use = set(self._wallets.values())
+        for group in groups_of_type(self._entry, SUBENTRY_TYPE_WALLET_GROUP):
+            if group.unique_id in in_use or subentry_devices(
+                self._hass, entry_id, group.subentry_id
+            ):
+                continue
+            self._hass.config_entries.async_remove_subentry(self._entry, group.subentry_id)
 
 
 @callback
@@ -483,9 +534,10 @@ def _keep_polling() -> None:
 async def async_setup_portfolio_entities(
     hass: HomeAssistant,
     entry: ConfigEntry,
-    add_entities: Callable[[list[SensorEntity]], None],
+    add_entities: Callable[..., None],
 ) -> None:
-    """The Portfolio device's sensors, then the wallets the manager keeps current."""
+    """The Portfolio device's sensors, outside every group, then the wallets
+    the manager keeps current in their groups."""
     runtime: PortfolioRuntime = entry.runtime_data
     currency = entry.data.get(CONF_CURRENCY, DEFAULT_CURRENCY)
     add_entities(

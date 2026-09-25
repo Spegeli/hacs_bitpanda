@@ -8,6 +8,7 @@ from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.groups import (
     async_add_asset_to_group,
+    async_get_or_create_wallet_group,
     async_group_titles,
     async_remove_asset_from_group,
     group_of_category,
@@ -145,3 +146,20 @@ async def test_an_asset_leaves_its_group_and_the_last_one_takes_the_group_along(
     async_remove_asset_from_group(hass, entry, GOLD["id"])
     await hass.async_block_till_done()
     assert listener.call_count == 2
+
+
+async def test_a_wallet_group_is_created_once_and_holds_just_its_category(hass):
+    entry = MockConfigEntry(domain=DOMAIN, version=3, data={"entry_type": "portfolio"})
+    entry.add_to_hass(hass)
+    titles = await async_group_titles(hass)
+
+    group = async_get_or_create_wallet_group(hass, entry, "metal", titles)
+
+    assert (group.subentry_type, group.unique_id, group.title, dict(group.data)) == (
+        "wallet_group", "metal", "Precious metals", {"category": "metal"},
+    )
+    assert list(entry.subentries) == [group.subentry_id]
+    # Found, not created again -- and its title is the one it was created with.
+    again = async_get_or_create_wallet_group(hass, entry, "metal", {**titles, "metal": "Metalle"})
+    assert (again.subentry_id, again.title) == (group.subentry_id, "Precious metals")
+    assert list(entry.subentries) == [group.subentry_id]

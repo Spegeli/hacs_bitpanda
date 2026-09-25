@@ -111,6 +111,13 @@
         "already_configured": "Dieses Asset wird bereits verfolgt.",
         "asset_added": "{asset} wird jetzt in der Gruppe {group} verfolgt."
       }
+    },
+    "wallet_group": {
+      "initiate_flow": {
+        "user": "Wallet-Gruppe hinzufügen"
+      },
+      "entry_type": "Wallet-Gruppe",
+      "step": {}
     }
   },
   "selector": {

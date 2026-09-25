@@ -67,6 +67,11 @@ SUBENTRY_TYPE_PRICE_GROUP = "price_group"
 CONF_CATEGORY = "category"
 CONF_ASSETS = "assets"
 
+# The Portfolio keeps its wallet devices in groups by asset type too: one
+# config subentry per category, keyed by the category, whose data holds just
+# the category. The wallet manager creates and removes them; the user adds none.
+SUBENTRY_TYPE_WALLET_GROUP = "wallet_group"
+
 # Set by the version 1 migration on the Price Tracker entry it creates: the
 # legacy price entities that entry adopts on its first setup.
 CONF_LEGACY_ADOPT = "legacy_adopt"

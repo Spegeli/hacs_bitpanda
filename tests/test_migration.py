@@ -4,11 +4,13 @@ from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
 from homeassistant import data_entry_flow
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
 from custom_components.bitpanda.const import DOMAIN
+from custom_components.bitpanda.devices import subentry_devices
 from custom_components.bitpanda.ecb import EcbRates
 from custom_components.bitpanda.migration import (
     async_adopt_legacy_prices,
@@ -409,6 +411,79 @@ async def test_wallets_are_rekeyed_and_default_ids_renamed(hass, legacy_api, no_
     message = _message(notify)
     assert "`sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet`" in message
     assert "sensor.my_index" not in message
+
+
+def _by_symbol_or_id(**kwargs):
+    """/assets as the migration (by symbol) and the Portfolio (by id) ask it."""
+    return [
+        a for a in load_fixture("assets-sample.json")
+        if a["symbol"] == kwargs.get("symbol") or a["id"] == kwargs.get("asset_id")
+    ]
+
+
+def _position(asset_id: str, value: str) -> dict:
+    return {
+        "asset_id": asset_id,
+        "balance": {"value": "1.00000000"},
+        "available_balance": {"value": "1.00000000"},
+        "currency_balance": {"value": value},
+    }
+
+
+async def test_a_migrated_install_ends_with_its_wallets_in_groups(hass, legacy_api, notify):
+    """The upgrade end to end: the migration, then the Portfolio's first
+    setup. The wallets the migration re-keyed move into the groups of their
+    asset types; the Portfolio's own sensors, and a legacy wallet it left
+    alone together with its device, stay outside every group."""
+    _, assets = legacy_api
+    assets.side_effect = _by_symbol_or_id
+    entry = _v1_entry(hass, wallets=["cryptocoin_BTC", "commodity_metal_XAU", "cryptocoin_GONE"])
+    device = _legacy_device(hass, entry, "wallets")
+    eid = entry.entry_id
+    _legacy_entity(hass, entry, f"{eid}_wallet_cryptocoin_BTC", "bitpanda_wallets_btc_wallet", device)
+    _legacy_entity(
+        hass, entry, f"{eid}_wallet_commodity_metal_XAU", "bitpanda_wallets_xau_wallet", device
+    )
+    gone = _legacy_entity(
+        hass, entry, f"{eid}_wallet_cryptocoin_GONE", "bitpanda_wallets_gone_wallet", device
+    )
+    _legacy_entity(hass, entry, f"{eid}_portfolio_total", "bitpanda_wallets_portfolio_total", device)
+    portfolio = [
+        _position(BTC_ID, "50000.00"),
+        _position(GOLD_ID, "3000.00"),
+        {"currency_id": _EUR_ID, "balance": {"value": "10.00"}},
+    ]
+    with patch(f"{_API}async_get_portfolio", AsyncMock(return_value=portfolio)), patch(
+        f"{_API}async_get_portfolio_history", AsyncMock(return_value={"return_percentage": "1.5"})
+    ), patch(f"{_API}async_get_earn_configs", AsyncMock(return_value=[])), patch(
+        f"{_API}async_get_operations", AsyncMock(return_value=[])
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert (entry.version, entry.state) == (3, ConfigEntryState.LOADED)
+    groups = {sub.unique_id: sub for sub in entry.subentries.values()}
+    assert {category: group.title for category, group in groups.items()} == {
+        "crypto": "Cryptocurrencies",
+        "metal": "Precious metals",
+    }
+    ent_reg = er.async_get(hass)
+    btc = ent_reg.async_get("sensor.bitpanda_bitcoin_btc_wallet")
+    gold = ent_reg.async_get("sensor.bitpanda_gold_xau_wallet")
+    assert (btc.unique_id, btc.config_subentry_id) == (
+        f"{eid}_wallet_{BTC_ID}", groups["crypto"].subentry_id,
+    )
+    assert (gold.unique_id, gold.config_subentry_id) == (
+        f"{eid}_wallet_{GOLD_ID}", groups["metal"].subentry_id,
+    )
+    total = ent_reg.async_get("sensor.bitpanda_portfolio_total")
+    assert (total.unique_id, total.config_subentry_id) == (f"{eid}_portfolio_total", None)
+    left = ent_reg.async_get(gone)
+    assert (left.config_subentry_id, left.device_id) == (None, device)
+    assert all(
+        device not in {d.id for d in subentry_devices(hass, eid, group.subentry_id)}
+        for group in groups.values()
+    )
 
 
 async def test_the_fiat_wallet_of_the_entry_currency_becomes_portfolio_cash(

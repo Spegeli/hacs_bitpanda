@@ -26,7 +26,12 @@ from .const import (
     entry_type,
 )
 from .devices import device_identifier
-from .groups import async_remove_asset_from_group, groups_of_type, tracked_assets
+from .groups import (
+    async_group_titles,
+    async_remove_asset_from_group,
+    groups_of_type,
+    tracked_assets,
+)
 from .naming import (
     asset_display_label,
     portfolio_device_identifier,
@@ -59,11 +64,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up one of the two services."""
     if entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER:
         entry.runtime_data = await _async_start_price_tracker(hass, entry)
+        # Options, groups and data all change what it tracks: rebuild on any change.
+        reload_listener = _async_reload
     else:
         entry.runtime_data = await _async_start_portfolio(hass, entry)
+        reload_listener = _async_reload_on_new_data_or_options
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    # Options, subentries and data all change what exists: rebuild on any change.
-    entry.async_on_unload(entry.add_update_listener(_async_reload))
+    entry.async_on_unload(entry.add_update_listener(reload_listener))
     _async_register_refresh_service(hass)
     return True
 
@@ -81,6 +88,9 @@ async def _async_start_portfolio(hass: HomeAssistant, entry: ConfigEntry) -> Por
         history=HistoryCoordinator(hass, entry, client, currency_id),
         earn=EarnCoordinator(hass, entry, client),
         rewards=RewardsCoordinator(hass, entry, client),
+        group_titles=await async_group_titles(hass),
+        data_at_setup=dict(entry.data),
+        options_at_setup=dict(entry.options),
     )
     await runtime.portfolio.async_config_entry_first_refresh()
     # Earn, rewards and history are additive: a failure there must not block
@@ -126,6 +136,23 @@ async def _async_start_price_tracker(
 
 async def _async_reload(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def _async_reload_on_new_data_or_options(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> None:
+    """Reload the Portfolio once its data or options differ from setup's.
+
+    Its subentries, the wallet groups, change without a reload: the wallet
+    manager adds and removes them itself, and brings the wallets of a group
+    the user deleted back with the next refresh (portfolio_sensor.py).
+    """
+    runtime: PortfolioRuntime = entry.runtime_data
+    if (dict(entry.data), dict(entry.options)) != (
+        runtime.data_at_setup,
+        runtime.options_at_setup,
+    ):
+        await hass.config_entries.async_reload(entry.entry_id)
 
 
 def _loaded_runtimes(hass: HomeAssistant) -> list:

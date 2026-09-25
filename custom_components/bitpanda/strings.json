@@ -111,6 +111,13 @@
         "already_configured": "This asset is already tracked.",
         "asset_added": "{asset} is now tracked in the group {group}."
       }
+    },
+    "wallet_group": {
+      "initiate_flow": {
+        "user": "Add wallet group"
+      },
+      "entry_type": "Wallet group",
+      "step": {}
     }
   },
   "selector": {

@@ -38,3 +38,21 @@ def find_entry_device(
         ),
         None,
     )
+
+
+def subentry_devices(
+    hass: HomeAssistant, entry_id: str, subentry_id: str
+) -> list[dr.DeviceEntry]:
+    """The devices of config entry `entry_id` that belong to its subentry `subentry_id`.
+
+    Read from `config_entries_subentries`, the one field that tells on every
+    supported version: Home Assistant 2025.5 lets a device belong to several
+    subentries and stores them there, per config entry; later versions give
+    a device a single subentry and keep that field as a deprecated
+    compatibility property.
+    """
+    return [
+        device
+        for device in dr.async_entries_for_config_entry(dr.async_get(hass), entry_id)
+        if subentry_id in device.config_entries_subentries.get(entry_id, ())
+    ]

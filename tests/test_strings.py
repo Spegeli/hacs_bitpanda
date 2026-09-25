@@ -51,12 +51,31 @@ def test_every_currency_and_entity_name_is_translated():
 
 def test_the_price_group_flow_has_its_strings():
     strings = json.loads((_DIR / "strings.json").read_text(encoding="utf-8"))
-    assert set(strings["config_subentries"]) == {"price_group"}
+    assert set(strings["config_subentries"]) == {"price_group", "wallet_group"}
     group = strings["config_subentries"]["price_group"]
     assert set(group["step"]) == {"user", "asset"}
     assert set(group["abort"]) == {"already_configured", "asset_added"}
     assert "{asset}" in group["abort"]["asset_added"]
     assert "{group}" in group["abort"]["asset_added"]
+
+
+def test_the_wallet_group_is_named_and_has_no_flow():
+    """No dialog ever adds a wallet group, yet hassfest wants the strings of
+    a flow: `initiate_flow.user` and a `step` block, here empty."""
+    english, german = (
+        json.loads((_DIR / name).read_text(encoding="utf-8"))["config_subentries"]["wallet_group"]
+        for name in ("strings.json", "translations/de.json")
+    )
+    assert english == {
+        "initiate_flow": {"user": "Add wallet group"},
+        "entry_type": "Wallet group",
+        "step": {},
+    }
+    assert german == {
+        "initiate_flow": {"user": "Wallet-Gruppe hinzufügen"},
+        "entry_type": "Wallet-Gruppe",
+        "step": {},
+    }
 
 
 def test_every_asset_category_has_a_group_title():

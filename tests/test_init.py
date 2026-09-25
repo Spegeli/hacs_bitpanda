@@ -17,7 +17,7 @@ from custom_components.bitpanda import async_remove_config_entry_device
 from custom_components.bitpanda.api import BitpandaAuthError
 from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.const import DOMAIN
-from custom_components.bitpanda.devices import find_entry_device
+from custom_components.bitpanda.devices import find_entry_device, subentry_devices
 from custom_components.bitpanda.ecb import EcbRates
 
 from tests.conftest import load_fixture, price_group
@@ -145,6 +145,120 @@ async def test_portfolio_setup_creates_its_devices_and_sensors(hass, portfolio_a
     assert devices == {"Portfolio", "Vision (VSN) Wallet"}
 
 
+_VSN_ENTITIES = (
+    "sensor.bitpanda_vision_vsn_wallet",
+    "sensor.bitpanda_vision_vsn_wallet_staking",
+    "sensor.bitpanda_vision_vsn_wallet_total",
+)
+
+
+def _group_devices(hass, entry, group: ConfigSubentry) -> list[str]:
+    return sorted(d.name for d in subentry_devices(hass, entry.entry_id, group.subentry_id))
+
+
+async def test_the_portfolio_groups_its_wallets_and_keeps_its_own_device_outside(
+    hass, portfolio_api
+):
+    hass.config.language = "de"
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    [group] = entry.subentries.values()
+    assert (group.subentry_type, group.unique_id, group.title) == (
+        "wallet_group", "crypto", "Kryptowährungen",
+    )
+    ent_reg = er.async_get(hass)
+    for entity_id in _VSN_ENTITIES:
+        assert ent_reg.async_get(entity_id).config_subentry_id == group.subentry_id
+    assert _group_devices(hass, entry, group) == ["Vision (VSN) Wallet"]
+    for key in ("total", "cash", "cash_plus", "return_day"):
+        assert ent_reg.async_get(f"sensor.bitpanda_portfolio_{key}").config_subentry_id is None
+    portfolio = _own_device(hass, entry, "portfolio")
+    assert portfolio is not None
+    assert portfolio.name not in _group_devices(hass, entry, group)
+
+
+async def _next_refresh(hass) -> None:
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=6))
+    await hass.async_block_till_done()
+
+
+async def test_a_deleted_wallet_group_comes_back_on_the_next_refresh_without_a_reload(
+    hass, portfolio_api
+):
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    group = _group(entry, "crypto")
+    calls = portfolio_api.call_count
+
+    hass.config_entries.async_remove_subentry(entry, group.subentry_id)
+    await hass.async_block_till_done()
+    ent_reg = er.async_get(hass)
+    assert [ent_reg.async_get(entity_id) for entity_id in _VSN_ENTITIES] == [None] * 3
+    assert portfolio_api.call_count == calls
+
+    await _next_refresh(hass)
+    # The refresh's own request, no reload's.
+    assert portfolio_api.call_count == calls + 1
+    regrouped = _group(entry, "crypto")
+    assert regrouped.subentry_id != group.subentry_id
+    for entity_id in _VSN_ENTITIES:
+        assert ent_reg.async_get(entity_id).config_subentry_id == regrouped.subentry_id
+    assert _group_devices(hass, entry, regrouped) == ["Vision (VSN) Wallet"]
+    assert _value(hass, "sensor.bitpanda_vision_vsn_wallet") == 50.0
+
+
+async def test_wallet_groups_the_manager_adds_or_removes_never_reload_the_portfolio(
+    hass, portfolio_api
+):
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    calls = portfolio_api.call_count
+    held = portfolio_api.return_value
+    portfolio_api.return_value = [
+        *held,
+        {
+            "asset_id": GOLD["id"],
+            "balance": {"value": "1.00000000"},
+            "available_balance": {"value": "1.00000000"},
+            "currency_balance": {"value": "3000.00"},
+        },
+    ]
+
+    await _next_refresh(hass)
+    assert portfolio_api.call_count == calls + 1
+    assert [sub.unique_id for sub in entry.subentries.values()] == ["crypto", "metal"]
+    assert _value(hass, "sensor.bitpanda_gold_xau_wallet") == 3000.0
+
+    portfolio_api.return_value = held
+    for _ in range(3):
+        await _next_refresh(hass)
+    assert portfolio_api.call_count == calls + 4
+    assert [sub.unique_id for sub in entry.subentries.values()] == ["crypto"]
+    assert er.async_get(hass).async_get("sensor.bitpanda_gold_xau_wallet") is None
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"data": {"entry_type": "portfolio", "api_key": "new-key", "currency": "EUR",
+                  "currency_id": _EUR_ID}},
+        {"options": {"added_later": True}},
+    ],
+    ids=["data", "options"],
+)
+async def test_a_data_or_options_change_reloads_the_portfolio(hass, portfolio_api, change):
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    calls = portfolio_api.call_count
+
+    hass.config_entries.async_update_entry(entry, **change)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    # The reload's first refresh.
+    assert portfolio_api.call_count == calls + 1
+
+
 async def test_a_rejected_key_fails_setup_and_asks_for_a_new_one(hass, portfolio_api):
     portfolio_api.side_effect = BitpandaAuthError("Unauthorized for /portfolio")
     entry = _portfolio_entry(hass)
@@ -214,6 +328,24 @@ async def test_reauth_with_the_same_key_revives_a_portfolio_stopped_by_a_401(
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=6))
     await hass.async_block_till_done()
     assert portfolio_api.call_count == calls + 2
+
+
+async def test_reauth_with_a_new_key_reloads_the_portfolio_once(hass, portfolio_api):
+    """The new key changes the entry's data, so the update listener reloads
+    the Portfolio -- once: the flow leaves the reload to it."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    calls = portfolio_api.call_count
+    result = await entry.start_reauth_flow(hass)
+    with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=[])):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": "new-key"}
+        )
+        await hass.async_block_till_done()
+    assert result["reason"] == "reauth_successful"
+    assert entry.data["api_key"] == "new-key"
+    assert entry.state is ConfigEntryState.LOADED
+    assert portfolio_api.call_count == calls + 1
 
 
 async def test_price_tracker_setup_creates_one_sensor_per_asset_and_currency(hass, price_api):

@@ -35,7 +35,13 @@ def _register(hass, ticker_interval: timedelta):
     portfolio = _Coordinator(timedelta(minutes=5))
     tickers = _Coordinator(ticker_interval)
     for entry_type, runtime in (
-        ("portfolio", PortfolioRuntime(portfolio=portfolio, history=None, earn=None, rewards=None)),
+        (
+            "portfolio",
+            PortfolioRuntime(
+                portfolio=portfolio, history=None, earn=None, rewards=None,
+                group_titles={}, data_at_setup={}, options_at_setup={},
+            ),
+        ),
         ("price_tracker", PriceTrackerRuntime(tickers=tickers, ecb=None)),
     ):
         entry = MockConfigEntry(domain=DOMAIN, version=3, data={"entry_type": entry_type})

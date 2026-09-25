@@ -1,8 +1,11 @@
-"""Wallet devices appear and disappear with the holdings."""
+"""Wallet devices appear and disappear with the holdings, in groups by asset type."""
 from datetime import timedelta
+import json
 import logging
+from pathlib import Path
 from unittest.mock import AsyncMock
 
+from homeassistant.config_entries import ConfigSubentry
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
@@ -13,6 +16,8 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.bitpanda.const import DOMAIN
+from custom_components.bitpanda.devices import subentry_devices
+from custom_components.bitpanda.groups import async_get_or_create_wallet_group
 from custom_components.bitpanda.portfolio_coordinator import PortfolioRuntime
 from custom_components.bitpanda.portfolio_model import EarnData, Holding, PortfolioData
 from custom_components.bitpanda.portfolio_sensor import (
@@ -20,11 +25,26 @@ from custom_components.bitpanda.portfolio_sensor import (
     async_setup_portfolio_entities,
 )
 
-VSN = {"id": "1f051b7c-5980-6dda-9d3d-cf107d8d4bfb", "symbol": "VSN", "name": "Vision", "group": "token"}
-BTC = {"id": "b86c034b-efe3-11eb-b56f-0691764446a7", "symbol": "BTC", "name": "Bitcoin", "group": "coin"}
+VSN = {"id": "1f051b7c-5980-6dda-9d3d-cf107d8d4bfb", "symbol": "VSN", "name": "Vision",
+       "type": "cryptocoin", "group": "token"}
+BTC = {"id": "b86c034b-efe3-11eb-b56f-0691764446a7", "symbol": "BTC", "name": "Bitcoin",
+       "type": "cryptocoin", "group": "coin"}
+GOLD = {"id": "b86c88d4-efe3-11eb-b56f-0691764446a7", "symbol": "XAU", "name": "Gold",
+        "type": "commodity", "group": "metal"}
 BCPEUR = {"id": "1edf9721-e545-644c-9796-ae5b69a774d7", "symbol": "BCPEUR",
-          "name": "Bitpanda Cash Plus EUR", "group": "fiat_earn"}
+          "name": "Bitpanda Cash Plus EUR", "type": "security", "group": "fiat_earn"}
 _LOG = logging.getLogger(__name__)
+
+# The group titles of an English Home Assistant, as setup loads them.
+_TITLES = json.loads(
+    (
+        Path(__file__).parent.parent / "custom_components" / "bitpanda" / "translations" / "en.json"
+    ).read_text(encoding="utf-8")
+)["selector"]["asset_group"]["options"]
+
+VSN_WALLET = "sensor.bitpanda_vision_vsn_wallet"
+VSN_ENTITIES = {VSN_WALLET, f"{VSN_WALLET}_staking", f"{VSN_WALLET}_total"}
+GOLD_WALLET = "sensor.bitpanda_gold_xau_wallet"
 
 
 def _holding(asset, staked=0.0) -> Holding:
@@ -33,15 +53,19 @@ def _holding(asset, staked=0.0) -> Holding:
 
 def _data(*holdings, unnamed=()) -> PortfolioData:
     data = PortfolioData(holdings={h.asset_id: h for h in holdings})
-    records = {a["id"]: a for a in (VSN, BTC, BCPEUR)}
+    records = {a["id"]: a for a in (VSN, BTC, GOLD, BCPEUR)}
     data.assets = {h.asset_id: records[h.asset_id] for h in holdings if h.asset_id not in unnamed}
     return data
 
 
 class _Harness:
-    """A manager wired to a real entity platform, registry and coordinators."""
+    """A manager wired to a real entity platform, registry and coordinators.
 
-    def __init__(self, hass):
+    `eager_add=False` lets the platform add entities only once the manager's
+    refresh has returned, rather than starting at once as Home Assistant does.
+    """
+
+    def __init__(self, hass, *, eager_add=True):
         self.hass = hass
         self.entry = MockConfigEntry(domain=DOMAIN, version=3, data={"entry_type": "portfolio"})
         self.entry.add_to_hass(hass)
@@ -58,11 +82,16 @@ class _Harness:
             history=_coordinator("history"),
             earn=_coordinator("earn"),
             rewards=_coordinator("rewards"),
+            group_titles=_TITLES,
+            data_at_setup=dict(self.entry.data),
+            options_at_setup={},
         )
         self.runtime.earn.data = EarnData(apr={}, offered=frozenset())
         self.manager = PortfolioEntityManager(
             hass, self.entry, self.runtime, "EUR",
-            lambda entities: hass.async_create_task(self.platform.async_add_entities(entities)),
+            lambda entities, **kwargs: hass.async_create_task(
+                self.platform.async_add_entities(entities, **kwargs), eager_start=eager_add
+            ),
         )
 
     async def refresh(self, data=None, success=True):
@@ -83,6 +112,25 @@ class _Harness:
             for d in dr.async_entries_for_config_entry(dr.async_get(self.hass), self.entry.entry_id)
         }
 
+    def groups(self) -> dict[str, str]:
+        """Category -> title of every wallet group."""
+        return {
+            sub.unique_id: sub.title
+            for sub in self.entry.subentries.values()
+            if sub.subentry_type == "wallet_group"
+        }
+
+    def group(self, category: str) -> ConfigSubentry:
+        [group] = [sub for sub in self.entry.subentries.values() if sub.unique_id == category]
+        return group
+
+    def group_devices(self, category: str) -> set[str]:
+        subentry_id = self.group(category).subentry_id
+        return {d.name for d in subentry_devices(self.hass, self.entry.entry_id, subentry_id)}
+
+    def subentry_of(self, entity_id: str) -> str | None:
+        return er.async_get(self.hass).async_get(entity_id).config_subentry_id
+
 
 async def test_a_held_asset_gets_its_wallet_device(hass):
     harness = _Harness(hass)
@@ -95,6 +143,7 @@ async def test_cash_plus_and_unnamed_holdings_get_no_wallet(hass):
     harness = _Harness(hass)
     await harness.refresh(_data(_holding(BCPEUR), _holding(BTC), unnamed={BTC["id"]}))
     assert harness.entity_ids() == set()
+    assert harness.groups() == {}
 
 
 async def test_something_staked_adds_staking_and_total(hass):
@@ -216,6 +265,111 @@ async def test_a_migrated_wallet_for_a_sold_asset_leaves_after_three_refreshes(h
     assert harness.entity_ids() == {unresolved.entity_id}
 
 
+async def test_wallets_are_grouped_by_asset_type(hass):
+    harness = _Harness(hass)
+    await harness.refresh(_data(_holding(VSN, staked=4.0), _holding(GOLD)))
+    assert harness.groups() == {"crypto": "Cryptocurrencies", "metal": "Precious metals"}
+    crypto, metal = harness.group("crypto"), harness.group("metal")
+    assert dict(crypto.data) == {"category": "crypto"}
+    assert dict(metal.data) == {"category": "metal"}
+    # Wallet, Staking and Total of an asset share its group, device included.
+    assert {entity_id: harness.subentry_of(entity_id) for entity_id in VSN_ENTITIES} == {
+        entity_id: crypto.subentry_id for entity_id in VSN_ENTITIES
+    }
+    assert harness.subentry_of(GOLD_WALLET) == metal.subentry_id
+    assert harness.group_devices("crypto") == {"Vision (VSN) Wallet"}
+    assert harness.group_devices("metal") == {"Gold (XAU) Wallet"}
+
+
+async def test_a_second_wallet_of_a_type_joins_its_group(hass):
+    harness = _Harness(hass)
+    await harness.refresh(_data(_holding(VSN)))
+    crypto = harness.group("crypto")
+    await harness.refresh(_data(_holding(VSN), _holding(BTC)))
+    assert harness.groups() == {"crypto": "Cryptocurrencies"}
+    assert harness.group("crypto").subentry_id == crypto.subentry_id
+    assert harness.subentry_of("sensor.bitpanda_bitcoin_btc_wallet") == crypto.subentry_id
+    assert harness.group_devices("crypto") == {"Vision (VSN) Wallet", "Bitcoin (BTC) Wallet"}
+
+
+async def test_staking_that_starts_later_joins_the_group_of_its_wallet(hass):
+    harness = _Harness(hass)
+    await harness.refresh(_data(_holding(VSN)))
+    await harness.refresh(_data(_holding(VSN, staked=4.0)))
+    crypto = harness.group("crypto").subentry_id
+    assert {entity_id: harness.subentry_of(entity_id) for entity_id in VSN_ENTITIES} == {
+        entity_id: crypto for entity_id in VSN_ENTITIES
+    }
+
+
+async def test_the_last_wallet_of_a_type_takes_its_group_along(hass):
+    harness = _Harness(hass)
+    await harness.refresh(_data(_holding(VSN), _holding(GOLD)))
+    for _ in range(2):
+        await harness.refresh(_data(_holding(VSN)))
+    assert set(harness.groups()) == {"crypto", "metal"}
+    await harness.refresh(_data(_holding(VSN)))
+    assert harness.groups() == {"crypto": "Cryptocurrencies"}
+    assert harness.devices() == {"Vision (VSN) Wallet"}
+
+
+async def test_a_new_group_stays_while_its_wallets_are_still_being_added(hass):
+    """A group created in this refresh may hold no device yet when the
+    refresh ends: the wallet it was created for keeps it."""
+    harness = _Harness(hass, eager_add=False)
+    await harness.refresh(_data(_holding(VSN)))
+    assert harness.groups() == {"crypto": "Cryptocurrencies"}
+    assert harness.group_devices("crypto") == {"Vision (VSN) Wallet"}
+
+
+async def test_a_group_stays_while_it_holds_a_wallet(hass):
+    """After a restart the manager tracks only the wallets it added itself.
+    One from before -- here of an asset sold since -- still sits in its
+    group, and the group stays until that wallet is gone."""
+    harness = _Harness(hass)
+    eid = harness.entry.entry_id
+    metal = async_get_or_create_wallet_group(hass, harness.entry, "metal", _TITLES)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=eid,
+        config_subentry_id=metal.subentry_id,
+        identifiers={(DOMAIN, f"{eid}_wallet_{GOLD['id']}")},
+        name="Gold (XAU) Wallet",
+    )
+    er.async_get(hass).async_get_or_create(
+        "sensor", DOMAIN, f"{eid}_wallet_{GOLD['id']}", config_entry=harness.entry,
+        config_subentry_id=metal.subentry_id, device_id=device.id,
+        suggested_object_id="bitpanda_gold_xau_wallet",
+    )
+    for _ in range(2):
+        await harness.refresh(_data(_holding(VSN)))
+    assert set(harness.groups()) == {"crypto", "metal"}
+    await harness.refresh(_data(_holding(VSN)))
+    assert set(harness.groups()) == {"crypto"}
+    assert harness.devices() == {"Vision (VSN) Wallet"}
+
+
+async def test_the_wallets_of_a_deleted_group_come_back_in_a_new_group(hass):
+    """Deleting a group deletes its devices and entities. Assets still held
+    come back with the next refresh, in a new group, under the same IDs."""
+    harness = _Harness(hass)
+    await harness.refresh(_data(_holding(VSN, staked=4.0), _holding(GOLD)))
+    crypto = harness.group("crypto")
+    hass.config_entries.async_remove_subentry(harness.entry, crypto.subentry_id)
+    await hass.async_block_till_done()
+    assert harness.entity_ids() == {GOLD_WALLET}
+
+    await harness.refresh(_data(_holding(VSN, staked=4.0), _holding(GOLD)))
+
+    regrouped = harness.group("crypto")
+    assert regrouped.subentry_id != crypto.subentry_id
+    assert harness.entity_ids() == VSN_ENTITIES | {GOLD_WALLET}
+    assert {entity_id: harness.subentry_of(entity_id) for entity_id in VSN_ENTITIES} == {
+        entity_id: regrouped.subentry_id for entity_id in VSN_ENTITIES
+    }
+    assert harness.group_devices("crypto") == {"Vision (VSN) Wallet"}
+    assert harness.manager.has_total(VSN["id"])
+
+
 async def test_staking_registered_before_a_restart_is_recreated_while_earn_is_unknown(hass):
     harness = _Harness(hass)
     ent_reg = er.async_get(hass)
@@ -259,6 +413,9 @@ async def test_the_earn_catalogue_keeps_refreshing_without_staking_sensors(hass)
         history=_coordinator("history"),
         earn=earn,
         rewards=_coordinator("rewards"),
+        group_titles=_TITLES,
+        data_at_setup=dict(entry.data),
+        options_at_setup={},
     )
     runtime.portfolio.data = _data(_holding(VSN))  # nothing staked
     runtime.portfolio.last_update_success = True
@@ -266,7 +423,9 @@ async def test_the_earn_catalogue_keeps_refreshing_without_staking_sensors(hass)
 
     await async_setup_portfolio_entities(
         hass, entry,
-        lambda entities: hass.async_create_task(platform.async_add_entities(entities)),
+        lambda entities, **kwargs: hass.async_create_task(
+            platform.async_add_entities(entities, **kwargs)
+        ),
     )
     await hass.async_block_till_done()
     assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_staking") is None

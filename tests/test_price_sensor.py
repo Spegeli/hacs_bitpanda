@@ -40,6 +40,7 @@ def test_ids_names_and_device():
     assert sensor.entity_id == "sensor.bitpanda_bitcoin_btc_usd"
     assert sensor.unique_id == f"eid_{BTC['id']}_price_USD"
     assert sensor.name == "USD"
+    assert sensor.translation_key == "price"
     assert sensor.has_entity_name is True
     assert sensor.native_unit_of_measurement == "USD"
     info = price_device_info("eid", BTC)

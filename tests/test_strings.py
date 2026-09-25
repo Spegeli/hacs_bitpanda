@@ -3,6 +3,20 @@ import json
 from pathlib import Path
 
 from custom_components.bitpanda.assets import ASSET_CATEGORY_FILTERS, CATEGORY_OTHER
+from custom_components.bitpanda.ecb import EcbRates
+from custom_components.bitpanda.portfolio_model import (
+    EarnData,
+    Holding,
+    PortfolioData,
+    RewardTotals,
+)
+from custom_components.bitpanda.portfolio_sensor import (
+    PortfolioCashPlusSensor,
+    StakingSensor,
+    WalletSensor,
+    WalletTotalSensor,
+)
+from custom_components.bitpanda.price_sensor import PriceSensor
 
 _DIR = Path(__file__).parent.parent / "custom_components" / "bitpanda"
 _FILES = ("strings.json", "translations/en.json", "translations/de.json")
@@ -46,6 +60,7 @@ def test_every_currency_and_entity_name_is_translated():
     assert set(strings["entity"]["sensor"]) == {
         "total_value", "cash", "cash_plus", "return_day", "return_week",
         "return_month", "return_six_month", "return_year", "staking", "wallet_total",
+        "wallet", "price",
     }
 
 
@@ -96,3 +111,104 @@ def test_every_asset_category_has_a_group_title():
     assert set(strings["selector"]["asset_group"]["options"]) == {
         *ASSET_CATEGORY_FILTERS, CATEGORY_OTHER,
     }
+
+
+# --- Attribute label drift guard --------------------------------------------------
+#
+# Every attribute a sensor can publish must have a translated label under its
+# translation_key: Home Assistant's more-info "Details" view sorts attributes
+# alphabetically by their displayed label, mixed with its own (device class,
+# friendly name, ...), and only a translation lets an integration control that
+# label at all (see the sensor modules' docstrings). Each scenario below is
+# built to make one sensor class publish every attribute it can, so a new
+# attribute added without a matching label here fails this test.
+
+
+class _Coordinator:
+    """Duck-typed coordinator: what the entities read."""
+
+    def __init__(self, data=None, last_update_success=True):
+        self.data = data
+        self.last_update_success = last_update_success
+
+
+_VSN = {"id": "1f051b7c-5980-6dda-9d3d-cf107d8d4bfb", "symbol": "VSN", "name": "Vision",
+        "group": "token"}
+_BCPEUR = {"id": "cash-plus-eur", "symbol": "BCPEUR", "name": "Bitpanda Cash Plus EUR",
+           "group": "fiat_earn"}
+_BCPUSD = {"id": "cash-plus-usd", "symbol": "BCPUSD", "name": "Bitpanda Cash Plus USD",
+           "group": "fiat_earn"}
+_BCPGBP = {"id": "cash-plus-gbp", "symbol": "BCPGBP", "name": "Bitpanda Cash Plus GBP",
+           "group": "fiat_earn"}
+_BTC = {"id": "b86c034b-efe3-11eb-b56f-0691764446a7", "symbol": "BTC", "name": "Bitcoin",
+        "group": "coin"}
+
+
+def _wallet_portfolio_data() -> PortfolioData:
+    """One holding with every performance figure set, so WalletSensor and
+    WalletTotalSensor both publish the full performance set."""
+    holding = Holding(
+        asset_id=_VSN["id"], balance=100.0, available=25.0, value=200.0,
+        invested=150.0, avg_buy_price=1.5, total_return=50.0, total_return_pct=33.33,
+    )
+    data = PortfolioData(holdings={_VSN["id"]: holding}, cash=0.0)
+    data.assets = {_VSN["id"]: _VSN}
+    return data
+
+
+def _cash_plus_portfolio_data() -> PortfolioData:
+    """A Cash Plus holding in each of the three known product currencies."""
+    products = (_BCPEUR, _BCPUSD, _BCPGBP)
+    data = PortfolioData(
+        holdings={
+            asset["id"]: Holding(asset_id=asset["id"], balance=10.0, available=10.0, value=10.0)
+            for asset in products
+        },
+        cash=0.0,
+    )
+    data.assets = {asset["id"]: asset for asset in products}
+    return data
+
+
+def _attribute_scenarios() -> list[tuple[str, dict]]:
+    """(translation_key, published attributes) for every sensor class that
+    publishes attributes."""
+    wallet_coordinator = _Coordinator(_wallet_portfolio_data())
+    rewards = _Coordinator({_VSN["id"]: RewardTotals(
+        gross=12.0, fee=2.4, net=9.6, count=3, last_at="2026-09-22T17:16:35Z")})
+    earn = _Coordinator(EarnData(apr={_VSN["id"]: 0.0544}, offered=frozenset({_VSN["id"]})))
+
+    price = PriceSensor(
+        _Coordinator({_BTC["id"]: 100.0}),
+        _Coordinator(EcbRates(date="2026-09-24", rates={"USD": 1.1367})),
+        "eid", _BTC, "USD",
+    )
+    price._price_24h_ago = 90.0
+
+    return [
+        ("wallet", WalletSensor(
+            wallet_coordinator, "eid", "EUR", _VSN, lambda _asset_id: False
+        ).extra_state_attributes),
+        ("staking", StakingSensor(
+            wallet_coordinator, earn, rewards, "eid", "EUR", _VSN
+        ).extra_state_attributes),
+        ("wallet_total", WalletTotalSensor(
+            wallet_coordinator, "eid", "EUR", _VSN
+        ).extra_state_attributes),
+        ("price", price.extra_state_attributes),
+        ("cash_plus", PortfolioCashPlusSensor(
+            _Coordinator(_cash_plus_portfolio_data()), "eid", "EUR"
+        ).extra_state_attributes),
+    ]
+
+
+def test_every_published_attribute_has_a_translated_label():
+    strings = json.loads((_DIR / "strings.json").read_text(encoding="utf-8"))
+    english = json.loads((_DIR / "translations/en.json").read_text(encoding="utf-8"))
+
+    for translation_key, attrs in _attribute_scenarios():
+        labels = strings["entity"]["sensor"][translation_key]["state_attributes"]
+        assert set(attrs) == set(labels), translation_key
+        assert english["entity"]["sensor"][translation_key]["state_attributes"] == labels, (
+            translation_key
+        )

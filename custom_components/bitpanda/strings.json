@@ -196,11 +196,116 @@
       "return_year": {
         "name": "Return year"
       },
+      "wallet": {
+        "state_attributes": {
+          "asset": {
+            "name": "Asset: symbol"
+          },
+          "asset_name": {
+            "name": "Asset: name"
+          },
+          "units": {
+            "name": "Asset: quantity"
+          },
+          "average_buy_price": {
+            "name": "Balance: average buy price"
+          },
+          "invested_amount": {
+            "name": "Balance: invested"
+          },
+          "total_return": {
+            "name": "Balance: profit/loss"
+          },
+          "total_return_percent": {
+            "name": "Balance: profit/loss %"
+          }
+        }
+      },
       "staking": {
-        "name": "Staking"
+        "name": "Staking",
+        "state_attributes": {
+          "asset": {
+            "name": "Asset: symbol"
+          },
+          "asset_name": {
+            "name": "Asset: name"
+          },
+          "units": {
+            "name": "Asset: quantity"
+          },
+          "apr_percent": {
+            "name": "Rewards: APR %"
+          },
+          "rewards_gross": {
+            "name": "Rewards: gross"
+          },
+          "rewards_fee": {
+            "name": "Rewards: fee"
+          },
+          "rewards_net": {
+            "name": "Rewards: net"
+          },
+          "rewards_count": {
+            "name": "Rewards: count"
+          },
+          "rewards_last_at": {
+            "name": "Rewards: last"
+          }
+        }
       },
       "wallet_total": {
-        "name": "Total"
+        "name": "Total",
+        "state_attributes": {
+          "asset": {
+            "name": "Asset: symbol"
+          },
+          "asset_name": {
+            "name": "Asset: name"
+          },
+          "units": {
+            "name": "Asset: quantity"
+          },
+          "average_buy_price": {
+            "name": "Balance: average buy price"
+          },
+          "invested_amount": {
+            "name": "Balance: invested"
+          },
+          "total_return": {
+            "name": "Balance: profit/loss"
+          },
+          "total_return_percent": {
+            "name": "Balance: profit/loss %"
+          }
+        }
+      },
+      "price": {
+        "state_attributes": {
+          "asset": {
+            "name": "Asset: symbol"
+          },
+          "asset_name": {
+            "name": "Asset: name"
+          },
+          "trading_pair": {
+            "name": "Asset: trading pair"
+          },
+          "change_24h_pct": {
+            "name": "24 h: change %"
+          },
+          "price_24h_ago": {
+            "name": "24 h: price before"
+          },
+          "conversion_rate": {
+            "name": "Conversion: rate"
+          },
+          "rate_date": {
+            "name": "Conversion: date"
+          },
+          "rate_source": {
+            "name": "Conversion: source"
+          }
+        }
       }
     }
   },

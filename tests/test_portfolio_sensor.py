@@ -152,6 +152,7 @@ def test_wallet_is_the_unstaked_value_and_named_by_its_device():
     assert sensor.entity_id == "sensor.bitpanda_vision_vsn_wallet"
     assert sensor.unique_id == f"eid_wallet_{VSN['id']}"
     assert sensor.name is None
+    assert sensor.translation_key == "wallet"
     assert sensor.native_value == 50.0
     assert sensor.extra_state_attributes == {
         "asset": "VSN", "asset_name": "Vision", "units": 25.0,
@@ -186,6 +187,7 @@ def test_staking_is_the_staked_value_with_earn_attributes():
     assert sensor.entity_id == "sensor.bitpanda_vision_vsn_wallet_staking"
     assert sensor.unique_id == f"eid_staking_{VSN['id']}"
     assert sensor.translation_key == "staking"
+    assert sensor.icon == "mdi:lock-clock"
     assert sensor.native_value == 150.0
     assert sensor.extra_state_attributes == {
         "asset": "VSN", "asset_name": "Vision", "units": 75.0, "apr_percent": 5.44,

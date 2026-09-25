@@ -249,6 +249,7 @@ class WalletSensor(_WalletPart):
     """
 
     _attr_name = None
+    _attr_translation_key = "wallet"
     _attr_icon = "mdi:wallet"
 
     def __init__(
@@ -283,7 +284,7 @@ class StakingSensor(_WalletPart):
     """Value of the staked units, with everything about Earn as attributes."""
 
     _attr_translation_key = "staking"
-    _attr_icon = "mdi:sprout"
+    _attr_icon = "mdi:lock-clock"
 
     def __init__(
         self, coordinator, earn, rewards, entry_id: str, currency: str, asset: dict

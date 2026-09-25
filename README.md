@@ -145,6 +145,8 @@ When two assets share a label, Home Assistant appends `_2` to the second one's I
 
 ### Attributes
 
+Home Assistant lists these in the entity's Details view under translated names grouped by prefix (e.g. "Asset: Menge", "Bilanz: investiert"); the keys in the table below are what templates use.
+
 | Sensor | Attributes |
 |---|---|
 | Wallet | `asset`, `asset_name`, `units` (tradable units). Without a Total sensor also `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |

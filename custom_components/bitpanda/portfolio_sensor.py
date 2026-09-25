@@ -518,11 +518,12 @@ class PortfolioEntityManager:
     def _forget_wallets_without_group(self) -> None:
         """Forget every tracked wallet whose group is gone -- deleted by the
         user, its devices and entities with it -- so that this refresh adds
-        the wallet again, as if it were new."""
+        the wallet again, as if it were new: its miss count goes too."""
         for asset_id, category in list(self._wallets.items()):
             if group_of_category(self._entry, SUBENTRY_TYPE_WALLET_GROUP, category) is None:
                 del self._wallets[asset_id]
                 self._staking.discard(asset_id)
+                self._misses.pop(asset_id, None)
 
     def _remove_empty_groups(self) -> None:
         """Remove every wallet group that no tracked wallet belongs to and

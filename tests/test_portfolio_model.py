@@ -105,11 +105,36 @@ def test_parse_splits_assets_from_fiat_and_sums_cash_from_balance():
 def test_parse_skips_an_unparsable_holding():
     data = parse_portfolio([{"asset_id": VSN, "balance": {"value": "x"}}])
     assert data.holdings == {}
+    assert data.unparsed_assets == {VSN}
 
 
 def test_parse_keeps_a_holding_without_currency_balance_as_no_value():
     data = parse_portfolio([_asset_entry(VSN, "1.0", "1.0", value=None)])
     assert data.holdings[VSN].value is None
+
+
+def test_an_unparsable_holding_makes_total_and_cash_plus_unknown():
+    data = parse_portfolio(
+        [
+            _asset_entry(VSN, "100.0", "25.0", "200.00"),
+            {"asset_id": BCPEUR, "balance": {"value": "x"}},
+        ]
+    )
+    data.assets = {VSN: {"id": VSN, "group": "token"}}
+    assert data.total is None
+    assert data.cash_plus is None
+    assert data.wallet_ids == [VSN]
+
+
+def test_an_unparsable_fiat_balance_makes_cash_and_total_unknown():
+    data = parse_portfolio(
+        [
+            _asset_entry(VSN, "100.0", "25.0", "200.00"),
+            {"currency_id": EUR_ID, "balance": {"value": "x"}},
+        ]
+    )
+    assert data.cash is None
+    assert data.total is None
 
 
 # --- PortfolioData: total, Cash Plus, wallets -----------------------------------

@@ -72,11 +72,19 @@ class PortfolioData:
     `assets` is filled by the coordinator from the AssetDirectory: only a
     record's `group` tells Cash Plus from a wallet, so a holding without one
     is neither, and makes Cash Plus unknown.
+
+    An entry `parse_portfolio` could not read at all -- not even enough to
+    hold a zero -- is recorded in `unparsed_assets` rather than dropped: a
+    holding that just vanished would look identical to "not held", turning a
+    read failure into a silently low total. The same reasoning makes `cash`
+    `None` when a fiat entry's balance could not be read: `None` means
+    unknown, never that there was none.
     """
 
     holdings: dict[str, Holding] = field(default_factory=dict)
-    cash: float = 0.0
+    cash: float | None = 0.0
     assets: dict[str, dict] = field(default_factory=dict)
+    unparsed_assets: set[str] = field(default_factory=set)
 
     def is_cash_plus(self, asset_id: str) -> bool | None:
         asset = self.assets.get(asset_id)
@@ -86,7 +94,14 @@ class PortfolioData:
 
     @property
     def total(self) -> float | None:
-        """Every holding, Cash Plus included, plus all fiat. None if any value is unknown."""
+        """Every holding, Cash Plus included, plus all fiat.
+
+        None when that cannot be said with confidence: any holding value is
+        unknown, `cash` is unknown, or an entry failed to parse at all
+        (`unparsed_assets`) -- never a number that quietly omits it.
+        """
+        if self.unparsed_assets or self.cash is None:
+            return None
         values = [holding.value for holding in self.holdings.values()]
         if any(value is None for value in values):
             return None
@@ -94,6 +109,15 @@ class PortfolioData:
 
     @property
     def cash_plus(self) -> float | None:
+        """Cash Plus holdings only.
+
+        None when that cannot be said with confidence: a holding is
+        unclassified, its value is unknown, or an entry failed to parse at
+        all and so was never classified (`unparsed_assets`) -- it might
+        itself be Cash Plus.
+        """
+        if self.unparsed_assets:
+            return None
         amount = 0.0
         for asset_id, holding in self.holdings.items():
             kind = self.is_cash_plus(asset_id)
@@ -119,16 +143,30 @@ def parse_portfolio(entries: list[dict]) -> PortfolioData:
     on `asset_id`. `currency_balance` arrives already converted into the
     requested currency and is used as given -- multiplying a balance by a
     price here is what produced issue #7.
+
+    An entry whose balance cannot be read is never silently dropped as if it
+    held nothing: an unparsable holding goes into `unparsed_assets` and an
+    unparsable fiat balance makes `cash` None, so the affected figure reads
+    as unknown rather than quietly low.
     """
     data = PortfolioData()
     cash = 0.0
+    cash_ok = True
     for entry in entries:
         asset_id = entry.get("asset_id")
         if not asset_id:
+            currency_id = entry.get("currency_id")
+            if not currency_id:
+                # Neither asset_id nor currency_id: not a shape this endpoint
+                # documents. Ignored, same as an entry that never existed.
+                continue
             # `balance`, not `available_balance`: fiat reserved by a pending
             # order is still the user's cash.
             amount = to_float(entry.get("balance"))
-            if entry.get("currency_id") and amount is not None:
+            if amount is None:
+                _LOGGER.debug("Skipping unparsable fiat balance %s", currency_id)
+                cash_ok = False
+            else:
                 cash += amount
             continue
 
@@ -136,6 +174,7 @@ def parse_portfolio(entries: list[dict]) -> PortfolioData:
         available = to_float(entry.get("available_balance"))
         if balance is None or available is None:
             _LOGGER.debug("Skipping unparsable holding %s", asset_id)
+            data.unparsed_assets.add(asset_id)
             continue
         try:
             return_pct = float(entry["total_return_percent"])
@@ -151,7 +190,7 @@ def parse_portfolio(entries: list[dict]) -> PortfolioData:
             total_return=to_float(entry.get("total_return")),
             total_return_pct=return_pct,
         )
-    data.cash = round(cash, DECIMALS)
+    data.cash = round(cash, DECIMALS) if cash_ok else None
     return data
 
 

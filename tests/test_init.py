@@ -145,20 +145,12 @@ async def test_price_tracker_setup_creates_one_sensor_per_asset_and_currency(has
     assert _value(hass, "sensor.bitpanda_bitcoin_btc_eur") == 100.0
     assert _value(hass, "sensor.bitpanda_bitcoin_btc_usd") == 200.0
     usd = hass.states.get("sensor.bitpanda_bitcoin_btc_usd")
-    # PriceSensor sets has_entity_name=False specifically to get its full
-    # name verbatim, undecorated by its device's name (see its docstring).
-    # That held on older Home Assistant; on this pinned version (2026.9.3),
-    # entity_registry.async_get_full_entity_name() prepends the device name
-    # to any entity that has a device_id, has_entity_name or not, unless the
-    # entity's own name already starts with it (confirmed by reading
-    # homeassistant/helpers/entity_registry.py in the test image). So the
-    # displayed name is the device name plus the entity's own name.
-    assert usd.attributes["friendly_name"] == "Bitcoin (BTC) Price Tracker Bitcoin (BTC)/USD"
+    assert usd.attributes["friendly_name"] == "Bitcoin (BTC) USD"
     assert usd.attributes["rate_source"] == "ECB"
     registry_entry = er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_usd")
     assert registry_entry.config_subentry_id == next(iter(entry.subentries))
     device = dr.async_get(hass).async_get(registry_entry.device_id)
-    assert device.name == "Bitcoin (BTC) Price Tracker"
+    assert device.name == "Bitcoin (BTC)"
 
 
 async def test_without_extra_currencies_the_ecb_is_never_asked(hass, price_api):

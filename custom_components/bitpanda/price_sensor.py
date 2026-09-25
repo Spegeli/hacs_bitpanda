@@ -66,7 +66,7 @@ def display_precision(value: float | None) -> int:
 def price_device_info(entry_id: str, asset: dict) -> DeviceInfo:
     return DeviceInfo(
         identifiers={(DOMAIN, price_device_identifier(entry_id, asset["id"]))},
-        name=f"{asset_display_label(asset)} Price Tracker",
+        name=asset_display_label(asset),
         manufacturer="Bitpanda",
         model="Price Tracker",
         entry_type=DeviceEntryType.SERVICE,
@@ -82,11 +82,11 @@ def tracked_currencies(entry: ConfigEntry) -> list[str]:
 class PriceSensor(CoordinatorEntity, SensorEntity):
     """Price of one asset in one currency.
 
-    Named "Bitcoin (BTC)/USD" in full rather than after its device, hence
-    has_entity_name False.
+    Named by its currency and inherits the asset label from its device, so
+    it reads "Bitcoin (BTC) EUR" on every Home Assistant version.
     """
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_icon = "mdi:chart-line"
 
@@ -96,7 +96,7 @@ class PriceSensor(CoordinatorEntity, SensorEntity):
         self._asset = asset
         self._asset_id = asset["id"]
         self._currency = currency
-        self._attr_name = f"{asset_display_label(asset)}/{currency}"
+        self._attr_name = currency
         self._attr_unique_id = price_unique_id(entry_id, asset["id"], currency)
         self.entity_id = price_entity_id(asset, currency)
         self._attr_native_unit_of_measurement = currency

@@ -36,8 +36,10 @@ def test_english_translation_is_the_strings_file():
 
 def test_every_currency_and_entity_name_is_translated():
     strings = json.loads((_DIR / "strings.json").read_text(encoding="utf-8"))
+    # Lowercase: hassfest's translation-key validator rejects uppercase
+    # selector option keys (see config_flow.py's _currency_select).
     assert set(strings["selector"]["currency"]["options"]) == {
-        "CHF", "CZK", "DKK", "EUR", "GBP", "HUF", "NOK", "PLN", "RON", "SEK", "TRY", "USD",
+        "chf", "czk", "dkk", "eur", "gbp", "huf", "nok", "pln", "ron", "sek", "try", "usd",
     }
     assert set(strings["entity"]["sensor"]) == {
         "total_value", "cash", "cash_plus", "return_day", "return_week",

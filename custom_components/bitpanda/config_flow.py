@@ -81,10 +81,17 @@ def _log_unexpected(step: str, err: Exception) -> None:
 
 
 def _currency_select(options: list[str], *, multiple: bool = False) -> SelectSelector:
-    """Currency codes labelled with their names through `selector.currency`."""
+    """Currency codes labelled with their names through `selector.currency`.
+
+    hassfest's translation-key validator accepts lowercase selector option
+    keys only, so the options travel to and from the frontend lowercase;
+    everything stored (entry data/options, `self._currency_ids`) stays
+    uppercase -- see `async_step_currency` and `extra_currencies` below,
+    which convert back at the boundary.
+    """
     return SelectSelector(
         SelectSelectorConfig(
-            options=options,
+            options=[currency.lower() for currency in options],
             translation_key="currency",
             multiple=multiple,
             mode=SelectSelectorMode.LIST if multiple else SelectSelectorMode.DROPDOWN,
@@ -93,17 +100,23 @@ def _currency_select(options: list[str], *, multiple: bool = False) -> SelectSel
 
 
 def extra_currencies(values) -> list[str]:
-    """The supported extra currencies among `values`, in one fixed order."""
-    chosen = set(values or [])
+    """The supported extra currencies among `values`, in one fixed order.
+
+    `values` arrives lowercase from the selector form; upper-cased here
+    before matching EXTRA_CURRENCIES, which -- like every other stored
+    currency -- stays uppercase.
+    """
+    chosen = {str(value).upper() for value in values or []}
     return [currency for currency in EXTRA_CURRENCIES if currency in chosen]
 
 
 def extra_currencies_schema(selected: list[str]) -> vol.Schema:
     return vol.Schema(
         {
-            vol.Optional(CONF_EXTRA_CURRENCIES, default=list(selected)): _currency_select(
-                list(EXTRA_CURRENCIES), multiple=True
-            )
+            vol.Optional(
+                CONF_EXTRA_CURRENCIES,
+                default=[currency.lower() for currency in selected],
+            ): _currency_select(list(EXTRA_CURRENCIES), multiple=True)
         }
     )
 
@@ -213,7 +226,8 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Re-checked here: a second dialog may have finished in between.
             await self.async_set_unique_id(ENTRY_TYPE_PORTFOLIO)
             self._abort_if_unique_id_configured()
-            currency = user_input[CONF_CURRENCY]
+            # The form value travels lowercase (hassfest); stored upper again.
+            currency = user_input[CONF_CURRENCY].upper()
             return self.async_create_entry(
                 title=PORTFOLIO_TITLE,
                 data={
@@ -227,7 +241,11 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="currency",
             data_schema=vol.Schema(
-                {vol.Required(CONF_CURRENCY, default=DEFAULT_CURRENCY): _currency_select(options)}
+                {
+                    vol.Required(
+                        CONF_CURRENCY, default=DEFAULT_CURRENCY.lower()
+                    ): _currency_select(options)
+                }
             ),
         )
 

@@ -125,18 +125,18 @@
     },
     "currency": {
       "options": {
-        "CHF": "Schweizer Franken (CHF)",
-        "CZK": "Tschechische Krone (CZK)",
-        "DKK": "Dänische Krone (DKK)",
-        "EUR": "Euro (EUR)",
-        "GBP": "Britisches Pfund (GBP)",
-        "HUF": "Ungarischer Forint (HUF)",
-        "NOK": "Norwegische Krone (NOK)",
-        "PLN": "Polnischer Złoty (PLN)",
-        "RON": "Rumänischer Leu (RON)",
-        "SEK": "Schwedische Krone (SEK)",
-        "TRY": "Türkische Lira (TRY)",
-        "USD": "US-Dollar (USD)"
+        "chf": "Schweizer Franken (CHF)",
+        "czk": "Tschechische Krone (CZK)",
+        "dkk": "Dänische Krone (DKK)",
+        "eur": "Euro (EUR)",
+        "gbp": "Britisches Pfund (GBP)",
+        "huf": "Ungarischer Forint (HUF)",
+        "nok": "Norwegische Krone (NOK)",
+        "pln": "Polnischer Złoty (PLN)",
+        "ron": "Rumänischer Leu (RON)",
+        "sek": "Schwedische Krone (SEK)",
+        "try": "Türkische Lira (TRY)",
+        "usd": "US-Dollar (USD)"
       }
     }
   },

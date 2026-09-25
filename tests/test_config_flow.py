@@ -124,7 +124,7 @@ async def test_a_second_portfolio_aborts_even_from_an_open_dialog(hass):
     result = await _submit_key(hass, await _portfolio_form(hass), "good")
     assert result["step_id"] == "currency"
     _portfolio_entry().add_to_hass(hass)
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"currency": "EUR"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"currency": "eur"})
     assert result["type"] == _FLOW.ABORT
     assert result["reason"] == "already_configured"
 
@@ -193,15 +193,17 @@ async def test_portfolio_currency_step_offers_the_supported_currencies(hass):
     result = await _submit_key(hass, await _portfolio_form(hass), "good")
     assert result["step_id"] == "currency"
     config = _selector_config(result["data_schema"], "currency")
+    # Lowercase: hassfest's translation-key validator rejects uppercase
+    # selector option keys.
     assert config["options"] == [
-        "CHF", "CZK", "DKK", "EUR", "GBP", "HUF", "NOK", "PLN", "RON", "SEK", "TRY", "USD",
+        "chf", "czk", "dkk", "eur", "gbp", "huf", "nok", "pln", "ron", "sek", "try", "usd",
     ]
     assert config["translation_key"] == "currency"
 
 
 async def test_portfolio_creates_the_entry(hass):
     result = await _submit_key(hass, await _portfolio_form(hass), "  good  \n")
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"currency": "USD"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"currency": "usd"})
     assert result["type"] == _FLOW.CREATE_ENTRY
     entry = result["result"]
     assert entry.title == "Bitpanda Portfolio"
@@ -226,7 +228,9 @@ async def test_price_tracker_form_offers_the_extra_currencies(hass):
     )
     assert result["step_id"] == "price_tracker"
     config = _selector_config(result["data_schema"], "extra_currencies")
-    assert "EUR" not in config["options"]
+    # Lowercase: hassfest's translation-key validator rejects uppercase
+    # selector option keys.
+    assert "eur" not in config["options"]
     assert len(config["options"]) == 11
     assert config["multiple"] is True
     assert config["translation_key"] == "currency"
@@ -238,7 +242,7 @@ async def test_price_tracker_creates_a_keyless_entry(hass):
         result["flow_id"], {"next_step_id": "price_tracker"}
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"extra_currencies": ["USD", "CHF"]}
+        result["flow_id"], {"extra_currencies": ["usd", "chf"]}
     )
     entry = result["result"]
     assert entry.title == "Bitpanda Price Tracker"
@@ -389,9 +393,30 @@ async def test_options_change_the_extra_currencies(hass):
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
     schema = result["data_schema"]
-    assert schema({})["extra_currencies"] == ["USD"]
+    # The default travels lowercase (hassfest); the stored option stays USD.
+    assert schema({})["extra_currencies"] == ["usd"]
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"extra_currencies": ["GBP", "CHF"]}
+        result["flow_id"], {"extra_currencies": ["gbp", "chf"]}
     )
     assert result["type"] == _FLOW.CREATE_ENTRY
     assert dict(entry.options) == {"extra_currencies": ["CHF", "GBP"]}
+
+
+async def test_stored_currency_round_trips_through_the_options_form(hass):
+    """Created lowercase (the selector's own shape), stored upper, and shown
+    lowercase again the next time the options form renders -- the same
+    conversion the Portfolio's currency step relies on, exercised here for
+    the Price Tracker's own currency selector.
+    """
+    result = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "price_tracker"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"extra_currencies": ["usd"]}
+    )
+    entry = result["result"]
+    assert dict(entry.options) == {"extra_currencies": ["USD"]}
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["data_schema"]({})["extra_currencies"] == ["usd"]

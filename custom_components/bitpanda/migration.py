@@ -19,6 +19,7 @@ from typing import Any
 
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
+from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr, entity_registry as er
@@ -499,6 +500,19 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "This Bitpanda config entry comes from an unreleased development "
             "build (version 2) that cannot be migrated. Please remove the "
             "Bitpanda integration and add it again."
+        )
+        return False
+    # The recorder moves an entity's history along with an entity-ID rename
+    # only while its entity registry listener is installed. Before Home
+    # Assistant 2025.5 it installed that listener only once Home Assistant had
+    # started -- after config entry migrations such as this one -- so every
+    # rename below would leave the history behind under the old ID. HACS
+    # enforces the floor (hacs.json); this covers a manual install.
+    if (MAJOR_VERSION, MINOR_VERSION) < (2025, 5):
+        _LOGGER.error(
+            "Updating the Bitpanda config entry needs Home Assistant 2025.5 or newer "
+            "to keep entity history. Nothing has been changed; update Home Assistant "
+            "and restart."
         )
         return False
     if _portfolio_taken(hass, entry):

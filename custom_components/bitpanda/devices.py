@@ -15,8 +15,9 @@ def find_entry_device(
     Scoped to the entry on purpose: device identifiers are no longer unique
     across config entries, which is why DeviceRegistry.async_get_device is
     deprecated (it stops working in Home Assistant 2027.8). Its replacements
-    do not exist at this integration's 2025.3 floor; listing the entry's own
-    devices works on every version.
+    (async_get_device_by_identifier and its siblings) do not exist at this
+    integration's 2025.5 floor; listing the entry's own devices works on
+    every version.
     """
     wanted = (DOMAIN, identifier)
     return next(

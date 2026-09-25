@@ -17,5 +17,8 @@ def test_manifest_allows_one_entry_per_service():
     assert "recorder" in manifest["after_dependencies"]
 
 
-def test_hacs_requires_config_subentries():
-    assert _json("hacs.json")["homeassistant"] == "2025.3.0"
+def test_hacs_requires_2025_5_where_renames_at_startup_keep_history():
+    """Config subentries alone would need 2025.3. But the version 1 migration
+    renames entity IDs while Home Assistant starts, and only from 2025.5 on
+    does the recorder move an entity's history along with such a rename."""
+    assert _json("hacs.json")["homeassistant"] == "2025.5.0"

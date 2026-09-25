@@ -91,7 +91,9 @@ class AssetSubentryFlow(ConfigSubentryFlow):
         self._category: str | None = None
 
     def _tracked_ids(self) -> set[str]:
-        # ConfigSubentryFlow._get_entry() does not exist at the 2025.3 floor.
+        # Not ConfigSubentryFlow._get_entry(): that raises UnknownEntry when the
+        # entry was removed while this dialog was open. Looked up here, a
+        # removed entry simply tracks nothing.
         entry = self.hass.config_entries.async_get_entry(self.handler[0])
         if entry is None:
             return set()

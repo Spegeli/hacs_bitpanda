@@ -89,6 +89,46 @@ async def test_a_version_2_development_build_must_be_re_added(hass, caplog):
     assert "remove the Bitpanda integration and add it again" in caplog.text
 
 
+_MIGRATION = "custom_components.bitpanda.migration"
+
+
+@pytest.mark.parametrize("minor", [3, 4])
+async def test_home_assistant_before_2025_5_leaves_the_entry_alone(
+    hass, legacy_api, no_setup, notify, caplog, minor
+):
+    """Only from Home Assistant 2025.5 on does the recorder move history along
+    with an entity-ID rename made while Home Assistant starts -- when this
+    migration runs. Before, every migrated entity would lose its history, so
+    the migration refuses and changes nothing, not even with an API call."""
+    currencies, assets = legacy_api
+    entry = _v1_entry(hass, assets=["BTC"], wallets=["cryptocoin_BTC"])
+    eid = entry.entry_id
+    wallet = _legacy_entity(
+        hass, entry, f"{eid}_wallet_cryptocoin_BTC", "bitpanda_wallets_btc_wallet"
+    )
+    with patch(f"{_MIGRATION}.MAJOR_VERSION", 2025), patch(f"{_MIGRATION}.MINOR_VERSION", minor):
+        assert not await async_migrate_entry(hass, entry)
+    assert entry.version == 1
+    assert dict(entry.data) == {"api_key": "legacy-key", "currency": "EUR"}
+    assert dict(entry.options) == {"tracked_assets": ["BTC"], "tracked_wallets": ["cryptocoin_BTC"]}
+    reg_entry = er.async_get(hass).async_get(wallet)
+    assert reg_entry.unique_id == f"{eid}_wallet_cryptocoin_BTC"
+    assert reg_entry.entity_id == "sensor.bitpanda_wallets_btc_wallet"
+    assert _price_trackers(hass) == []
+    currencies.assert_not_called()
+    assets.assert_not_called()
+    notify.assert_not_called()
+    assert "Home Assistant 2025.5 or newer" in caplog.text
+    assert "legacy-key" not in caplog.text
+
+
+async def test_home_assistant_2025_5_migrates(hass, legacy_api, no_setup, notify):
+    entry = _v1_entry(hass, wallets=["cryptocoin_BTC"])
+    with patch(f"{_MIGRATION}.MAJOR_VERSION", 2025), patch(f"{_MIGRATION}.MINOR_VERSION", 5):
+        assert await async_migrate_entry(hass, entry)
+    assert entry.version == 3
+
+
 async def test_v1_becomes_the_portfolio(hass, legacy_api, no_setup):
     entry = _v1_entry(hass, currency="USD", wallets=["cryptocoin_BTC"])
     assert await async_migrate_entry(hass, entry)

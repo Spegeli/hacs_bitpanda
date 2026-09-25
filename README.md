@@ -58,7 +58,7 @@ Cash Plus products are cash equivalents — one unit is one unit of their curren
 
 ## 📋 Requirements
 
-- Home Assistant **2025.3** or newer
+- Home Assistant **2025.5** or newer
 - A [Bitpanda](https://www.bitpanda.com) account
 - For the Portfolio: a Bitpanda API key ([create one here](https://app.bitpanda.com/my-account/apikey)). The Price Tracker needs none.
 

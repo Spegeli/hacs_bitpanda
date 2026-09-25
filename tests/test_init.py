@@ -72,10 +72,10 @@ def price_api():
         yield ticker, ecb
 
 
-def _portfolio_entry(hass) -> MockConfigEntry:
+def _portfolio_entry(hass, *, api_key: str = "key") -> MockConfigEntry:
     entry = MockConfigEntry(
         domain=DOMAIN, version=3, unique_id="portfolio", title="Bitpanda Portfolio",
-        data={"entry_type": "portfolio", "api_key": "key", "currency": "EUR",
+        data={"entry_type": "portfolio", "api_key": api_key, "currency": "EUR",
               "currency_id": _EUR_ID},
     )
     entry.add_to_hass(hass)
@@ -143,6 +143,19 @@ async def test_portfolio_setup_creates_its_devices_and_sensors(hass, portfolio_a
     )
     devices = {d.name for d in dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)}
     assert devices == {"Portfolio", "Vision (VSN) Wallet"}
+
+
+_RUNTIME_SECRET = "totally-secret-runtime-key"
+
+
+async def test_the_runtime_repr_never_prints_the_api_key(hass, portfolio_api):
+    """PortfolioRuntime.data_at_setup is `dict(entry.data)`, which holds the
+    key. HA's profiler services (`dump_log_objects`, `start_log_object_sources`)
+    log object reprs at CRITICAL, so the dataclass's generated repr must not
+    hand the key to them."""
+    entry = _portfolio_entry(hass, api_key=_RUNTIME_SECRET)
+    await _setup(hass, entry)
+    assert _RUNTIME_SECRET not in repr(entry.runtime_data)
 
 
 _VSN_ENTITIES = (

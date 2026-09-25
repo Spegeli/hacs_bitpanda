@@ -6,7 +6,7 @@ Home Assistant turns into the reauth dialog.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 import math
 from typing import Any
@@ -247,6 +247,10 @@ class PortfolioRuntime:
     # synchronously and titles the groups it creates from these.
     group_titles: dict[str, str]
     # entry.data and entry.options as they were at setup: the update listener
-    # reloads the entry only once either of them differs.
-    data_at_setup: dict[str, Any]
-    options_at_setup: dict[str, Any]
+    # reloads the entry only once either of them differs. entry.data holds
+    # the API key, so both fields are excluded from the dataclass's generated
+    # repr -- HA's profiler services (dump_log_objects, start_log_object_sources)
+    # log object reprs at CRITICAL, and would otherwise write the key into
+    # home-assistant.log.
+    data_at_setup: dict[str, Any] = field(repr=False)
+    options_at_setup: dict[str, Any] = field(repr=False)

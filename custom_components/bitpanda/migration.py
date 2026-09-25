@@ -44,6 +44,7 @@ from .const import (
     PORTFOLIO_TITLE,
     SUPPORTED_CURRENCIES,
 )
+from .devices import find_entry_device
 from .naming import (
     LEGACY_PORTFOLIO_OBJECT_ID,
     is_default_entity_id,
@@ -386,20 +387,20 @@ def rewrite_portfolio_registry(
     return renames, skipped
 
 
-def remove_empty_legacy_device(hass: HomeAssistant, identifier: str) -> None:
+def remove_empty_legacy_device(hass: HomeAssistant, entry_id: str, identifier: str) -> None:
     """Remove a legacy device once no entity refers to it any more.
 
     Removing a device also removes its entities -- which is why every
     migrated entity was detached first, and why a device that still holds a
-    legacy entity the migration left alone is kept.
+    legacy entity the migration left alone is kept. The device is looked up
+    within its own config entry, `entry_id` (see `devices.find_entry_device`).
     """
-    dev_reg = dr.async_get(hass)
-    device = dev_reg.async_get_device(identifiers={(DOMAIN, identifier)})
+    device = find_entry_device(hass, entry_id, identifier)
     if device is None:
         return
     if er.async_entries_for_device(er.async_get(hass), device.id, include_disabled_entities=True):
         return
-    dev_reg.async_remove_device(device.id)
+    dr.async_get(hass).async_remove_device(device.id)
 
 
 @callback
@@ -437,7 +438,7 @@ def async_adopt_legacy_prices(hass: HomeAssistant, entry: ConfigEntry) -> None:
         ent_reg.async_update_entity(entity_id, **updates)
     source = adopt.get("source_entry_id")
     if source:
-        remove_empty_legacy_device(hass, f"{source}_price_tracker")
+        remove_empty_legacy_device(hass, source, f"{source}_price_tracker")
     hass.config_entries.async_update_entry(
         entry, data={k: v for k, v in entry.data.items() if k != CONF_LEGACY_ADOPT}
     )
@@ -546,7 +547,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             f"`{item['entity_id']}`: a Price Tracker was already set up; add the asset there"
             for item in items
         ]
-    remove_empty_legacy_device(hass, f"{entry.entry_id}_wallets")
+    remove_empty_legacy_device(hass, entry.entry_id, f"{entry.entry_id}_wallets")
     hass.config_entries.async_update_entry(
         entry,
         title=PORTFOLIO_TITLE,

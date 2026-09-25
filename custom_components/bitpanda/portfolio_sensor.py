@@ -23,6 +23,7 @@ from .const import (
     PORTFOLIO_TIMEFRAMES,
     WALLET_REMOVAL_MISSES,
 )
+from .devices import find_entry_device
 from .naming import (
     asset_display_label,
     managed_asset_id,
@@ -403,12 +404,11 @@ class PortfolioEntityManager:
             if entity_id is not None:
                 ent_reg.async_remove(entity_id)
         if device:
-            dev_reg = dr.async_get(self._hass)
-            found = dev_reg.async_get_device(
-                identifiers={(DOMAIN, wallet_device_identifier(entry_id, asset_id))}
+            found = find_entry_device(
+                self._hass, entry_id, wallet_device_identifier(entry_id, asset_id)
             )
             if found is not None:
-                dev_reg.async_remove_device(found.id)
+                dr.async_get(self._hass).async_remove_device(found.id)
 
     @callback
     def async_reconcile(self) -> None:

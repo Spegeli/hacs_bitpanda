@@ -398,6 +398,24 @@ async def test_the_wallets_of_a_deleted_group_come_back_in_a_new_group(hass):
     assert harness.manager.has_total(VSN["id"])
 
 
+async def test_a_failed_refresh_neither_brings_back_nor_removes_a_group(hass):
+    """Like every other change, healing a deleted group and removing an empty
+    one wait for a successful refresh."""
+    harness = _Harness(hass)
+    await harness.refresh(_data(_holding(VSN), _holding(GOLD)))
+    async_get_or_create_wallet_group(hass, harness.entry, "etf", _TITLES)  # holds nothing
+    hass.config_entries.async_remove_subentry(harness.entry, harness.group("crypto").subentry_id)
+    await hass.async_block_till_done()
+
+    await harness.refresh(_data(_holding(VSN), _holding(GOLD)), success=False)
+    assert set(harness.groups()) == {"metal", "etf"}
+    assert harness.entity_ids() == {GOLD_WALLET}
+
+    await harness.refresh(_data(_holding(VSN), _holding(GOLD)))
+    assert set(harness.groups()) == {"crypto", "metal"}
+    assert harness.entity_ids() == {VSN_WALLET, GOLD_WALLET}
+
+
 async def test_staking_registered_before_a_restart_is_recreated_while_earn_is_unknown(hass):
     harness = _Harness(hass)
     ent_reg = er.async_get(hass)

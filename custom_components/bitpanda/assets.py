@@ -1,44 +1,70 @@
-"""Symbol to asset-id resolution for the Bitpanda Public API.
+"""Asset records: legacy symbol resolution, holding metadata, list labels.
 
-Every endpoint except /assets and /currencies works on UUIDs. `AssetResolver`
-resolves one symbol at a time -- migration is its only caller now -- and
-caches every hit in the config entry by asset id, not by symbol, because a
-symbol does not uniquely name an asset (`XAU` is both a stock and a metal;
-see `pick_legacy` below). The options flow separately pages through whole
-catalogue categories to build its pickers (`config_flow.py`'s
-`ASSET_CATEGORY_FILTERS` and `BitpandaApiClient.async_list_assets`) -- a
-different, unrelated enumeration that this module has no part in.
+Every endpoint except /assets and /currencies works on UUIDs. A symbol does
+not uniquely name an asset (`XAU` is both a stock and a metal), so nothing
+here ever keys by symbol. `AssetResolver` and `pick_legacy` serve only the
+version 1 migration; `AssetDirectory` names the holdings of a portfolio.
 """
 from __future__ import annotations
 
-from .api import BitpandaApiClient
+import logging
+from collections.abc import Iterable
 
-# Keyed by `group`, the more specific of the API's two classification fields.
-_GROUP_CATEGORY = {
-    "coin": "crypto",
-    "token": "crypto",
-    "leveraged_token": "crypto",
-    "security_token": "crypto",
-    "metal": "metal",
-    "index": "index",
-    "stock": "stock",
-    "equity_stock": "stock",
-    "etf": "etf",
-    "equity_etf": "etf",
-    "equity_complex_etf": "etf",
-    "etc": "commodity",
-    "equity_complex_etc": "commodity",
-    "fiat_earn": "cash_plus",
-}
+from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
+
+_LOGGER = logging.getLogger(__name__)
+
+# All the integration reads from a catalogue record. The rest of a full
+# record -- trading flags -- would only cost memory.
+CATALOGUE_FIELDS = ("id", "symbol", "name", "isin", "type", "group")
 
 
-def category_of(asset: dict) -> str:
-    """Return the UI category for an asset.
+def slim_asset(asset: dict) -> dict:
+    """A catalogue record reduced to CATALOGUE_FIELDS."""
+    return {key: asset[key] for key in CATALOGUE_FIELDS if key in asset}
 
-    Unknown groups fall through to "other" rather than raising: the catalog
-    gains entries, and an unseen group must not break setup.
+
+class AssetDirectory:
+    """Records of held assets, looked up by id.
+
+    /portfolio names holdings by UUID only. Wallet devices need a name and a
+    symbol, and only a record's group tells Cash Plus apart, so each held
+    asset is looked up once with a keyless /assets?id= request and kept in
+    `cache` -- a dict the caller keeps across reloads. A failed lookup is
+    retried on the next refresh; an asset the catalogue does not know is
+    asked for once per run.
     """
-    return _GROUP_CATEGORY.get(asset.get("group", ""), "other")
+
+    def __init__(self, client: BitpandaApiClient, cache: dict[str, dict]) -> None:
+        self._client = client
+        self._cache = cache
+        self._unknown: set[str] = set()
+
+    def get(self, asset_id: str) -> dict | None:
+        return self._cache.get(asset_id)
+
+    async def async_resolve(self, asset_ids: Iterable[str]) -> None:
+        for asset_id in asset_ids:
+            if asset_id in self._cache or asset_id in self._unknown:
+                continue
+            try:
+                found = await self._client.async_get_assets(asset_id=asset_id)
+            except BitpandaRateLimitError:
+                _LOGGER.debug("Rate limited looking up assets; retrying next refresh")
+                return
+            except BitpandaApiError as err:
+                _LOGGER.debug("Could not look up asset %s: %s", asset_id, err)
+                continue
+            record = next((a for a in found if a.get("id") == asset_id), None)
+            if record is None:
+                self._unknown.add(asset_id)
+                _LOGGER.warning(
+                    "Held asset %s is not in the Bitpanda catalogue; it gets no "
+                    "wallet sensor",
+                    asset_id,
+                )
+                continue
+            self._cache[asset_id] = slim_asset(record)
 
 
 # What the legacy (v1, api.bitpanda.com) API could ever track. It only ever

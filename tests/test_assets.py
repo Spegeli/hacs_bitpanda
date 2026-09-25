@@ -13,7 +13,6 @@ from custom_components.bitpanda.api import (
 from custom_components.bitpanda.assets import (
     AssetResolver,
     asset_label,
-    category_of,
     is_legacy_supported,
     pick_legacy,
 )
@@ -282,27 +281,6 @@ def test_pick_legacy_index_wallet_prefix_narrows_to_the_index():
     index = _asset("DUP", "id-index", "index", "index")
 
     assert pick_legacy([crypto, metal, index], "index_index_") == index
-
-
-# --- category_of ---------------------------------------------------------
-
-
-def test_category_of_covers_every_observed_group():
-    assert category_of(_asset("BTC", "i", "cryptocoin", "coin")) == "crypto"
-    assert category_of(_asset("GHST", "i", "cryptocoin", "token")) == "crypto"
-    assert category_of(_asset("BTC2L", "i", "cryptocoin", "leveraged_token")) == "crypto"
-    assert category_of(_asset("XAU", "i", "commodity", "metal")) == "metal"
-    assert category_of(_asset("BCI5", "i", "index", "index")) == "index"
-    assert category_of(_asset("ESSITYB", "i", "security", "stock")) == "stock"
-    assert category_of(_asset("517", "i", "equity_security", "equity_stock")) == "stock"
-    assert category_of(_asset("SXR8", "i", "security", "etf")) == "etf"
-    assert category_of(_asset("EXIA", "i", "equity_security", "equity_etf")) == "etf"
-    assert category_of(_asset("ALUMINIUM", "i", "security", "etc")) == "commodity"
-    assert category_of(_asset("BCPEUR", "i", "security", "fiat_earn")) == "cash_plus"
-
-
-def test_category_of_unknown_group_does_not_raise():
-    assert category_of(_asset("X", "i", "brand_new", "never_seen")) == "other"
 
 
 # --- asset_label ---------------------------------------------------------

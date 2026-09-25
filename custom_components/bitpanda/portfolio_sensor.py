@@ -464,6 +464,21 @@ class PortfolioEntityManager:
             self._add_entities(new)
 
 
+@callback
+def _keep_polling() -> None:
+    """No-op listener that keeps the Earn coordinator's periodic refresh alive.
+
+    DataUpdateCoordinator only schedules its next refresh while it has at
+    least one listener, and stops once the last one unsubscribes. The Earn
+    coordinator's only other listeners are StakingSensors, so an entry with
+    none registered -- nothing staked and nothing offered, or the last
+    Staking sensor was just removed -- would freeze its catalogue forever at
+    whatever the first refresh returned (or at `None` if that one failed),
+    even though the manager reads it on every portfolio refresh and needs to
+    notice when an asset later becomes offered (spec §2.4).
+    """
+
+
 async def async_setup_portfolio_entities(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -486,3 +501,9 @@ async def async_setup_portfolio_entities(
     manager = PortfolioEntityManager(hass, entry, runtime, currency, add_entities)
     manager.async_reconcile()
     entry.async_on_unload(runtime.portfolio.async_add_listener(manager.async_reconcile))
+    # Keep Earn polling even without a Staking sensor around (see
+    # _keep_polling). Not `manager.async_reconcile` itself: misses are
+    # counted once per call, so subscribing it a second time here would
+    # remove a holding after fewer than WALLET_REMOVAL_MISSES portfolio
+    # refreshes.
+    entry.async_on_unload(runtime.earn.async_add_listener(_keep_polling))

@@ -1,14 +1,24 @@
 """Wallet devices appear and disappear with the holdings."""
+from datetime import timedelta
 import logging
+from unittest.mock import AsyncMock
 
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from pytest_homeassistant_custom_component.common import MockConfigEntry, MockEntityPlatform
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    MockEntityPlatform,
+    async_fire_time_changed,
+)
 
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.portfolio_coordinator import PortfolioRuntime
 from custom_components.bitpanda.portfolio_model import EarnData, Holding, PortfolioData
-from custom_components.bitpanda.portfolio_sensor import PortfolioEntityManager
+from custom_components.bitpanda.portfolio_sensor import (
+    PortfolioEntityManager,
+    async_setup_portfolio_entities,
+)
 
 VSN = {"id": "1f051b7c-5980-6dda-9d3d-cf107d8d4bfb", "symbol": "VSN", "name": "Vision", "group": "token"}
 BTC = {"id": "b86c034b-efe3-11eb-b56f-0691764446a7", "symbol": "BTC", "name": "Bitcoin", "group": "coin"}
@@ -206,3 +216,59 @@ async def test_staking_registered_before_a_restart_is_recreated_while_earn_is_un
     await harness.refresh(_data(_holding(VSN)))
     assert harness.manager.has_total(VSN["id"])
     assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_staking") is not None
+
+
+async def test_the_earn_catalogue_keeps_refreshing_without_staking_sensors(hass):
+    """DataUpdateCoordinator only reschedules itself while it has listeners.
+
+    The Earn coordinator's only other listeners are StakingSensors, so an
+    entry with none registered (nothing staked, nothing offered) must not
+    freeze the catalogue at its setup-time answer forever -- an asset that
+    later becomes offered still needs to gain Staking/Total (spec §2.4)."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=3, data={"entry_type": "portfolio", "currency": "EUR"},
+    )
+    entry.add_to_hass(hass)
+    platform = MockEntityPlatform(hass, domain="sensor", platform_name=DOMAIN)
+    platform.config_entry = entry
+
+    def _coordinator(name):
+        return DataUpdateCoordinator(
+            hass, _LOG, config_entry=entry, name=name, update_interval=None
+        )
+
+    update_method = AsyncMock(return_value=EarnData(apr={}, offered=frozenset()))
+    earn = DataUpdateCoordinator(
+        hass, _LOG, config_entry=entry, name="earn",
+        update_interval=timedelta(hours=24), update_method=update_method,
+    )
+    runtime = PortfolioRuntime(
+        portfolio=_coordinator("portfolio"),
+        history=_coordinator("history"),
+        earn=earn,
+        rewards=_coordinator("rewards"),
+    )
+    runtime.portfolio.data = _data(_holding(VSN))  # nothing staked
+    runtime.portfolio.last_update_success = True
+    entry.runtime_data = runtime
+
+    await async_setup_portfolio_entities(
+        hass, entry,
+        lambda entities: hass.async_create_task(platform.async_add_entities(entities)),
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_staking") is None
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(hours=25))
+    await hass.async_block_till_done()
+    assert update_method.await_count >= 1
+
+    # A successful refresh reschedules the next one as long as `_keep_polling`
+    # is still subscribed, which would otherwise leave a pending loop timer at
+    # teardown. This entry was never taken through
+    # hass.config_entries.async_setup, so it stays ConfigEntryState.NOT_LOADED
+    # and hass.config_entries.async_unload(entry.entry_id) would return early
+    # without running the `_on_unload` callbacks -- shut the coordinator down
+    # directly instead (DataUpdateCoordinator registers this same method with
+    # config_entry.async_on_unload itself when given a config_entry).
+    await earn.async_shutdown()

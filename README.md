@@ -115,7 +115,7 @@ Bitpanda API keys expire after **one year** — see [Changing the key or the cur
 
 ### 3. Track prices
 
-The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stocks, ETFs, ETCs, Crypto indices, Precious metals — with one device per asset inside. A group is named in the language Home Assistant runs in when it is created, and the name never changes by itself; newer Home Assistant versions let you rename a group with **⋮ → Rename**.
+The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stocks, ETFs, ETCs, Crypto indices, Precious metals — with one device per asset inside. A group is named in the language Home Assistant runs in when it is created; its title then follows Home Assistant's system language at every later start, unless you renamed the group yourself — newer Home Assistant versions let you rename a group with **⋮ → Rename**.
 
 1. On the **Bitpanda Price Tracker** entry, click **Add price tracker** (older versions: **⋮ → Add price tracker**)
 2. Pick a category (Crypto, Stocks, ETFs, ETCs, Crypto indices, Precious metals), then type to search by name, symbol or ISIN and pick one asset. Entries read `Name / SYMBOL / ISIN` (ISIN only for stocks, ETFs and ETCs)

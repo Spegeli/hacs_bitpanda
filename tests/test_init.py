@@ -1,11 +1,16 @@
 """Both services set up, reload and unload end to end (API mocked)."""
+from datetime import timedelta
 from types import MappingProxyType
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentry, ConfigSubentryData
 from homeassistant.helpers import device_registry as dr, entity_registry as er
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 
 from custom_components.bitpanda.api import BitpandaAuthError
 from custom_components.bitpanda.assets import slim_asset
@@ -137,6 +142,47 @@ async def test_a_rejected_key_fails_setup_and_asks_for_a_new_one(hass, portfolio
     assert entry.state is ConfigEntryState.SETUP_ERROR
     flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
     assert [flow["context"]["source"] for flow in flows] == ["reauth"]
+
+
+def _reauth_flows(hass) -> list[dict]:
+    return [
+        flow for flow in hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+        if flow["context"]["source"] == "reauth"
+    ]
+
+
+async def test_reauth_with_the_same_key_revives_a_portfolio_stopped_by_a_401(
+    hass, portfolio_api
+):
+    """A 401 on a scheduled refresh stops the portfolio coordinator for good
+    and asks for a key. When Bitpanda recovers and the user re-enters the
+    same, still valid key, nothing in the entry changes -- the Portfolio must
+    be reloaded anyway, or it stays unavailable until a restart."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+
+    portfolio_api.side_effect = BitpandaAuthError("Unauthorized for /portfolio")
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=6))
+    await hass.async_block_till_done()
+    [flow] = _reauth_flows(hass)
+    assert hass.states.get("sensor.bitpanda_vision_vsn_wallet").state == "unavailable"
+
+    portfolio_api.side_effect = None
+    calls = portfolio_api.call_count
+    with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=[])):
+        result = await hass.config_entries.flow.async_configure(
+            flow["flow_id"], {"api_key": "key"}
+        )
+        await hass.async_block_till_done()
+    assert result["reason"] == "reauth_successful"
+    assert entry.state is ConfigEntryState.LOADED
+    # The reload's first refresh asks for /portfolio again ...
+    assert portfolio_api.call_count == calls + 1
+    assert _value(hass, "sensor.bitpanda_vision_vsn_wallet") == 50.0
+    # ... and polling goes on from there.
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=6))
+    await hass.async_block_till_done()
+    assert portfolio_api.call_count == calls + 2
 
 
 async def test_price_tracker_setup_creates_one_sensor_per_asset_and_currency(hass, price_api):

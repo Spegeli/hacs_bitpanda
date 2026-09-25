@@ -330,6 +330,26 @@ async def test_reauth_with_a_listener_lets_the_listener_reload(hass):
     reload.assert_not_called()
 
 
+async def test_reauth_with_the_same_key_and_a_listener_reloads_once(hass):
+    """Re-entering the stored key changes nothing, so the update listener
+    never fires -- yet a coordinator stopped by a 401 does not restart by
+    itself. The flow reloads explicitly, once."""
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    listener = AsyncMock()
+    entry.add_update_listener(listener)
+    result = await entry.start_reauth_flow(hass)
+    with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=[])), patch(
+        "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
+    ) as reload:
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"api_key": " key \n"})
+        await hass.async_block_till_done()
+    assert result["reason"] == "reauth_successful"
+    assert entry.data["api_key"] == "key"
+    reload.assert_called_once_with(entry.entry_id)
+    listener.assert_not_called()
+
+
 async def test_reauth_without_a_listener_schedules_one_reload(hass):
     entry = _portfolio_entry()
     entry.add_to_hass(hass)
@@ -449,6 +469,20 @@ async def test_reconfigure_key_only_with_a_listener_lets_the_listener_reload(has
     assert entry.data["api_key"] == "new"
     listener.assert_called_once()
     reload.assert_not_called()
+
+
+async def test_reconfigure_with_the_same_key_and_a_listener_reloads_once(hass):
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    listener = AsyncMock()
+    entry.add_update_listener(listener)
+    with patch("homeassistant.config_entries.ConfigEntries.async_schedule_reload") as reload:
+        result = await _reconfigure(hass, entry, {"api_key": "key", "currency": "eur"})
+        await hass.async_block_till_done()
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data["api_key"] == "key"
+    reload.assert_called_once_with(entry.entry_id)
+    listener.assert_not_called()
 
 
 async def test_reconfigure_bad_key_stays_on_the_form_with_the_currency_kept(hass):

@@ -300,19 +300,24 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def _async_replace_key(
         self, entry: ConfigEntry, api_key: str, reason: str
     ) -> ConfigFlowResult:
-        """Store a new key and get it into effect with exactly one reload.
+        """Store the key and get it into effect with exactly one reload.
 
         An entry that finished setup has an update listener that reloads it
         on any change; Home Assistant wants that listener to do the
         reloading and warns when async_update_reload_and_abort reloads a
-        second time. An entry whose setup failed -- the typical reauth case,
-        a key rejected on the first portfolio refresh -- never registered
-        the listener, so there the explicit reload is the only one.
+        second time. A key re-entered unchanged changes nothing, though, so
+        the listener never fires -- and a coordinator stopped by a 401 never
+        restarts by itself -- so that case reloads explicitly. An entry whose
+        setup failed -- the typical reauth case, a key rejected on the first
+        portfolio refresh -- never registered the listener, so there the
+        explicit reload is the only one.
         """
         if entry.update_listeners:
-            self.hass.config_entries.async_update_entry(
+            if not self.hass.config_entries.async_update_entry(
                 entry, data={**entry.data, CONF_API_KEY: api_key}
-            )
+            ):
+                # Nothing changed, so no listener fires: reload explicitly, once.
+                self.hass.config_entries.async_schedule_reload(entry.entry_id)
             return self.async_abort(reason=reason)
         return self.async_update_reload_and_abort(
             entry, data_updates={CONF_API_KEY: api_key}, reason=reason

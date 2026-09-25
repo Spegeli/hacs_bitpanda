@@ -13,9 +13,7 @@ By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## What cannot be added
 
-Crypto, stocks, ETFs, ETCs, Bitpanda Crypto Indices and tokenized precious metals are all supported, for both price tracking and wallets — 14,051 assets across six catalogue categories (see the README's Supported Assets table). The three Cash Plus products (`fiat_earn` group) are the only catalogue entries left out. They do have tickers (BCPEUR, BCPUSD, BCPGBP), but they are cash equivalents — one unit is one unit of its currency, and interest arrives as separate operations — so tracking their price adds nothing.
-
-Fiat currencies are not wallets. A fiat balance is available as the `cash` attribute of the Portfolio Total sensor, not as its own entity.
+The Price Tracker covers crypto, stocks, ETFs, ETCs, Bitpanda Crypto Indices and tokenized precious metals — 14,051 assets across six catalogue categories. The three Cash Plus products (`fiat_earn` group) are left out of it: they are cash equivalents, one unit per unit of their currency. The Portfolio shows them as its Cash Plus sensor, and fiat as its Cash sensor — neither is a wallet.
 
 ## Development setup
 
@@ -26,7 +24,7 @@ No build step and no dependencies beyond Home Assistant itself.
 3. Restart Home Assistant.
 4. Add the integration: **Settings → Devices & Services → Add Integration → Bitpanda**.
 
-You need a Bitpanda API key with all three required read scopes — **Guthaben (Balance)**, **Transaktion (Transaction)** and **Earn (Read)** ([create one](https://app.bitpanda.com/my-account/apikey)).
+The Portfolio needs a Bitpanda API key with all three required read scopes — **Guthaben (Balance)**, **Transaktion (Transaction)** and **Earn (Read)** ([create one](https://app.bitpanda.com/my-account/apikey)). The Price Tracker needs none.
 
 To see what the integration is doing, enable debug logging in `configuration.yaml`:
 
@@ -36,28 +34,49 @@ logger:
     custom_components.bitpanda: debug
 ```
 
+Tests use `pytest-homeassistant-custom-component`, whose harness does not run on Windows. On Linux or macOS:
+
+```bash
+pip install -r requirements_test.txt
+pytest tests/ -q
+```
+
 ## Project layout
 
 Everything lives in `custom_components/bitpanda/`:
 
 | File | Responsibility |
 |---|---|
-| `__init__.py` | Setup/unload, v1→v2 entity-registry migration, the five coordinators, the `bitpanda.refresh` service |
-| `api.py` | `BitpandaApiClient` — all HTTP calls |
-| `assets.py` | `AssetResolver` — symbol/id resolution, legacy wallet-id lookup for migration |
-| `coordinator.py` | The five `DataUpdateCoordinator`s: Portfolio, Price, Earn, Rewards, History |
-| `fx.py` | Derives the non-EUR conversion rate from the user's own portfolio |
-| `sensor.py` | Price, wallet and portfolio sensors |
-| `config_flow.py` | Setup flow and options flow |
-| `const.py` | Domain, API URL, required scopes, update intervals, currency defaults |
-| `diagnostics.py` | Config entry diagnostics |
+| `__init__.py` | Setup and unload per service, the `bitpanda.refresh` service |
+| `api.py` | `BitpandaApiClient` — all HTTP calls; keyless for public endpoints |
+| `assets.py` | Legacy symbol resolution (`pick_legacy`), `AssetDirectory` for holding metadata, list labels |
+| `asset_flow.py` | The "Add price tracker" subentry flow and the cached catalogue listings |
+| `config_flow.py` | Service menu, Portfolio setup/reauth/reconfigure, Price Tracker setup and options, import |
+| `const.py` | Domain, URLs, scopes, currencies, intervals, budgets |
+| `diagnostics.py` | Diagnostics per service, API key redacted |
+| `ecb.py` | ECB daily reference rates |
+| `migration.py` | Migration of version 1 (legacy API) entries to version 3 |
+| `naming.py` | Labels, entity IDs, unique_ids, device identifiers |
+| `portfolio_coordinator.py` | Portfolio, History, Earn and Rewards coordinators |
+| `portfolio_model.py` | Pure data model: holdings, value split, Cash Plus, Earn, rewards |
+| `portfolio_sensor.py` | Portfolio sensors and the wallet lifecycle manager |
+| `price_coordinator.py` | Keyless ticker coordinator with its request budget, ECB coordinator |
+| `price_sensor.py` | Price sensors per asset and currency |
+| `purge.py` | Deletes the Portfolio's sensors with their history on a currency change |
+| `sensor.py` | Dispatches the sensor platform to the service |
 | `strings.json`, `translations/` | UI strings |
 
-Five `DataUpdateCoordinator` instances handle polling: Portfolio and History every 5 minutes, Price every 60 seconds for assets priced from the ticker (an asset you hold worth at least 50 in the display currency is priced from the Portfolio coordinator's own data instead, so effectively every 5 minutes — see coordinator.py's PriceCoordinator), Earn every 24 hours, Rewards every hour. Add new API reads to an existing coordinator rather than polling from a sensor.
+The Portfolio polls `/portfolio` and `/portfolio-history` every 5 minutes, `/operations` every hour and `/earn/configs` every 24 hours, all with the key. The Price Tracker polls `/tickers` without a key — every 60 seconds, stretched above 30 assets to stay within 1,800 requests per hour — and the ECB every 6 hours when extra currencies are configured. Add new reads to an existing coordinator rather than polling from a sensor.
 
 ## Things that are easy to get wrong
 
-**Every ticker price string carries exactly 8 decimals.** `90.93000000` for a stock, `0.00000032` for a micro-cap — the API always emits 8 decimal places, for every asset. Display precision is derived from the price's magnitude (`sensor.py`'s `display_precision`), never by counting the string's digits. Prices derived from the portfolio are rounded to 8 decimals too, but only as precise as the cent-rounded value they come from — which is why holdings worth less than 50 are priced from the ticker.
+**Every ticker price string carries exactly 8 decimals.** `90.93000000` for a stock, `0.00000032` for a micro-cap. Display precision is derived from the price's magnitude (`price_sensor.py`'s `display_precision`), never by counting the string's digits.
+
+**`/portfolio` has no staked field.** Staked units are `balance − available_balance`, and the cent-rounded `currency_balance` of the whole position is split in that proportion (`portfolio_model.py`). A missing `currency_balance` is no value, never 0.
+
+**Entity IDs are set explicitly.** Every entity sets its own `entity_id` from `naming.py`, in English. Never let one derive from a translated name.
+
+**Config subentry flows at the 2025.3 floor have no `_get_entry()`.** Use `self.hass.config_entries.async_get_entry(self.handler[0])`.
 
 **`/operations` cursors need milliseconds.** The server ignores a cursor whose timestamp has no fractional seconds and silently answers with page 1 — yet emits such cursors itself. `api.py` rewrites them (`normalize_operations_cursor`), and `_paginate` raises rather than return a partial listing when a cursor repeats. Never loosen that into "return what we have": a partial history publishes wrong lifetime totals as fact.
 
@@ -73,7 +92,7 @@ Five `DataUpdateCoordinator` instances handle polling: Portfolio and History eve
 
 `strings.json` is the source of truth. `translations/en.json` must mirror it exactly, and every other language file must have the same key structure.
 
-To add a language, copy `translations/en.json` to `translations/<code>.json` and translate the values. Keep the emoji prefixes in the options menu (`📈` Add price tracker, `🪙` Add wallet, `🗑️` Remove tracked items, `💾` Save) so the menu stays visually consistent.
+To add a language, copy `translations/en.json` to `translations/<code>.json` and translate the values. Keep option labels short; the currency names under selector.currency include their code in brackets.
 
 ## Code style
 
@@ -86,7 +105,7 @@ Follow the [Home Assistant developer guidelines](https://developers.home-assista
 
 ## Pull requests
 
-1. Branch from `main`. There is no `dev` branch.
+1. Branch from `main`.
 2. Keep the change focused — one topic per PR.
 3. Use [Conventional Commits](https://www.conventionalcommits.org) for commit messages: `fix:`, `feat:`, `docs:`, `chore:`, `refactor:`, `ci:`.
 4. Open the PR against `main` and fill in the template.

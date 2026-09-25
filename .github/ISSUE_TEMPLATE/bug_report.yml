@@ -26,9 +26,10 @@ body:
     attributes:
       label: Affected area
       options:
-        - Price Tracker (asset price sensor)
-        - Wallet Monitor (wallet balance sensor)
-        - Portfolio Total
+        - Price Tracker (price sensors, currencies, Add price tracker)
+        - Portfolio (wallet, staking and total sensors)
+        - Portfolio (total value, cash, Cash Plus, returns)
+        - Upgrade from an older version
         - Setup / Configuration flow
         - Manual refresh service
         - Other / not sure

@@ -10,60 +10,57 @@
   <img src="https://img.shields.io/badge/License-MIT-green.svg">
 </p>
 
-A custom <a href="https://www.home-assistant.io/">Home Assistant</a> integration to monitor your **Bitpanda portfolio** directly from your dashboard — track live asset prices and your wallet balances in one place.
+A custom <a href="https://www.home-assistant.io/">Home Assistant</a> integration for **Bitpanda**: your whole portfolio, and live prices of any asset, on your dashboard.
 
 ---
 
 ## ✨ Features
 
-### Price Tracker
-- Live prices for any of the 14,051 supported assets — crypto, stocks, ETFs, ETCs, Bitpanda Crypto Indices and tokenized precious metals
-- Supports 12 display currencies: CHF, CZK, DKK, EUR, GBP, HUF, NOK, PLN, RON, SEK, TRY, USD
-- If you hold the asset worth at least 50 in your display currency, its price is derived from your portfolio value and updates every 5 minutes, together with your wallet balances
-- Otherwise — you don't hold it, or hold only a little, where the portfolio's cent-rounded value would make a derived price imprecise — its price is fetched every 60 seconds; above 30 such tracked assets the interval stretches automatically, to stay inside Bitpanda's 3,000-requests-per-hour limit
-- Ticker prices carry exactly 8 decimals from the API. Portfolio-derived prices are rounded to 8 decimals as well, but their accuracy is bounded by the cent-rounded portfolio value (about 0.01 % at 50). The sensor's displayed precision is derived from the price's magnitude, not from the raw string
-- 24h price change (`change_24h_pct`) available as entity attribute, powered by the Home Assistant recorder
+The integration offers two services. Set up either or both — each one once.
 
-### Wallet Monitor
-- Displays the current value of your Bitpanda holdings — crypto, stocks, ETFs, ETCs, crypto indices and precious metals — in your selected currency
-- Wallet values come from the portfolio every 5 minutes — no longer tied to price updates
-- Raw coin/token balance (`balance`, `available`, `staked`) always available as entity attributes
-- Earn data for staked assets: staked amount, APR (`earn_apr_percent`) and accumulated rewards (`rewards_net` and related attributes)
-- Performance attributes: invested amount, average buy price, total return (amount and percent)
-- Fiat is no longer a wallet — see Portfolio Total below
+### Bitpanda Portfolio
+- Tracks every holding in your account automatically — there is no list to maintain. A holding you buy appears at the next refresh; one you sell is removed after three refreshes without it (about 15 minutes)
+- Every value in your Portfolio currency, as Bitpanda reports it
+- A **Portfolio** device: **Total value** (every holding, Cash Plus included, plus all fiat), **Cash** (all fiat balances, including funds reserved by a pending order), **Cash Plus**, and your **return** over a day, a week, a month, six months and a year
+- One device per held asset, such as **Vision (VSN) Wallet**:
+  - **Wallet** — the value of the units you can trade (not staked)
+  - **Staking** — the value of the staked units, with APR and lifetime rewards
+  - **Total** — the whole position, with invested amount, average buy price and total return
+  - Staking and Total appear as soon as something is staked or Bitpanda offers an Earn product for the asset, and stay while either is true
+- Updates every 5 minutes; Earn products every 24 hours; rewards every hour
 
-### Portfolio Total
-- A single sensor showing the value of your whole Bitpanda account: every holding, whether or not you track it as a wallet, plus all fiat cash
-- Per-asset value breakdown (`breakdown`) and the number of holdings (`wallet_count`) as entity attributes, both covering every holding
-- Uninvested fiat balance as the `cash` attribute, including funds reserved by a pending order
-- Portfolio return over five timeframes — day, week, month, six months, year — as `return_<timeframe>_percent` attributes
+### Bitpanda Price Tracker
+- Live prices for any of 14,051 assets — crypto, stocks, ETFs, ETCs, Bitpanda Crypto Indices and tokenized precious metals — **without an API key**
+- One device per tracked asset, such as **Bitcoin (BTC)**, with a price sensor in EUR (**Bitcoin (BTC) EUR**) and, optionally, one in each of the other 11 supported currencies
+- EUR prices come from Bitpanda every 60 seconds. Above 30 tracked assets the interval stretches automatically, so the integration never sends more than 1,800 price requests per hour
+- Other currencies are converted with the daily reference rates of the European Central Bank (ECB), fetched every 6 hours
+- 24h price change (`change_24h_pct`) as an attribute, from the Home Assistant recorder
 
 ### Manual Refresh
-- Call the `bitpanda.refresh` service to trigger an immediate update of all price and wallet data outside of the regular update intervals
-- Calls closer together than the current price interval (60 seconds by default, longer when many assets are tracked) are ignored, so an automation cannot push requests beyond the normal polling rate
+- The `bitpanda.refresh` service updates the portfolio and the prices immediately
+- Calls closer together than the price interval (60 seconds, longer with many tracked assets) are ignored, so an automation cannot push requests beyond the normal polling rate
 
 ### Supported Assets
-| Type | Description | Examples | Assets | Price Tracker | Wallet Monitor |
-|------|-------------|----------|:------:|:---:|:---:|
-| 🪙 **Crypto** | Cryptocurrencies available on Bitpanda | BTC, ETH, ADA, SOL, XRP, etc. | 876 | ✅ | ✅ |
-| 📈 **Stocks** | Stocks & shares | AAPL, MSFT, TSLA, etc. | 10,182 | ✅ | ✅ |
-| 🏦 **ETFs** | Exchange Traded Funds | S&P 500, NASDAQ 100, DAX, etc. | 2,804 | ✅ | ✅ |
-| 🛢️ **ETCs (commodities)** | Exchange-traded commodities | WisdomTree Aluminium, iShares Physical Gold ETC, etc. | 176 | ✅ | ✅ |
-| 📊 **Crypto indices** | Bitpanda Crypto Indices | BCI5, BCI10, BCI25, BCISL, etc. | 9 | ✅ | ✅ |
-| 🥇 **Precious metals** | Tokenized precious metals | XAU (Gold), XAG (Silver), XPT (Platinum), XPD (Palladium) | 4 | ✅ | ✅ |
-| 💶 **Fiat** | Fiat currencies | EUR, USD, CHF, GBP, etc. | — | ❌ | ❌ |
+| Type | Examples | Assets | Price Tracker | Portfolio |
+|------|----------|:------:|:---:|:---:|
+| 🪙 **Crypto** | BTC, ETH, ADA, SOL, XRP | 876 | ✅ | ✅ wallet |
+| 📈 **Stocks** | AAPL, MSFT, TSLA | 10,182 | ✅ | ✅ wallet |
+| 🏦 **ETFs** | S&P 500, NASDAQ 100, DAX | 2,804 | ✅ | ✅ wallet |
+| 🛢️ **ETCs (commodities)** | WisdomTree Aluminium, iShares Physical Gold ETC | 176 | ✅ | ✅ wallet |
+| 📊 **Crypto indices** | BCI5, BCI10, BCI25 | 9 | ✅ | ✅ wallet |
+| 🥇 **Precious metals** | Gold (XAU), Silver (XAG), Platinum (XPT), Palladium (XPD) | 4 | ✅ | ✅ wallet |
+| 💶 **Fiat** | EUR, USD, CHF | — | ❌ | ✅ Cash sensor |
+| 💰 **Cash Plus** | BCPEUR, BCPUSD, BCPGBP | 3 | ❌ | ✅ Cash Plus sensor |
 
-Together, these six categories cover 14,051 of Bitpanda's tradable assets. Only the three Cash Plus products are excluded — they are cash equivalents, one unit per unit of their currency, so a price for them tells you nothing.
-
-Fiat is no longer a wallet: your balance is available as the `cash` attribute of the **Portfolio Total** sensor.
+Cash Plus products are cash equivalents — one unit is one unit of their currency — so the Price Tracker leaves them out.
 
 ---
 
 ## 📋 Requirements
 
-- Home Assistant **2025.1** or newer
+- Home Assistant **2025.3** or newer
 - A [Bitpanda](https://www.bitpanda.com) account
-- A Bitpanda API key ([create one here](https://app.bitpanda.com/my-account/apikey))
+- For the Portfolio: a Bitpanda API key ([create one here](https://app.bitpanda.com/my-account/apikey)). The Price Tracker needs none.
 
 ---
 
@@ -93,7 +90,7 @@ Or add it manually:
 
 ## ⚙️ Configuration
 
-### 1. Create a Bitpanda API Key
+### 1. Create a Bitpanda API key (Portfolio only)
 
 1. Go to your [Bitpanda API settings](https://app.bitpanda.com/my-account/apikey) and create a new API key
 2. Under **Scope**, select all three required permissions:
@@ -101,55 +98,79 @@ Or add it manually:
    - **Transaktion (Transaction)**
    - **Earn (Read)**
    - ℹ️ All three are read-only. The integration never calls a write endpoint and cannot place trades or move funds. **Trading** is not needed — it unlocks nothing the integration uses.
-   - ⚠️ Scopes cannot be added to an existing key afterwards. If your key predates Earn, create a new one.
+   - ⚠️ Scopes cannot be added to an existing key afterwards.
 3. Copy your API key — **you will only see it once!**
 
-Bitpanda API keys expire after **one year** — see [Replacing the API Key](#replacing-the-api-key) below for what happens then.
+Bitpanda API keys expire after **one year** — see [Changing the key or the currency](#changing-the-key-or-the-currency).
 
-### 2. Add the Integration to Home Assistant
+### 2. Add a service
 
-1. Go to **Settings → Devices & Services → Add Integration**
-2. Search for **Bitpanda**
-3. Enter your **API key** and select your **currency**
-   > ⚠️ The currency can only be selected during initial setup, and only one Bitpanda entry is allowed per Home Assistant instance. To change the currency, remove and re-add the integration.
-4. Setup checks all three scopes and tells you which one is missing, if any
+1. Go to **Settings → Devices & Services → Add Integration** and search for **Bitpanda**
+2. Choose **Bitpanda Portfolio** or **Bitpanda Price Tracker** — the list only offers what is not set up yet
+3. **Portfolio:** enter your API key — setup checks all three scopes and names any that is missing — then choose your currency
+4. **Price Tracker:** choose additional currencies if you want them. Every asset always gets its EUR sensor.
 
-### 3. Configure Assets and Wallets
+### 3. Track prices
 
-1. Go to **Settings → Devices & Services → Bitpanda → Configure**
-2. Choose from the options menu:
-   - **📈 Add price tracker** — pick a category (Crypto, Stocks, ETFs, ETCs, Crypto indices, Precious metals), then search that category's assets by name, symbol or ISIN
-   - **🪙 Add wallet** — search the assets you currently hold
-   - **🗑️ Remove tracked items** — remove price trackers or wallets
-   - **💾 Save** — apply all changes
-3. Search results are shown as `Name / SYMBOL / ISIN` (ISIN only for stocks, ETFs and ETCs) and match on any of the three
-4. The first time you open the Stocks list it takes about ten seconds to load; it is then cached for 24 hours
+1. On the **Bitpanda Price Tracker** entry, click **Add price tracker**
+2. Pick a category (Crypto, Stocks, ETFs, ETCs, Crypto indices, Precious metals), then type to search by name, symbol or ISIN and pick one asset. Entries read `Name / SYMBOL / ISIN` (ISIN only for stocks, ETFs and ETCs)
+3. The first time you open the Stocks list it takes about ten seconds; it is then cached for 24 hours
+4. To stop tracking an asset, use the **⋮** menu of its row. To change the extra currencies, use **Configure**: removing a currency deletes its sensors, adding it back restores the same entity IDs and their history
 
-### Replacing the API Key
+### Changing the key or the currency
 
-Bitpanda API keys expire after one year. When Bitpanda rejects the stored key, Home Assistant shows **Reauthentication required** for the Bitpanda integration — open it and paste a new key. Every tracked asset and sensor is kept.
+- When Bitpanda rejects the stored key — it expired, was revoked, or lacks a scope — Home Assistant asks for a new one (**New Bitpanda API key needed**). Paste it there; every sensor is kept.
+- **⋮ → Reconfigure** on the Portfolio entry replaces the key at any time (leave the key field empty to keep the current one) and changes the currency.
+- ⚠️ **Changing the currency deletes all Portfolio sensors including their history** and recreates them in the new currency, under the same entity IDs. You are asked to confirm first.
 
-You don't have to wait for expiry: open the entry's **⋮ menu → Reconfigure** at any time to replace the key. The display currency cannot be changed this way — see step 2 above.
+### Entity IDs
+
+Entity IDs are English and fixed, whatever language Home Assistant runs in. Assets are labelled `Name (SYMBOL)`, or just the symbol when the name only repeats it (BNB, BCI5).
+
+| Sensor | Entity ID |
+|---|---|
+| Portfolio Total value / Cash / Cash Plus | `sensor.bitpanda_portfolio_total`, `sensor.bitpanda_portfolio_cash`, `sensor.bitpanda_portfolio_cash_plus` |
+| Portfolio returns | `sensor.bitpanda_portfolio_return_day`, `_week`, `_month`, `_6_months`, `_year` |
+| Vision (VSN) Wallet / Staking / Total | `sensor.bitpanda_vision_vsn_wallet`, `sensor.bitpanda_vision_vsn_wallet_staking`, `sensor.bitpanda_vision_vsn_wallet_total` |
+| Bitcoin (BTC) in EUR / USD | `sensor.bitpanda_bitcoin_btc_eur`, `sensor.bitpanda_bitcoin_btc_usd` |
+
+When two assets share a label, Home Assistant appends `_2` to the second one's ID.
+
+### Attributes
+
+| Sensor | Attributes |
+|---|---|
+| Wallet | `asset`, `asset_name`, `units` (tradable units). Without a Total sensor also `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
+| Staking | `asset`, `asset_name`, `units` (staked), `apr_percent`, `rewards_gross`, `rewards_fee`, `rewards_net`, `rewards_count`, `rewards_last_at` |
+| Total | `asset`, `asset_name`, `units` (whole position), `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
+| Portfolio Total value | `wallet_count` |
+| Price (EUR) | `asset`, `asset_name`, `trading_pair`, `change_24h_pct`, `price_24h_ago` |
+| Price (other currencies) | as EUR, plus `conversion_rate`, `rate_date`, `rate_source` (`ECB`) |
 
 ---
 
 ## ⬆️ Upgrading from 2026.06.x
 
-This release moves to Bitpanda's new Public API and adds Earn data. If you're upgrading from a 2026.06.x release:
+This release moves to Bitpanda's new Public API and splits the integration into two services.
 
-1. Create a new API key with **Guthaben (Balance)**, **Transaktion (Transaction)** and **Earn (Read)** — keys created from the old key page never had Earn
+1. Create a new API key with **Guthaben (Balance)**, **Transaktion (Transaction)** and **Earn (Read)** at [app.bitpanda.com/my-account/apikey](https://app.bitpanda.com/my-account/apikey) — keys from the old key page never had Earn
 2. Update the integration through HACS and restart Home Assistant
-3. **Reload the browser tab** (`Ctrl+F5` / `Cmd+Shift+R`) — skipping this can leave the integration's dialogs showing raw translation keys like `missing_scopes` from your browser's cached texts
-4. Home Assistant shows **Reauthentication required** for the Bitpanda integration — open it and paste the new key
-5. What is kept: tracked assets, entity IDs, history, dashboards and automations — for crypto, precious metal and crypto index wallets (BCI5, BCI10 and the others) alike.
+3. **Reload the browser tab** (`Ctrl+F5` / `Cmd+Shift+R`) — otherwise the integration's dialogs can show raw text from your browser's cached translations
+4. Home Assistant shows **New Bitpanda API key needed** — paste the new key (or use **⋮ → Reconfigure** on the Bitpanda Portfolio entry)
+5. A notification lists **every renamed entity ID (old → new)** and anything that could not be migrated. **Check your dashboards, automations and scripts** for the old IDs.
+
+**What is kept:** the history of every migrated sensor (it moves with the rename), your price trackers (now in the Bitpanda Price Tracker, in EUR and in your old currency) and your wallets. Entity IDs you renamed yourself are left as they are.
 
 **What changes:**
 
-- **Portfolio Total now means your whole account.** It used to sum only the wallets you tracked; it now covers every holding plus all fiat cash. If you tracked only some of your wallets, its value steps up at the upgrade — check automations that compare it against a threshold. `wallet_count` and `breakdown` now cover every holding too.
-- **Fiat wallets are gone.** Fiat wallet sensors (such as "EUR Wallet") are no longer created — the leftover entity shows as `unavailable` and can be deleted; the balance is now the Portfolio Total sensor's `cash` attribute. If you tracked only fiat wallets, no tracked wallet remains, so the Portfolio Total sensor is no longer created either — add a wallet to bring it back.
-- **Removed attributes:** `all_prices` on price sensors and `price` on wallet sensors.
-- **Wallet `balance` is now a number**, not a string — templates that converted it with `| float` keep working. **Index wallets (BCI5 and similar):** `balance` used to hold the value in your currency and now holds index units, as it does for every other asset. Templates that read an index wallet's value from `balance` must use the sensor's state instead.
-- **Price cadence:** price sensors for assets you hold worth at least 50 in your currency now update every 5 minutes instead of every 60 seconds, since they are derived from the portfolio rather than a separate ticker call — all other assets are unaffected.
+- **Two services.** Your entry becomes **Bitpanda Portfolio**; your price trackers move to a new **Bitpanda Price Tracker** entry.
+- **Entity IDs follow the new scheme**, for example `sensor.bitpanda_wallets_vsn_wallet` → `sensor.bitpanda_vision_vsn_wallet` and `sensor.bitpanda_price_tracker_btc_eur` → `sensor.bitpanda_bitcoin_btc_eur`.
+- **Every holding is tracked**, not only the wallets you picked, and each gets its own device.
+- **Wallet still means the unstaked part**, as before. The new **Staking** and **Total** sensors show the staked part and the whole position; they start without history.
+- **Portfolio Total value now covers your whole account** — every holding plus all fiat. It used to add up only the wallets you tracked, so its value steps up at the upgrade: check automations that compare it against a threshold.
+- **The fiat wallet in your currency becomes Portfolio Cash**, which sums all your fiat balances. Other fiat wallets are left as `unavailable` entities you can delete.
+- **Prices in other currencies are converted with ECB daily rates** instead of being quoted by Bitpanda.
+- **Attributes:** units are now `units` on each sensor (the Wallet's `units` are the unstaked units its old `balance` showed); the APR is `apr_percent` on the Staking sensor; the position performance is on the Total sensor. `breakdown`, `all_prices` and the wallet `price` attribute are gone.
 
 ---
 
@@ -158,14 +179,15 @@ This release moves to Bitpanda's new Public API and adds Earn data. If you're up
 | Problem | Solution |
 |---|---|
 | Integration doesn't load | Restart Home Assistant and clear the HACS cache |
-| Sensor shows `unavailable` | Check your API key and review the HA logs |
-| 24h price change missing | The Recorder integration must be active and have at least 24 hours of history |
-| Wallet not visible | Add it via the integration's options menu (**Add wallet**) |
-| Portfolio sensor missing | Add at least one wallet first — the portfolio sensor only appears when wallets are tracked |
-| Price shows `unknown` and a `conversion` attribute | Your display currency is not EUR and your account holds neither cash nor any single asset worth at least 50 EUR to derive an exchange rate from — see the FAQ below |
-| "Reauthentication required" | The key expired, was revoked, or lacks a scope — open the notification and paste a new key |
+| "New Bitpanda API key needed" | The key expired, was revoked, or lacks a scope — paste a new key with all three scopes |
 | Setup says permissions are missing | Create a new key with all three scopes — scopes cannot be added to an existing key |
-| Dialogs show raw text like `missing_scopes` | Reload the browser tab (`Ctrl+F5` / `Cmd+Shift+R`) — your browser cached the old translation strings |
+| Dialogs show raw text | Reload the browser tab (`Ctrl+F5` / `Cmd+Shift+R`) — your browser cached old translations |
+| A wallet sensor is `unavailable` | The asset is no longer in your portfolio; the wallet is removed after about 15 minutes |
+| Portfolio Total value, Cash or Cash Plus is `unavailable` | Bitpanda sent an entry the integration could not read; rather than show a figure that silently leaves it out, the sensor shows none until the entry reads correctly again. Enable debug logging to see which one. |
+| No Staking sensor for an asset | It appears once something is staked or Bitpanda offers an Earn product for the asset |
+| A price in another currency has no value and a `conversion` attribute | The ECB rates could not be loaded since Home Assistant started; the integration retries every 15 minutes and the value appears with the first success |
+| One asset's price sensors are `unavailable` | Bitpanda returned no price for it; see the warning in the log |
+| 24h price change missing | The Recorder integration must be active and have at least 24 hours of history |
 | Stocks list takes a while to open | Expected on first use — about ten seconds. It is then cached for 24 hours |
 
 ---
@@ -173,22 +195,22 @@ This release moves to Bitpanda's new Public API and adds Earn data. If you're up
 ## ❓ FAQ
 
 **Which assets are supported?**  
-Crypto, stocks, ETFs, ETCs (exchange-traded commodities), Bitpanda Crypto Indices and tokenized precious metals — 14,051 assets in total, for both price tracking and wallets. See [Supported Assets](#supported-assets) above.
+Crypto, stocks, ETFs, ETCs, Bitpanda Crypto Indices and tokenized precious metals — 14,051 assets for price tracking, and every holding in your portfolio. See [Supported Assets](#supported-assets).
 
-**Can I track multiple currencies at the same time?**  
-No. Home Assistant allows only one Bitpanda entry per instance, and its display currency is fixed at setup. To use a different currency, remove the integration and add it again.
+**Can I see prices in several currencies?**  
+Yes. The Price Tracker always gives EUR and adds one sensor per extra currency you choose under **Configure**.
 
-**How do I change the display currency?**  
-Remove the integration and re-add it — you can choose the currency during setup.
+**How do I change the Portfolio currency?**  
+**⋮ → Reconfigure** on the Bitpanda Portfolio entry. This deletes all Portfolio sensors including their history, because every recorded value was in the old currency; they come back under the same entity IDs.
+
+**Where do the non-EUR prices come from?**  
+Bitpanda's price endpoint only answers in EUR. The Price Tracker converts with the ECB's daily reference rates, published once per working day around 16:00 CET; at weekends and on holidays the last rate stays in use. The `rate_date` attribute shows which day's rate a price uses.
 
 **Is my API key safe?**  
-Yes. The integration only requires three read scopes — Guthaben (Balance), Transaktion (Transaction) and Earn (Read) — and never calls a write endpoint; it cannot place trades or move funds. The key is never logged, and diagnostics keep it redacted. It is stored locally in Home Assistant and never transmitted to third parties.
-
-**Why are prices converted rather than quoted in my currency?**  
-Bitpanda's price endpoint only returns EUR. For any other display currency, the integration derives a conversion rate from your own portfolio, valued once in EUR and once in your currency — from your cash balance, or, if you hold no cash, from your largest holding — provided it is worth at least 50 EUR, because portfolio values are rounded to cents and a smaller holding would give a visibly wrong rate. Rates derived from a cash balance landed within about half a percent of ECB reference rates in testing. Only an account with neither cash nor a holding of at least 50 EUR has nothing to derive a rate from; prices that would have to be converted from EUR — assets you don't hold, and holdings worth less than 50 — then show no value rather than an EUR figure under your currency, and the price sensor's `conversion` attribute says why.
+Only the Portfolio uses a key, with three read scopes; the integration never calls a write endpoint and cannot place trades or move funds. The key is never logged, and diagnostics keep it redacted. It is stored locally in Home Assistant and sent only to Bitpanda. The Price Tracker and all asset lookups work without the key.
 
 **What happens when my API key expires?**  
-Bitpanda API keys expire after one year. When Bitpanda rejects the stored key, Home Assistant shows **Reauthentication required** for the Bitpanda integration — open it and paste a new key. Every tracked asset and sensor is kept. You can also replace the key any time via the entry's **⋮ menu → Reconfigure**.
+Bitpanda API keys expire after one year. Home Assistant then asks for a new key; every sensor is kept.
 
 ---
 

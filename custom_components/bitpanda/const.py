@@ -59,3 +59,47 @@ DEFAULT_CURRENCY = "EUR"
 # +-12 % band; 0.04 EUR shown as 0.05 USD claims a rate of 1.25), and dust valued
 # at 0.00 would publish a price of 0.
 MIN_PORTFOLIO_DERIVED_VALUE = 50.0
+
+# --- Two services -----------------------------------------------------------
+
+# Entry data key naming the service an entry belongs to. Each service's entry
+# also carries its type as its unique_id, so a second one cannot be created.
+ENTRY_TYPE = "entry_type"
+ENTRY_TYPE_PORTFOLIO = "portfolio"
+ENTRY_TYPE_PRICE_TRACKER = "price_tracker"
+
+PORTFOLIO_TITLE = "Bitpanda Portfolio"
+PRICE_TRACKER_TITLE = "Bitpanda Price Tracker"
+
+# Price Tracker options: currencies converted from EUR in addition to EUR.
+CONF_EXTRA_CURRENCIES = "extra_currencies"
+
+# One config subentry per tracked asset; its data holds the slim asset record.
+SUBENTRY_TYPE_ASSET = "asset"
+CONF_ASSET = "asset"
+
+# Set by the version 1 migration on the Price Tracker entry it creates: the
+# legacy price entities that entry adopts on its first setup.
+CONF_LEGACY_ADOPT = "legacy_adopt"
+
+# The fiat currencies Bitpanda offers (/currencies, verified 2026-09-24). The
+# ECB daily reference rates cover every one of them.
+SUPPORTED_CURRENCIES: tuple[str, ...] = (
+    "CHF", "CZK", "DKK", "EUR", "GBP", "HUF", "NOK", "PLN", "RON", "SEK", "TRY", "USD",
+)
+EXTRA_CURRENCIES: tuple[str, ...] = tuple(c for c in SUPPORTED_CURRENCIES if c != "EUR")
+
+ECB_RATES_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
+ECB_UPDATE_INTERVAL = timedelta(hours=6)
+
+# The keyless ticker endpoint documents no limit. The Price Tracker holds
+# itself to this many requests per hour: 30 assets at the 60 s base interval.
+TICKER_HOURLY_BUDGET = 1800
+
+# A holding is removed only after this many consecutive successful portfolio
+# refreshes without it.
+WALLET_REMOVAL_MISSES = 3
+
+# The asset group of Bitpanda's Cash Plus products. They count towards the
+# Portfolio's Cash Plus sensor and never get a wallet device.
+CASH_PLUS_GROUP = "fiat_earn"

@@ -50,7 +50,7 @@ body:
     id: api_reference
     attributes:
       label: Bitpanda API reference
-      description: If this needs data from the Bitpanda API, link the relevant endpoint in the [API docs](https://developers.bitpanda.com/platform).
+      description: If this needs data from the Bitpanda API, link the relevant endpoint in the [API docs](https://docs.public.bitpanda.com).
     validations:
       required: false
 

@@ -47,15 +47,16 @@ Everything lives in `custom_components/bitpanda/`:
 
 | File | Responsibility |
 |---|---|
-| `__init__.py` | Setup and unload per service, the `bitpanda.refresh` service |
+| `__init__.py` | Setup and unload per service, deleting devices from their device page, the `bitpanda.refresh` service |
 | `api.py` | `BitpandaApiClient` — all HTTP calls; keyless for public endpoints |
-| `assets.py` | Legacy symbol resolution (`pick_legacy`), `AssetDirectory` for holding metadata, list labels |
+| `assets.py` | Asset categories (`asset_category`), legacy symbol resolution (`pick_legacy`), `AssetDirectory` for holding metadata, list labels |
 | `asset_flow.py` | The "Add price tracker" subentry flow and the cached catalogue listings |
 | `config_flow.py` | Service menu, Portfolio setup/reauth/reconfigure, Price Tracker setup and options, import |
 | `const.py` | Domain, URLs, scopes, currencies, intervals, budgets |
 | `devices.py` | Device lookups scoped to their config entry |
 | `diagnostics.py` | Diagnostics per service, API key redacted |
 | `ecb.py` | ECB daily reference rates |
+| `groups.py` | Groups by asset type (config subentries): titles, lookups, the Price Tracker's tracked assets |
 | `migration.py` | Migration of version 1 (legacy API) entries to version 3 |
 | `naming.py` | Labels, entity IDs, unique_ids, device identifiers |
 | `portfolio_coordinator.py` | Portfolio, History, Earn and Rewards coordinators |

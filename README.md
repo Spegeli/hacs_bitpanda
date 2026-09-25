@@ -27,11 +27,12 @@ The integration offers two services. Set up either or both — each one once.
   - **Staking** — the value of the staked units, with APR and lifetime rewards
   - **Total** — the whole position, with invested amount, average buy price and total return
   - Staking and Total appear as soon as something is staked or Bitpanda offers an Earn product for the asset, and stay while either is true
+- The wallet of an asset you no longer hold can be deleted from its device page (**⋮ → Delete**) instead of waiting for it to go. The Portfolio device and the wallets of assets you hold cannot be deleted: they would come straight back
 - Updates every 5 minutes; Earn products every 24 hours; rewards every hour
 
 ### Bitpanda Price Tracker
 - Live prices for any of 14,051 assets — crypto, stocks, ETFs, ETCs, Bitpanda Crypto Indices and tokenized precious metals — **without an API key**
-- One device per tracked asset, such as **Bitcoin (BTC)**, with a price sensor in EUR (**Bitcoin (BTC) EUR**) and, optionally, one in each of the other 11 supported currencies
+- One device per tracked asset, such as **Bitcoin (BTC)**, in groups by asset type, with a price sensor in EUR (**Bitcoin (BTC) EUR**) and, optionally, one in each of the other 11 supported currencies
 - EUR prices come from Bitpanda every 60 seconds. Above 30 tracked assets the interval stretches automatically, so the integration never sends more than 1,800 price requests per hour
 - Other currencies are converted with the daily reference rates of the European Central Bank (ECB), fetched every 6 hours
 - 24h price change (`change_24h_pct`) as an attribute, from the Home Assistant recorder
@@ -112,10 +113,14 @@ Bitpanda API keys expire after **one year** — see [Changing the key or the cur
 
 ### 3. Track prices
 
+The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stocks, ETFs, ETCs, Crypto indices, Precious metals — with one device per asset inside. A group is named in the language Home Assistant runs in when it is created; **⋮ → Rename** on the group renames it.
+
 1. On the **Bitpanda Price Tracker** entry, click **Add price tracker**
 2. Pick a category (Crypto, Stocks, ETFs, ETCs, Crypto indices, Precious metals), then type to search by name, symbol or ISIN and pick one asset. Entries read `Name / SYMBOL / ISIN` (ISIN only for stocks, ETFs and ETCs)
-3. The first time you open the Stocks list it takes about ten seconds; it is then cached for 24 hours
-4. To stop tracking an asset, use the **⋮** menu of its row. To change the extra currencies, use **Configure**: removing a currency deletes its sensors, adding it back restores the same entity IDs and their history
+3. The asset joins the group of its type; the first asset of a type creates that group
+4. The first time you open the Stocks list it takes about ten seconds; it is then cached for 24 hours
+5. To stop tracking one asset, open its device and use **⋮ → Delete**. **⋮ → Delete** on a group stops tracking all of its assets. Tracking an asset again later restores the same entity IDs and their history
+6. To change the extra currencies, use **Configure**: removing a currency deletes its sensors, adding it back restores the same entity IDs and their history
 
 ### Changing the key or the currency
 
@@ -185,7 +190,7 @@ This release moves to Bitpanda's new Public API and splits the integration into 
 | "New Bitpanda API key needed" | The key expired, was revoked, or lacks a scope — paste a new key with all three scopes |
 | Setup says permissions are missing | Create a new key with all three scopes — scopes cannot be added to an existing key |
 | Dialogs show raw text | Reload the browser tab (`Ctrl+F5` / `Cmd+Shift+R`) — your browser cached old translations |
-| A wallet sensor is `unavailable` | The asset is no longer in your portfolio; the wallet is removed after about 15 minutes |
+| A wallet sensor is `unavailable` | The asset is no longer in your portfolio; the wallet is removed after about 15 minutes, or at once with **⋮ → Delete** on its device page |
 | Portfolio Total value, Cash or Cash Plus is `unavailable` | Bitpanda sent an entry the integration could not read; rather than show a figure that silently leaves it out, the sensor shows none until the entry reads correctly again. Enable debug logging to see which one. |
 | No Staking sensor for an asset | It appears once something is staked or Bitpanda offers an Earn product for the asset |
 | A price in another currency has no value and a `conversion` attribute | The ECB rates could not be loaded since Home Assistant started; the integration retries every 15 minutes and the value appears with the first success |

@@ -21,6 +21,7 @@ from .const import (
 )
 from .coordinator import PortfolioData
 from .portfolio_model import RewardTotals
+from .price_sensor import display_precision
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -164,29 +165,6 @@ class BitpandaWalletSensor(CoordinatorEntity, SensorEntity):
             apr=(self._earn.data or {}).get(self._asset_id),
             rewards=(self._rewards.data or {}).get(self._asset_id),
         )
-
-
-def display_precision(value: float | None) -> int:
-    """Return decimals to display for a price.
-
-    Derived from magnitude, never from the price string. Every price the API
-    returns has exactly 8 decimals — `90.93000000` for a stock, `0.00000032`
-    for a micro-cap — so counting them yields 8 for everything.
-    """
-    if value is None or value == 0:
-        return 2
-    magnitude = abs(value)
-    if magnitude >= 10:
-        return 2
-    if magnitude >= 1:
-        return 4
-    if magnitude >= 0.1:
-        return 5
-    if magnitude >= 0.001:
-        return 6
-    if magnitude >= 0.0001:
-        return 7
-    return 8
 
 
 class BitpandaPriceSensor(CoordinatorEntity, SensorEntity):

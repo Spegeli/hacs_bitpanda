@@ -352,7 +352,22 @@
       "message": "Bitpanda rejected the API key."
     },
     "update_failed": {
-      "message": "Could not fetch data from Bitpanda: {error}"
+      "message": "Could not fetch data from Bitpanda."
+    },
+    "update_failed_timeout": {
+      "message": "Could not fetch data from Bitpanda: {path} did not answer in time."
+    },
+    "update_failed_connection": {
+      "message": "Could not fetch data from Bitpanda: the connection for {path} failed."
+    },
+    "update_failed_http_status": {
+      "message": "Could not fetch data from Bitpanda: {path} answered with HTTP status {status}."
+    },
+    "update_failed_unreadable": {
+      "message": "Could not fetch data from Bitpanda: the answer from {path} could not be read."
+    },
+    "update_failed_incomplete_listing": {
+      "message": "Could not fetch data from Bitpanda: the listing from {path} is incomplete."
     },
     "history_unavailable": {
       "message": "No portfolio history could be fetched."
@@ -367,7 +382,19 @@
       "message": "No prices could be fetched from Bitpanda."
     },
     "ecb_rates_failed": {
-      "message": "Could not fetch the ECB exchange rates: {error}"
+      "message": "Could not fetch the ECB exchange rates."
+    },
+    "ecb_rates_failed_timeout": {
+      "message": "Could not fetch the ECB exchange rates: the ECB did not answer in time."
+    },
+    "ecb_rates_failed_connection": {
+      "message": "Could not fetch the ECB exchange rates: the connection to the ECB failed."
+    },
+    "ecb_rates_failed_http_status": {
+      "message": "Could not fetch the ECB exchange rates: the ECB answered with HTTP status {status}."
+    },
+    "ecb_rates_failed_unreadable": {
+      "message": "Could not fetch the ECB exchange rates: the answer from the ECB could not be read."
     },
     "nothing_to_refresh": {
       "message": "There is nothing to refresh: neither Bitpanda Portfolio nor Bitpanda Price Tracker is loaded."

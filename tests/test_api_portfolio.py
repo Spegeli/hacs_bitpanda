@@ -9,7 +9,12 @@ from aiohttp.test_utils import TestServer
 import pytest
 from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client
 
-from custom_components.bitpanda.api import BitpandaApiClient, BitpandaApiError
+from custom_components.bitpanda.api import (
+    BitpandaApiClient,
+    BitpandaApiError,
+    BitpandaAuthError,
+    BitpandaRateLimitError,
+)
 from custom_components.bitpanda.const import API_BASE_URL, EUR_CURRENCY_ID
 
 
@@ -141,6 +146,36 @@ async def test_request_failures_are_logged_at_debug_only(caplog):
     assert {r.levelno for r in records} == {logging.DEBUG}
     assert all(r.exc_info is None for r in records)
     assert secret not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("response", "error", "kind", "status"),
+    [
+        ({"status": 500}, BitpandaApiError, "http_status", 500),
+        ({"status": 302}, BitpandaApiError, "http_status", 302),
+        ({"status": 401}, BitpandaAuthError, "http_status", 401),
+        ({"status": 429}, BitpandaRateLimitError, "http_status", 429),
+        ({"exc": aiohttp.ClientConnectionError("details")}, BitpandaApiError, "connection", None),
+        ({"exc": asyncio.TimeoutError()}, BitpandaApiError, "timeout", None),
+        ({"text": "not json{"}, BitpandaApiError, "unreadable", None),
+    ],
+    ids=["http", "redirect", "unauthorized", "rate_limited", "connection", "timeout", "unreadable"],
+)
+async def test_a_failed_request_says_what_failed_without_words(response, error, kind, status):
+    """Beside its English message for the log, every failure carries what
+    failed in a form a translation can use: its kind, the request path and
+    an HTTP status -- no words, and never the key."""
+    secret = "totally-secret-key"
+    with mock_aiohttp_client() as mocker:
+        mocker.get(f"{API_BASE_URL}/portfolio", **response)
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient(secret, session)
+            with pytest.raises(error) as excinfo:
+                await client.async_get_portfolio()
+    assert (excinfo.value.kind, excinfo.value.path, excinfo.value.status) == (
+        kind, "/portfolio", status
+    )
+    assert secret not in repr(vars(excinfo.value))
 
 
 async def test_a_redirect_is_an_error():

@@ -64,6 +64,12 @@ def _id_page(ids: list[str], next_cursor: str | None = None) -> dict:
     return body
 
 
+def _incomplete(err: BitpandaApiError) -> tuple:
+    """What a failed listing says without words: its kind, the listing's
+    path and (no) HTTP status -- for its translated message."""
+    return err.kind, err.path, err.status
+
+
 # --- normalize_operations_cursor ----------------------------------------------
 
 
@@ -206,9 +212,10 @@ async def test_self_loop_shape_without_normalisation_raises_after_two_requests()
         mocker.get(f"{API_BASE_URL}/assets", json=page_one)
         async with mocker.create_session(asyncio.get_running_loop()) as session:
             client = BitpandaApiClient("key", session)
-            with pytest.raises(BitpandaApiError, match="/assets"):
+            with pytest.raises(BitpandaApiError, match="/assets") as excinfo:
                 await client.async_get_assets()
 
+    assert _incomplete(excinfo.value) == ("incomplete_listing", "/assets", None)
     assert mocker.call_count == 2
     # The cursor went out exactly as received: the workaround is
     # /operations-only. Compared decoded, since its "=" padding travels
@@ -251,9 +258,10 @@ async def test_operations_cycle_the_workaround_cannot_fix_raises():
         mocker.get(f"{API_BASE_URL}/operations", json=page_one)
         async with mocker.create_session(asyncio.get_running_loop()) as session:
             client = BitpandaApiClient("key", session)
-            with pytest.raises(BitpandaApiError, match="/operations"):
+            with pytest.raises(BitpandaApiError, match="/operations") as excinfo:
                 await client.async_get_operations()
 
+    assert _incomplete(excinfo.value) == ("incomplete_listing", "/operations", None)
     assert mocker.call_count == 2
 
 
@@ -270,9 +278,10 @@ async def test_paginate_raises_when_the_page_cap_is_reached(monkeypatch):
         mocker.get(f"{API_BASE_URL}/assets", json=_id_page(["a"], "C1"))
         async with mocker.create_session(asyncio.get_running_loop()) as session:
             client = BitpandaApiClient("key", session)
-            with pytest.raises(BitpandaApiError, match="/assets"):
+            with pytest.raises(BitpandaApiError, match="/assets") as excinfo:
                 await client.async_get_assets()
 
+    assert _incomplete(excinfo.value) == ("incomplete_listing", "/assets", None)
     assert mocker.call_count == 3
 
 
@@ -292,9 +301,10 @@ async def test_paginate_raises_when_another_page_is_announced_without_a_cursor()
         )
         async with mocker.create_session(asyncio.get_running_loop()) as session:
             client = BitpandaApiClient("key", session)
-            with pytest.raises(BitpandaApiError, match="/assets"):
+            with pytest.raises(BitpandaApiError, match="/assets") as excinfo:
                 await client.async_get_assets()
 
+    assert _incomplete(excinfo.value) == ("incomplete_listing", "/assets", None)
     assert mocker.call_count == 1
 
 

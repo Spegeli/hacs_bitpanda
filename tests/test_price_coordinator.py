@@ -187,27 +187,57 @@ def test_a_slow_interval_is_announced_at_construction(caplog):
 _RATES = EcbRates(date="2026-09-24", rates={"USD": 1.1367})
 
 
+_TIMEOUT = EcbError("Timeout fetching the ECB rates", kind="timeout")
+
+
 async def test_ecb_retries_sooner_while_no_rates_were_ever_loaded():
     coordinator = EcbCoordinator(None, None, object())
     with patch(
         "custom_components.bitpanda.price_coordinator.async_fetch_ecb_rates",
-        AsyncMock(side_effect=[EcbError("Timeout fetching the ECB rates"), _RATES]),
+        AsyncMock(side_effect=[_TIMEOUT, _RATES]),
     ):
         with pytest.raises(UpdateFailed) as excinfo:
             await coordinator._async_update_data()
-        assert _translation(excinfo.value) == (
-            "bitpanda", "ecb_rates_failed", {"error": "Timeout fetching the ECB rates"}
-        )
+        assert _translation(excinfo.value) == ("bitpanda", "ecb_rates_failed_timeout", None)
         assert coordinator.update_interval == timedelta(minutes=15)
         await coordinator._async_update_data()
     assert coordinator.update_interval == timedelta(hours=6)
+
+
+@pytest.mark.parametrize(
+    ("error", "key", "placeholders"),
+    [
+        (EcbError("x", kind="timeout"), "ecb_rates_failed_timeout", None),
+        (EcbError("x", kind="connection"), "ecb_rates_failed_connection", None),
+        (
+            EcbError("x", kind="http_status", status=503),
+            "ecb_rates_failed_http_status",
+            {"status": "503"},
+        ),
+        (EcbError("x", kind="unreadable"), "ecb_rates_failed_unreadable", None),
+        (EcbError("x"), "ecb_rates_failed", None),
+        (EcbError("x", kind="http_status"), "ecb_rates_failed", None),
+    ],
+    ids=["timeout", "connection", "http_status", "unreadable", "no_kind", "no_status"],
+)
+async def test_a_failed_ecb_fetch_is_translated_by_what_failed(error, key, placeholders):
+    """One text per kind of failure, with an HTTP status as the only
+    placeholder; a failure that says too little gets the plain text. The
+    English message never reaches a placeholder."""
+    coordinator = EcbCoordinator(None, None, object())
+    with patch(
+        "custom_components.bitpanda.price_coordinator.async_fetch_ecb_rates",
+        AsyncMock(side_effect=error),
+    ), pytest.raises(UpdateFailed) as excinfo:
+        await coordinator._async_update_data()
+    assert _translation(excinfo.value) == ("bitpanda", key, placeholders)
 
 
 async def test_ecb_coordinator_keeps_the_last_rates_when_a_fetch_fails(hass):
     coordinator = EcbCoordinator(hass, None, object())
     with patch(
         "custom_components.bitpanda.price_coordinator.async_fetch_ecb_rates",
-        AsyncMock(side_effect=[_RATES, EcbError("Timeout fetching the ECB rates")]),
+        AsyncMock(side_effect=[_RATES, _TIMEOUT]),
     ):
         await coordinator.async_refresh()
         assert coordinator.data == _RATES

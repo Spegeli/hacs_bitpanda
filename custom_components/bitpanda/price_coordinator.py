@@ -15,6 +15,10 @@ from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
 from .const import (
     DOMAIN,
     ECB_UPDATE_INTERVAL,
+    ERROR_CONNECTION,
+    ERROR_HTTP_STATUS,
+    ERROR_TIMEOUT,
+    ERROR_UNREADABLE,
     PRICE_UPDATE_INTERVAL_BASE,
     TICKER_HOURLY_BUDGET,
 )
@@ -34,6 +38,34 @@ _MAX_BACKOFF = 16
 # Retry for ECB rates that were never loaded: until then the other
 # currencies have no value at all.
 _ECB_RETRY = timedelta(minutes=15)
+
+# The text of each kind of failed ECB fetch (const.API_ERROR_KINDS; the ECB
+# answers no listing, so never ERROR_INCOMPLETE_LISTING).
+_ECB_FAILED_KEYS = {
+    ERROR_TIMEOUT: "ecb_rates_failed_timeout",
+    ERROR_CONNECTION: "ecb_rates_failed_connection",
+    ERROR_HTTP_STATUS: "ecb_rates_failed_http_status",
+    ERROR_UNREADABLE: "ecb_rates_failed_unreadable",
+}
+
+
+def _ecb_failed(err: EcbError) -> UpdateFailed:
+    """A failed ECB fetch, translated by what failed: an HTTP status is its
+    only placeholder, so the whole message is in the reader's language; the
+    English message is for the log alone. A failure that does not say
+    enough to fill its text in gets the plain `ecb_rates_failed`."""
+    key = _ECB_FAILED_KEYS.get(err.kind)
+    placeholders: dict[str, int | None] = {}
+    if err.kind == ERROR_HTTP_STATUS:
+        placeholders["status"] = err.status
+    if key is None or None in placeholders.values():
+        return UpdateFailed(translation_domain=DOMAIN, translation_key="ecb_rates_failed")
+    return UpdateFailed(
+        translation_domain=DOMAIN,
+        translation_key=key,
+        translation_placeholders={name: str(value) for name, value in placeholders.items()}
+        or None,
+    )
 
 
 def price_interval(ticker_count: int) -> timedelta:
@@ -180,11 +212,7 @@ class EcbCoordinator(DataUpdateCoordinator[EcbRates]):
         except EcbError as err:
             if self.data is None:
                 self.update_interval = _ECB_RETRY
-            raise UpdateFailed(
-                translation_domain=DOMAIN,
-                translation_key="ecb_rates_failed",
-                translation_placeholders={"error": str(err)},
-            ) from None
+            raise _ecb_failed(err) from None
         self.update_interval = ECB_UPDATE_INTERVAL
         return rates
 

@@ -5,8 +5,11 @@ from pathlib import Path
 import re
 import string
 
+from custom_components.bitpanda.api import BitpandaApiError
 from custom_components.bitpanda.assets import ASSET_CATEGORY_FILTERS, CATEGORY_OTHER
-from custom_components.bitpanda.ecb import EcbRates
+from custom_components.bitpanda.const import API_ERROR_KINDS
+from custom_components.bitpanda.ecb import EcbError, EcbRates
+from custom_components.bitpanda.portfolio_coordinator import _update_failed
 from custom_components.bitpanda.portfolio_model import (
     EarnData,
     Holding,
@@ -19,6 +22,7 @@ from custom_components.bitpanda.portfolio_sensor import (
     WalletSensor,
     WalletTotalSensor,
 )
+from custom_components.bitpanda.price_coordinator import _ecb_failed
 from custom_components.bitpanda.price_sensor import PriceSensor
 
 _DIR = Path(__file__).parent.parent / "custom_components" / "bitpanda"
@@ -226,6 +230,63 @@ def test_each_service_has_options_texts_of_its_own():
     assert set(steps["portfolio"]["data"]) == {"language"}
     for step in steps.values():
         assert set(step["data_description"]) == {"language"}
+
+
+# --- Failed requests: one text per kind of failure ---------------------------------
+
+
+def _failure_texts() -> dict[str, list[tuple[str, dict[str, str] | None]]]:
+    """The (translation key, placeholders) of every text a failed request can
+    raise, by the coordinator module that raises it: one per kind of failure
+    (const.API_ERROR_KINDS) and the plain one for a failure that says too
+    little -- each with the placeholders the code fills in."""
+    bitpanda = [
+        BitpandaApiError("English detail", kind=kind, path="/portfolio", status=503)
+        for kind in API_ERROR_KINDS
+    ] + [BitpandaApiError("English detail")]
+    ecb = [EcbError("English detail", kind=kind, status=503) for kind in API_ERROR_KINDS] + [
+        EcbError("English detail")
+    ]
+    return {
+        "portfolio_coordinator": [
+            (failed.translation_key, failed.translation_placeholders)
+            for failed in map(_update_failed, bitpanda)
+        ],
+        "price_coordinator": [
+            (failed.translation_key, failed.translation_placeholders)
+            for failed in map(_ecb_failed, ecb)
+        ],
+    }
+
+
+def test_each_kind_of_failed_request_has_a_text_of_its_own():
+    texts = _failure_texts()
+    portfolio_keys = [key for key, _ in texts["portfolio_coordinator"]]
+    assert len(set(portfolio_keys)) == len(API_ERROR_KINDS) + 1
+    # The ECB answers no listing: every other kind has a text of its own.
+    ecb_keys = [key for key, _ in texts["price_coordinator"]]
+    assert len(set(ecb_keys)) == len(API_ERROR_KINDS)
+
+
+def test_every_failure_text_has_exactly_the_placeholders_the_code_fills_in():
+    """A missing placeholder would show as `{path}`, an extra one would be
+    dropped; and none of them carries words -- the request path, an HTTP
+    status -- so the whole message is in the reader's language."""
+    for name in _FILES:
+        exceptions = _load(name)["exceptions"]
+        for texts in _failure_texts().values():
+            for key, placeholders in texts:
+                assert _placeholders(exceptions[key]["message"]) == set(placeholders or {}), (
+                    name, key
+                )
+
+
+def test_no_exception_text_takes_an_english_message():
+    """`{error}` once carried the API client's English message into
+    otherwise translated texts."""
+    for name in _FILES:
+        for key, text in _texts(_load(name)["exceptions"]).items():
+            assert "error" not in _placeholders(text), (name, key)
 
 
 def test_every_language_titles_each_group_differently():

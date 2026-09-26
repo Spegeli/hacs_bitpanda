@@ -27,6 +27,11 @@ from .assets import AssetDirectory
 from .const import (
     DOMAIN,
     EARN_UPDATE_INTERVAL,
+    ERROR_CONNECTION,
+    ERROR_HTTP_STATUS,
+    ERROR_INCOMPLETE_LISTING,
+    ERROR_TIMEOUT,
+    ERROR_UNREADABLE,
     PORTFOLIO_TIMEFRAMES,
     PORTFOLIO_UPDATE_INTERVAL,
     REWARDS_UPDATE_INTERVAL,
@@ -65,13 +70,32 @@ def _auth_failed() -> ConfigEntryAuthFailed:
     return ConfigEntryAuthFailed(translation_domain=DOMAIN, translation_key="api_key_rejected")
 
 
+# The text of each kind of failed request (const.API_ERROR_KINDS).
+_UPDATE_FAILED_KEYS = {
+    ERROR_TIMEOUT: "update_failed_timeout",
+    ERROR_CONNECTION: "update_failed_connection",
+    ERROR_HTTP_STATUS: "update_failed_http_status",
+    ERROR_UNREADABLE: "update_failed_unreadable",
+    ERROR_INCOMPLETE_LISTING: "update_failed_incomplete_listing",
+}
+
+
 def _update_failed(err: BitpandaApiError) -> UpdateFailed:
-    """A failed request, translated. {error} is the API client's own
-    message, which names a path and a cause, never request data."""
+    """A failed request, translated by what failed: its placeholders carry
+    no words -- the request path and an HTTP status -- so the whole message
+    is in the reader's language; the client's English message is for the
+    log alone. A failure that does not say enough to fill its text in (no
+    kind, path or status) gets the plain `update_failed`."""
+    key = _UPDATE_FAILED_KEYS.get(err.kind)
+    placeholders: dict[str, str | int | None] = {"path": err.path}
+    if err.kind == ERROR_HTTP_STATUS:
+        placeholders["status"] = err.status
+    if key is None or None in placeholders.values():
+        return UpdateFailed(translation_domain=DOMAIN, translation_key="update_failed")
     return UpdateFailed(
         translation_domain=DOMAIN,
-        translation_key="update_failed",
-        translation_placeholders={"error": str(err)},
+        translation_key=key,
+        translation_placeholders={name: str(value) for name, value in placeholders.items()},
     )
 
 

@@ -536,15 +536,21 @@ async def test_a_failed_first_portfolio_refresh_retries_with_a_translated_reason
     hass, portfolio_api, first_refresh
 ):
     """The "retrying setup" reason on the integration page is translated on
-    every supported Home Assistant version, the floor included."""
-    portfolio_api.side_effect = BitpandaApiError("HTTP 503 from /portfolio")
+    every supported Home Assistant version, the floor included -- all of
+    it: its placeholders are the request path and the HTTP status, never
+    the API client's English message."""
+    portfolio_api.side_effect = BitpandaApiError(
+        "HTTP 503 from /portfolio", kind="http_status", path="/portfolio", status=503
+    )
     entry = _portfolio_entry(hass)
     with _home_assistant_first_refresh(first_refresh):
         assert not await hass.config_entries.async_setup(entry.entry_id)
     assert entry.state is ConfigEntryState.SETUP_RETRY
-    assert entry.error_reason_translation_key == "update_failed"
-    assert entry.error_reason_translation_placeholders == {"error": "HTTP 503 from /portfolio"}
-    assert entry.reason == "Could not fetch data from Bitpanda: HTTP 503 from /portfolio"
+    assert entry.error_reason_translation_key == "update_failed_http_status"
+    assert entry.error_reason_translation_placeholders == {"path": "/portfolio", "status": "503"}
+    assert entry.reason == (
+        "Could not fetch data from Bitpanda: /portfolio answered with HTTP status 503"
+    )
 
 
 async def test_the_translated_not_ready_is_raised_from_none():

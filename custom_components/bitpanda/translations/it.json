@@ -352,7 +352,22 @@
       "message": "Bitpanda ha rifiutato la chiave API."
     },
     "update_failed": {
-      "message": "Impossibile recuperare i dati da Bitpanda: {error}"
+      "message": "Impossibile recuperare i dati da Bitpanda."
+    },
+    "update_failed_timeout": {
+      "message": "Impossibile recuperare i dati da Bitpanda: {path} non ha risposto in tempo."
+    },
+    "update_failed_connection": {
+      "message": "Impossibile recuperare i dati da Bitpanda: la connessione per {path} non è riuscita."
+    },
+    "update_failed_http_status": {
+      "message": "Impossibile recuperare i dati da Bitpanda: {path} ha risposto con lo stato HTTP {status}."
+    },
+    "update_failed_unreadable": {
+      "message": "Impossibile recuperare i dati da Bitpanda: la risposta di {path} non è leggibile."
+    },
+    "update_failed_incomplete_listing": {
+      "message": "Impossibile recuperare i dati da Bitpanda: l'elenco restituito da {path} è incompleto."
     },
     "history_unavailable": {
       "message": "Impossibile recuperare la cronologia del Portfolio."
@@ -367,7 +382,19 @@
       "message": "Non è stato possibile recuperare alcun prezzo da Bitpanda."
     },
     "ecb_rates_failed": {
-      "message": "Impossibile recuperare i tassi di cambio della BCE: {error}"
+      "message": "Impossibile recuperare i tassi di cambio della BCE."
+    },
+    "ecb_rates_failed_timeout": {
+      "message": "Impossibile recuperare i tassi di cambio della BCE: la BCE non ha risposto in tempo."
+    },
+    "ecb_rates_failed_connection": {
+      "message": "Impossibile recuperare i tassi di cambio della BCE: la connessione alla BCE non è riuscita."
+    },
+    "ecb_rates_failed_http_status": {
+      "message": "Impossibile recuperare i tassi di cambio della BCE: la BCE ha risposto con lo stato HTTP {status}."
+    },
+    "ecb_rates_failed_unreadable": {
+      "message": "Impossibile recuperare i tassi di cambio della BCE: la risposta della BCE non è leggibile."
     },
     "nothing_to_refresh": {
       "message": "Non c'è nulla da aggiornare: né Bitpanda Portfolio né Bitpanda Price Tracker è caricato."

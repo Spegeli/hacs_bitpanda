@@ -11,7 +11,17 @@ from typing import Any
 
 import aiohttp
 
-from .const import API_BASE_URL, API_TIMEOUT, MAX_PAGE_SIZE, REQUIRED_SCOPES
+from .const import (
+    API_BASE_URL,
+    API_TIMEOUT,
+    ERROR_CONNECTION,
+    ERROR_HTTP_STATUS,
+    ERROR_INCOMPLETE_LISTING,
+    ERROR_TIMEOUT,
+    ERROR_UNREADABLE,
+    MAX_PAGE_SIZE,
+    REQUIRED_SCOPES,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,7 +70,27 @@ def normalize_operations_cursor(cursor: str) -> str:
 
 
 class BitpandaApiError(Exception):
-    """Base error for API failures."""
+    """Base error for API failures.
+
+    The message is English, for the log. What failed is carried without
+    words too, for a translated text (portfolio_coordinator._update_failed):
+    `kind`, one of const.API_ERROR_KINDS -- None when raised outside the
+    client --, `path`, the request path, and `status`, the HTTP status of an
+    ERROR_HTTP_STATUS. None of them ever holds request data.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        kind: str | None = None,
+        path: str | None = None,
+        status: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.kind = kind
+        self.path = path
+        self.status = status
 
 
 class BitpandaAuthError(BitpandaApiError):
@@ -121,24 +151,41 @@ class BitpandaApiClient:
                 timeout=aiohttp.ClientTimeout(total=API_TIMEOUT),
                 allow_redirects=False,
             ) as response:
-                if 300 <= response.status < 400:
-                    _LOGGER.debug("HTTP %s redirect from %s", response.status, path)
-                    raise BitpandaApiError(f"Unexpected redirect from {path}")
-                if response.status in (401, 403):
-                    raise BitpandaAuthError(f"Unauthorized for {path}")
-                if response.status == 429:
-                    raise BitpandaRateLimitError(f"Rate limited on {path}")
+                status = response.status
+                if 300 <= status < 400:
+                    _LOGGER.debug("HTTP %s redirect from %s", status, path)
+                    raise BitpandaApiError(
+                        f"Unexpected redirect from {path}",
+                        kind=ERROR_HTTP_STATUS, path=path, status=status,
+                    )
+                if status in (401, 403):
+                    raise BitpandaAuthError(
+                        f"Unauthorized for {path}",
+                        kind=ERROR_HTTP_STATUS, path=path, status=status,
+                    )
+                if status == 429:
+                    raise BitpandaRateLimitError(
+                        f"Rate limited on {path}",
+                        kind=ERROR_HTTP_STATUS, path=path, status=status,
+                    )
                 response.raise_for_status()
                 return await response.json()
         except aiohttp.ClientResponseError as err:
             _LOGGER.debug("HTTP %s from %s", err.status, path)
-            raise BitpandaApiError(f"HTTP {err.status} from {path}") from None
+            raise BitpandaApiError(
+                f"HTTP {err.status} from {path}",
+                kind=ERROR_HTTP_STATUS, path=path, status=err.status,
+            ) from None
         except aiohttp.ClientError as err:
             _LOGGER.debug("Connection error for %s: %s", path, type(err).__name__)
-            raise BitpandaApiError(f"Connection error for {path}") from None
+            raise BitpandaApiError(
+                f"Connection error for {path}", kind=ERROR_CONNECTION, path=path
+            ) from None
         except asyncio.TimeoutError:
             _LOGGER.debug("Timeout for %s", path)
-            raise BitpandaApiError(f"Timeout for {path}") from None
+            raise BitpandaApiError(
+                f"Timeout for {path}", kind=ERROR_TIMEOUT, path=path
+            ) from None
         except ValueError:
             # json.JSONDecodeError subclasses ValueError, and a body that
             # decodes to text but not JSON can also raise UnicodeDecodeError
@@ -148,7 +195,9 @@ class BitpandaApiClient:
             # exc_info=True through this integration's own logger, which is
             # exactly what the API-key rule forbids.
             _LOGGER.debug("Could not decode response from %s", path)
-            raise BitpandaApiError(f"Could not decode response from {path}") from None
+            raise BitpandaApiError(
+                f"Could not decode response from {path}", kind=ERROR_UNREADABLE, path=path
+            ) from None
 
     async def _paginate(
         self,
@@ -193,18 +242,23 @@ class BitpandaApiClient:
             cursor = body.get("next_cursor")
             if not cursor:
                 raise BitpandaApiError(
-                    f"{path} announced another page but sent no cursor"
+                    f"{path} announced another page but sent no cursor",
+                    kind=ERROR_INCOMPLETE_LISTING, path=path,
                 )
             if cursor_fix is not None:
                 cursor = cursor_fix(cursor)
             if cursor in sent_cursors:
                 raise BitpandaApiError(
-                    f"{path} repeated a page cursor; its listing is incomplete"
+                    f"{path} repeated a page cursor; its listing is incomplete",
+                    kind=ERROR_INCOMPLETE_LISTING, path=path,
                 )
             sent_cursors.add(cursor)
             params["cursor"] = cursor
 
-        raise BitpandaApiError(f"{path} returned more than {_MAX_PAGES} pages")
+        raise BitpandaApiError(
+            f"{path} returned more than {_MAX_PAGES} pages",
+            kind=ERROR_INCOMPLETE_LISTING, path=path,
+        )
 
     async def async_get_currencies(self) -> list[dict]:
         """List all fiat currencies. Not paginated."""

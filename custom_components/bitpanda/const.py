@@ -13,6 +13,23 @@ API_BASE_URL = "https://api.public.bitpanda.com/v1"
 API_TIMEOUT = 15
 MAX_PAGE_SIZE = 100
 
+# What made a request fail, as api.py and ecb.py report it beside their
+# English message for the log. Each kind has a translated text of its own
+# (exceptions.update_failed_<kind>, exceptions.ecb_rates_failed_<kind>),
+# whose only placeholders carry no words: the request path, an HTTP status.
+ERROR_TIMEOUT = "timeout"
+ERROR_CONNECTION = "connection"
+ERROR_HTTP_STATUS = "http_status"
+ERROR_UNREADABLE = "unreadable"
+ERROR_INCOMPLETE_LISTING = "incomplete_listing"
+API_ERROR_KINDS: tuple[str, ...] = (
+    ERROR_TIMEOUT,
+    ERROR_CONNECTION,
+    ERROR_HTTP_STATUS,
+    ERROR_UNREADABLE,
+    ERROR_INCOMPLETE_LISTING,
+)
+
 API_KEY_URL = "https://app.bitpanda.com/my-account/apikey"
 
 # Measured 2026-09-24 with one key per scope: /portfolio needs Guthaben

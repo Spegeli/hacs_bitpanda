@@ -352,7 +352,22 @@
       "message": "Bitpanda hat den API-Schlüssel abgelehnt."
     },
     "update_failed": {
-      "message": "Daten von Bitpanda konnten nicht abgerufen werden: {error}"
+      "message": "Daten von Bitpanda konnten nicht abgerufen werden."
+    },
+    "update_failed_timeout": {
+      "message": "Daten von Bitpanda konnten nicht abgerufen werden: {path} hat nicht rechtzeitig geantwortet."
+    },
+    "update_failed_connection": {
+      "message": "Daten von Bitpanda konnten nicht abgerufen werden: Die Verbindung für {path} ist fehlgeschlagen."
+    },
+    "update_failed_http_status": {
+      "message": "Daten von Bitpanda konnten nicht abgerufen werden: {path} hat mit HTTP-Status {status} geantwortet."
+    },
+    "update_failed_unreadable": {
+      "message": "Daten von Bitpanda konnten nicht abgerufen werden: Die Antwort von {path} war nicht lesbar."
+    },
+    "update_failed_incomplete_listing": {
+      "message": "Daten von Bitpanda konnten nicht abgerufen werden: Die Liste von {path} ist unvollständig."
     },
     "history_unavailable": {
       "message": "Es konnte kein Portfolio-Verlauf abgerufen werden."
@@ -367,7 +382,19 @@
       "message": "Von Bitpanda konnten keine Preise abgerufen werden."
     },
     "ecb_rates_failed": {
-      "message": "Die Wechselkurse der EZB konnten nicht abgerufen werden: {error}"
+      "message": "Die Wechselkurse der EZB konnten nicht abgerufen werden."
+    },
+    "ecb_rates_failed_timeout": {
+      "message": "Die Wechselkurse der EZB konnten nicht abgerufen werden: Die EZB hat nicht rechtzeitig geantwortet."
+    },
+    "ecb_rates_failed_connection": {
+      "message": "Die Wechselkurse der EZB konnten nicht abgerufen werden: Die Verbindung zur EZB ist fehlgeschlagen."
+    },
+    "ecb_rates_failed_http_status": {
+      "message": "Die Wechselkurse der EZB konnten nicht abgerufen werden: Die EZB hat mit HTTP-Status {status} geantwortet."
+    },
+    "ecb_rates_failed_unreadable": {
+      "message": "Die Wechselkurse der EZB konnten nicht abgerufen werden: Die Antwort der EZB war nicht lesbar."
     },
     "nothing_to_refresh": {
       "message": "Es gibt nichts zu aktualisieren: Weder Bitpanda Portfolio noch Bitpanda Price Tracker ist geladen."

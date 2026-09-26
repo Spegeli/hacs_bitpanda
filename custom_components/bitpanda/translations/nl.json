@@ -352,7 +352,22 @@
       "message": "Bitpanda heeft de API-sleutel geweigerd."
     },
     "update_failed": {
-      "message": "Kan geen gegevens ophalen bij Bitpanda: {error}"
+      "message": "Kan geen gegevens ophalen bij Bitpanda."
+    },
+    "update_failed_timeout": {
+      "message": "Kan geen gegevens ophalen bij Bitpanda: {path} heeft niet op tijd geantwoord."
+    },
+    "update_failed_connection": {
+      "message": "Kan geen gegevens ophalen bij Bitpanda: de verbinding voor {path} is mislukt."
+    },
+    "update_failed_http_status": {
+      "message": "Kan geen gegevens ophalen bij Bitpanda: {path} antwoordde met HTTP-status {status}."
+    },
+    "update_failed_unreadable": {
+      "message": "Kan geen gegevens ophalen bij Bitpanda: het antwoord van {path} was onleesbaar."
+    },
+    "update_failed_incomplete_listing": {
+      "message": "Kan geen gegevens ophalen bij Bitpanda: de lijst van {path} is onvolledig."
     },
     "history_unavailable": {
       "message": "Er kon geen portfoliogeschiedenis worden opgehaald."
@@ -367,7 +382,19 @@
       "message": "Er konden geen prijzen bij Bitpanda worden opgehaald."
     },
     "ecb_rates_failed": {
-      "message": "Kan de wisselkoersen van de ECB niet ophalen: {error}"
+      "message": "Kan de wisselkoersen van de ECB niet ophalen."
+    },
+    "ecb_rates_failed_timeout": {
+      "message": "Kan de wisselkoersen van de ECB niet ophalen: de ECB heeft niet op tijd geantwoord."
+    },
+    "ecb_rates_failed_connection": {
+      "message": "Kan de wisselkoersen van de ECB niet ophalen: de verbinding met de ECB is mislukt."
+    },
+    "ecb_rates_failed_http_status": {
+      "message": "Kan de wisselkoersen van de ECB niet ophalen: de ECB antwoordde met HTTP-status {status}."
+    },
+    "ecb_rates_failed_unreadable": {
+      "message": "Kan de wisselkoersen van de ECB niet ophalen: het antwoord van de ECB was onleesbaar."
     },
     "nothing_to_refresh": {
       "message": "Er valt niets te vernieuwen: noch Bitpanda Portfolio, noch Bitpanda Price Tracker is geladen."

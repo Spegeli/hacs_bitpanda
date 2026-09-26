@@ -121,15 +121,56 @@ async def test_portfolio_401_starts_reauth_with_a_translated_message(hass):
 
 async def test_portfolio_error_fails_the_update_before_any_lookup(hass):
     directory = _Directory({})
-    client = _Client(error=BitpandaApiError("Timeout for /portfolio"))
+    client = _Client(
+        error=BitpandaApiError("Timeout for /portfolio", kind="timeout", path="/portfolio")
+    )
     coordinator = _coordinator(hass, client, directory)
     with pytest.raises(UpdateFailed) as excinfo:
         await coordinator._async_update_data()
     assert _translation(excinfo.value) == (
-        "bitpanda", "update_failed", {"error": "Timeout for /portfolio"}
+        "bitpanda", "update_failed_timeout", {"path": "/portfolio"}
     )
     assert excinfo.value.__cause__ is None
     assert directory.resolved == []
+
+
+@pytest.mark.parametrize(
+    ("kind", "status", "key", "placeholders"),
+    [
+        ("timeout", None, "update_failed_timeout", {"path": "/portfolio"}),
+        ("connection", None, "update_failed_connection", {"path": "/portfolio"}),
+        ("http_status", 503, "update_failed_http_status", {"path": "/portfolio", "status": "503"}),
+        ("unreadable", None, "update_failed_unreadable", {"path": "/portfolio"}),
+        ("incomplete_listing", None, "update_failed_incomplete_listing", {"path": "/portfolio"}),
+    ],
+)
+async def test_a_failed_request_is_translated_by_what_failed(hass, kind, status, key, placeholders):
+    """One text per kind of failure; the placeholders carry no words -- the
+    request path and an HTTP status -- so the whole message is in the
+    reader's language. The client's English message never reaches it."""
+    client = _Client(
+        error=BitpandaApiError("English detail", kind=kind, path="/portfolio", status=status)
+    )
+    with pytest.raises(UpdateFailed) as excinfo:
+        await _coordinator(hass, client)._async_update_data()
+    assert _translation(excinfo.value) == ("bitpanda", key, placeholders)
+    assert "English detail" not in str(excinfo.value.translation_placeholders)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        BitpandaApiError("raised without a kind"),
+        BitpandaApiError("an HTTP status without one", kind="http_status", path="/portfolio"),
+        BitpandaApiError("a kind without a path", kind="timeout"),
+    ],
+    ids=["no_kind", "no_status", "no_path"],
+)
+async def test_a_failure_that_says_too_little_gets_the_plain_text(hass, error):
+    """Never a text with an empty placeholder, never the English message."""
+    with pytest.raises(UpdateFailed) as excinfo:
+        await _coordinator(hass, _Client(error=error))._async_update_data()
+    assert _translation(excinfo.value) == ("bitpanda", "update_failed", None)
 
 
 # --- A completely empty /portfolio ----------------------------------------------
@@ -264,11 +305,12 @@ async def test_earn_401_starts_reauth():
 
 
 async def test_earn_error_fails_the_update():
-    coordinator = EarnCoordinator(
-        None, None, _EarnClient(error=BitpandaApiError("HTTP 503 from /earn/configs"))
+    error = BitpandaApiError(
+        "HTTP 503 from /earn/configs", kind="http_status", path="/earn/configs", status=503
     )
+    coordinator = EarnCoordinator(None, None, _EarnClient(error=error))
     with pytest.raises(UpdateFailed) as excinfo:
         await coordinator._async_update_data()
     assert _translation(excinfo.value) == (
-        "bitpanda", "update_failed", {"error": "HTTP 503 from /earn/configs"}
+        "bitpanda", "update_failed_http_status", {"path": "/earn/configs", "status": "503"}
     )

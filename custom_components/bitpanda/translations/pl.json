@@ -352,7 +352,22 @@
       "message": "Bitpanda odrzuciła klucz API."
     },
     "update_failed": {
-      "message": "Nie można pobrać danych z platformy Bitpanda: {error}"
+      "message": "Nie można pobrać danych z platformy Bitpanda."
+    },
+    "update_failed_timeout": {
+      "message": "Nie można pobrać danych z platformy Bitpanda: brak odpowiedzi z {path} w wyznaczonym czasie."
+    },
+    "update_failed_connection": {
+      "message": "Nie można pobrać danych z platformy Bitpanda: nie udało się połączyć z {path}."
+    },
+    "update_failed_http_status": {
+      "message": "Nie można pobrać danych z platformy Bitpanda: odpowiedź z {path} ma status HTTP {status}."
+    },
+    "update_failed_unreadable": {
+      "message": "Nie można pobrać danych z platformy Bitpanda: nie udało się odczytać odpowiedzi z {path}."
+    },
+    "update_failed_incomplete_listing": {
+      "message": "Nie można pobrać danych z platformy Bitpanda: lista z {path} jest niekompletna."
     },
     "history_unavailable": {
       "message": "Nie można pobrać historii Portfolio."
@@ -367,7 +382,19 @@
       "message": "Nie można pobrać żadnych cen z platformy Bitpanda."
     },
     "ecb_rates_failed": {
-      "message": "Nie można pobrać kursów walut EBC: {error}"
+      "message": "Nie można pobrać kursów walut EBC."
+    },
+    "ecb_rates_failed_timeout": {
+      "message": "Nie można pobrać kursów walut EBC: EBC nie odpowiedział na czas."
+    },
+    "ecb_rates_failed_connection": {
+      "message": "Nie można pobrać kursów walut EBC: nie udało się połączyć z EBC."
+    },
+    "ecb_rates_failed_http_status": {
+      "message": "Nie można pobrać kursów walut EBC: odpowiedź EBC ma status HTTP {status}."
+    },
+    "ecb_rates_failed_unreadable": {
+      "message": "Nie można pobrać kursów walut EBC: nie udało się odczytać odpowiedzi EBC."
     },
     "nothing_to_refresh": {
       "message": "Nie ma nic do odświeżenia: nie załadowano ani usługi Bitpanda Portfolio, ani usługi Bitpanda Price Tracker."

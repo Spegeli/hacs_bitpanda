@@ -352,7 +352,22 @@
       "message": "Bitpanda a refusé la clé API."
     },
     "update_failed": {
-      "message": "Impossible de récupérer les données de Bitpanda : {error}"
+      "message": "Impossible de récupérer les données de Bitpanda."
+    },
+    "update_failed_timeout": {
+      "message": "Impossible de récupérer les données de Bitpanda : {path} n'a pas répondu à temps."
+    },
+    "update_failed_connection": {
+      "message": "Impossible de récupérer les données de Bitpanda : la connexion pour {path} a échoué."
+    },
+    "update_failed_http_status": {
+      "message": "Impossible de récupérer les données de Bitpanda : {path} a répondu avec le statut HTTP {status}."
+    },
+    "update_failed_unreadable": {
+      "message": "Impossible de récupérer les données de Bitpanda : la réponse de {path} est illisible."
+    },
+    "update_failed_incomplete_listing": {
+      "message": "Impossible de récupérer les données de Bitpanda : la liste renvoyée par {path} est incomplète."
     },
     "history_unavailable": {
       "message": "Impossible de récupérer l'historique du Portfolio."
@@ -367,7 +382,19 @@
       "message": "Aucun prix n'a pu être récupéré auprès de Bitpanda."
     },
     "ecb_rates_failed": {
-      "message": "Impossible de récupérer les taux de change de la BCE : {error}"
+      "message": "Impossible de récupérer les taux de change de la BCE."
+    },
+    "ecb_rates_failed_timeout": {
+      "message": "Impossible de récupérer les taux de change de la BCE : la BCE n'a pas répondu à temps."
+    },
+    "ecb_rates_failed_connection": {
+      "message": "Impossible de récupérer les taux de change de la BCE : la connexion à la BCE a échoué."
+    },
+    "ecb_rates_failed_http_status": {
+      "message": "Impossible de récupérer les taux de change de la BCE : la BCE a répondu avec le statut HTTP {status}."
+    },
+    "ecb_rates_failed_unreadable": {
+      "message": "Impossible de récupérer les taux de change de la BCE : la réponse de la BCE est illisible."
     },
     "nothing_to_refresh": {
       "message": "Il n'y a rien à actualiser : ni Bitpanda Portfolio ni Bitpanda Price Tracker n'est chargé."

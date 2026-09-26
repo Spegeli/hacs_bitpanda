@@ -88,7 +88,13 @@ async def test_rewards_coordinator_raises_config_entry_auth_failed_on_401():
 
 
 async def test_rewards_coordinator_raises_update_failed_on_other_errors():
-    client = _FakeClient(error=BitpandaApiError("simulated outage"))
+    client = _FakeClient(
+        error=BitpandaApiError(
+            "/operations repeated a page cursor; its listing is incomplete",
+            kind="incomplete_listing",
+            path="/operations",
+        )
+    )
     coordinator = RewardsCoordinator(hass=None, entry=None, client=client)
 
     with pytest.raises(UpdateFailed) as excinfo:
@@ -97,7 +103,7 @@ async def test_rewards_coordinator_raises_update_failed_on_other_errors():
         excinfo.value.translation_domain,
         excinfo.value.translation_key,
         excinfo.value.translation_placeholders,
-    ) == ("bitpanda", "update_failed", {"error": "simulated outage"})
+    ) == ("bitpanda", "update_failed_incomplete_listing", {"path": "/operations"})
 
 
 # ---------------------------------------------------------------------------

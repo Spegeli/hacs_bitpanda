@@ -19,7 +19,7 @@ from homeassistant.config_entries import (
     ConfigSubentryFlow,
 )
 from homeassistant.core import callback
-from homeassistant.data_entry_flow import section
+from homeassistant.data_entry_flow import SectionConfig, section
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     SelectSelector,
@@ -498,7 +498,7 @@ _SECTION_CURRENCIES = "currencies"
 _SECTION_LANGUAGE = "language"
 # Both open: a section is the only way a Home Assistant form sets fields
 # apart, not a place to hide them.
-_OPEN = {"collapsed": False}
+_OPEN: SectionConfig = {"collapsed": False}
 
 
 class BitpandaOptionsFlow(config_entries.OptionsFlow):

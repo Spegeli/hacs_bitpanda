@@ -18,7 +18,7 @@
       },
       "currency": {
         "title": "Valuta del Portfolio",
-        "description": "Bitpanda esprime ogni valore del tuo portafoglio in questa valuta. Potrai cambiarla in seguito con Riconfigura.",
+        "description": "Bitpanda esprime ogni valore del tuo portafoglio in questa valuta. Potrai cambiarla in seguito con \"Riconfigura\".",
         "data": {
           "currency": "Valuta"
         }
@@ -65,7 +65,7 @@
       "reconfigure_successful": "La chiave API è stata sostituita.",
       "currency_changed": "La valuta è stata cambiata. I sensori del Portfolio vengono ricreati.",
       "no_changes": "Non è stato modificato nulla.",
-      "no_reconfigure": "Il Price Tracker non ha nulla da riconfigurare. Usa Configura per scegliere le sue valute."
+      "no_reconfigure": "Il Price Tracker non ha nulla da riconfigurare. Usa \"Configura\" per scegliere le sue valute."
     }
   },
   "options": {

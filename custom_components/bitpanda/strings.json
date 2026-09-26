@@ -18,7 +18,7 @@
       },
       "currency": {
         "title": "Portfolio currency",
-        "description": "Bitpanda reports every value of your portfolio in this currency. You can change it later with Reconfigure.",
+        "description": "Bitpanda reports every value of your portfolio in this currency. You can change it later with \"Reconfigure\".",
         "data": {
           "currency": "Currency"
         }
@@ -65,7 +65,7 @@
       "reconfigure_successful": "The API key was replaced.",
       "currency_changed": "The currency was changed. The Portfolio sensors are being recreated.",
       "no_changes": "Nothing was changed.",
-      "no_reconfigure": "The Price Tracker has nothing to reconfigure. Use Configure to choose its currencies."
+      "no_reconfigure": "The Price Tracker has nothing to reconfigure. Use \"Configure\" to choose its currencies."
     }
   },
   "options": {

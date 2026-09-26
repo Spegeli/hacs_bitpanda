@@ -18,14 +18,14 @@
       },
       "currency": {
         "title": "Portfolio-Währung",
-        "description": "Bitpanda meldet alle Werte deines Portfolios in dieser Währung. Du kannst sie später über Neu konfigurieren ändern.",
+        "description": "Bitpanda meldet alle Werte deines Portfolios in dieser Währung. Du kannst sie später über „Neu konfigurieren“ ändern.",
         "data": {
           "currency": "Währung"
         }
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "Jedes verfolgte Asset bekommt immer einen Preis-Sensor in EUR. Wähle zusätzliche Währungen, um pro Asset und Währung einen weiteren Sensor zu erhalten, umgerechnet mit den täglichen Referenzkursen der Europäischen Zentralbank. Assets fügst du danach mit \"Preis-Tracker hinzufügen\" hinzu.",
+        "description": "Jedes verfolgte Asset bekommt immer einen Preis-Sensor in EUR. Wähle zusätzliche Währungen, um pro Asset und Währung einen weiteren Sensor zu erhalten, umgerechnet mit den täglichen Referenzkursen der Europäischen Zentralbank. Assets fügst du danach mit „Preis-Tracker hinzufügen“ hinzu.",
         "data": {
           "extra_currencies": "Zusätzliche Währungen"
         }
@@ -65,7 +65,7 @@
       "reconfigure_successful": "Der API-Schlüssel wurde ersetzt.",
       "currency_changed": "Die Währung wurde geändert. Die Portfolio-Sensoren werden neu angelegt.",
       "no_changes": "Es wurde nichts geändert.",
-      "no_reconfigure": "Beim Price Tracker gibt es nichts neu zu konfigurieren. Seine Währungen wählst du unter Konfigurieren."
+      "no_reconfigure": "Beim Price Tracker gibt es nichts neu zu konfigurieren. Seine Währungen wählst du unter „Konfigurieren“."
     }
   },
   "options": {

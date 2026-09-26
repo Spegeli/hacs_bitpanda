@@ -18,7 +18,7 @@
       },
       "currency": {
         "title": "Portfolio-valuta",
-        "description": "Bitpanda geeft alle waarden van je portfolio in deze valuta weer. Je kunt de valuta later wijzigen door de dienst opnieuw te configureren.",
+        "description": "Bitpanda geeft alle waarden van je portfolio in deze valuta weer. Je kunt de valuta later wijzigen met \"Herconfigureer\".",
         "data": {
           "currency": "Valuta"
         }
@@ -38,7 +38,7 @@
         }
       },
       "reconfigure": {
-        "title": "Bitpanda Portfolio opnieuw configureren",
+        "title": "Bitpanda Portfolio herconfigureren",
         "description": "Plak een nieuwe sleutel van [{api_key_url}]({api_key_url}) om de opgeslagen API-sleutel te vervangen; hij heeft Guthaben (Balance), Transaktion (Transaction) en Earn (Read) nodig. Laat het veld leeg om de huidige sleutel te behouden. Als je de valuta wijzigt, worden alle Portfolio-sensoren met hun geschiedenis verwijderd; dat bevestig je in de volgende stap.",
         "data": {
           "api_key": "Nieuwe API-sleutel",
@@ -65,7 +65,7 @@
       "reconfigure_successful": "De API-sleutel is vervangen.",
       "currency_changed": "De valuta is gewijzigd. De Portfolio-sensoren worden opnieuw aangemaakt.",
       "no_changes": "Er is niets gewijzigd.",
-      "no_reconfigure": "Bij de Price Tracker valt niets opnieuw te configureren. Kies de valuta via Configureren."
+      "no_reconfigure": "Bij de Price Tracker valt niets te herconfigureren. Kies de valuta via \"Configureren\"."
     }
   },
   "options": {

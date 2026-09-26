@@ -106,6 +106,8 @@ What every language keeps exactly as English has it:
 - Markdown link targets (`[{api_key_url}]({api_key_url})`), product names (Bitpanda, Bitpanda Portfolio, Bitpanda Price Tracker, Cash Plus, Earn) and currency codes.
 - Bitpanda's permission names, `Guthaben (Balance)`, `Transaktion (Transaction)` and `Earn (Read)`, as Bitpanda's key page shows them (German uses the German names alone).
 
+A text that sends the user to one of Home Assistant's menu items names it in quotation marks, exactly as Home Assistant's frontend labels it in that language (`ui.panel.config.integrations.config_entry.*`) — for example "Reconfigure" / „Neu konfigurieren“ / « Reconfigurer » / "Herconfigureer" / "Riconfigura" / "Reconfigurar" / „Rekonfiguracja”, and "Configure" / „Konfigurieren“ / « Configurer » / "Configureren" / "Configura" / "Configurar" / „Konfiguruj”.
+
 Group titles (`selector.asset_group`) must differ from one another within a language. A group still titled a shipped default is retitled to Home Assistant's language at every start; a group whose title is no longer any language's default counts as renamed by the user, so changing a title leaves groups created under the old one alone. Attribute labels (`entity.sensor.*.state_attributes`) carry a group prefix — `Asset:`, `Balance:`, `Rewards:`, `24 h:`, `Conversion:` in English — because Home Assistant sorts them alphabetically: keep the prefix identical within a group so related labels stay together.
 
 Write the files as UTF-8 without a BOM, formatted like the others (`json.dumps(..., indent=2, ensure_ascii=False)`).
@@ -122,13 +124,14 @@ These tests guard the files (`tests/test_strings.py` unless noted):
 | `test_every_link_keeps_its_english_target` | unchanged Markdown link targets |
 | `test_no_language_is_an_untranslated_copy_of_english` | no sentence left in English, and most strings translated |
 | `test_every_language_titles_each_group_differently` | distinct group titles |
+| `test_menu_items_are_named_with_home_assistants_own_labels` | "Reconfigure" and "Configure" named by Home Assistant's own label, quoted (`_MENU_LABELS`) |
 | `test_every_published_attribute_has_a_translated_label` | every attribute a sensor publishes has a label |
 | `tests/test_migration.py::test_every_text_of_the_migration_has_a_template` | every text of the upgrade notification has a template |
 | `tests/test_groups.py::test_known_group_titles_are_read_from_every_shipped_language` | each language's group titles count as shipped defaults |
 
 CI's hassfest run validates `strings.json` and `translations/en.json` as well.
 
-To add a language, copy `translations/en.json` to `translations/<code>.json` and translate the values, following Home Assistant's own wording in that language for its UI (device, entity, integration, Configure, Submit). Add the code to `test_the_shipped_languages`, its group titles to `test_known_group_titles_are_read_from_every_shipped_language`, and the language to the list in the README. Keep option labels short; the currency names under `selector.currency` include their code in brackets.
+To add a language, copy `translations/en.json` to `translations/<code>.json` and translate the values, following Home Assistant's own wording in that language for its UI (device, entity, integration, Configure, Submit). Add the code to `test_the_shipped_languages`, its menu labels to `_MENU_LABELS` in `tests/test_strings.py`, its group titles to `test_known_group_titles_are_read_from_every_shipped_language`, and the language to the list in the README. Keep option labels short; the currency names under `selector.currency` include their code in brackets.
 
 ## Code style
 

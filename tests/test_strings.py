@@ -124,6 +124,37 @@ def test_no_language_is_an_untranslated_copy_of_english():
         assert len(same) * 5 <= len(texts), (language, same)
 
 
+# Home Assistant's own labels for the menu items of an integration entry, per
+# language: (Reconfigure, Configure) -- the frontend's translations of
+# ui.panel.config.integrations.config_entry.reconfigure / .configure, as
+# bundled with Home Assistant 2026.9.
+_MENU_LABELS = {
+    "de": ("Neu konfigurieren", "Konfigurieren"),
+    "en": ("Reconfigure", "Configure"),
+    "es": ("Reconfigurar", "Configurar"),
+    "fr": ("Reconfigurer", "Configurer"),
+    "it": ("Riconfigura", "Configura"),
+    "nl": ("Herconfigureer", "Configureren"),
+    "pl": ("Rekonfiguracja", "Konfiguruj"),
+}
+
+
+def _quoted(label: str) -> re.Pattern:
+    """`label` in quotation marks: "…", „…“ or „…”, or « … » with no-break
+    spaces."""
+    return re.compile(rf"[\"„«]\s?{re.escape(label)}\s?[\"“”»]")
+
+
+def test_menu_items_are_named_with_home_assistants_own_labels():
+    """Where a text sends the user to a menu item of the integration entry,
+    it names the item exactly as the frontend labels it in that language."""
+    assert sorted(_MENU_LABELS) == _LANGUAGES
+    for language, (reconfigure, configure) in _MENU_LABELS.items():
+        config = _load(f"translations/{language}.json")["config"]
+        assert _quoted(reconfigure).search(config["step"]["currency"]["description"]), language
+        assert _quoted(configure).search(config["abort"]["no_reconfigure"]), language
+
+
 def test_every_language_titles_each_group_differently():
     """Groups are told apart by their titles; a title is also how a group is
     recognised as a shipped default when it is retitled (groups.py)."""

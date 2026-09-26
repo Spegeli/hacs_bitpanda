@@ -1,8 +1,9 @@
 """Tests for v1 to v3 config entry migration."""
+import ast
 import json
 import logging
 from pathlib import Path
-import re
+import string
 from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
@@ -825,18 +826,73 @@ async def test_a_language_without_translations_gets_the_english_notification(
     assert _migration_warnings(caplog) == [_message(notify)]
 
 
+_INTEGRATION = Path(migration.__file__).parent
+
+
+def _messages_in_migration() -> list[tuple[str, frozenset[str]]]:
+    """Every Message migration.py builds, read from its source: the
+    template key and the names of the placeholders the code fills."""
+    tree = ast.parse(Path(migration.__file__).read_text(encoding="utf-8"))
+    found: list[tuple[str, frozenset[str]]] = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "Message"):
+            continue
+        key = node.args[0]
+        assert isinstance(key, ast.Constant) and isinstance(key.value, str), ast.dump(node)
+        filled = [*node.args[1:], *(kw.value for kw in node.keywords if kw.arg == "placeholders")]
+        names: set[str] = set()
+        for placeholders in filled:
+            assert isinstance(placeholders, ast.Dict), ast.dump(node)
+            names |= {name.value for name in placeholders.keys}
+        found.append((key.value, frozenset(names)))
+    return found
+
+
+def _placeholders(template: str) -> frozenset[str]:
+    return frozenset(
+        field for _, field, _, _ in string.Formatter().parse(template) if field is not None
+    )
+
+
+def _exception_templates(name: str) -> dict[str, str]:
+    """The `exceptions` texts of one strings file, keyed the way
+    async_get_translations returns them."""
+    exceptions = json.loads((_INTEGRATION / name).read_text(encoding="utf-8"))["exceptions"]
+    return {
+        f"component.{DOMAIN}.exceptions.{key}.message": value["message"]
+        for key, value in exceptions.items()
+    }
+
+
 def test_every_text_of_the_migration_has_a_template():
     """A text without a template would show as its bare key: every key
     migration.py names must exist under `exceptions` in strings.json -- and
     every migration template there must still be in use."""
-    source = Path(migration.__file__).read_text(encoding="utf-8")
-    used = set(re.findall(r'"(migration_[a-z_]+)"', source))
-    strings = json.loads(
-        (Path(migration.__file__).parent / "strings.json").read_text(encoding="utf-8")
-    )
+    used = {key for key, _ in _messages_in_migration()}
+    strings = json.loads((_INTEGRATION / "strings.json").read_text(encoding="utf-8"))
     templates = {key for key in strings["exceptions"] if key.startswith("migration_")}
     assert used
     assert used == templates
+
+
+def test_every_text_of_the_migration_renders_in_every_language():
+    """The notification is written after the entry is already saved as
+    version 3, so a template must never fail there: in every shipped
+    language, each text migration.py builds has a template with exactly the
+    placeholders the code fills, and renders with them. Read from the files
+    themselves -- Home Assistant would replace a mismatched translation with
+    English, hiding it."""
+    messages = _messages_in_migration()
+    languages = sorted(path.stem for path in (_INTEGRATION / "translations").glob("*.json"))
+    assert messages
+    assert len(languages) == 7
+    for language in languages:
+        templates = _exception_templates(f"translations/{language}.json")
+        for key, names in messages:
+            template = templates[f"component.{DOMAIN}.exceptions.{key}.message"]
+            assert _placeholders(template) == names, (language, key)
+            text = migration.Message(key, {name: f"<{name}>" for name in names}).render(templates)
+            assert all(f"<{name}>" in text for name in names), (language, key)
 
 
 async def test_an_interrupted_migration_can_run_again(hass, legacy_api, no_setup, notify):

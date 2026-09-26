@@ -127,6 +127,7 @@ These tests guard the files (`tests/test_strings.py` unless noted):
 | `test_menu_items_are_named_with_home_assistants_own_labels` | "Reconfigure" and "Configure" named by Home Assistant's own label, quoted (`_MENU_LABELS`) |
 | `test_every_published_attribute_has_a_translated_label` | every attribute a sensor publishes has a label |
 | `tests/test_migration.py::test_every_text_of_the_migration_has_a_template` | every text of the upgrade notification has a template |
+| `tests/test_migration.py::test_every_text_of_the_migration_renders_in_every_language` | each of those templates has exactly the placeholders the code fills, in every language |
 | `tests/test_groups.py::test_known_group_titles_are_read_from_every_shipped_language` | each language's group titles count as shipped defaults |
 
 CI's hassfest run validates `strings.json` and `translations/en.json` as well.

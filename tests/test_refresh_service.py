@@ -6,6 +6,7 @@ self-imposed budget, so the cooldown follows it and never drops below 10 s.
 The clock is the module's own `monotonic` name, patched there alone.
 """
 from datetime import timedelta
+import json
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -104,28 +105,35 @@ async def test_first_refresh_is_accepted_right_after_boot(hass):
     assert tickers.async_request_refresh.await_count == 1
 
 
-_SERVICES_YAML = Path(__file__).parent.parent / "custom_components" / "bitpanda" / "services.yaml"
+_BITPANDA_DIR = Path(__file__).parent.parent / "custom_components" / "bitpanda"
+_SERVICES_YAML = _BITPANDA_DIR / "services.yaml"
+# Discovered from disk, the way the integration itself finds its shipped
+# languages (groups._shipped_languages): a new one is covered as soon as it
+# exists, with no change to this test.
+_LANGUAGES = sorted(path.stem for path in (_BITPANDA_DIR / "translations").glob("*.json"))
 
 
 async def test_the_refresh_service_is_named_and_described_in_every_language(hass):
     """Name and description are translations (`services.refresh`): the
     frontend shows them in the user's language -- Home Assistant 2025.5 also
     copies the English ones into its service descriptions, later versions
-    leave that to the frontend. services.yaml only declares the service."""
+    leave that to the frontend. services.yaml only declares the service.
+
+    Looped over every shipped language rather than a couple hardcoded ones,
+    each checked against its own translations file -- the source of truth
+    for what it should say, guarded for content by tests/test_strings.py."""
     _register(hass, timedelta(seconds=60))
     assert (await async_get_all_descriptions(hass))[DOMAIN]["refresh"]["fields"] == {}
-    name, description = (
+    name_key, description_key = (
         f"component.{DOMAIN}.services.refresh.name",
         f"component.{DOMAIN}.services.refresh.description",
     )
-    english = await async_get_translations(hass, "en", "services", {DOMAIN})
-    assert (english[name], english[description]) == (
-        "Refresh",
-        "Manually trigger an immediate refresh of all Bitpanda price and wallet data.",
-    )
-    german = await async_get_translations(hass, "de", "services", {DOMAIN})
-    assert (german[name], german[description]) == (
-        "Aktualisieren",
-        "Aktualisiert sofort alle Preis- und Wallet-Daten von Bitpanda.",
-    )
+    for language in _LANGUAGES:
+        raw = json.loads(
+            (_BITPANDA_DIR / "translations" / f"{language}.json").read_text(encoding="utf-8")
+        )["services"]["refresh"]
+        translations = await async_get_translations(hass, language, "services", {DOMAIN})
+        assert (translations[name_key], translations[description_key]) == (
+            raw["name"], raw["description"]
+        )
     assert yaml.safe_load(_SERVICES_YAML.read_text(encoding="utf-8")) == {"refresh": None}

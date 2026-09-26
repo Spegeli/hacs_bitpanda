@@ -26,7 +26,7 @@ Wallet value bugs are easy to miss — state the numbers you verified.
 - [ ] Tested on a real Home Assistant instance
 - [ ] `hassfest` and HACS validation pass (CI runs both)
 - [ ] No API key or other secret is logged, committed or included in diagnostics
-- [ ] Translations updated and in sync: `strings.json`, `translations/en.json`, `translations/de.json`
+- [ ] Translations updated and in sync: `strings.json` and all seven `translations/*.json` (`en`, `de`, `fr`, `nl`, `it`, `es`, `pl`)
 - [ ] README updated if user-facing behavior changed
 
 <!--

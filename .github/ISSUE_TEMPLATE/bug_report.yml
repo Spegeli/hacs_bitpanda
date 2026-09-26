@@ -128,4 +128,4 @@ body:
       value: |
         > [!WARNING]
         > **Never paste your Bitpanda API key.** Diagnostics redact it for you, but raw logs or screenshots may not.
-        > If you posted a key by accident, revoke it immediately at https://web.bitpanda.com/apikey.
+        > If you posted a key by accident, revoke it immediately at https://app.bitpanda.com/my-account/apikey.

@@ -48,6 +48,11 @@ The integration offers two services. Set up either or both — each one once.
 - While neither service is loaded — for example while its setup is being retried — a call fails with an error saying there is nothing to refresh
 - ⚠️ A failed call stops a script or automation at that step, unless the step sets `continue_on_error: true`
 
+### Long-term statistics
+- Every value sensor keeps long-term statistics: the Portfolio's figures, returns and wallets, and every price. They start with this version; the time before it has none
+- Show them over weeks or months with a **Statistics graph** card: under **Show stat types**, choose *State* for a money value, and *Mean*, *Min* or *Max* for a return
+- Changing the Portfolio currency deletes the Portfolio sensors' statistics along with their history — they were recorded in the old currency
+
 ### Supported Assets
 | Type | Examples | Assets | Price Tracker | Portfolio |
 |------|----------|:------:|:---:|:---:|
@@ -145,7 +150,7 @@ The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stock
 
 - When Bitpanda rejects the stored key — it expired, was revoked, or lacks a scope — Home Assistant asks for a new one (**New Bitpanda API key needed**). Paste it there; every sensor is kept.
 - **⋮ → Reconfigure** on the Portfolio entry replaces the key at any time (leave the key field empty to keep the current one) and changes the currency.
-- ⚠️ **Changing the currency deletes all Portfolio sensors including their history** and recreates them in the new currency, under the entity IDs the integration gives them; IDs you renamed are restored only on newer Home Assistant versions. You are asked to confirm first.
+- ⚠️ **Changing the currency deletes all Portfolio sensors including their history and long-term statistics** and recreates them in the new currency, under the entity IDs the integration gives them; IDs you renamed are restored only on newer Home Assistant versions. You are asked to confirm first.
 
 ### Entity IDs
 
@@ -202,6 +207,7 @@ If you set up a **Bitpanda Portfolio** beside the old entry before upgrading, th
 - **Portfolio Total value now covers your whole account** — every holding plus all fiat. It used to add up only the wallets you tracked, so its value steps up at the upgrade: check automations that compare it against a threshold.
 - **The fiat wallet in your currency becomes Portfolio Cash**, which sums all your fiat balances. Other fiat wallets are left as `unavailable` entities you can delete.
 - **Prices in other currencies are converted with ECB daily rates** instead of being quoted by Bitpanda.
+- **Long-term statistics.** Every value sensor now keeps them, from the upgrade on (see [Long-term statistics](#long-term-statistics)).
 - **Attributes:** units are now `units` on each sensor (the Wallet's `units` are the unstaked units its old `balance` showed); the APR is `apr_percent` on the Staking sensor; the position performance is on the Total sensor. `breakdown`, `wallet_count`, `all_prices` and the wallet `price` attribute are gone. The price sensor's `conversion` attribute now carries the status `no_rate` (not a sentence) while no exchange rate is loaded.
 
 ---
@@ -213,7 +219,7 @@ If you set up a **Bitpanda Portfolio** beside the old entry before upgrading, th
 3. Restart Home Assistant.
 4. Optional: delete the API key on [Bitpanda's key page](https://app.bitpanda.com/my-account/apikey) if nothing else uses it.
 
-The recorded history of the removed sensors stays in Home Assistant's database until the recorder purges it — after 10 days by default (the recorder's `purge_keep_days`).
+The recorded history of the removed sensors stays in Home Assistant's database until the recorder purges it — after 10 days by default (the recorder's `purge_keep_days`). Their long-term statistics are not purged; delete them in the **Statistics** tab of the developer tools if you no longer want them.
 
 ---
 
@@ -259,7 +265,7 @@ Crypto, stocks, ETFs, ETCs, Bitpanda Crypto Indices and tokenized precious metal
 Yes. The Price Tracker always gives EUR and adds one sensor per extra currency you choose under **Configure**.
 
 **How do I change the Portfolio currency?**  
-**⋮ → Reconfigure** on the Bitpanda Portfolio entry. This deletes all Portfolio sensors including their history, because every recorded value was in the old currency; they come back under the entity IDs the integration gives them, and IDs you renamed are restored only on newer Home Assistant versions.
+**⋮ → Reconfigure** on the Bitpanda Portfolio entry. This deletes all Portfolio sensors including their history and long-term statistics, because every recorded value was in the old currency; they come back under the entity IDs the integration gives them, and IDs you renamed are restored only on newer Home Assistant versions.
 
 **Where do the non-EUR prices come from?**  
 Bitpanda's price endpoint only answers in EUR. The Price Tracker converts with the ECB's daily reference rates, published once per working day around 16:00 CET; at weekends and on holidays the last rate stays in use. The `rate_date` attribute shows which day's rate a price uses.

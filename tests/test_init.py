@@ -6,6 +6,11 @@ from types import MappingProxyType
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from homeassistant.components.sensor import (
+    DEVICE_CLASS_STATE_CLASSES,
+    SensorDeviceClass,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentry, ConfigSubentryData
 from homeassistant.exceptions import (
     ConfigEntryNotReady,
@@ -184,6 +189,36 @@ async def test_no_sensor_state_carries_an_icon(hass, portfolio_api, price_api):
     states = hass.states.async_all("sensor")
     assert len(states) >= 10
     assert [state.entity_id for state in states if "icon" in state.attributes] == []
+
+
+async def test_every_sensor_keeps_long_term_statistics(hass, portfolio_api, price_api, caplog):
+    """Every value sensor sets a state class: money `total` -- the only one
+    Home Assistant allows for the monetary device class -- and the returns
+    (%) `measurement`. Home Assistant accepts each: no warning about an
+    impossible state class."""
+    portfolio = _portfolio_entry(hass)
+    _price_entry(hass, ["USD"], price_group("crypto", BTC))
+    # The first setup of the domain sets up both entries.
+    await _setup(hass, portfolio)
+    classes = {
+        state.entity_id: (
+            state.attributes.get("device_class"),
+            state.attributes.get("state_class"),
+            state.attributes.get("unit_of_measurement"),
+        )
+        for state in hass.states.async_all("sensor")
+    }
+    # Eight Portfolio figures, the staked VSN's three sensors, BTC in EUR and USD.
+    assert len(classes) == 13
+    for entity_id, (device_class, state_class, unit) in classes.items():
+        if device_class == SensorDeviceClass.MONETARY:
+            assert state_class == SensorStateClass.TOTAL, entity_id
+            assert state_class in DEVICE_CLASS_STATE_CLASSES[SensorDeviceClass.MONETARY]
+        else:
+            assert (device_class, state_class, unit) == (
+                None, SensorStateClass.MEASUREMENT, "%"
+            ), entity_id
+    assert "impossible considering device class" not in caplog.text
 
 
 async def test_every_portfolio_figure_is_one_the_currency_purge_knows(hass, portfolio_api):

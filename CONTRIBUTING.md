@@ -84,6 +84,8 @@ The wallet lifecycle manager (`PortfolioEntityManager`) runs after every portfol
 
 **Entity IDs are set explicitly.** Every entity sets its own `entity_id` from `naming.py`, in English. Never let one derive from a translated name.
 
+**Every value sensor keeps long-term statistics.** Money values set `state_class` `total` — the only state class Home Assistant allows for the monetary device class — and the returns `measurement`; a new sensor needs one too. Statistics are recorded in the sensor's unit, so a sensor whose currency can change must have its statistics cleared with its history: the currency purge (`purge.py`) does that for every Portfolio sensor, and `tests/test_currency_change.py` checks it with a real recorder.
+
 **Home Assistant 2025.5 is the floor** (`hacs.json`), and only APIs that exist there may be used. It is set by the recorder: only from 2025.5 on does it move an entity's history along with an entity-ID rename made while Home Assistant starts, which is when the version 1 migration renames. The device registry's per-entry lookups (`async_get_device_by_identifier` and its siblings) do not exist at the floor, and `async_get_device` is deprecated — find a device through `devices.find_entry_device`.
 
 **A device never moves between groups.** A wallet stays in the wallet group it sits in, even when Bitpanda files its asset under another type later: moving a device to another config subentry lists it in both on Home Assistant 2025.5, 2026.9 warns about it and 2027.8 will refuse it. What a group holds is read from the entity registry (`groups.entities_by_group`), never from the device registry's `config_entries_subentries`, a deprecated compatibility property from 2026.9 on.

@@ -1,4 +1,5 @@
 """Tests for the Price Tracker sensors."""
+from homeassistant.components.sensor import SensorStateClass
 from homeassistant.config_entries import ConfigSubentryData
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -43,6 +44,8 @@ def test_ids_names_and_device():
     assert sensor.translation_key == "price"
     assert sensor.has_entity_name is True
     assert sensor.native_unit_of_measurement == "USD"
+    # Long-term statistics: Home Assistant allows only `total` for money.
+    assert (sensor.device_class, sensor.state_class) == ("monetary", SensorStateClass.TOTAL)
     info = price_device_info("eid", BTC)
     assert info["name"] == "Bitcoin (BTC)"
     assert info["identifiers"] == {("bitpanda", f"eid_price_{BTC['id']}")}

@@ -2,13 +2,22 @@
 
 Every value is in the Portfolio currency, as Bitpanda reports it. Units of an
 asset are attributes, never states.
+
+Every sensor keeps long-term statistics: the money values as `total`, the
+only state class Home Assistant allows for the monetary device class, the
+returns as `measurement`. They are recorded in the Portfolio currency, so a
+currency change clears them with the sensors' history (purge.py).
 """
 from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant, callback
@@ -90,6 +99,7 @@ class _PortfolioFigure(CoordinatorEntity, SensorEntity):
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_suggested_display_precision = 2
     _key: str
     _attr_translation_key: str
@@ -159,6 +169,7 @@ class PortfolioReturnSensor(CoordinatorEntity, SensorEntity):
 
     _attr_has_entity_name = True
     _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 2
 
     def __init__(self, coordinator, entry_id: str, timeframe: str) -> None:
@@ -201,6 +212,7 @@ class _WalletPart(CoordinatorEntity, SensorEntity):
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_suggested_display_precision = 2
 
     def __init__(self, coordinator, entry_id: str, currency: str, asset: dict) -> None:

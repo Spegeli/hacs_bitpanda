@@ -1,7 +1,9 @@
 """Sensors of the Price Tracker: one per tracked asset and currency.
 
 EUR comes straight from Bitpanda's ticker. Every other currency is the EUR
-price times the ECB reference rate of that currency.
+price times the ECB reference rate of that currency. Every sensor keeps
+long-term statistics as `total`, the only state class Home Assistant allows
+for the monetary device class; each sensor's currency never changes.
 """
 from __future__ import annotations
 
@@ -10,7 +12,11 @@ from datetime import timedelta
 import logging
 from typing import Any
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
@@ -89,6 +95,7 @@ class PriceSensor(CoordinatorEntity, SensorEntity):
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_translation_key = "price"
 
     def __init__(self, tickers, ecb, entry_id: str, asset: dict, currency: str) -> None:

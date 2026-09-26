@@ -1,4 +1,6 @@
 """Tests for the Portfolio service's sensor entities."""
+from homeassistant.components.sensor import SensorStateClass
+
 from custom_components.bitpanda.portfolio_model import (
     EarnData,
     Holding,
@@ -188,6 +190,33 @@ def test_return_sensors_read_their_timeframe():
     assert six_months.native_unit_of_measurement == "%"
     assert six_months.native_value == -3.5
     assert week.available is False
+
+
+# --- Long-term statistics ---------------------------------------------------------------
+
+
+def test_every_money_value_keeps_long_term_statistics_as_a_total():
+    """Home Assistant allows only `total` for the monetary device class."""
+    portfolio = _portfolio(**{VSN["id"]: _vsn()})
+    earn = _Coordinator(EarnData(apr={}, offered=frozenset()))
+    sensors = [
+        PortfolioTotalSensor(portfolio, "eid", "EUR"),
+        PortfolioCashSensor(portfolio, "eid", "EUR"),
+        PortfolioCashPlusSensor(portfolio, "eid", "EUR"),
+        WalletSensor(portfolio, "eid", "EUR", VSN, lambda _: True),
+        StakingSensor(portfolio, earn, _Coordinator(None), "eid", "EUR", VSN),
+        WalletTotalSensor(portfolio, "eid", "EUR", VSN),
+    ]
+    for sensor in sensors:
+        assert (sensor.device_class, sensor.state_class) == ("monetary", SensorStateClass.TOTAL), (
+            type(sensor).__name__
+        )
+
+
+def test_every_return_keeps_long_term_statistics_as_a_measurement():
+    for timeframe in ("DAY", "WEEK", "MONTH", "SIX_MONTH", "YEAR"):
+        sensor = PortfolioReturnSensor(_Coordinator({}), "eid", timeframe)
+        assert (sensor.device_class, sensor.state_class) == (None, SensorStateClass.MEASUREMENT)
 
 
 # --- Wallet device ------------------------------------------------------------------

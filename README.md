@@ -19,7 +19,7 @@ A custom <a href="https://www.home-assistant.io/">Home Assistant</a> integration
 The integration offers two services. Set up either or both — each one once.
 
 ### Bitpanda Portfolio
-- Tracks every holding in your account automatically — there is no list to maintain. A holding you buy appears at the next refresh; one you sell is removed after three refreshes without it (about 15 minutes). If Bitpanda suddenly reports a completely empty portfolio, the Portfolio's sensors show `unavailable` and nothing is removed until three empty answers in a row (about 10 minutes) confirm it, so a glitch never reads as a sale of everything
+- Tracks every holding in your account automatically — there is no list to maintain. A holding you buy appears at the next refresh; one you sell is removed after three refreshes without it (about 15 minutes). If Bitpanda suddenly reports a completely empty portfolio — also right after a restart, while wallets exist — the Portfolio's sensors show `unavailable` and nothing is removed: the empty answer is not taken for a sale until three empty answers in a row (about 10 minutes) confirm it
 - Every value in your Portfolio currency, as Bitpanda reports it
 - A **Portfolio** device: **Total value** (every holding, Cash Plus included, plus all fiat), **Cash** (all fiat balances, including funds reserved by a pending order), **Cash Plus**, and your **return** over a day, a week, a month, six months and a year
 - **Cash Plus** is the value of all your Cash Plus holdings in the Portfolio currency. Its attributes show each held product's own amount in its own currency — for example `eur: 250.75` while the Portfolio itself is shown in USD
@@ -207,6 +207,7 @@ This release moves to Bitpanda's new Public API and splits the integration into 
 | Dialogs show raw text | Reload the browser tab (`Ctrl+F5` / `Cmd+Shift+R`) — your browser cached old translations |
 | A wallet sensor is `unavailable` | The asset is no longer in your portfolio; the wallet is removed after about 15 minutes, or at once with **⋮ → Delete** on its device page |
 | Portfolio Total value, Cash or Cash Plus is `unavailable` | Bitpanda sent an entry the integration could not read; rather than show a figure that silently leaves it out, the sensor shows none until the entry reads correctly again. Enable debug logging to see which one. |
+| Every Portfolio sensor is `unavailable` | Bitpanda reported an empty portfolio; it counts only once three answers in a row confirm it (about 10 minutes) |
 | No Staking sensor for an asset | It appears once something is staked or Bitpanda offers an Earn product for the asset |
 | A price in another currency has no value and a `conversion` attribute | The ECB rates could not be loaded since Home Assistant started; the integration retries every 15 minutes and the value appears with the first success |
 | One asset's price sensors are `unavailable` | Bitpanda returned no price for it; see the warning in the log |

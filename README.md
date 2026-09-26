@@ -22,7 +22,7 @@ The integration offers two services. Set up either or both — each one once.
 - Tracks every holding in your account automatically — there is no list to maintain. A holding you buy appears at the next refresh; one you sell is removed after three refreshes without it (about 15 minutes). If Bitpanda suddenly reports a completely empty portfolio, the Portfolio's sensors show `unavailable` and nothing is removed until three empty answers in a row (about 10 minutes) confirm it, so a glitch never reads as a sale of everything
 - Every value in your Portfolio currency, as Bitpanda reports it
 - A **Portfolio** device: **Total value** (every holding, Cash Plus included, plus all fiat), **Cash** (all fiat balances, including funds reserved by a pending order), **Cash Plus**, and your **return** over a day, a week, a month, six months and a year
-- **Cash Plus** is the value of all your Cash Plus holdings in the Portfolio currency. Its attributes show each held product's own amount in its own currency — for example `eur: 100.00` while the Portfolio itself is shown in USD
+- **Cash Plus** is the value of all your Cash Plus holdings in the Portfolio currency. Its attributes show each held product's own amount in its own currency — for example `eur: 250.75` while the Portfolio itself is shown in USD
 - One device per held asset, such as **Vision (VSN) Wallet**:
   - **Wallet** — the value of the units you can trade (not staked)
   - **Staking** — the value of the staked units, with APR and lifetime rewards

@@ -28,7 +28,7 @@ The integration offers two services. Set up either or both — each one once.
   - **Staking** — the value of the staked units, with APR and lifetime rewards
   - **Total** — the whole position, with invested amount, average buy price and total return
   - Staking and Total appear as soon as something is staked or Bitpanda offers an Earn product for the asset, and stay while either is true
-- The wallets appear in groups by asset type, such as Cryptocurrencies or Precious metals, named in the language Home Assistant runs in (see [Languages](#languages)). The Portfolio device stays outside the groups (newer Home Assistant versions list it above them). Groups come and go with your holdings — there is nothing to add. Deleting a group (**⋮ → Delete**) only hides it until the next refresh while you still hold those assets: the group and its wallets come back, under the entity IDs the integration gives them; IDs you renamed yourself, and other customisations, survive only on newer Home Assistant versions
+- The wallets appear in groups by asset type, such as Cryptocurrencies or Precious metals, named in Home Assistant's system language (see [Languages](#languages)). The Portfolio device stays outside the groups (newer Home Assistant versions list it above them). Groups come and go with your holdings — there is nothing to add. Deleting a group (**⋮ → Delete**) only hides it until the next refresh while you still hold those assets: the group and its wallets come back, under the entity IDs the integration gives them; IDs you renamed yourself, and other customisations, survive only on newer Home Assistant versions
 - The wallet of an asset you no longer hold can be deleted from its device page (**⋮ → Delete**) instead of waiting for it to go. The Portfolio device and the wallets of assets you hold cannot be deleted: they would come straight back, and the dialog explains why
 - Updates every 5 minutes; Earn products every 24 hours; rewards every hour
 
@@ -125,7 +125,7 @@ Bitpanda API keys expire after **one year** — see [Changing the key or the cur
 
 ### 3. Track prices
 
-The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stocks, ETFs, ETCs, Crypto indices, Precious metals — titled in the language Home Assistant runs in (see [Languages](#languages)), with one device per asset inside.
+The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stocks, ETFs, ETCs, Crypto indices, Precious metals — titled in Home Assistant's system language (see [Languages](#languages)), with one device per asset inside.
 
 1. On the **Bitpanda Price Tracker** entry, click **Add price tracker** (older versions: **⋮ → Add price tracker**)
    - ⚠️ On versions up to 2026.9 that show an **Add price tracker** button at the top of the integration page, it opens a dialog listing both Bitpanda entries instead, and picking **Bitpanda Portfolio** there fails. Pick **Bitpanda Price Tracker** in that dialog, or avoid it entirely with the **Bitpanda Price Tracker** row's own **⋮ → Add price tracker**, which opens the asset types directly. Fixed in the frontend's development branch, due in a later release.

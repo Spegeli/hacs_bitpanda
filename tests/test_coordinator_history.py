@@ -12,6 +12,7 @@ from custom_components.bitpanda.portfolio_coordinator import (
     HistoryCoordinator,
     collect_returns,
 )
+from custom_components.bitpanda.portfolio_model import PortfolioReturns
 
 
 async def test_collect_returns_one_entry_per_timeframe():
@@ -25,11 +26,14 @@ async def test_collect_returns_one_entry_per_timeframe():
         async with mocker.create_session(asyncio.get_running_loop()) as session:
             client = BitpandaApiClient("key", session)
             result = await collect_returns(client, None)
-    assert result == {tf: float(i) for i, tf in enumerate(PORTFOLIO_TIMEFRAMES)}
+    assert result == PortfolioReturns(
+        values={tf: float(i) for i, tf in enumerate(PORTFOLIO_TIMEFRAMES)}, failed=frozenset()
+    )
 
 
 async def test_collect_returns_skips_a_failing_timeframe():
-    """One bad window must not lose the other four."""
+    """One bad window must not lose the other four -- and is told apart from
+    a timeframe answered without a figure: its own request failed."""
     with mock_aiohttp_client() as mocker:
         for timeframe in PORTFOLIO_TIMEFRAMES:
             if timeframe == "YEAR":
@@ -45,8 +49,9 @@ async def test_collect_returns_skips_a_failing_timeframe():
         async with mocker.create_session(asyncio.get_running_loop()) as session:
             client = BitpandaApiClient("key", session)
             result = await collect_returns(client, None)
-    assert "YEAR" not in result
-    assert len(result) == len(PORTFOLIO_TIMEFRAMES) - 1
+    assert "YEAR" not in result.values
+    assert len(result.values) == len(PORTFOLIO_TIMEFRAMES) - 1
+    assert result.failed == {"YEAR"}
 
 
 async def test_collect_returns_raises_when_every_timeframe_fails():
@@ -78,8 +83,10 @@ async def test_collect_returns_drops_a_boolean_percentage():
         async with mocker.create_session(asyncio.get_running_loop()) as session:
             client = BitpandaApiClient("key", session)
             result = await collect_returns(client, None)
-    assert "DAY" not in result
-    assert len(result) == len(PORTFOLIO_TIMEFRAMES) - 1
+    assert "DAY" not in result.values
+    assert len(result.values) == len(PORTFOLIO_TIMEFRAMES) - 1
+    # Answered, just without a usable figure: not a failed request.
+    assert result.failed == frozenset()
 
 
 async def test_collect_returns_parses_a_numeric_string_percentage():
@@ -101,7 +108,7 @@ async def test_collect_returns_parses_a_numeric_string_percentage():
         async with mocker.create_session(asyncio.get_running_loop()) as session:
             client = BitpandaApiClient("key", session)
             result = await collect_returns(client, None)
-    assert result == {
+    assert result.values == {
         "DAY": 0.73,
         "WEEK": 7.22,
         "MONTH": 1.5,
@@ -129,10 +136,9 @@ async def test_collect_returns_drops_unparsable_or_non_finite_percentage_strings
         async with mocker.create_session(asyncio.get_running_loop()) as session:
             client = BitpandaApiClient("key", session)
             result = await collect_returns(client, None)
-    assert "DAY" not in result
-    assert "WEEK" not in result
-    assert "MONTH" not in result
-    assert result == {"SIX_MONTH": 1.0, "YEAR": 1.0}
+    assert result == PortfolioReturns(
+        values={"SIX_MONTH": 1.0, "YEAR": 1.0}, failed=frozenset()
+    )
 
 
 class _Returns:
@@ -155,7 +161,9 @@ async def test_collect_returns_drops_non_finite_numbers():
         "SIX_MONTH": 1.0,
         "YEAR": 2,
     }
-    assert await collect_returns(_Returns(values), None) == {"SIX_MONTH": 1.0, "YEAR": 2.0}
+    assert await collect_returns(_Returns(values), None) == PortfolioReturns(
+        values={"SIX_MONTH": 1.0, "YEAR": 2.0}, failed=frozenset()
+    )
 
 
 async def test_collect_returns_is_quiet_when_history_is_genuinely_empty():
@@ -170,7 +178,7 @@ async def test_collect_returns_is_quiet_when_history_is_genuinely_empty():
         async with mocker.create_session(asyncio.get_running_loop()) as session:
             client = BitpandaApiClient("key", session)
             result = await collect_returns(client, None)
-    assert result == {}
+    assert result == PortfolioReturns(values={}, failed=frozenset())
 
 
 async def test_collect_returns_reraises_auth_error_instead_of_counting_it():

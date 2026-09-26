@@ -5,6 +5,7 @@ from custom_components.bitpanda.portfolio_model import (
     EarnData,
     Holding,
     PortfolioData,
+    PortfolioReturns,
     RewardTotals,
 )
 from custom_components.bitpanda.portfolio_sensor import (
@@ -181,15 +182,39 @@ def test_before_any_answer_was_taken_as_the_truth_the_figures_are_unavailable():
 
 
 def test_return_sensors_read_their_timeframe():
-    history = _Coordinator({"DAY": 1.25, "SIX_MONTH": -3.5})
+    history = _Coordinator(PortfolioReturns(values={"DAY": 1.25, "SIX_MONTH": -3.5}))
     six_months = PortfolioReturnSensor(history, "eid", "SIX_MONTH")
-    week = PortfolioReturnSensor(history, "eid", "WEEK")
     assert six_months.entity_id == "sensor.bitpanda_portfolio_return_6_months"
     assert six_months.unique_id == "eid_portfolio_return_six_month"
     assert six_months.translation_key == "return_six_month"
     assert six_months.native_unit_of_measurement == "%"
-    assert six_months.native_value == -3.5
-    assert week.available is False
+    assert (six_months.native_value, six_months.available) == (-3.5, True)
+
+
+def test_a_timeframe_answered_without_a_figure_is_unknown():
+    """Bitpanda answered for the week, just without a usable figure: the
+    sensor stays available with the state unknown."""
+    history = _Coordinator(PortfolioReturns(values={"DAY": 1.25}))
+    week = PortfolioReturnSensor(history, "eid", "WEEK")
+    assert (week.native_value, week.available) == (None, True)
+
+
+def test_a_timeframe_whose_own_request_failed_is_unavailable():
+    """The week's request failed while the others answered: only its sensor
+    goes unavailable, like a price whose ticker request failed."""
+    history = _Coordinator(
+        PortfolioReturns(values={"DAY": 1.25}, failed=frozenset({"WEEK"}))
+    )
+    week = PortfolioReturnSensor(history, "eid", "WEEK")
+    day = PortfolioReturnSensor(history, "eid", "DAY")
+    assert (week.native_value, week.available) == (None, False)
+    assert (day.native_value, day.available) == (1.25, True)
+
+
+def test_a_failed_history_update_makes_every_return_unavailable():
+    history = _Coordinator(PortfolioReturns(values={"DAY": 1.25}), last_update_success=False)
+    assert PortfolioReturnSensor(history, "eid", "DAY").available is False
+    assert PortfolioReturnSensor(_Coordinator(None, False), "eid", "DAY").available is False
 
 
 # --- Long-term statistics ---------------------------------------------------------------
@@ -215,7 +240,7 @@ def test_every_money_value_keeps_long_term_statistics_as_a_total():
 
 def test_every_return_keeps_long_term_statistics_as_a_measurement():
     for timeframe in ("DAY", "WEEK", "MONTH", "SIX_MONTH", "YEAR"):
-        sensor = PortfolioReturnSensor(_Coordinator({}), "eid", timeframe)
+        sensor = PortfolioReturnSensor(_Coordinator(PortfolioReturns(values={})), "eid", timeframe)
         assert (sensor.device_class, sensor.state_class) == (None, SensorStateClass.MEASUREMENT)
 
 
@@ -244,9 +269,38 @@ def test_wallet_carries_the_position_performance_while_no_total_sensor_exists():
 
 
 def test_a_wallet_whose_asset_is_gone_is_unavailable():
+    """/portfolio no longer lists the asset: unavailable until the wallet is
+    removed."""
     sensor = WalletSensor(_portfolio(), "eid", "EUR", VSN, lambda _: False)
     assert sensor.native_value is None
     assert sensor.available is False
+
+
+def _held_parts(data: PortfolioData) -> list:
+    """Wallet, Staking and Total of VSN over `data`."""
+    coordinator = _Coordinator(data)
+    earn = _Coordinator(EarnData(apr={}, offered=frozenset()))
+    return [
+        WalletSensor(coordinator, "eid", "EUR", VSN, lambda _: True),
+        StakingSensor(coordinator, earn, _Coordinator(None), "eid", "EUR", VSN),
+        WalletTotalSensor(coordinator, "eid", "EUR", VSN),
+    ]
+
+
+def test_a_held_asset_without_a_value_is_unknown():
+    """Listed by /portfolio, but Bitpanda sent no value: available, unknown."""
+    for sensor in _held_parts(_data(**{VSN["id"]: _vsn(value=None)})):
+        assert (sensor.native_value, sensor.available) == (None, True), type(sensor).__name__
+
+
+def test_a_held_asset_whose_entry_cannot_be_read_is_unknown():
+    """Still listed -- PortfolioData.held counts an unreadable entry -- so
+    its wallet is unknown, not unavailable; it shows no units either."""
+    data = _data()
+    data.unparsed_assets = {VSN["id"]}
+    for sensor in _held_parts(data):
+        assert (sensor.native_value, sensor.available) == (None, True), type(sensor).__name__
+        assert "units" not in sensor.extra_state_attributes
 
 
 def test_a_failed_refresh_makes_the_wallet_unavailable():

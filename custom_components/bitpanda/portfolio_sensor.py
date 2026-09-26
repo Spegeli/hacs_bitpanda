@@ -56,7 +56,14 @@ from .naming import (
     wallet_unique_id,
 )
 from .portfolio_coordinator import PortfolioRuntime
-from .portfolio_model import DECIMALS, EarnData, Holding, PortfolioData, staking_applies
+from .portfolio_model import (
+    DECIMALS,
+    EarnData,
+    Holding,
+    PortfolioData,
+    PortfolioReturns,
+    staking_applies,
+)
 
 _CONFIGURATION_URL = "https://www.bitpanda.com"
 
@@ -165,7 +172,12 @@ class PortfolioCashPlusSensor(_PortfolioFigure):
 
 
 class PortfolioReturnSensor(CoordinatorEntity, SensorEntity):
-    """The portfolio's return over one timeframe, in percent."""
+    """The portfolio's return over one timeframe, in percent.
+
+    Unavailable while the history update failed or this timeframe's own
+    request did; unknown when Bitpanda answered for it without a usable
+    figure (PortfolioReturns).
+    """
 
     _attr_has_entity_name = True
     _attr_native_unit_of_measurement = PERCENTAGE
@@ -183,11 +195,13 @@ class PortfolioReturnSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self) -> float | None:
-        return (self.coordinator.data or {}).get(self._timeframe)
+        data: PortfolioReturns | None = self.coordinator.data
+        return None if data is None else data.values.get(self._timeframe)
 
     @property
     def available(self) -> bool:
-        return super().available and self.native_value is not None
+        data: PortfolioReturns | None = self.coordinator.data
+        return super().available and data is not None and self._timeframe not in data.failed
 
 
 # --- Wallet devices -----------------------------------------------------------------
@@ -240,7 +254,12 @@ class _WalletPart(CoordinatorEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
-        return super().available and self.native_value is not None
+        """Unavailable while the update failed, and once /portfolio no longer
+        lists the asset -- until the manager removes the wallet. While it is
+        listed (PortfolioData.held, an unreadable entry included), a value
+        that cannot be told is unknown."""
+        data: PortfolioData | None = self.coordinator.data
+        return super().available and data is not None and self._asset_id in data.held
 
     def _attributes(self) -> dict[str, Any]:
         attrs: dict[str, Any] = {

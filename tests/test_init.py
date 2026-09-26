@@ -446,6 +446,52 @@ async def test_a_figure_bitpanda_leaves_unreadable_is_unknown_not_unavailable(
     assert _value(hass, "sensor.bitpanda_portfolio_cash_plus") == 0.0
 
 
+async def test_a_return_without_a_figure_is_unknown_and_a_failed_one_unavailable(
+    hass, portfolio_api
+):
+    """The month is answered without a usable figure: unknown. The week's
+    own request fails: unavailable. The other timeframes are shown."""
+
+    async def _history(*, timeframe, equivalent_currency_id=None):
+        if timeframe == "WEEK":
+            raise BitpandaApiError(
+                "HTTP 503 from /portfolio-history",
+                kind="http_status", path="/portfolio-history", status=503,
+            )
+        return {"return_percentage": None if timeframe == "MONTH" else 1.5}
+
+    with patch(f"{_CLIENT}async_get_portfolio_history", AsyncMock(side_effect=_history)):
+        await _setup(hass, _portfolio_entry(hass))
+    assert hass.states.get("sensor.bitpanda_portfolio_return_month").state == "unknown"
+    assert hass.states.get("sensor.bitpanda_portfolio_return_week").state == "unavailable"
+    assert _value(hass, "sensor.bitpanda_portfolio_return_day") == 1.5
+
+
+async def test_a_held_wallet_whose_value_cannot_be_told_is_unknown(hass, portfolio_api):
+    """While /portfolio lists the asset, its Wallet, Staking and Total are
+    unknown when Bitpanda sends no value or an entry that cannot be read;
+    once it is no longer listed they are unavailable, until removed."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    vsn, eur = portfolio_api.return_value
+
+    portfolio_api.return_value = [
+        {key: value for key, value in vsn.items() if key != "currency_balance"}, eur,
+    ]
+    await _next_refresh(hass)
+    assert {hass.states.get(entity_id).state for entity_id in _VSN_ENTITIES} == {"unknown"}
+
+    portfolio_api.return_value = [
+        {"asset_id": VSN["id"], "balance": {"value": "unreadable"}}, eur,
+    ]
+    await _next_refresh(hass)
+    assert {hass.states.get(entity_id).state for entity_id in _VSN_ENTITIES} == {"unknown"}
+
+    portfolio_api.return_value = [eur]
+    await _next_refresh(hass)
+    assert {hass.states.get(entity_id).state for entity_id in _VSN_ENTITIES} == {"unavailable"}
+
+
 def _registered_wallet(hass, entry) -> str:
     """The VSN wallet of `entry` as a restart finds it: its device and its
     Wallet sensor in the registries, nothing loaded yet."""

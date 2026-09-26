@@ -184,6 +184,21 @@ class PortfolioData:
         return set(self.holdings) | self.unparsed_assets
 
 
+@dataclass(frozen=True)
+class PortfolioReturns:
+    """The portfolio's return per /portfolio-history timeframe, from one
+    refresh, in percent.
+
+    `values` holds every timeframe Bitpanda answered with a usable figure,
+    `failed` every timeframe whose own request failed. A timeframe in
+    neither was answered without a usable figure: its return is unknown,
+    where a failed one is unavailable.
+    """
+
+    values: dict[str, float]
+    failed: frozenset[str] = frozenset()
+
+
 def lists_nothing(entries: list[dict]) -> bool:
     """Whether a /portfolio answer lists no asset and no fiat entry at all.
 

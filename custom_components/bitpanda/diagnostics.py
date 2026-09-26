@@ -65,6 +65,7 @@ def _portfolio(hass: HomeAssistant, entry: ConfigEntry, runtime) -> dict[str, An
     if runtime is None:
         return out
     data = runtime.portfolio.data
+    history = runtime.history.data
     earn = runtime.earn.data
     out["coordinators"] = {
         "portfolio": {
@@ -73,7 +74,11 @@ def _portfolio(hass: HomeAssistant, entry: ConfigEntry, runtime) -> dict[str, An
             "wallets": len(data.wallet_ids) if data else 0,
             "unnamed_holdings": len(data.holdings) - len(data.assets) if data else 0,
         },
-        "history": {**_health(runtime.history), "timeframes": len(runtime.history.data or {})},
+        "history": {
+            **_health(runtime.history),
+            "timeframes": len(history.values) if history else 0,
+            "failed_timeframes": len(history.failed) if history else 0,
+        },
         "earn": {**_health(runtime.earn), "offered_assets": len(earn.offered) if earn else 0},
         "rewards": {
             **_health(runtime.rewards),

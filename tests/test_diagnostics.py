@@ -9,7 +9,12 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.diagnostics import async_get_config_entry_diagnostics
 from custom_components.bitpanda.ecb import EcbRates
-from custom_components.bitpanda.portfolio_model import EarnData, Holding, PortfolioData
+from custom_components.bitpanda.portfolio_model import (
+    EarnData,
+    Holding,
+    PortfolioData,
+    PortfolioReturns,
+)
 
 from tests.conftest import price_group, wallet_group
 
@@ -81,7 +86,9 @@ def _portfolio_entry(hass, *, loaded: bool) -> MockConfigEntry:
         data.assets = {"a": {"id": "a", "group": "coin"}}
         entry.runtime_data = SimpleNamespace(
             portfolio=_Coordinator(data),
-            history=_Coordinator({"DAY": 1.0}),
+            history=_Coordinator(
+                PortfolioReturns(values={"DAY": 1.0}, failed=frozenset({"YEAR"}))
+            ),
             earn=_Coordinator(EarnData(apr={}, offered=frozenset({"a"}))),
             rewards=_Coordinator(None, success=False),
         )
@@ -97,7 +104,7 @@ async def test_portfolio_diagnostics_report_health_and_never_the_key(hass):
     assert result["coordinators"] == {
         "portfolio": {"last_update_success": True, "holdings": 2, "wallets": 1,
                       "unnamed_holdings": 1},
-        "history": {"last_update_success": True, "timeframes": 1},
+        "history": {"last_update_success": True, "timeframes": 1, "failed_timeframes": 1},
         "earn": {"last_update_success": True, "offered_assets": 1},
         "rewards": {"last_update_success": False, "assets_with_rewards": 0},
     }

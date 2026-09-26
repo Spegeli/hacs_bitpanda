@@ -42,6 +42,7 @@ from .naming import managed_asset_id
 from .portfolio_model import (
     EarnData,
     PortfolioData,
+    PortfolioReturns,
     RewardTotals,
     lists_nothing,
     parse_earn_configs,
@@ -284,13 +285,14 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict]):
 
 async def collect_returns(
     client: BitpandaApiClient, currency_id: str | None
-) -> dict[str, float]:
+) -> PortfolioReturns:
     """Fetch return_percentage for every timeframe.
 
     One request per timeframe — there is no combined call. A failure on one
-    window is logged and skipped so the others still report. An auth error is
-    different: it will not resolve by trying the next timeframe, so it
-    propagates immediately instead of being counted as one of five failures --
+    window is logged and recorded in `failed`, so the others still report
+    and its sensor alone goes unavailable. An auth error is different: it
+    will not resolve by trying the next timeframe, so it propagates
+    immediately instead of being counted as one of five failures --
     otherwise five 401s would read as "No portfolio history could be
     fetched" (an UpdateFailed) and the caller would never see the
     BitpandaAuthError it needs to start reauth.
@@ -298,10 +300,11 @@ async def collect_returns(
     The API sends return_percentage as a JSON string today (observed
     2026-09-25); plain numbers are still accepted in case that changes back.
     Either way the value must parse to a finite float or it is dropped, same
-    as any other unusable value -- a missing timeframe, not a bad one.
+    as any other unusable value -- a timeframe answered without a figure,
+    whose return is unknown, not a failed one.
     """
     out: dict[str, float] = {}
-    failures = 0
+    failed: set[str] = set()
     for timeframe in PORTFOLIO_TIMEFRAMES:
         try:
             body = await client.async_get_portfolio_history(
@@ -310,7 +313,7 @@ async def collect_returns(
         except BitpandaAuthError:
             raise
         except BitpandaApiError:
-            failures += 1
+            failed.add(timeframe)
             _LOGGER.debug("No history for timeframe %s this cycle", timeframe)
             continue
         value = body.get("return_percentage")
@@ -330,21 +333,21 @@ async def collect_returns(
         if math.isfinite(parsed):
             out[timeframe] = parsed
 
-    # Raise only when every *request* failed. Returning {} normally would
-    # leave last_update_success True, making a dead endpoint indistinguishable
-    # from "no data yet" — forever, at any log level. But an account whose
-    # history is genuinely empty answers all five requests successfully with
-    # no usable return_percentage, and that must not be reported as an
-    # outage, or it would fail on every cycle.
-    if failures == len(PORTFOLIO_TIMEFRAMES):
+    # Raise only when every *request* failed. Returning no figure normally
+    # would leave last_update_success True, making a dead endpoint
+    # indistinguishable from "no data yet" — forever, at any log level. But
+    # an account whose history is genuinely empty answers all five requests
+    # successfully with no usable return_percentage, and that must not be
+    # reported as an outage, or it would fail on every cycle.
+    if len(failed) == len(PORTFOLIO_TIMEFRAMES):
         raise UpdateFailed(
             translation_domain=DOMAIN, translation_key="history_unavailable"
         )
 
-    return out
+    return PortfolioReturns(values=out, failed=frozenset(failed))
 
 
-class HistoryCoordinator(DataUpdateCoordinator[dict]):
+class HistoryCoordinator(DataUpdateCoordinator[PortfolioReturns]):
     """Portfolio return over each supported timeframe."""
 
     def __init__(
@@ -364,7 +367,7 @@ class HistoryCoordinator(DataUpdateCoordinator[dict]):
         self._client = client
         self._currency_id = currency_id
 
-    async def _async_update_data(self) -> dict[str, float]:
+    async def _async_update_data(self) -> PortfolioReturns:
         try:
             return await collect_returns(self._client, self._currency_id)
         except BitpandaAuthError:

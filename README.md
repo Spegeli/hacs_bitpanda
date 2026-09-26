@@ -128,6 +128,7 @@ Bitpanda API keys expire after **one year** — see [Changing the key or the cur
 The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stocks, ETFs, ETCs, Crypto indices, Precious metals — titled in the language Home Assistant runs in (see [Languages](#languages)), with one device per asset inside.
 
 1. On the **Bitpanda Price Tracker** entry, click **Add price tracker** (older versions: **⋮ → Add price tracker**)
+   - ⚠️ On Home Assistant 2026.9 and older, the integration page's own **Add price tracker** button (top of the page) opens a dialog listing both Bitpanda entries instead, and picking **Bitpanda Portfolio** there fails. Pick **Bitpanda Price Tracker** in that dialog, or avoid it entirely with the **Bitpanda Price Tracker** row's own **⋮ → Add price tracker**, which opens the asset types directly. Fixed upstream in a later Home Assistant frontend release.
 2. Pick a category (Crypto, Stocks, ETFs, ETCs, Crypto indices, Precious metals), then type to search by name, symbol or ISIN and pick one asset. Entries read `Name / SYMBOL / ISIN` (ISIN only for stocks, ETFs and ETCs)
 3. The asset joins the group of its type; the first asset of a type creates that group
 4. The first time you open the Stocks list it takes about ten seconds; it is then cached for 24 hours

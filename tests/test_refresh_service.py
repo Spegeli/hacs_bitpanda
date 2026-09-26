@@ -108,7 +108,7 @@ async def test_first_refresh_is_accepted_right_after_boot(hass):
 _BITPANDA_DIR = Path(__file__).parent.parent / "custom_components" / "bitpanda"
 _SERVICES_YAML = _BITPANDA_DIR / "services.yaml"
 # Discovered from disk, the way the integration itself finds its shipped
-# languages (groups._shipped_languages): a new one is covered as soon as it
+# languages (language.async_shipped_languages): a new one is covered as soon as it
 # exists, with no change to this test.
 _LANGUAGES = sorted(path.stem for path in (_BITPANDA_DIR / "translations").glob("*.json"))
 

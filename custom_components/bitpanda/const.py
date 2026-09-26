@@ -60,6 +60,12 @@ PRICE_TRACKER_TITLE = "Bitpanda Price Tracker"
 # Price Tracker options: currencies converted from EUR in addition to EUR.
 CONF_EXTRA_CURRENCIES = "extra_currencies"
 
+# Option of both services: the language of the integration's own texts --
+# group titles and the refusals to delete a device (language.py). English
+# until the user picks another shipped language under Configure.
+CONF_LANGUAGE = "language"
+DEFAULT_LANGUAGE = "en"
+
 # The Price Tracker keeps its assets in groups by asset type (groups.py): one
 # config subentry per category, keyed by the category, whose data holds the
 # category and the slim records of its assets by asset id.

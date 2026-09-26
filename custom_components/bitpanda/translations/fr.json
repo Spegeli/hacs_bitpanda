@@ -71,11 +71,25 @@
   },
   "options": {
     "step": {
-      "init": {
-        "title": "Devises du Price Tracker",
+      "price_tracker": {
+        "title": "Options du Price Tracker",
         "description": "Chaque actif suivi conserve toujours son capteur en EUR. Chaque devise sélectionnée ajoute un capteur par actif ; retirer une devise supprime ces capteurs.",
         "data": {
-          "extra_currencies": "Devises supplémentaires"
+          "extra_currencies": "Devises supplémentaires",
+          "language": "Langue des titres de groupe et des messages"
+        },
+        "data_description": {
+          "language": "Les titres des groupes et les messages propres à l'intégration utilisent cette langue. Les noms des capteurs suivent la langue du système de Home Assistant."
+        }
+      },
+      "portfolio": {
+        "title": "Options du Portfolio",
+        "description": "Pour remplacer la clé API ou changer de devise, utilisez « Reconfigurer ».",
+        "data": {
+          "language": "Langue des titres de groupe et des messages"
+        },
+        "data_description": {
+          "language": "Les titres des groupes et les messages propres à l'intégration utilisent cette langue. Les noms des capteurs suivent la langue du système de Home Assistant."
         }
       }
     }
@@ -157,6 +171,17 @@
         "sek": "Couronne suédoise (SEK)",
         "try": "Livre turque (TRY)",
         "usd": "Dollar américain (USD)"
+      }
+    },
+    "language": {
+      "options": {
+        "de": "Deutsch",
+        "en": "English",
+        "es": "Español",
+        "fr": "Français",
+        "it": "Italiano",
+        "nl": "Nederlands",
+        "pl": "Polski"
       }
     }
   },

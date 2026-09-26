@@ -20,7 +20,6 @@ them as wallets arrive and removes them once they hold nothing.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
@@ -37,14 +36,9 @@ from .const import (
     SUBENTRY_TYPE_PRICE_GROUP,
     SUBENTRY_TYPE_WALLET_GROUP,
 )
+from .language import async_shipped_languages
 
 _TITLE_KEY = f"component.{DOMAIN}.selector.asset_group.options."
-
-# The file names under here are this integration's own shipped languages and
-# do not change at runtime, but the path being fixed does not make the read
-# itself a one-time cost: _shipped_languages() globs this directory in the
-# executor at every setup of either service, not once per process.
-_TRANSLATIONS_DIR = Path(__file__).parent / "translations"
 
 
 async def async_group_titles(hass: HomeAssistant) -> dict[str, str]:
@@ -62,22 +56,12 @@ async def async_group_titles(hass: HomeAssistant) -> dict[str, str]:
     }
 
 
-def _shipped_languages() -> list[str]:
-    """Language codes this integration ships a translations file for, from
-    the file names in translations/. Blocking I/O -- call through the executor."""
-    return sorted(path.stem for path in _TRANSLATIONS_DIR.glob("*.json"))
-
-
 async def async_known_group_titles(hass: HomeAssistant) -> dict[str, set[str]]:
     """Category -> every group title this integration has ever shipped as its
-    default, in any language it ships (translations/*.json; English is
-    en.json). Tells a shipped default title apart from one the user chose.
-
-    The set of shipped languages is discovered from disk (in the executor,
-    never blocking the event loop) rather than hard-coded, so a future
-    language added under translations/ is picked up without a code change.
+    default, in any language it ships (language.async_shipped_languages).
+    Tells a shipped default title apart from one the user chose.
     """
-    languages = await hass.async_add_executor_job(_shipped_languages)
+    languages = await async_shipped_languages(hass)
     known: dict[str, set[str]] = {
         category: set() for category in (*ASSET_CATEGORY_FILTERS, CATEGORY_OTHER)
     }

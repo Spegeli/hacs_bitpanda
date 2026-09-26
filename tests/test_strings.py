@@ -23,7 +23,7 @@ from custom_components.bitpanda.price_sensor import PriceSensor
 
 _DIR = Path(__file__).parent.parent / "custom_components" / "bitpanda"
 # Every language file under translations/, found the way the integration
-# itself finds them (groups._shipped_languages): a new one is guarded by
+# itself finds them (language.async_shipped_languages): a new one is guarded by
 # every test below as soon as it exists.
 _LANGUAGES = sorted(path.stem for path in (_DIR / "translations").glob("*.json"))
 _FILES = ("strings.json", *(f"translations/{language}.json" for language in _LANGUAGES))
@@ -144,7 +144,10 @@ _MENU_LABELS = {
 
 # The texts that send the user to one of those controls, by the control.
 _LABEL_REFERENCES = {
-    "reconfigure": [("config", "step", "currency", "description")],
+    "reconfigure": [
+        ("config", "step", "currency", "description"),
+        ("options", "step", "portfolio", "description"),
+    ],
     "configure": [("config", "abort", "no_reconfigure")],
     "submit": [
         ("config", "step", "confirm_currency", "description"),
@@ -172,6 +175,39 @@ def test_menu_items_are_named_with_home_assistants_own_labels():
                 for part in key:
                     text = text[part]
                 assert _quoted(labels[control]).search(text), (language, ".".join(key))
+
+
+# Each shipped language by its own name.
+_ENDONYMS = {
+    "de": "Deutsch",
+    "en": "English",
+    "es": "Español",
+    "fr": "Français",
+    "it": "Italiano",
+    "nl": "Nederlands",
+    "pl": "Polski",
+}
+
+
+def test_every_shipped_language_is_offered_by_its_own_name():
+    """The language setting (Configure, `selector.language`) lists every
+    shipped language by its own name, the same in every file: whoever needs
+    their language finds it, whatever language the list is shown in."""
+    assert sorted(_ENDONYMS) == _LANGUAGES
+    for name in _FILES:
+        assert _load(name)["selector"]["language"]["options"] == _ENDONYMS, name
+
+
+def test_each_service_has_options_texts_of_its_own():
+    """Configure shows one form per service, each under its own step id
+    (config_flow.BitpandaOptionsFlow): each field has a label, and the
+    language field its description."""
+    steps = _load("strings.json")["options"]["step"]
+    assert set(steps) == {"price_tracker", "portfolio"}
+    assert set(steps["price_tracker"]["data"]) == {"extra_currencies", "language"}
+    assert set(steps["portfolio"]["data"]) == {"language"}
+    for step in steps.values():
+        assert set(step["data_description"]) == {"language"}
 
 
 def test_every_language_titles_each_group_differently():

@@ -71,11 +71,25 @@
   },
   "options": {
     "step": {
-      "init": {
-        "title": "Währungen des Price Trackers",
+      "price_tracker": {
+        "title": "Optionen des Price Trackers",
         "description": "Jedes verfolgte Asset behält immer seinen EUR-Sensor. Jede gewählte Währung fügt pro Asset einen Sensor hinzu; wird eine Währung abgewählt, werden diese Sensoren gelöscht.",
         "data": {
-          "extra_currencies": "Zusätzliche Währungen"
+          "extra_currencies": "Zusätzliche Währungen",
+          "language": "Sprache für Gruppentitel und Meldungen"
+        },
+        "data_description": {
+          "language": "Gruppentitel und die eigenen Meldungen der Integration verwenden diese Sprache. Sensornamen folgen der Systemsprache von Home Assistant."
+        }
+      },
+      "portfolio": {
+        "title": "Optionen des Portfolios",
+        "description": "Um den API-Schlüssel zu ersetzen oder die Währung zu ändern, verwende „Neu konfigurieren“.",
+        "data": {
+          "language": "Sprache für Gruppentitel und Meldungen"
+        },
+        "data_description": {
+          "language": "Gruppentitel und die eigenen Meldungen der Integration verwenden diese Sprache. Sensornamen folgen der Systemsprache von Home Assistant."
         }
       }
     }
@@ -157,6 +171,17 @@
         "sek": "Schwedische Krone (SEK)",
         "try": "Türkische Lira (TRY)",
         "usd": "US-Dollar (USD)"
+      }
+    },
+    "language": {
+      "options": {
+        "de": "Deutsch",
+        "en": "English",
+        "es": "Español",
+        "fr": "Français",
+        "it": "Italiano",
+        "nl": "Nederlands",
+        "pl": "Polski"
       }
     }
   },

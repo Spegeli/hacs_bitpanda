@@ -1,5 +1,6 @@
 """Tests for the config flow: service menu, both setups, reauth, reconfigure,
-import and the Price Tracker options."""
+import and the options of both services."""
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -651,20 +652,61 @@ async def test_the_price_tracker_has_nothing_to_reconfigure(hass):
     assert result["reason"] == "no_reconfigure"
 
 
-# --- Options (Price Tracker only) ----------------------------------------------------------
+# --- Options: Configure, both services ----------------------------------------------------
+#
+# Each service shows its own form under a step id of its own, so each has
+# texts of its own (options.step.price_tracker / options.step.portfolio).
+# Saving calls the entry's update listener, which reloads it (__init__.py;
+# the reload itself is exercised in tests/test_init.py).
+
+# Discovered from disk, the way the integration offers them
+# (language.async_shipped_languages).
+_LANGUAGES = sorted(
+    path.stem
+    for path in (
+        Path(__file__).parent.parent / "custom_components" / "bitpanda" / "translations"
+    ).glob("*.json")
+)
 
 
-async def test_only_the_price_tracker_has_options(hass):
+def _with_options(entry: MockConfigEntry, **options) -> MockConfigEntry:
+    return MockConfigEntry(
+        domain=DOMAIN,
+        version=3,
+        unique_id=entry.unique_id,
+        title=entry.title,
+        data=dict(entry.data),
+        options={**entry.options, **options},
+    )
+
+
+async def _options_form(hass, entry: MockConfigEntry):
+    entry.add_to_hass(hass)
+    return await hass.config_entries.options.async_init(entry.entry_id)
+
+
+async def test_both_services_have_options(hass):
     from custom_components.bitpanda.config_flow import BitpandaConfigFlow
 
     assert BitpandaConfigFlow.async_supports_options_flow(_price_tracker_entry())
-    assert not BitpandaConfigFlow.async_supports_options_flow(_portfolio_entry())
+    assert BitpandaConfigFlow.async_supports_options_flow(_portfolio_entry())
+
+
+async def test_the_price_tracker_options_offer_the_language_after_the_currencies(hass):
+    result = await _options_form(hass, _price_tracker_entry(extra=["USD"]))
+    assert result["step_id"] == "price_tracker"
+    assert list(result["data_schema"].schema) == ["extra_currencies", "language"]
+    config = _selector_config(result["data_schema"], "language")
+    assert config["options"] == _LANGUAGES
+    assert config["translation_key"] == "language"
+    assert config.get("multiple", False) is False
+    # English until the user picks another language.
+    assert result["data_schema"]({})["language"] == "en"
 
 
 async def test_options_change_the_extra_currencies(hass):
     entry = _price_tracker_entry(extra=["USD"])
-    entry.add_to_hass(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _options_form(hass, entry)
     schema = result["data_schema"]
     # The default travels lowercase (hassfest); the stored option stays USD.
     assert schema({})["extra_currencies"] == ["usd"]
@@ -672,7 +714,70 @@ async def test_options_change_the_extra_currencies(hass):
         result["flow_id"], {"extra_currencies": ["gbp", "chf"]}
     )
     assert result["type"] == _FLOW.CREATE_ENTRY
-    assert dict(entry.options) == {"extra_currencies": ["CHF", "GBP"]}
+    assert dict(entry.options) == {"extra_currencies": ["CHF", "GBP"], "language": "en"}
+
+
+async def test_the_price_tracker_options_store_the_language_and_reload(hass):
+    entry = _price_tracker_entry(extra=["USD"])
+    result = await _options_form(hass, entry)
+    listener = AsyncMock()
+    entry.add_update_listener(listener)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"extra_currencies": ["usd"], "language": "de"}
+    )
+    await hass.async_block_till_done()
+    assert result["type"] == _FLOW.CREATE_ENTRY
+    assert dict(entry.options) == {"extra_currencies": ["USD"], "language": "de"}
+    listener.assert_called_once()
+
+
+async def test_the_portfolio_options_offer_only_the_language(hass):
+    """Its key and currency change through Reconfigure."""
+    result = await _options_form(hass, _portfolio_entry())
+    assert result["step_id"] == "portfolio"
+    assert list(result["data_schema"].schema) == ["language"]
+    config = _selector_config(result["data_schema"], "language")
+    assert config["options"] == _LANGUAGES
+    assert config["translation_key"] == "language"
+    assert result["data_schema"]({}) == {"language": "en"}
+
+
+async def test_the_portfolio_options_store_the_language_and_reload(hass):
+    entry = _portfolio_entry()
+    result = await _options_form(hass, entry)
+    listener = AsyncMock()
+    entry.add_update_listener(listener)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"language": "fr"}
+    )
+    await hass.async_block_till_done()
+    assert result["type"] == _FLOW.CREATE_ENTRY
+    assert dict(entry.options) == {"language": "fr"}
+    # The key and the currency stay where they are.
+    assert dict(entry.data) == dict(_portfolio_entry().data)
+    listener.assert_called_once()
+
+
+@pytest.mark.parametrize("service", ["price_tracker", "portfolio"])
+async def test_the_options_form_shows_the_stored_language(hass, service):
+    entry = _price_tracker_entry() if service == "price_tracker" else _portfolio_entry()
+    result = await _options_form(hass, _with_options(entry, language="it"))
+    assert result["data_schema"]({})["language"] == "it"
+
+
+async def test_a_stored_language_no_longer_shipped_shows_english(hass):
+    """So the form can still be saved unchanged: a default outside the
+    options would be refused."""
+    result = await _options_form(hass, _with_options(_portfolio_entry(), language="xx"))
+    assert result["data_schema"]({}) == {"language": "en"}
+
+
+async def test_a_language_the_integration_does_not_ship_is_refused(hass):
+    entry = _portfolio_entry()
+    result = await _options_form(hass, entry)
+    with pytest.raises(data_entry_flow.InvalidData):
+        await hass.config_entries.options.async_configure(result["flow_id"], {"language": "xx"})
+    assert dict(entry.options) == {}
 
 
 async def test_stored_currency_round_trips_through_the_options_form(hass):

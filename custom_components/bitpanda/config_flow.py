@@ -37,8 +37,10 @@ from .const import (
     CONF_CURRENCY,
     CONF_CURRENCY_ID,
     CONF_EXTRA_CURRENCIES,
+    CONF_LANGUAGE,
     CONF_LEGACY_ADOPT,
     DEFAULT_CURRENCY,
+    DEFAULT_LANGUAGE,
     DOMAIN,
     ENTRY_TYPE,
     ENTRY_TYPE_PORTFOLIO,
@@ -54,6 +56,7 @@ from .const import (
     entry_type,
 )
 from .groups import async_group_titles, price_group_subentries
+from .language import async_shipped_languages, entry_language
 from .purge import async_purge_portfolio
 
 _LOGGER = logging.getLogger(__name__)
@@ -119,6 +122,26 @@ def extra_currencies_schema(selected: list[str]) -> vol.Schema:
             ): _currency_select(list(EXTRA_CURRENCIES), multiple=True)
         }
     )
+
+
+def _language_field(languages: list[str], current: str) -> dict:
+    """The language of an entry's own texts (language.py), one of `languages`,
+    each labelled with its own name through `selector.language`.
+
+    `current` is the stored one; English stands in for a stored language no
+    longer among `languages`, which the form would refuse to save unchanged.
+    """
+    return {
+        vol.Required(
+            CONF_LANGUAGE, default=current if current in languages else DEFAULT_LANGUAGE
+        ): SelectSelector(
+            SelectSelectorConfig(
+                options=languages,
+                translation_key="language",
+                mode=SelectSelectorMode.DROPDOWN,
+            )
+        )
+    }
 
 
 class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -450,13 +473,10 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(
         config_entry: ConfigEntry,
     ) -> config_entries.OptionsFlow:
-        return PriceTrackerOptionsFlow()
-
-    @classmethod
-    @callback
-    def async_supports_options_flow(cls, config_entry: ConfigEntry) -> bool:
-        """Only the Price Tracker has options: the Portfolio tracks everything."""
-        return entry_type(config_entry) == ENTRY_TYPE_PRICE_TRACKER
+        """Both services have options (see BitpandaOptionsFlow): with this
+        defined, Home Assistant's own async_supports_options_flow offers
+        Configure on every entry."""
+        return BitpandaOptionsFlow()
 
     @classmethod
     @callback
@@ -470,10 +490,30 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return {SUBENTRY_TYPE_PRICE_GROUP: PriceTrackerSubentryFlow}
 
 
-class PriceTrackerOptionsFlow(config_entries.OptionsFlow):
-    """Configure: the Price Tracker's extra currencies. EUR is always there."""
+class BitpandaOptionsFlow(config_entries.OptionsFlow):
+    """Configure, for both services.
+
+    Each service shows its own form under a step id of its own, so each form
+    has texts of its own (`options.step.price_tracker`, `.portfolio`): the
+    Price Tracker's extra currencies -- EUR is always there -- and the
+    language of its own texts; the Portfolio's language alone, as its key
+    and currency change through Reconfigure. Saving changes the entry's
+    options, and its update listener reloads it (__init__.py).
+    """
 
     async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if entry_type(self.config_entry) == ENTRY_TYPE_PRICE_TRACKER:
+            return await self.async_step_price_tracker()
+        return await self.async_step_portfolio()
+
+    async def _async_language_field(self) -> dict:
+        return _language_field(
+            await async_shipped_languages(self.hass), entry_language(self.config_entry)
+        )
+
+    async def async_step_price_tracker(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
@@ -483,11 +523,23 @@ class PriceTrackerOptionsFlow(config_entries.OptionsFlow):
                     CONF_EXTRA_CURRENCIES: extra_currencies(
                         user_input.get(CONF_EXTRA_CURRENCIES)
                     ),
+                    CONF_LANGUAGE: user_input[CONF_LANGUAGE],
                 }
             )
         return self.async_show_form(
-            step_id="init",
+            step_id="price_tracker",
             data_schema=extra_currencies_schema(
                 self.config_entry.options.get(CONF_EXTRA_CURRENCIES, [])
-            ),
+            ).extend(await self._async_language_field()),
+        )
+
+    async def async_step_portfolio(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            return self.async_create_entry(
+                data={**self.config_entry.options, CONF_LANGUAGE: user_input[CONF_LANGUAGE]}
+            )
+        return self.async_show_form(
+            step_id="portfolio", data_schema=vol.Schema(await self._async_language_field())
         )

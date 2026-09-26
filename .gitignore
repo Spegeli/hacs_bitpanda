@@ -19,6 +19,7 @@ docs/
 # Python
 __pycache__/
 .pytest_cache/
+.mypy_cache/
 .coverage
 htmlcov/
 *.py[cod]

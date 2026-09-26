@@ -28,7 +28,7 @@ The integration offers two services. Set up either or both — each one once.
   - **Staking** — the value of the staked units, with APR and lifetime rewards
   - **Total** — the whole position, with invested amount, average buy price and total return
   - Staking and Total appear as soon as something is staked or Bitpanda offers an Earn product for the asset, and stay while either is true
-- The wallets appear in groups by asset type, such as Cryptocurrencies or Precious metals, named in the language Home Assistant runs in. The Portfolio device stays outside the groups (newer Home Assistant versions list it above them). Groups come and go with your holdings — there is nothing to add. Deleting a group (**⋮ → Delete**) only hides it until the next refresh while you still hold those assets: the group and its wallets come back, under the entity IDs the integration gives them; IDs you renamed yourself, and other customisations, survive only on newer Home Assistant versions
+- The wallets appear in groups by asset type, such as Cryptocurrencies or Precious metals, named in the language Home Assistant runs in (see [Languages](#languages)). The Portfolio device stays outside the groups (newer Home Assistant versions list it above them). Groups come and go with your holdings — there is nothing to add. Deleting a group (**⋮ → Delete**) only hides it until the next refresh while you still hold those assets: the group and its wallets come back, under the entity IDs the integration gives them; IDs you renamed yourself, and other customisations, survive only on newer Home Assistant versions
 - The wallet of an asset you no longer hold can be deleted from its device page (**⋮ → Delete**) instead of waiting for it to go. The Portfolio device and the wallets of assets you hold cannot be deleted: they would come straight back, and the dialog explains why
 - Updates every 5 minutes; Earn products every 24 hours; rewards every hour
 
@@ -56,6 +56,11 @@ The integration offers two services. Set up either or both — each one once.
 | 💰 **Cash Plus** | BCPEUR, BCPUSD, BCPGBP | 3 | ❌ | ✅ Cash Plus sensor |
 
 Cash Plus products are cash equivalents — one unit is one unit of their currency — so the Price Tracker leaves them out.
+
+### Languages
+- English, German, French, Dutch, Italian, Spanish and Polish. Dialogs, sensor and attribute names, group titles, error messages and the upgrade notification appear in the language Home Assistant runs in; any other language gets English. Entity IDs, device names (such as **Vision (VSN) Wallet**) and log messages stay English
+- The groups of both services — the Portfolio's wallet groups and the Price Tracker's asset groups — are titled in that language when they are created, and follow Home Assistant's system language at every later start, unless you renamed the group yourself. Newer Home Assistant versions let you rename a group with **⋮ → Rename**
+- Native speakers: corrections are welcome as an [issue](https://github.com/Spegeli/hacs_bitpanda/issues) or a pull request (see [CONTRIBUTING](CONTRIBUTING.md#translations))
 
 ---
 
@@ -115,7 +120,7 @@ Bitpanda API keys expire after **one year** — see [Changing the key or the cur
 
 ### 3. Track prices
 
-The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stocks, ETFs, ETCs, Crypto indices, Precious metals — with one device per asset inside. A group is named in the language Home Assistant runs in when it is created; its title then follows Home Assistant's system language at every later start, unless you renamed the group yourself — newer Home Assistant versions let you rename a group with **⋮ → Rename**.
+The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stocks, ETFs, ETCs, Crypto indices, Precious metals — titled in the language Home Assistant runs in (see [Languages](#languages)), with one device per asset inside.
 
 1. On the **Bitpanda Price Tracker** entry, click **Add price tracker** (older versions: **⋮ → Add price tracker**)
 2. Pick a category (Crypto, Stocks, ETFs, ETCs, Crypto indices, Precious metals), then type to search by name, symbol or ISIN and pick one asset. Entries read `Name / SYMBOL / ISIN` (ISIN only for stocks, ETFs and ETCs)
@@ -168,7 +173,7 @@ This release moves to Bitpanda's new Public API and splits the integration into 
 2. Update the integration through HACS and restart Home Assistant
 3. **Reload the browser tab** (`Ctrl+F5` / `Cmd+Shift+R`) — otherwise the integration's dialogs can show raw text from your browser's cached translations
 4. Home Assistant shows **New Bitpanda API key needed** — paste the new key (or use **⋮ → Reconfigure** on the Bitpanda Portfolio entry)
-5. A notification lists **every renamed entity ID (old → new)** and anything that could not be migrated; the same list goes to the Home Assistant log. **Check your dashboards, automations and scripts** for the old IDs.
+5. A notification, in the language Home Assistant runs in, lists **every renamed entity ID (old → new)** and anything that could not be migrated; the same list goes to the Home Assistant log, in English. **Check your dashboards, automations and scripts** for the old IDs.
 
 **What is kept:** the history of every migrated sensor (it moves with the rename), your price trackers (now in the Bitpanda Price Tracker, in EUR and in your old currency) and the wallets of assets you still hold. Entity IDs you renamed yourself are left as they are.
 

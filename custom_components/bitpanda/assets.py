@@ -68,23 +68,36 @@ class AssetDirectory:
     a rate limit, a timeout, a connection or server error -- ends the pass:
     the next lookup would most likely fail the same way, and with /assets
     hanging, each would hold the refresh (the first one runs inside setup)
-    for the whole request timeout. The next refresh asks again. An asset
-    the catalogue does not know -- an empty answer, not a failure -- is
-    asked for once per run, and the pass goes on.
+    for the whole request timeout. The next refresh asks again, but for the
+    assets whose lookup failed last, the one that failed longest ago first:
+    an asset whose own lookup keeps failing never keeps the others waiting
+    longer than that, and assets that keep failing take turns. An asset the
+    catalogue does not know -- an empty answer, not a failure -- is asked
+    for once per run, and the pass goes on.
     """
 
     def __init__(self, client: BitpandaApiClient, cache: dict[str, dict]) -> None:
         self._client = client
         self._cache = cache
         self._unknown: set[str] = set()
+        # Asset id -> when its lookup last failed, as a running count of
+        # failures: the order in which failed assets are asked for again.
+        self._failed: dict[str, int] = {}
+        self._failures = 0
 
     def get(self, asset_id: str) -> dict | None:
         return self._cache.get(asset_id)
 
     async def async_resolve(self, asset_ids: Iterable[str]) -> None:
-        for asset_id in asset_ids:
-            if asset_id in self._cache or asset_id in self._unknown:
-                continue
+        pending = [
+            asset_id
+            for asset_id in asset_ids
+            if asset_id not in self._cache and asset_id not in self._unknown
+        ]
+        # Stable: the assets never failed keep the order given, ahead of the
+        # rest.
+        pending.sort(key=lambda asset_id: self._failed.get(asset_id, 0))
+        for asset_id in pending:
             try:
                 found = await self._client.async_get_assets(asset_id=asset_id)
             except BitpandaApiError as err:
@@ -93,7 +106,10 @@ class AssetDirectory:
                 _LOGGER.debug(
                     "Could not look up asset %s: %s; retrying next refresh", asset_id, err
                 )
+                self._failures += 1
+                self._failed[asset_id] = self._failures
                 return
+            self._failed.pop(asset_id, None)
             record = next((a for a in found if a.get("id") == asset_id), None)
             if record is None:
                 self._unknown.add(asset_id)

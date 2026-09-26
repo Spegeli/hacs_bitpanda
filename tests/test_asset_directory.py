@@ -57,12 +57,11 @@ async def test_resolve_skips_cached_ids():
     assert client.calls == []
 
 
-async def test_a_failed_lookup_ends_the_pass_and_the_next_one_retries():
+async def test_a_failed_lookup_ends_the_pass_and_is_asked_for_last_next_time():
     """A timeout or a connection error makes the next lookup likely to fail
     the same way: with /assets hanging, going on would hold the first
     refresh -- inside setup -- for up to 15 s per held asset. The pass ends
-    there, and the next refresh asks again, starting with the one that
-    failed."""
+    there, and the next refresh asks again -- for the one that failed last."""
     client = _Client({VSN["id"]: VSN, BTC["id"]: BTC}, fail={VSN["id"]})
     directory = AssetDirectory(client, {})
     await directory.async_resolve([VSN["id"], BTC["id"]])
@@ -71,9 +70,52 @@ async def test_a_failed_lookup_ends_the_pass_and_the_next_one_retries():
 
     client.fail = set()
     await directory.async_resolve([VSN["id"], BTC["id"]])
-    assert client.calls == [VSN["id"], VSN["id"], BTC["id"]]
+    assert client.calls == [VSN["id"], BTC["id"], VSN["id"]]
     assert directory.get(VSN["id"]) == slim_asset(VSN)
     assert directory.get(BTC["id"]) == slim_asset(BTC)
+
+
+def _healthy(number: int) -> dict:
+    return {"id": f"{number:08d}-0000-0000-0000-000000000000", "symbol": f"H{number}",
+            "name": f"Healthy {number}", "type": "cryptocoin", "group": "coin"}
+
+
+async def test_an_asset_whose_lookup_keeps_failing_holds_up_no_other():
+    """Ahead of four healthy holdings in /portfolio's order, one asset whose
+    own lookup always fails: each pass still makes at most one failed
+    request, and the next pass asks for the others first."""
+    bad = "ffffffff-0000-0000-0000-000000000000"
+    healthy = [_healthy(number) for number in range(1, 5)]
+    client = _Client({record["id"]: record for record in healthy}, fail={bad})
+    directory = AssetDirectory(client, {})
+    held = [bad, *(record["id"] for record in healthy)]
+
+    for _ in range(2):
+        before = len(client.calls)
+        await directory.async_resolve(held)
+        assert client.calls[before:].count(bad) <= 1
+
+    assert [directory.get(record["id"]) for record in healthy] == [
+        slim_asset(record) for record in healthy
+    ]
+
+
+async def test_assets_whose_lookups_keep_failing_take_turns():
+    """Asked for last does not mean never again: of two failing assets, the
+    one that failed longer ago goes first, so each is retried in turn, and
+    one that recovers is resolved on its next turn at the latest."""
+    first, second = (f"{letter * 8}-0000-0000-0000-000000000000" for letter in "ef")
+    client = _Client({}, fail={first, second})
+    directory = AssetDirectory(client, {})
+    for _ in range(4):
+        await directory.async_resolve([first, second])
+    assert client.calls == [first, second, first, second]
+
+    client.fail = {first}
+    client.records = {second: {**_healthy(9), "id": second}}
+    for _ in range(2):
+        await directory.async_resolve([first, second])
+    assert directory.get(second) is not None
 
 
 async def test_an_asset_missing_from_the_catalogue_does_not_end_the_pass():

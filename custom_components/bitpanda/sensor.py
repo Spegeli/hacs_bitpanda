@@ -9,6 +9,10 @@ from .const import ENTRY_TYPE_PRICE_TRACKER, entry_type
 from .portfolio_sensor import async_setup_portfolio_entities
 from .price_sensor import async_setup_price_entities
 
+# Every sensor reads what its service's coordinators fetched and requests
+# nothing itself, so Home Assistant needs no limit on parallel updates.
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback

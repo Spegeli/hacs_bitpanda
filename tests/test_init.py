@@ -21,7 +21,11 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
-from custom_components.bitpanda import _async_first_refresh, async_remove_config_entry_device
+from custom_components.bitpanda import (
+    _async_first_refresh,
+    async_remove_config_entry_device,
+    sensor,
+)
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaAuthError
 from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.const import DOMAIN, REWARDS_UPDATE_INTERVAL
@@ -133,6 +137,12 @@ async def _setup(hass, entry) -> None:
 
 def _value(hass, entity_id) -> float:
     return float(hass.states.get(entity_id).state)
+
+
+def test_the_sensor_platform_sets_no_limit_on_parallel_updates():
+    """Every sensor reads its coordinator's data and requests nothing
+    itself: 0, explicitly (quality scale rule parallel-updates)."""
+    assert sensor.PARALLEL_UPDATES == 0
 
 
 async def test_portfolio_setup_creates_its_devices_and_sensors(hass, portfolio_api):

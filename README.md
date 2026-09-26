@@ -12,6 +12,8 @@
 
 A custom <a href="https://www.home-assistant.io/">Home Assistant</a> integration for **Bitpanda**: your whole portfolio, and live prices of any asset, on your dashboard.
 
+[Bitpanda](https://www.bitpanda.com) is a European investment platform for crypto, stocks, ETFs, ETCs and precious metals. The integration reads your account and Bitpanda's prices; it never trades.
+
 ---
 
 ## ✨ Features
@@ -197,6 +199,30 @@ This release moves to Bitpanda's new Public API and splits the integration into 
 - **The fiat wallet in your currency becomes Portfolio Cash**, which sums all your fiat balances. Other fiat wallets are left as `unavailable` entities you can delete.
 - **Prices in other currencies are converted with ECB daily rates** instead of being quoted by Bitpanda.
 - **Attributes:** units are now `units` on each sensor (the Wallet's `units` are the unstaked units its old `balance` showed); the APR is `apr_percent` on the Staking sensor; the position performance is on the Total sensor. `breakdown`, `wallet_count`, `all_prices` and the wallet `price` attribute are gone. The price sensor's `conversion` attribute now carries the status `no_rate` (not a sentence) while no exchange rate is loaded.
+
+---
+
+## 🗑️ Removal
+
+1. Go to **Settings → Devices & services → Bitpanda** and delete each service entry — **Bitpanda Portfolio** and **Bitpanda Price Tracker** — with **⋮ → Delete**. Their devices and sensors go with them.
+2. Remove **Bitpanda** in HACS (its **⋮** menu → **Remove**). Installed manually: delete the `config/custom_components/bitpanda` folder.
+3. Restart Home Assistant.
+4. Optional: delete the API key on [Bitpanda's key page](https://app.bitpanda.com/my-account/apikey) if nothing else uses it.
+
+The recorded history of the removed sensors stays in Home Assistant's database until the recorder purges it — after 10 days by default (the recorder's `purge_keep_days`).
+
+---
+
+## ⚠️ Known limitations
+
+- **One Bitpanda account per Home Assistant.** Each service can be set up once, and Bitpanda's API does not tell which account a key belongs to: a key of another account — entered under **Reconfigure** or when Home Assistant asks for a new key — switches the Portfolio to that account. Its figures then follow the new account, and the wallets of assets the new account does not hold are removed after three refreshes.
+- **Cloud polling only.** Bitpanda sends no updates by itself, so the integration asks: the portfolio every 5 minutes (Earn products every 24 hours, rewards every hour), prices every 60 seconds — longer above 30 tracked assets — and the ECB rates every 6 hours. `bitpanda.refresh` asks at once, within its [cooldown](#manual-refresh).
+- **Prices in other currencies are converted, not quoted.** Bitpanda's price endpoint answers in EUR only; every other currency is the EUR price × the ECB's daily reference rate, which can differ from the price Bitpanda itself shows in that currency.
+- **Returns only for Bitpanda's five timeframes:** a day, a week, a month, six months and a year.
+- **No price sensors for fiat and Cash Plus:** they are cash, one unit per unit of their currency; the Portfolio shows them as **Cash** and **Cash Plus**.
+- **Read-only.** The integration cannot trade, move funds or change anything in your account.
+- **English entity IDs, device names and log messages**, whatever language Home Assistant runs in (see [Languages](#languages)).
+- **"Add price tracker" at the top of the integration page** lists both Bitpanda entries on Home Assistant versions up to 2026.9 — see [Track prices](#3-track-prices) for the way around it.
 
 ---
 

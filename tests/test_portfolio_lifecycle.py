@@ -13,6 +13,7 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     MockEntityPlatform,
+    async_capture_events,
     async_fire_time_changed,
 )
 
@@ -214,13 +215,22 @@ async def test_an_offered_product_adds_staking_even_with_nothing_staked(hass):
 async def test_staking_leaves_when_nothing_is_staked_and_no_product_is_offered(hass):
     """Only the Staking sensor goes. The Total stays -- the same entity, not
     one removed and added again -- and with it the position performance, so
-    nothing an automation reads moves when staking stops."""
+    nothing an automation reads moves when staking stops.
+
+    The registry's own record of removals proves it: an entity removed and
+    added again gets its old registry entry back, id included, so the entry
+    alone could not tell."""
     harness = _Harness(hass)
     await harness.refresh(_data(_holding(VSN, staked=4.0)))
-    total = er.async_get(hass).async_get(VSN_TOTAL).id
+    registry_changes = async_capture_events(hass, er.EVENT_ENTITY_REGISTRY_UPDATED)
     await harness.refresh(_data(_holding(VSN)))
     assert harness.entity_ids() == VSN_UNSTAKED
-    assert er.async_get(hass).async_get(VSN_TOTAL).id == total
+    removed = [
+        change.data["entity_id"]
+        for change in registry_changes
+        if change.data["action"] == "remove"
+    ]
+    assert removed == [VSN_STAKING]
 
 
 async def test_unknown_earn_never_creates_staking(hass):

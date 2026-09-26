@@ -150,7 +150,7 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
     def __init__(
         self,
         hass: HomeAssistant,
-        entry: ConfigEntry,
+        entry: PortfolioConfigEntry,
         client: BitpandaApiClient,
         currency_id: str,
         directory: AssetDirectory,
@@ -229,7 +229,7 @@ class EarnCoordinator(DataUpdateCoordinator[EarnData]):
     config_entry: PortfolioConfigEntry
 
     def __init__(
-        self, hass: HomeAssistant, entry: ConfigEntry, client: BitpandaApiClient
+        self, hass: HomeAssistant, entry: PortfolioConfigEntry, client: BitpandaApiClient
     ) -> None:
         super().__init__(
             hass,
@@ -270,7 +270,7 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]
     config_entry: PortfolioConfigEntry
 
     def __init__(
-        self, hass: HomeAssistant, entry: ConfigEntry, client: BitpandaApiClient
+        self, hass: HomeAssistant, entry: PortfolioConfigEntry, client: BitpandaApiClient
     ) -> None:
         super().__init__(
             hass,
@@ -387,7 +387,7 @@ class HistoryCoordinator(DataUpdateCoordinator[PortfolioReturns]):
     def __init__(
         self,
         hass: HomeAssistant,
-        entry: ConfigEntry,
+        entry: PortfolioConfigEntry,
         client: BitpandaApiClient,
         currency_id: str,
     ) -> None:

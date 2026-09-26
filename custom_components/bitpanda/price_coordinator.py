@@ -165,7 +165,7 @@ class TickerCoordinator(DataUpdateCoordinator[dict[str, float]]):
     def __init__(
         self,
         hass: HomeAssistant,
-        entry: ConfigEntry,
+        entry: PriceTrackerConfigEntry,
         client: BitpandaApiClient,
         tracked: dict[str, str],
     ) -> None:
@@ -259,7 +259,7 @@ class EcbCoordinator(DataUpdateCoordinator[EcbRates]):
     def __init__(
         self,
         hass: HomeAssistant,
-        entry: ConfigEntry,
+        entry: PriceTrackerConfigEntry,
         session: aiohttp.ClientSession,
     ) -> None:
         super().__init__(

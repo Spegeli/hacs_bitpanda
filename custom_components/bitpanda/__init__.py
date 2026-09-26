@@ -62,6 +62,7 @@ from .portfolio_coordinator import (
 )
 from .price_coordinator import (
     EcbCoordinator,
+    PriceTrackerConfigEntry,
     PriceTrackerRuntime,
     TickerCoordinator,
     async_delete_price_interval_issue,
@@ -119,12 +120,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> 
         SUBENTRY_TYPE_PRICE_GROUP if is_price_tracker else SUBENTRY_TYPE_WALLET_GROUP,
         group_titles,
     )
+    # The entry's type names its service, and so its runtime data.
     if is_price_tracker:
-        entry.runtime_data = await _async_start_price_tracker(hass, entry)
+        entry.runtime_data = await _async_start_price_tracker(
+            hass, cast(PriceTrackerConfigEntry, entry)
+        )
         # Options, groups and data all change what it tracks: rebuild on any change.
         reload_listener = _async_reload
     else:
-        entry.runtime_data = await _async_start_portfolio(hass, entry, group_titles)
+        entry.runtime_data = await _async_start_portfolio(
+            hass, cast(PortfolioConfigEntry, entry), group_titles
+        )
         reload_listener = _async_reload_on_new_data_or_options
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(reload_listener))
@@ -132,7 +138,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> 
 
 
 async def _async_start_portfolio(
-    hass: HomeAssistant, entry: ConfigEntry, group_titles: dict[str, str]
+    hass: HomeAssistant, entry: PortfolioConfigEntry, group_titles: dict[str, str]
 ) -> PortfolioRuntime:
     session = async_get_clientsession(hass)
     client = BitpandaApiClient(entry.data[CONF_API_KEY], session)
@@ -176,7 +182,7 @@ async def _async_start_portfolio(
 
 
 async def _async_start_price_tracker(
-    hass: HomeAssistant, entry: ConfigEntry
+    hass: HomeAssistant, entry: PriceTrackerConfigEntry
 ) -> PriceTrackerRuntime:
     if entry.data.get(CONF_LEGACY_ADOPT):
         # Before any entity exists -- see migration.async_adopt_legacy_prices.

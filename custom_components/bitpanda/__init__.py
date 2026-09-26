@@ -112,7 +112,20 @@ async def _async_start_portfolio(
         data_at_setup=dict(entry.data),
         options_at_setup=dict(entry.options),
     )
-    await _async_first_refresh(runtime.portfolio)
+    try:
+        await _async_first_refresh(runtime.portfolio)
+    except ConfigEntryNotReady as err:
+        # An empty answer that awaits confirmation (PortfolioCoordinator) is
+        # no reason to retry setup: Home Assistant retries after 5 s, then
+        # 10 s, so the next answers -- which confirm it -- would come within
+        # seconds instead of at the usual pace. The entry loads with its
+        # sensors unavailable, and the regular refreshes confirm or refute it.
+        if err.translation_key != "portfolio_empty":
+            raise
+        _LOGGER.warning(
+            "Bitpanda reported an empty portfolio; the Portfolio's sensors stay "
+            "unavailable until the next answers list its holdings again or confirm it"
+        )
     # Earn, rewards and history are additive: a failure there must not block
     # setup, so they refresh with async_refresh(), which never raises
     # ConfigEntryNotReady. A 401 from any of them still reaches the reauth
@@ -318,6 +331,12 @@ async def async_remove_config_entry_device(
         return True
     runtime: PortfolioRuntime = config_entry.runtime_data
     data = runtime.portfolio.data
+    if data is None:
+        # No answer taken as the truth yet -- an empty one awaits
+        # confirmation: nothing tells whether the asset is held, and the
+        # wallet manager has added no wallet in this run. Should the asset
+        # still be held, its wallet comes back with the answer listing it.
+        return True
     for asset_id in wallets:
         if asset_id not in data.held:
             continue

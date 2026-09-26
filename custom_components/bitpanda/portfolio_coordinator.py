@@ -14,6 +14,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     TimestampDataUpdateCoordinator,
@@ -31,6 +32,7 @@ from .const import (
     REWARDS_UPDATE_INTERVAL,
     WALLET_REMOVAL_MISSES,
 )
+from .naming import managed_asset_id
 from .portfolio_model import (
     EarnData,
     PortfolioData,
@@ -42,6 +44,11 @@ from .portfolio_model import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Empty /portfolio answers in a row, per Portfolio entry, since the last one
+# taken as the truth (see PortfolioCoordinator). In hass.data rather than on
+# the coordinator, so the count outlives a reload or a failed setup.
+_EMPTY_ANSWERS = f"{DOMAIN}_empty_portfolio_answers"
 
 
 def _auth_failed() -> ConfigEntryAuthFailed:
@@ -67,17 +74,21 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
     Values arrive converted by Bitpanda (`equivalent_currency_id`): no
     exchange rate is derived or applied here.
 
-    A completely empty answer -- no asset and no fiat entry at all -- right
-    after one that listed something is far more likely a glitch at Bitpanda
-    than a sale of everything. It fails the update instead: the sensors go
-    unavailable, and the wallet manager, which acts only on successful
-    refreshes, counts no miss and removes nothing. Only the answer that
-    makes WALLET_REMOVAL_MISSES empty ones in a row is taken as the truth:
-    Total 0, and from then on every empty answer is too, and the wallets
-    count as missing as usual. A failed request in between neither counts
-    nor resets. An empty first answer -- a new, empty account -- is the
-    truth at once, so setup works; the count lives in memory, so after a
-    restart or reload the first answer is a first answer again.
+    A completely empty answer -- no asset and no fiat entry at all -- from
+    an account that listed something before is far more likely a glitch at
+    Bitpanda than a sale of everything. Listed something before: the last
+    answer this coordinator took as the truth did, or, for its first answer
+    -- after a restart or a reload -- wallets of this entry are registered.
+    Such an answer fails the update instead: the sensors go unavailable,
+    and the wallet manager, which acts only on successful refreshes, counts
+    no miss and removes nothing. Only the answer that makes
+    WALLET_REMOVAL_MISSES empty ones in a row is taken as the truth: Total
+    0, and from then on every empty answer is too, and the wallets count as
+    missing as usual. The count lives in hass.data, so a reload -- or a
+    setup that is retried -- goes on counting where the last coordinator
+    stopped. A failed request neither counts nor resets it; any answer taken
+    as the truth clears it. An empty first answer with no wallet registered
+    -- a new, empty account -- is the truth at once, so its setup works.
     """
 
     def __init__(
@@ -98,11 +109,9 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
         self._client = client
         self._currency_id = currency_id
         self._directory = directory
-        # Whether the last answer taken as the truth listed anything (False
-        # before the first), and the empty answers in a row since the last
-        # one that did -- see the class docstring.
-        self._listed = False
-        self._empty_in_a_row = 0
+        # Whether the last answer this coordinator took as the truth listed
+        # anything; None before its first (see the class docstring).
+        self._listed: bool | None = None
 
     async def _async_update_data(self) -> PortfolioData:
         try:
@@ -113,16 +122,7 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
             raise _auth_failed() from None
         except BitpandaApiError as err:
             raise _update_failed(err) from None
-        if not lists_nothing(entries):
-            self._listed = True
-            self._empty_in_a_row = 0
-        elif self._listed:
-            self._empty_in_a_row += 1
-            if self._empty_in_a_row < WALLET_REMOVAL_MISSES:
-                raise UpdateFailed(
-                    translation_domain=DOMAIN, translation_key="portfolio_empty"
-                )
-            self._listed = False
+        self._check_empty_answer(entries)
         data = parse_portfolio(entries)
         # Never raises: a failed lookup leaves the holdings not named yet
         # unnamed until the next refresh instead of failing the portfolio.
@@ -133,6 +133,31 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
             if (record := self._directory.get(asset_id)) is not None
         }
         return data
+
+    def _check_empty_answer(self, entries: list[dict]) -> None:
+        """Raise UpdateFailed for an empty answer not confirmed yet; count
+        or clear the empty answers in a row (see the class docstring)."""
+        counts: dict[str, int] = self.hass.data.setdefault(_EMPTY_ANSWERS, {})
+        entry_id = self.config_entry.entry_id
+        empty = lists_nothing(entries)
+        if empty and (self._listed if self._listed is not None else self._has_wallets()):
+            count = counts.get(entry_id, 0) + 1
+            if count < WALLET_REMOVAL_MISSES:
+                counts[entry_id] = count
+                raise UpdateFailed(
+                    translation_domain=DOMAIN, translation_key="portfolio_empty"
+                )
+        counts.pop(entry_id, None)
+        self._listed = not empty
+
+    def _has_wallets(self) -> bool:
+        """Whether wallets of this entry are registered -- wallet, staking
+        or total sensors: the account listed something before."""
+        entry_id = self.config_entry.entry_id
+        return any(
+            managed_asset_id(entry_id, reg_entry.unique_id) is not None
+            for reg_entry in er.async_entries_for_config_entry(er.async_get(self.hass), entry_id)
+        )
 
 
 class EarnCoordinator(DataUpdateCoordinator[EarnData]):

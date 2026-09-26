@@ -339,6 +339,98 @@ async def test_a_sudden_empty_portfolio_changes_nothing_until_it_is_confirmed(
     assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet") is None
 
 
+def _registered_wallet(hass, entry) -> str:
+    """The VSN wallet of `entry` as a restart finds it: its device and its
+    Wallet sensor in the registries, nothing loaded yet."""
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"{entry.entry_id}_wallet_{VSN['id']}")},
+        name="Vision (VSN) Wallet",
+    )
+    return er.async_get(hass).async_get_or_create(
+        "sensor", DOMAIN, f"{entry.entry_id}_wallet_{VSN['id']}", config_entry=entry,
+        device_id=device.id, suggested_object_id="bitpanda_vision_vsn_wallet",
+    ).entity_id
+
+
+@pytest.mark.parametrize(
+    "first_refresh", [None, "before_2026_9"], ids=["current", "before_2026_9"]
+)
+async def test_after_a_restart_an_empty_portfolio_waits_for_confirmation(
+    hass, portfolio_api, caplog, first_refresh
+):
+    """A wallet registered from before the restart: the account listed
+    something. An empty first answer loads the Portfolio with its sensors
+    unavailable -- retrying setup would bring the next answers within
+    seconds -- and nothing is removed until three empty answers in a row, at
+    the usual pace, confirm it. From then on the usual rules apply. On every
+    supported Home Assistant version: before 2026.9 the failed first refresh
+    carries its reason only through _async_first_refresh."""
+    entry = _portfolio_entry(hass)
+    wallet = _registered_wallet(hass, entry)
+    portfolio_api.return_value = []
+
+    with _home_assistant_first_refresh(
+        None if first_refresh is None else _first_refresh_before_2026_9
+    ):
+        await _setup(hass, entry)
+    assert "Bitpanda reported an empty portfolio" in caplog.text
+    ent_reg = er.async_get(hass)
+    for _ in range(2):
+        assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unavailable"
+        assert ent_reg.async_get(wallet) is not None
+        await _next_refresh(hass)
+
+    # The third empty answer in a row: the truth, and the wallet's first miss.
+    assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
+    await _next_refresh(hass)
+    assert ent_reg.async_get(wallet) is not None
+    await _next_refresh(hass)
+    assert ent_reg.async_get(wallet) is None
+
+
+async def test_a_new_empty_account_is_set_up_at_once(hass, portfolio_api):
+    """No wallet registered: nothing to hold back."""
+    portfolio_api.return_value = []
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
+
+
+async def test_the_count_of_empty_answers_survives_a_reload(hass, portfolio_api):
+    """The reload's first answer is the second empty one in a row, not a
+    first; the next refresh brings the third."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    portfolio_api.return_value = []
+    await _next_refresh(hass)
+
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.LOADED
+    assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unavailable"
+
+    await _next_refresh(hass)
+    assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
+
+
+async def test_a_wallet_may_be_deleted_while_an_empty_answer_awaits_confirmation(
+    hass, portfolio_api
+):
+    """Before any answer is taken as the truth nothing tells whether the
+    asset is held, and no wallet was added in this run: it may go, without
+    a reload."""
+    entry = _portfolio_entry(hass)
+    _registered_wallet(hass, entry)
+    portfolio_api.return_value = []
+    await _setup(hass, entry)
+    with patch.object(hass.config_entries, "async_schedule_reload") as reload:
+        assert await async_remove_config_entry_device(
+            hass, entry, _own_device(hass, entry, "wallet", VSN)
+        )
+    reload.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "change",
     [

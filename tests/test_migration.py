@@ -1165,7 +1165,7 @@ async def test_every_issue_text_renders_in_every_language(hass, legacy_api, no_s
         for issue in _issues(hass).values()
     }
     strings = json.loads((_INTEGRATION / "strings.json").read_text(encoding="utf-8"))
-    assert set(raised) == set(strings["issues"])
+    assert set(raised) == set(strings["issues"]) == set(migration.UPGRADE_ISSUES)
     languages = sorted(path.stem for path in (_INTEGRATION / "translations").glob("*.json"))
     assert len(languages) == 7
     for language in languages:
@@ -1182,6 +1182,28 @@ async def test_every_issue_text_renders_in_every_language(hass, legacy_api, no_s
             for name, value in placeholders.items():
                 if value.startswith("- "):
                     assert f"\n\n{{{name}}}" in description, (language, key, name)
+
+
+async def test_the_upgrade_issues_go_with_the_last_bitpanda_entry(hass, legacy_api, no_setup):
+    """Once no Bitpanda entry remains, the upgrade's repair issues describe
+    entities that are gone -- and after an uninstall Repairs could not even
+    show their texts: removing the last entry deletes them. While another
+    Bitpanda entry remains they stay; other integrations' issues always do."""
+    entry, _, _ = _upgrade_with_every_issue(hass)
+    assert await async_migrate_entry(hass, entry)
+    [tracker] = _price_trackers(hass)
+    ir.async_create_issue(
+        hass, "other", "unrelated", is_fixable=False, severity=ir.IssueSeverity.WARNING,
+        translation_key="unrelated",
+    )
+    assert set(_issues(hass)) == set(migration.UPGRADE_ISSUES)
+
+    await hass.config_entries.async_remove(entry.entry_id)
+    assert set(_issues(hass)) == set(migration.UPGRADE_ISSUES)
+
+    await hass.config_entries.async_remove(tracker.entry_id)
+    assert _issues(hass) == {}
+    assert ir.async_get(hass).async_get_issue("other", "unrelated") is not None
 
 
 async def test_an_interrupted_migration_can_run_again(hass, legacy_api, no_setup):

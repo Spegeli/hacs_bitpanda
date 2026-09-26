@@ -618,6 +618,26 @@ def _log_text(
     return "\n\n".join(paragraphs)
 
 
+# Every repair issue the upgrade can raise, by id -- each id is also its
+# translation key. tests/test_migration.py ties this to what the migration
+# raises and to the `issues` in strings.json.
+UPGRADE_ISSUES = (
+    "renamed_entities",
+    "entities_not_migrated",
+    "currency_dropped",
+    "price_tracker_exists",
+)
+
+
+@callback
+def async_delete_upgrade_issues(hass: HomeAssistant) -> None:
+    """Delete the upgrade's repair issues -- for when the last Bitpanda entry
+    goes: they describe entities that went with it, and after an uninstall
+    Repairs could no longer show their texts."""
+    for issue_id in UPGRADE_ISSUES:
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
+
+
 @callback
 def _async_raise_issue(hass: HomeAssistant, key: str, placeholders: dict[str, str]) -> None:
     """One repair issue of the upgrade, `key` both its id and its translation

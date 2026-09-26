@@ -293,8 +293,19 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Forget what outlived the entry's setups: its count of empty
-    /portfolio answers, kept in hass.data across reloads."""
+    /portfolio answers, kept in hass.data across reloads -- and, with the
+    last Bitpanda entry, the upgrade's repair issues (migration.py).
+
+    The entry itself is left out when looking for another one: Home
+    Assistant 2025.5 has already dropped it from its entries when this
+    runs, and nothing here depends on that order.
+    """
     async_forget_empty_answers(hass, entry.entry_id)
+    if not any(
+        other.entry_id != entry.entry_id
+        for other in hass.config_entries.async_entries(DOMAIN)
+    ):
+        migration.async_delete_upgrade_issues(hass)
 
 
 async def async_remove_config_entry_device(

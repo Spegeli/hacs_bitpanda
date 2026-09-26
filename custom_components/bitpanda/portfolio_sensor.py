@@ -10,20 +10,19 @@ currency change clears them with the sensors' history (purge.py).
 """
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
@@ -57,7 +56,14 @@ from .naming import (
     wallet_entity_id,
     wallet_unique_id,
 )
-from .portfolio_coordinator import PortfolioRuntime
+from .portfolio_coordinator import (
+    EarnCoordinator,
+    HistoryCoordinator,
+    PortfolioConfigEntry,
+    PortfolioCoordinator,
+    PortfolioRuntime,
+    RewardsCoordinator,
+)
 from .portfolio_model import (
     DECIMALS,
     EarnData,
@@ -82,7 +88,7 @@ def portfolio_device_info(entry_id: str) -> DeviceInfo:
     )
 
 
-def wallet_device_info(entry_id: str, asset: dict) -> DeviceInfo:
+def wallet_device_info(entry_id: str, asset: dict[str, Any]) -> DeviceInfo:
     return DeviceInfo(
         identifiers={(DOMAIN, wallet_device_identifier(entry_id, asset["id"]))},
         name=wallet_device_name(asset),
@@ -96,7 +102,7 @@ def wallet_device_info(entry_id: str, asset: dict) -> DeviceInfo:
 # --- Portfolio device ------------------------------------------------------------
 
 
-class _PortfolioFigure(CoordinatorEntity, SensorEntity):
+class _PortfolioFigure(CoordinatorEntity[PortfolioCoordinator], SensorEntity):
     """One figure of the whole account.
 
     Unavailable only while the update failed -- an empty answer held back
@@ -114,7 +120,9 @@ class _PortfolioFigure(CoordinatorEntity, SensorEntity):
     _key: str
     _attr_translation_key: str
 
-    def __init__(self, coordinator, entry_id: str, currency: str) -> None:
+    def __init__(
+        self, coordinator: PortfolioCoordinator, entry_id: str, currency: str
+    ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = portfolio_unique_id(entry_id, self._key)
         self.entity_id = portfolio_entity_id(self._key)
@@ -174,7 +182,7 @@ class PortfolioCashPlusSensor(_PortfolioFigure):
         return data.cash_plus_amounts or {}
 
 
-class PortfolioReturnSensor(CoordinatorEntity, SensorEntity):
+class PortfolioReturnSensor(CoordinatorEntity[HistoryCoordinator], SensorEntity):
     """The portfolio's return over one timeframe, in percent.
 
     Unavailable while the history update failed or this timeframe's own
@@ -187,7 +195,9 @@ class PortfolioReturnSensor(CoordinatorEntity, SensorEntity):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 2
 
-    def __init__(self, coordinator, entry_id: str, timeframe: str) -> None:
+    def __init__(
+        self, coordinator: HistoryCoordinator, entry_id: str, timeframe: str
+    ) -> None:
         super().__init__(coordinator)
         key = return_key(timeframe)
         self._timeframe = timeframe
@@ -224,7 +234,7 @@ def _performance(holding: Holding) -> dict[str, float]:
     return out
 
 
-class _WalletPart(CoordinatorEntity, SensorEntity):
+class _WalletPart(CoordinatorEntity[PortfolioCoordinator], SensorEntity):
     """One value of one holding."""
 
     _attr_has_entity_name = True
@@ -232,7 +242,13 @@ class _WalletPart(CoordinatorEntity, SensorEntity):
     _attr_state_class = SensorStateClass.TOTAL
     _attr_suggested_display_precision = 2
 
-    def __init__(self, coordinator, entry_id: str, currency: str, asset: dict) -> None:
+    def __init__(
+        self,
+        coordinator: PortfolioCoordinator,
+        entry_id: str,
+        currency: str,
+        asset: dict[str, Any],
+    ) -> None:
         super().__init__(coordinator)
         self._asset = asset
         self._asset_id = asset["id"]
@@ -282,7 +298,13 @@ class WalletSensor(_WalletPart):
 
     _attr_translation_key = "wallet"
 
-    def __init__(self, coordinator, entry_id: str, currency: str, asset: dict) -> None:
+    def __init__(
+        self,
+        coordinator: PortfolioCoordinator,
+        entry_id: str,
+        currency: str,
+        asset: dict[str, Any],
+    ) -> None:
         super().__init__(coordinator, entry_id, currency, asset)
         self._attr_unique_id = wallet_unique_id(entry_id, asset["id"])
         self.entity_id = wallet_entity_id(asset)
@@ -304,7 +326,13 @@ class StakingSensor(_WalletPart):
     _attr_translation_key = "staking"
 
     def __init__(
-        self, coordinator, earn, rewards, entry_id: str, currency: str, asset: dict
+        self,
+        coordinator: PortfolioCoordinator,
+        earn: EarnCoordinator,
+        rewards: RewardsCoordinator,
+        entry_id: str,
+        currency: str,
+        asset: dict[str, Any],
     ) -> None:
         super().__init__(coordinator, entry_id, currency, asset)
         self._earn = earn
@@ -366,7 +394,13 @@ class WalletTotalSensor(_WalletPart):
 
     _attr_translation_key = "wallet_total"
 
-    def __init__(self, coordinator, entry_id: str, currency: str, asset: dict) -> None:
+    def __init__(
+        self,
+        coordinator: PortfolioCoordinator,
+        entry_id: str,
+        currency: str,
+        asset: dict[str, Any],
+    ) -> None:
         super().__init__(coordinator, entry_id, currency, asset)
         self._attr_unique_id = total_unique_id(entry_id, asset["id"])
         self.entity_id = total_entity_id(asset)
@@ -429,10 +463,10 @@ class PortfolioEntityManager:
     def __init__(
         self,
         hass: HomeAssistant,
-        entry: ConfigEntry,
+        entry: PortfolioConfigEntry,
         runtime: PortfolioRuntime,
         currency: str,
-        add_entities: Callable[..., None],
+        add_entities: AddConfigEntryEntitiesCallback,
     ) -> None:
         self._hass = hass
         self._entry = entry
@@ -468,7 +502,9 @@ class PortfolioEntityManager:
             entity_id = ent_reg.async_get_entity_id("sensor", DOMAIN, unique_id)
             if entity_id is None:
                 continue
-            group = self._entry.subentries.get(ent_reg.async_get(entity_id).config_subentry_id)
+            # Registered: async_get_entity_id has just found it.
+            subentry_id = cast(er.RegistryEntry, ent_reg.async_get(entity_id)).config_subentry_id
+            group = None if subentry_id is None else self._entry.subentries.get(subentry_id)
             if group is not None and group.subentry_type == SUBENTRY_TYPE_WALLET_GROUP:
                 return group.unique_id
         return None
@@ -608,8 +644,8 @@ def _keep_polling() -> None:
 
 async def async_setup_portfolio_entities(
     hass: HomeAssistant,
-    entry: ConfigEntry,
-    add_entities: Callable[..., None],
+    entry: PortfolioConfigEntry,
+    add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """The Portfolio device's sensors, outside every group, then the wallets
     the manager keeps current in their groups."""

@@ -7,10 +7,9 @@ for the monetary device class; each sensor's currency never changes.
 """
 from __future__ import annotations
 
-from collections.abc import Callable
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -18,9 +17,10 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -43,7 +43,14 @@ from .naming import (
     price_key,
     price_unique_id,
 )
-from .price_coordinator import PriceTrackerRuntime, convert_price
+from .ecb import EcbRates
+from .price_coordinator import (
+    EcbCoordinator,
+    PriceTrackerConfigEntry,
+    PriceTrackerRuntime,
+    TickerCoordinator,
+    convert_price,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -71,7 +78,7 @@ def display_precision(value: float | None) -> int:
     return 8
 
 
-def price_device_info(entry_id: str, asset: dict) -> DeviceInfo:
+def price_device_info(entry_id: str, asset: dict[str, Any]) -> DeviceInfo:
     return DeviceInfo(
         identifiers={(DOMAIN, price_device_identifier(entry_id, asset["id"]))},
         name=price_device_name(asset),
@@ -87,7 +94,7 @@ def tracked_currencies(entry: ConfigEntry) -> list[str]:
     return ["EUR", *entry.options.get(CONF_EXTRA_CURRENCIES, [])]
 
 
-class PriceSensor(CoordinatorEntity, SensorEntity):
+class PriceSensor(CoordinatorEntity[TickerCoordinator], SensorEntity):
     """Price of one asset in one currency.
 
     Named by its currency after its device, so it reads "Bitcoin (BTC) Price
@@ -99,7 +106,14 @@ class PriceSensor(CoordinatorEntity, SensorEntity):
     _attr_state_class = SensorStateClass.TOTAL
     _attr_translation_key = "price"
 
-    def __init__(self, tickers, ecb, entry_id: str, asset: dict, currency: str) -> None:
+    def __init__(
+        self,
+        tickers: TickerCoordinator,
+        ecb: EcbCoordinator | None,
+        entry_id: str,
+        asset: dict[str, Any],
+        currency: str,
+    ) -> None:
         super().__init__(tickers)
         self._ecb = ecb
         self._asset = asset
@@ -113,7 +127,7 @@ class PriceSensor(CoordinatorEntity, SensorEntity):
         self._price_24h_ago: float | None = None
 
     @property
-    def _rates(self):
+    def _rates(self) -> EcbRates | None:
         """The last ECB rates, current or not: DataUpdateCoordinator keeps the
         last data after a failed refresh, and `rate_date` shows its age."""
         return None if self._ecb is None else self._ecb.data
@@ -154,7 +168,7 @@ class PriceSensor(CoordinatorEntity, SensorEntity):
             )
         )
 
-    async def _async_update_24h_change(self, _=None) -> None:
+    async def _async_update_24h_change(self, _: datetime | None = None) -> None:
         """Read this sensor's own value from about 24 hours ago from the recorder."""
         try:
             from homeassistant.components.recorder import get_instance
@@ -170,7 +184,9 @@ class PriceSensor(CoordinatorEntity, SensorEntity):
             )
             states = history.get(self.entity_id, [])
             if states:
-                self._price_24h_ago = float(states[-1].state)
+                # States, not dicts: neither minimal_response nor
+                # compressed_state_format is asked for.
+                self._price_24h_ago = float(cast(State, states[-1]).state)
         except Exception as err:  # noqa: BLE001 - optional data, never fatal
             _LOGGER.debug(
                 "No 24 h history for %s: %s", self.entity_id, type(err).__name__
@@ -190,7 +206,8 @@ class PriceSensor(CoordinatorEntity, SensorEntity):
                 attrs["conversion"] = "no_rate"
             else:
                 attrs["conversion_rate"] = rate
-                attrs["rate_date"] = self._rates.date
+                # The rate came from these rates.
+                attrs["rate_date"] = cast(EcbRates, self._rates).date
                 attrs["rate_source"] = "ECB"
         current = self.native_value
         if self._price_24h_ago and current is not None:
@@ -228,7 +245,9 @@ def _remove_untracked(hass: HomeAssistant, entry: ConfigEntry, currencies: list[
 
 
 async def async_setup_price_entities(
-    hass: HomeAssistant, entry: ConfigEntry, add_entities: Callable[..., None]
+    hass: HomeAssistant,
+    entry: PriceTrackerConfigEntry,
+    add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """One sensor per tracked asset and currency, bound to the asset's group.
 

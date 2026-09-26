@@ -165,6 +165,18 @@ async def test_portfolio_setup_creates_its_devices_and_sensors(hass, portfolio_a
     assert devices == {"Portfolio", "Vision (VSN) Wallet"}
 
 
+async def test_no_sensor_state_carries_an_icon(hass, portfolio_api, price_api):
+    """Icons come from icons.json by translation key (tests/test_icons.py):
+    the frontend looks them up, and no state carries one as an attribute."""
+    portfolio = _portfolio_entry(hass)
+    _price_entry(hass, ["USD"], price_group("crypto", BTC))
+    # The first setup of the domain sets up both entries.
+    await _setup(hass, portfolio)
+    states = hass.states.async_all("sensor")
+    assert len(states) >= 10
+    assert [state.entity_id for state in states if "icon" in state.attributes] == []
+
+
 async def test_every_portfolio_figure_is_one_the_currency_purge_knows(hass, portfolio_api):
     """The currency purge (purge.py) tells the Portfolio device's sensors
     apart by naming.PORTFOLIO_KEYS: a figure added without its key there

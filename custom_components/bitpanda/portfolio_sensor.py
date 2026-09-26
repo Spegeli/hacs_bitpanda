@@ -111,7 +111,6 @@ class PortfolioTotalSensor(_PortfolioFigure):
 
     _key = "total"
     _attr_translation_key = "total_value"
-    _attr_icon = "mdi:chart-pie"
 
     def _figure(self, data: PortfolioData) -> float | None:
         return data.total
@@ -122,7 +121,6 @@ class PortfolioCashSensor(_PortfolioFigure):
 
     _key = "cash"
     _attr_translation_key = "cash"
-    _attr_icon = "mdi:cash"
 
     def _figure(self, data: PortfolioData) -> float | None:
         return data.cash
@@ -133,7 +131,6 @@ class PortfolioCashPlusSensor(_PortfolioFigure):
 
     _key = "cash_plus"
     _attr_translation_key = "cash_plus"
-    _attr_icon = "mdi:piggy-bank"
 
     def _figure(self, data: PortfolioData) -> float | None:
         return data.cash_plus
@@ -158,7 +155,6 @@ class PortfolioReturnSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_suggested_display_precision = 2
-    _attr_icon = "mdi:chart-line"
 
     def __init__(self, coordinator, entry_id: str, timeframe: str) -> None:
         super().__init__(coordinator)
@@ -249,7 +245,6 @@ class WalletSensor(_WalletPart):
 
     _attr_name = None
     _attr_translation_key = "wallet"
-    _attr_icon = "mdi:wallet"
 
     def __init__(
         self,
@@ -283,7 +278,6 @@ class StakingSensor(_WalletPart):
     """Value of the staked units, with everything about Earn as attributes."""
 
     _attr_translation_key = "staking"
-    _attr_icon = "mdi:lock-clock"
 
     def __init__(
         self, coordinator, earn, rewards, entry_id: str, currency: str, asset: dict
@@ -334,7 +328,6 @@ class WalletTotalSensor(_WalletPart):
     """Value of the whole position, with its performance."""
 
     _attr_translation_key = "wallet_total"
-    _attr_icon = "mdi:sigma"
 
     def __init__(self, coordinator, entry_id: str, currency: str, asset: dict) -> None:
         super().__init__(coordinator, entry_id, currency, asset)

@@ -89,7 +89,6 @@ class PriceSensor(CoordinatorEntity, SensorEntity):
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_icon = "mdi:chart-line"
     _attr_translation_key = "price"
 
     def __init__(self, tickers, ecb, entry_id: str, asset: dict, currency: str) -> None:

@@ -207,7 +207,8 @@ def test_staking_is_the_staked_value_with_earn_attributes():
     assert sensor.entity_id == "sensor.bitpanda_vision_vsn_wallet_staking"
     assert sensor.unique_id == f"eid_staking_{VSN['id']}"
     assert sensor.translation_key == "staking"
-    assert sensor.icon == "mdi:lock-clock"
+    # Its icon comes from icons.json by that key (tests/test_icons.py).
+    assert sensor.icon is None
     assert sensor.native_value == 150.0
     assert sensor.extra_state_attributes == {
         "asset": "VSN", "asset_name": "Vision", "units": 75.0, "apr_percent": 5.44,

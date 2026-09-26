@@ -258,7 +258,7 @@ If a **Bitpanda Portfolio** was set up while the old entry still waited for its 
 - **Prices in other currencies are converted with ECB daily rates** instead of being quoted by Bitpanda.
 - **Long-term statistics.** Every value sensor now keeps them, from the upgrade on (see [Long-term statistics](#long-term-statistics)).
 - **`bitpanda.refresh` can fail now.** The old action never did. A refresh that fails, or a call while neither service is loaded, now stops a script or automation at that step unless the step sets `continue_on_error: true` (see [Manual Refresh](#manual-refresh)).
-- **Attributes:** units are now `units` on each sensor (the `units` of Balance (available) are the unstaked units its old `balance` showed); the APR is `apr_percent` on Balance (staking); the position performance is on Balance (total). `breakdown`, `wallet_count`, `all_prices` and the wallet `price` attribute are gone. The price sensor's `conversion` attribute now carries the status `no_rate` (not a sentence) while no exchange rate is loaded.
+- **Attributes:** units are now `units` on each sensor (the `units` of Balance (available) are the unstaked units its old `balance` showed); the APR is `apr_percent` on Balance (staking); the position performance is on Balance (total). `breakdown`, `wallet_count`, `all_prices` and the wallet `price` attribute are gone. The `icon` attribute is gone too; the icons themselves are unchanged. The price sensor's `conversion` attribute now carries the status `no_rate` (not a sentence) while no exchange rate is loaded.
 
 ---
 

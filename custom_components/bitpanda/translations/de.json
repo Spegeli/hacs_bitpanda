@@ -11,38 +11,54 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Gib deinen Bitpanda API-Schlüssel ein. Erstelle einen unter [{api_key_url}]({api_key_url}) mit diesen Berechtigungen: Guthaben, Transaktion und Earn (Read). Trading wird nicht benötigt. Berechtigungen lassen sich einem bestehenden Schlüssel später nicht hinzufügen.",
+        "description": "Gib deinen Bitpanda API-Schlüssel ein. Erstelle einen unter [{api_key_url}]({api_key_url}).",
         "data": {
           "api_key": "API-Schlüssel"
+        },
+        "data_description": {
+          "api_key": "Der Schlüssel braucht die Berechtigungen Guthaben, Transaktion und Earn (Read); Trading wird nicht benötigt. Berechtigungen lassen sich einem bestehenden Schlüssel später nicht hinzufügen."
         }
       },
       "currency": {
         "title": "Portfolio-Währung",
-        "description": "Bitpanda meldet alle Werte deines Portfolios in dieser Währung. Du kannst sie später über „Neu konfigurieren“ ändern.",
+        "description": "In welcher Währung möchtest du dein Portfolio sehen?",
         "data": {
           "currency": "Währung"
+        },
+        "data_description": {
+          "currency": "Bitpanda meldet alle Werte deines Portfolios in dieser Währung. Du kannst sie später über „Neu konfigurieren“ ändern."
         }
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "Jedes verfolgte Asset bekommt immer einen Preis-Sensor in EUR. Wähle zusätzliche Währungen, um pro Asset und Währung einen weiteren Sensor zu erhalten, umgerechnet mit den täglichen Referenzkursen der Europäischen Zentralbank. Assets fügst du danach mit „Preis-Tracker hinzufügen“ hinzu.",
+        "description": "Wähle jetzt die Währungen; Assets fügst du danach mit „Preis-Tracker hinzufügen“ hinzu.",
         "data": {
           "extra_currencies": "Zusätzliche Währungen"
+        },
+        "data_description": {
+          "extra_currencies": "Jedes verfolgte Asset bekommt immer einen Preis-Sensor in EUR. Jede hier gewählte Währung fügt pro Asset einen weiteren Sensor hinzu, umgerechnet mit den täglichen Referenzkursen der Europäischen Zentralbank."
         }
       },
       "reauth_confirm": {
         "title": "Neuer Bitpanda API-Schlüssel nötig",
-        "description": "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen, oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht. Erstelle unter [{api_key_url}]({api_key_url}) einen neuen Schlüssel mit Guthaben, Transaktion und Earn (Read) und füge ihn hier ein. Deine Sensoren bleiben erhalten.",
+        "description": "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen, oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht. Erstelle unter [{api_key_url}]({api_key_url}) einen neuen Schlüssel und füge ihn hier ein. Deine Sensoren bleiben erhalten.",
         "data": {
           "api_key": "API-Schlüssel"
+        },
+        "data_description": {
+          "api_key": "Der neue Schlüssel braucht die Berechtigungen Guthaben, Transaktion und Earn (Read)."
         }
       },
       "reconfigure": {
         "title": "Bitpanda Portfolio neu konfigurieren",
-        "description": "Um den gespeicherten API-Schlüssel zu ersetzen, füge einen neuen von [{api_key_url}]({api_key_url}) ein; er braucht Guthaben, Transaktion und Earn (Read). Lass das Feld leer, um den aktuellen Schlüssel zu behalten. Eine Änderung der Währung löscht alle Portfolio-Sensoren samt Verlauf; das bestätigst du im nächsten Schritt.",
+        "description": "Ersetze den gespeicherten API-Schlüssel, ändere die Währung oder beides.",
         "data": {
           "api_key": "Neuer API-Schlüssel",
           "currency": "Währung"
+        },
+        "data_description": {
+          "api_key": "Lass das Feld leer, um den aktuellen Schlüssel zu behalten. Ein neuer Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen Guthaben, Transaktion und Earn (Read).",
+          "currency": "Eine Änderung der Währung löscht alle Portfolio-Sensoren samt Verlauf; das bestätigst du im nächsten Schritt."
         }
       },
       "confirm_currency": {
@@ -73,12 +89,13 @@
     "step": {
       "price_tracker": {
         "title": "Optionen des Price Trackers",
-        "description": "Jedes verfolgte Asset behält immer seinen EUR-Sensor. Jede gewählte Währung fügt pro Asset einen Sensor hinzu; wird eine Währung abgewählt, werden diese Sensoren gelöscht.",
+        "description": "Änderungen gelten, sobald du sie speicherst.",
         "data": {
           "extra_currencies": "Zusätzliche Währungen",
           "language": "Sprache für Gruppentitel und Meldungen"
         },
         "data_description": {
+          "extra_currencies": "Jedes verfolgte Asset behält immer seinen EUR-Sensor. Jede gewählte Währung fügt pro Asset einen Sensor hinzu; wird eine Währung abgewählt, werden diese Sensoren gelöscht.",
           "language": "Gruppentitel und die eigenen Meldungen der Integration verwenden diese Sprache. Sensornamen folgen der Systemsprache von Home Assistant."
         }
       },
@@ -106,13 +123,19 @@
           "description": "Welche Art von Asset möchtest du verfolgen?",
           "data": {
             "category": "Asset-Typ"
+          },
+          "data_description": {
+            "category": "Der nächste Schritt listet alle Assets dieses Typs auf, die noch nicht verfolgt werden."
           }
         },
         "asset": {
           "title": "Preis-Tracker hinzufügen",
-          "description": "Tippe, um nach Name, Symbol oder ISIN zu suchen, und wähle ein Asset. Klicke ohne Auswahl auf „OK“, um zu den Asset-Typen zurückzukehren.",
+          "description": "Welches Asset möchtest du verfolgen?",
           "data": {
             "asset": "Asset"
+          },
+          "data_description": {
+            "asset": "Tippe, um nach Name, Symbol oder ISIN zu suchen, und wähle ein Asset. Klicke ohne Auswahl auf „OK“, um zu den Asset-Typen zurückzukehren."
           }
         }
       },

@@ -1,5 +1,7 @@
 """Tests for the "Add price tracker" subentry flow."""
 from datetime import timedelta
+import json
+from pathlib import Path
 from unittest.mock import ANY, AsyncMock, patch
 
 from homeassistant import data_entry_flow
@@ -75,6 +77,27 @@ def _options(result) -> list[dict]:
         if marker == "asset":
             return validator.config["options"]
     raise KeyError("asset")
+
+
+_STEP_TEXTS = json.loads(
+    (
+        Path(__file__).parent.parent / "custom_components" / "bitpanda" / "strings.json"
+    ).read_text(encoding="utf-8")
+)["config_subentries"]["price_group"]["step"]
+
+
+async def test_every_field_of_both_steps_has_a_label_and_a_help_text(hass):
+    """Each field shows its label and, under it, its help text."""
+    entry = _entry(hass)
+    forms = [await _start(hass, entry)]
+    with patch(_LIST, AsyncMock(return_value=_metals())):
+        forms.append(await _pick_category(hass, entry))
+    assert [result["step_id"] for result in forms] == ["user", "asset"]
+    for result in forms:
+        step = _STEP_TEXTS[result["step_id"]]
+        fields = {str(marker) for marker in result["data_schema"].schema}
+        assert set(step["data"]) == fields, result["step_id"]
+        assert set(step.get("data_description", {})) == fields, result["step_id"]
 
 
 async def test_the_portfolio_offers_no_subentries(hass):

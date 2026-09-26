@@ -149,14 +149,14 @@ _MENU_LABELS = {
 # The texts that send the user to one of those controls, by the control.
 _LABEL_REFERENCES = {
     "reconfigure": [
-        ("config", "step", "currency", "description"),
+        ("config", "step", "currency", "data_description", "currency"),
         ("options", "step", "portfolio", "description"),
         ("issues", "currency_dropped", "description"),
     ],
     "configure": [("config", "abort", "no_reconfigure")],
     "submit": [
         ("config", "step", "confirm_currency", "description"),
-        ("config_subentries", "price_group", "step", "asset", "description"),
+        ("config_subentries", "price_group", "step", "asset", "data_description", "asset"),
     ],
 }
 
@@ -222,14 +222,35 @@ def test_every_shipped_language_is_offered_by_its_own_name():
 
 def test_each_service_has_options_texts_of_its_own():
     """Configure shows one form per service, each under its own step id
-    (config_flow.BitpandaOptionsFlow): each field has a label, and the
-    language field its description."""
+    (config_flow.BitpandaOptionsFlow): each field has a label and a help
+    text."""
     steps = _load("strings.json")["options"]["step"]
     assert set(steps) == {"price_tracker", "portfolio"}
     assert set(steps["price_tracker"]["data"]) == {"extra_currencies", "language"}
     assert set(steps["portfolio"]["data"]) == {"language"}
     for step in steps.values():
-        assert set(step["data_description"]) == {"language"}
+        assert set(step["data_description"]) == set(step["data"])
+
+
+def test_every_field_has_a_help_text():
+    """Under every field of every dialog -- setup, reauth, reconfigure,
+    Configure and "Add price tracker" -- a help text (`data_description`)
+    says what it is for: exactly one per labelled field. The flow tests
+    check that every field a form shows is labelled."""
+    strings = _load("strings.json")
+    steps = {
+        **{f"config.{step_id}": step for step_id, step in strings["config"]["step"].items()},
+        **{f"options.{step_id}": step for step_id, step in strings["options"]["step"].items()},
+        **{
+            f"config_subentries.{flow}.{step_id}": step
+            for flow, texts in strings["config_subentries"].items()
+            for step_id, step in texts["step"].items()
+        },
+    }
+    labelled = {name: step for name, step in steps.items() if step.get("data")}
+    assert len(labelled) == 9
+    for name, step in labelled.items():
+        assert set(step.get("data_description", {})) == set(step["data"]), name
 
 
 # --- Failed requests: one text per kind of failure ---------------------------------

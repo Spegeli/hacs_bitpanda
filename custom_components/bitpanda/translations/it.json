@@ -11,38 +11,54 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Inserisci la tua chiave API di Bitpanda. Creane una su [{api_key_url}]({api_key_url}) con queste autorizzazioni: Guthaben (Balance), Transaktion (Transaction) e Earn (Read). L'autorizzazione Trading non è necessaria. Non è possibile aggiungere autorizzazioni a una chiave esistente in un secondo momento.",
+        "description": "Inserisci la tua chiave API di Bitpanda. Creane una su [{api_key_url}]({api_key_url}).",
         "data": {
           "api_key": "Chiave API"
+        },
+        "data_description": {
+          "api_key": "La chiave deve avere le autorizzazioni Guthaben (Balance), Transaktion (Transaction) e Earn (Read); l'autorizzazione Trading non è necessaria. Non è possibile aggiungere autorizzazioni a una chiave esistente in un secondo momento."
         }
       },
       "currency": {
         "title": "Valuta del Portfolio",
-        "description": "Bitpanda esprime ogni valore del tuo portafoglio in questa valuta. Potrai cambiarla in seguito con \"Riconfigura\".",
+        "description": "In quale valuta vuoi vedere il tuo portafoglio?",
         "data": {
           "currency": "Valuta"
+        },
+        "data_description": {
+          "currency": "Bitpanda esprime ogni valore del tuo portafoglio in questa valuta. Potrai cambiarla in seguito con \"Riconfigura\"."
         }
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "Ogni asset monitorato ha sempre un sensore di prezzo in EUR. Seleziona valute aggiuntive per avere un sensore in più per ogni asset e valuta, convertito con i tassi di cambio di riferimento giornalieri della Banca centrale europea. Aggiungi poi gli asset con \"Aggiungi monitoraggio prezzo\".",
+        "description": "Scegli ora le valute e aggiungi poi gli asset con \"Aggiungi monitoraggio prezzo\".",
         "data": {
           "extra_currencies": "Valute aggiuntive"
+        },
+        "data_description": {
+          "extra_currencies": "Ogni asset monitorato ha sempre un sensore di prezzo in EUR. Ogni valuta selezionata qui aggiunge un sensore in più per asset, convertito con i tassi di cambio di riferimento giornalieri della Banca centrale europea."
         }
       },
       "reauth_confirm": {
         "title": "Serve una nuova chiave API di Bitpanda",
-        "description": "Bitpanda ha rifiutato la chiave API salvata. Potrebbe essere scaduta oppure risalire a prima delle autorizzazioni richieste da questa versione. Crea una nuova chiave su [{api_key_url}]({api_key_url}) con Guthaben (Balance), Transaktion (Transaction) e Earn (Read) e incollala qui. I tuoi sensori vengono mantenuti.",
+        "description": "Bitpanda ha rifiutato la chiave API salvata. Potrebbe essere scaduta oppure risalire a prima delle autorizzazioni richieste da questa versione. Crea una nuova chiave su [{api_key_url}]({api_key_url}) e incollala qui. I tuoi sensori vengono mantenuti.",
         "data": {
           "api_key": "Chiave API"
+        },
+        "data_description": {
+          "api_key": "La nuova chiave deve avere le autorizzazioni Guthaben (Balance), Transaktion (Transaction) e Earn (Read)."
         }
       },
       "reconfigure": {
         "title": "Riconfigura Bitpanda Portfolio",
-        "description": "Per sostituire la chiave API salvata, incollane una nuova da [{api_key_url}]({api_key_url}); deve avere Guthaben (Balance), Transaktion (Transaction) e Earn (Read). Lascia il campo vuoto per mantenere la chiave attuale. Cambiare la valuta elimina tutti i sensori del Portfolio, cronologia inclusa; lo confermerai nel passaggio successivo.",
+        "description": "Sostituisci la chiave API salvata, cambia la valuta o entrambe le cose.",
         "data": {
           "api_key": "Nuova chiave API",
           "currency": "Valuta"
+        },
+        "data_description": {
+          "api_key": "Lascia il campo vuoto per mantenere la chiave attuale. Una nuova chiave da [{api_key_url}]({api_key_url}) deve avere le autorizzazioni Guthaben (Balance), Transaktion (Transaction) e Earn (Read).",
+          "currency": "Cambiare la valuta elimina tutti i sensori del Portfolio, cronologia inclusa; lo confermerai nel passaggio successivo."
         }
       },
       "confirm_currency": {
@@ -73,12 +89,13 @@
     "step": {
       "price_tracker": {
         "title": "Opzioni del Price Tracker",
-        "description": "Ogni asset monitorato mantiene sempre il suo sensore in EUR. Ogni valuta selezionata aggiunge un sensore per asset; togliere una valuta elimina quei sensori.",
+        "description": "Le modifiche si applicano non appena salvi.",
         "data": {
           "extra_currencies": "Valute aggiuntive",
           "language": "Lingua dei titoli dei gruppi e dei messaggi"
         },
         "data_description": {
+          "extra_currencies": "Ogni asset monitorato mantiene sempre il suo sensore in EUR. Ogni valuta selezionata aggiunge un sensore per asset; togliere una valuta elimina quei sensori.",
           "language": "I titoli dei gruppi e i messaggi propri dell'integrazione usano questa lingua. I nomi dei sensori seguono la lingua di sistema di Home Assistant."
         }
       },
@@ -106,13 +123,19 @@
           "description": "Che tipo di asset vuoi monitorare?",
           "data": {
             "category": "Tipo di asset"
+          },
+          "data_description": {
+            "category": "Il passaggio successivo elenca tutti gli asset di questo tipo non ancora monitorati."
           }
         },
         "asset": {
           "title": "Aggiungi monitoraggio prezzo",
-          "description": "Digita per cercare per nome, simbolo o ISIN, poi scegli un asset. Seleziona \"Invia\" senza scegliere nulla per tornare ai tipi di asset.",
+          "description": "Quale asset vuoi monitorare?",
           "data": {
             "asset": "Asset"
+          },
+          "data_description": {
+            "asset": "Digita per cercare per nome, simbolo o ISIN, poi scegli un asset. Seleziona \"Invia\" senza scegliere nulla per tornare ai tipi di asset."
           }
         }
       },

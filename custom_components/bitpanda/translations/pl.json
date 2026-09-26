@@ -11,38 +11,54 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Wprowadź swój klucz API platformy Bitpanda. Utwórz go na stronie [{api_key_url}]({api_key_url}) z tymi uprawnieniami: Guthaben (Balance), Transaktion (Transaction) i Earn (Read). Uprawnienie Trading nie jest potrzebne. Do istniejącego klucza nie można później dodać uprawnień.",
+        "description": "Wprowadź swój klucz API platformy Bitpanda. Utwórz go na stronie [{api_key_url}]({api_key_url}).",
         "data": {
           "api_key": "Klucz API"
+        },
+        "data_description": {
+          "api_key": "Klucz potrzebuje uprawnień Guthaben (Balance), Transaktion (Transaction) i Earn (Read); uprawnienie Trading nie jest potrzebne. Do istniejącego klucza nie można później dodać uprawnień."
         }
       },
       "currency": {
         "title": "Waluta Portfolio",
-        "description": "Bitpanda podaje wszystkie wartości Twojego portfolio w tej walucie. Możesz ją później zmienić za pomocą opcji „Rekonfiguracja”.",
+        "description": "W jakiej walucie chcesz widzieć swoje portfolio?",
         "data": {
           "currency": "Waluta"
+        },
+        "data_description": {
+          "currency": "Bitpanda podaje wszystkie wartości Twojego portfolio w tej walucie. Możesz ją później zmienić za pomocą opcji „Rekonfiguracja”."
         }
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "Każde śledzone aktywo zawsze ma sensor ceny w EUR. Wybierz dodatkowe waluty, aby dla każdego aktywa i każdej waluty dostać jeszcze jeden sensor, przeliczany według dziennych kursów referencyjnych Europejskiego Banku Centralnego. Aktywa dodasz potem za pomocą „Dodaj śledzenie ceny”.",
+        "description": "Wybierz teraz waluty, a aktywa dodasz potem za pomocą „Dodaj śledzenie ceny”.",
         "data": {
           "extra_currencies": "Dodatkowe waluty"
+        },
+        "data_description": {
+          "extra_currencies": "Każde śledzone aktywo zawsze ma sensor ceny w EUR. Każda wybrana tutaj waluta dodaje jeszcze jeden sensor na aktywo, przeliczany według dziennych kursów referencyjnych Europejskiego Banku Centralnego."
         }
       },
       "reauth_confirm": {
         "title": "Potrzebny nowy klucz API platformy Bitpanda",
-        "description": "Bitpanda odrzuciła zapisany klucz API. Mógł wygasnąć albo powstać przed wprowadzeniem uprawnień, których wymaga ta wersja. Utwórz nowy klucz na stronie [{api_key_url}]({api_key_url}) z uprawnieniami Guthaben (Balance), Transaktion (Transaction) i Earn (Read) i wklej go tutaj. Twoje sensory zostaną zachowane.",
+        "description": "Bitpanda odrzuciła zapisany klucz API. Mógł wygasnąć albo powstać przed wprowadzeniem uprawnień, których wymaga ta wersja. Utwórz nowy klucz na stronie [{api_key_url}]({api_key_url}) i wklej go tutaj. Twoje sensory zostaną zachowane.",
         "data": {
           "api_key": "Klucz API"
+        },
+        "data_description": {
+          "api_key": "Nowy klucz potrzebuje uprawnień Guthaben (Balance), Transaktion (Transaction) i Earn (Read)."
         }
       },
       "reconfigure": {
         "title": "Rekonfiguracja usługi Bitpanda Portfolio",
-        "description": "Aby zastąpić zapisany klucz API, wklej nowy ze strony [{api_key_url}]({api_key_url}); potrzebuje on uprawnień Guthaben (Balance), Transaktion (Transaction) i Earn (Read). Pozostaw pole puste, aby zachować obecny klucz. Zmiana waluty usuwa wszystkie sensory Portfolio wraz z ich historią; potwierdzisz to w następnym kroku.",
+        "description": "Zastąp zapisany klucz API, zmień walutę albo jedno i drugie.",
         "data": {
           "api_key": "Nowy klucz API",
           "currency": "Waluta"
+        },
+        "data_description": {
+          "api_key": "Pozostaw pole puste, aby zachować obecny klucz. Nowy klucz ze strony [{api_key_url}]({api_key_url}) potrzebuje uprawnień Guthaben (Balance), Transaktion (Transaction) i Earn (Read).",
+          "currency": "Zmiana waluty usuwa wszystkie sensory Portfolio wraz z ich historią; potwierdzisz to w następnym kroku."
         }
       },
       "confirm_currency": {
@@ -73,12 +89,13 @@
     "step": {
       "price_tracker": {
         "title": "Opcje usługi Price Tracker",
-        "description": "Każde śledzone aktywo zawsze zachowuje swój sensor w EUR. Każda wybrana waluta dodaje jeden sensor na aktywo; usunięcie waluty usuwa te sensory.",
+        "description": "Zmiany obowiązują od razu po zapisaniu.",
         "data": {
           "extra_currencies": "Dodatkowe waluty",
           "language": "Język tytułów grup i komunikatów"
         },
         "data_description": {
+          "extra_currencies": "Każde śledzone aktywo zawsze zachowuje swój sensor w EUR. Każda wybrana waluta dodaje jeden sensor na aktywo; usunięcie waluty usuwa te sensory.",
           "language": "Tytuły grup i własne komunikaty integracji używają tego języka. Nazwy sensorów są w języku systemu Home Assistant."
         }
       },
@@ -106,13 +123,19 @@
           "description": "Jaki rodzaj aktywa chcesz śledzić?",
           "data": {
             "category": "Rodzaj aktywa"
+          },
+          "data_description": {
+            "category": "Następny krok pokaże wszystkie aktywa tego rodzaju, które nie są jeszcze śledzone."
           }
         },
         "asset": {
           "title": "Dodaj śledzenie ceny",
-          "description": "Zacznij pisać, aby wyszukać po nazwie, symbolu lub numerze ISIN, a potem wybierz jedno aktywo. Kliknij „Zatwierdź” bez wyboru, aby wrócić do rodzajów aktywów.",
+          "description": "Które aktywo chcesz śledzić?",
           "data": {
             "asset": "Aktywo"
+          },
+          "data_description": {
+            "asset": "Zacznij pisać, aby wyszukać po nazwie, symbolu lub numerze ISIN, a potem wybierz jedno aktywo. Kliknij „Zatwierdź” bez wyboru, aby wrócić do rodzajów aktywów."
           }
         }
       },

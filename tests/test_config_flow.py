@@ -1,5 +1,6 @@
 """Tests for the config flow: service menu, both setups, reauth, reconfigure,
 import and the options of both services."""
+import json
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -781,6 +782,66 @@ async def test_a_language_the_integration_does_not_ship_is_refused(hass):
     with pytest.raises(data_entry_flow.InvalidData):
         await hass.config_entries.options.async_configure(result["flow_id"], {"language": "xx"})
     assert dict(entry.options) == {}
+
+
+# --- Every field has a label and a help text ------------------------------------------
+
+_STRINGS = json.loads(
+    (
+        Path(__file__).parent.parent / "custom_components" / "bitpanda" / "strings.json"
+    ).read_text(encoding="utf-8")
+)
+
+
+def _fields_without_texts(section: str, result) -> dict[str, list[str]]:
+    """The fields of the form `result` shows that lack a label (`data`) or a
+    help text shown under the field (`data_description`) in strings.json."""
+    step = _STRINGS[section]["step"][result["step_id"]]
+    fields = [str(marker) for marker in result["data_schema"].schema]
+    assert fields, result["step_id"]
+    return {
+        texts: [field for field in fields if field not in step.get(texts, {})]
+        for texts in ("data", "data_description")
+        if any(field not in step.get(texts, {}) for field in fields)
+    }
+
+
+async def test_every_field_of_every_form_has_a_label_and_a_help_text(hass):
+    """Setup of both services, reauth, reconfigure and both Configure forms:
+    each field shows its label and, under it, its help text."""
+    forms = []
+    result = await _portfolio_form(hass)
+    forms.append(("config", result))
+    forms.append(("config", await _submit_key(hass, result, "good")))
+    result = await _start(hass)
+    forms.append(
+        (
+            "config",
+            await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"next_step_id": "price_tracker"}
+            ),
+        )
+    )
+    portfolio = _portfolio_entry()
+    portfolio.add_to_hass(hass)
+    forms.append(("config", await portfolio.start_reauth_flow(hass)))
+    forms.append(("config", await portfolio.start_reconfigure_flow(hass)))
+    forms.append(("options", await hass.config_entries.options.async_init(portfolio.entry_id)))
+    tracker = _price_tracker_entry()
+    tracker.add_to_hass(hass)
+    forms.append(("options", await hass.config_entries.options.async_init(tracker.entry_id)))
+
+    assert [(section, result["step_id"]) for section, result in forms] == [
+        ("config", "portfolio"),
+        ("config", "currency"),
+        ("config", "price_tracker"),
+        ("config", "reauth_confirm"),
+        ("config", "reconfigure"),
+        ("options", "portfolio"),
+        ("options", "price_tracker"),
+    ]
+    for section, result in forms:
+        assert _fields_without_texts(section, result) == {}, (section, result["step_id"])
 
 
 async def test_stored_currency_round_trips_through_the_options_form(hass):

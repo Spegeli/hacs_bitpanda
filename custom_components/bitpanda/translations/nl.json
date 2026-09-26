@@ -11,38 +11,54 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Voer je Bitpanda API-sleutel in. Maak er een aan op [{api_key_url}]({api_key_url}) met deze rechten: Guthaben (Balance), Transaktion (Transaction) en Earn (Read). Het recht Trading is niet nodig. Rechten kunnen later niet aan een bestaande sleutel worden toegevoegd.",
+        "description": "Voer je Bitpanda API-sleutel in. Maak er een aan op [{api_key_url}]({api_key_url}).",
         "data": {
           "api_key": "API-sleutel"
+        },
+        "data_description": {
+          "api_key": "De sleutel heeft de rechten Guthaben (Balance), Transaktion (Transaction) en Earn (Read) nodig; het recht Trading is niet nodig. Rechten kunnen later niet aan een bestaande sleutel worden toegevoegd."
         }
       },
       "currency": {
         "title": "Portfolio-valuta",
-        "description": "Bitpanda geeft alle waarden van je portfolio in deze valuta weer. Je kunt de valuta later wijzigen met \"Herconfigureer\".",
+        "description": "In welke valuta wil je je portfolio zien?",
         "data": {
           "currency": "Valuta"
+        },
+        "data_description": {
+          "currency": "Bitpanda geeft alle waarden van je portfolio in deze valuta weer. Je kunt de valuta later wijzigen met \"Herconfigureer\"."
         }
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "Elke gevolgde asset krijgt altijd een prijssensor in EUR. Kies extra valuta om per asset en valuta nog een sensor te krijgen, omgerekend met de dagelijkse referentiekoersen van de Europese Centrale Bank. Voeg daarna assets toe met \"Prijstracker toevoegen\".",
+        "description": "Kies nu de valuta en voeg daarna assets toe met \"Prijstracker toevoegen\".",
         "data": {
           "extra_currencies": "Extra valuta"
+        },
+        "data_description": {
+          "extra_currencies": "Elke gevolgde asset krijgt altijd een prijssensor in EUR. Elke hier gekozen valuta voegt per asset nog een sensor toe, omgerekend met de dagelijkse referentiekoersen van de Europese Centrale Bank."
         }
       },
       "reauth_confirm": {
         "title": "Nieuwe Bitpanda API-sleutel nodig",
-        "description": "Bitpanda heeft de opgeslagen API-sleutel geweigerd. Misschien is hij verlopen, of hij dateert van vóór de rechten die deze versie nodig heeft. Maak op [{api_key_url}]({api_key_url}) een nieuwe sleutel aan met Guthaben (Balance), Transaktion (Transaction) en Earn (Read) en plak die hier. Je sensoren blijven behouden.",
+        "description": "Bitpanda heeft de opgeslagen API-sleutel geweigerd. Misschien is hij verlopen, of hij dateert van vóór de rechten die deze versie nodig heeft. Maak op [{api_key_url}]({api_key_url}) een nieuwe sleutel aan en plak die hier. Je sensoren blijven behouden.",
         "data": {
           "api_key": "API-sleutel"
+        },
+        "data_description": {
+          "api_key": "De nieuwe sleutel heeft de rechten Guthaben (Balance), Transaktion (Transaction) en Earn (Read) nodig."
         }
       },
       "reconfigure": {
         "title": "Bitpanda Portfolio herconfigureren",
-        "description": "Plak een nieuwe sleutel van [{api_key_url}]({api_key_url}) om de opgeslagen API-sleutel te vervangen; hij heeft Guthaben (Balance), Transaktion (Transaction) en Earn (Read) nodig. Laat het veld leeg om de huidige sleutel te behouden. Als je de valuta wijzigt, worden alle Portfolio-sensoren met hun geschiedenis verwijderd; dat bevestig je in de volgende stap.",
+        "description": "Vervang de opgeslagen API-sleutel, wijzig de valuta, of allebei.",
         "data": {
           "api_key": "Nieuwe API-sleutel",
           "currency": "Valuta"
+        },
+        "data_description": {
+          "api_key": "Laat het veld leeg om de huidige sleutel te behouden. Een nieuwe sleutel van [{api_key_url}]({api_key_url}) heeft de rechten Guthaben (Balance), Transaktion (Transaction) en Earn (Read) nodig.",
+          "currency": "Als je de valuta wijzigt, worden alle Portfolio-sensoren met hun geschiedenis verwijderd; dat bevestig je in de volgende stap."
         }
       },
       "confirm_currency": {
@@ -73,12 +89,13 @@
     "step": {
       "price_tracker": {
         "title": "Opties van de Price Tracker",
-        "description": "Elke gevolgde asset houdt altijd zijn EUR-sensor. Elke gekozen valuta voegt per asset een sensor toe; als je een valuta weghaalt, worden die sensoren verwijderd.",
+        "description": "Wijzigingen gelden zodra je opslaat.",
         "data": {
           "extra_currencies": "Extra valuta",
           "language": "Taal van groepstitels en meldingen"
         },
         "data_description": {
+          "extra_currencies": "Elke gevolgde asset houdt altijd zijn EUR-sensor. Elke gekozen valuta voegt per asset een sensor toe; als je een valuta weghaalt, worden die sensoren verwijderd.",
           "language": "Groepstitels en de eigen meldingen van de integratie gebruiken deze taal. Sensornamen volgen de systeemtaal van Home Assistant."
         }
       },
@@ -106,13 +123,19 @@
           "description": "Welk soort asset wil je volgen?",
           "data": {
             "category": "Assettype"
+          },
+          "data_description": {
+            "category": "De volgende stap toont alle assets van dit type die nog niet gevolgd worden."
           }
         },
         "asset": {
           "title": "Prijstracker toevoegen",
-          "description": "Typ om te zoeken op naam, symbool of ISIN en kies dan een asset. Klik zonder keuze op \"Verzenden\" om terug te gaan naar de assettypes.",
+          "description": "Welke asset wil je volgen?",
           "data": {
             "asset": "Asset"
+          },
+          "data_description": {
+            "asset": "Typ om te zoeken op naam, symbool of ISIN en kies dan een asset. Klik zonder keuze op \"Verzenden\" om terug te gaan naar de assettypes."
           }
         }
       },

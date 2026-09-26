@@ -11,38 +11,54 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Saisissez votre clé API Bitpanda. Créez-en une sur [{api_key_url}]({api_key_url}) avec ces autorisations : Guthaben (Balance), Transaktion (Transaction) et Earn (Read). L'autorisation Trading n'est pas nécessaire. Il est impossible d'ajouter des autorisations à une clé existante par la suite.",
+        "description": "Saisissez votre clé API Bitpanda. Créez-en une sur [{api_key_url}]({api_key_url}).",
         "data": {
           "api_key": "Clé API"
+        },
+        "data_description": {
+          "api_key": "La clé doit avoir les autorisations Guthaben (Balance), Transaktion (Transaction) et Earn (Read) ; l'autorisation Trading n'est pas nécessaire. Il est impossible d'ajouter des autorisations à une clé existante par la suite."
         }
       },
       "currency": {
         "title": "Devise du Portfolio",
-        "description": "Bitpanda exprime toutes les valeurs de votre portefeuille dans cette devise. Vous pourrez la modifier plus tard avec « Reconfigurer ».",
+        "description": "Dans quelle devise voulez-vous voir votre portefeuille ?",
         "data": {
           "currency": "Devise"
+        },
+        "data_description": {
+          "currency": "Bitpanda exprime toutes les valeurs de votre portefeuille dans cette devise. Vous pourrez la modifier plus tard avec « Reconfigurer »."
         }
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "Chaque actif suivi a toujours un capteur de prix en EUR. Sélectionnez des devises supplémentaires pour obtenir un capteur de plus par actif et par devise, converti avec les taux de référence quotidiens de la Banque centrale européenne. Ajoutez ensuite des actifs avec « Ajouter un suivi de prix ».",
+        "description": "Choisissez les devises maintenant, puis ajoutez des actifs avec « Ajouter un suivi de prix ».",
         "data": {
           "extra_currencies": "Devises supplémentaires"
+        },
+        "data_description": {
+          "extra_currencies": "Chaque actif suivi a toujours un capteur de prix en EUR. Chaque devise sélectionnée ici ajoute un capteur de plus par actif, converti avec les taux de référence quotidiens de la Banque centrale européenne."
         }
       },
       "reauth_confirm": {
         "title": "Nouvelle clé API Bitpanda requise",
-        "description": "Bitpanda a refusé la clé API enregistrée. Elle a peut-être expiré, ou elle est antérieure aux autorisations dont cette version a besoin. Créez une nouvelle clé sur [{api_key_url}]({api_key_url}) avec Guthaben (Balance), Transaktion (Transaction) et Earn (Read), puis collez-la ici. Vos capteurs sont conservés.",
+        "description": "Bitpanda a refusé la clé API enregistrée. Elle a peut-être expiré, ou elle est antérieure aux autorisations dont cette version a besoin. Créez une nouvelle clé sur [{api_key_url}]({api_key_url}), puis collez-la ici. Vos capteurs sont conservés.",
         "data": {
           "api_key": "Clé API"
+        },
+        "data_description": {
+          "api_key": "La nouvelle clé doit avoir les autorisations Guthaben (Balance), Transaktion (Transaction) et Earn (Read)."
         }
       },
       "reconfigure": {
         "title": "Reconfigurer Bitpanda Portfolio",
-        "description": "Pour remplacer la clé API enregistrée, collez-en une nouvelle depuis [{api_key_url}]({api_key_url}) ; elle doit avoir Guthaben (Balance), Transaktion (Transaction) et Earn (Read). Laissez le champ vide pour conserver la clé actuelle. Changer de devise supprime tous les capteurs du Portfolio, y compris leur historique ; vous le confirmerez à l'étape suivante.",
+        "description": "Remplacez la clé API enregistrée, changez de devise, ou les deux.",
         "data": {
           "api_key": "Nouvelle clé API",
           "currency": "Devise"
+        },
+        "data_description": {
+          "api_key": "Laissez le champ vide pour conserver la clé actuelle. Une nouvelle clé créée sur [{api_key_url}]({api_key_url}) doit avoir les autorisations Guthaben (Balance), Transaktion (Transaction) et Earn (Read).",
+          "currency": "Changer de devise supprime tous les capteurs du Portfolio, y compris leur historique ; vous le confirmerez à l'étape suivante."
         }
       },
       "confirm_currency": {
@@ -73,12 +89,13 @@
     "step": {
       "price_tracker": {
         "title": "Options du Price Tracker",
-        "description": "Chaque actif suivi conserve toujours son capteur en EUR. Chaque devise sélectionnée ajoute un capteur par actif ; retirer une devise supprime ces capteurs.",
+        "description": "Les modifications s'appliquent dès que vous enregistrez.",
         "data": {
           "extra_currencies": "Devises supplémentaires",
           "language": "Langue des titres de groupe et des messages"
         },
         "data_description": {
+          "extra_currencies": "Chaque actif suivi conserve toujours son capteur en EUR. Chaque devise sélectionnée ajoute un capteur par actif ; retirer une devise supprime ces capteurs.",
           "language": "Les titres des groupes et les messages propres à l'intégration utilisent cette langue. Les noms des capteurs suivent la langue du système de Home Assistant."
         }
       },
@@ -106,13 +123,19 @@
           "description": "Quel type d'actif voulez-vous suivre ?",
           "data": {
             "category": "Type d'actif"
+          },
+          "data_description": {
+            "category": "L'étape suivante liste tous les actifs de ce type qui ne sont pas encore suivis."
           }
         },
         "asset": {
           "title": "Ajouter un suivi de prix",
-          "description": "Tapez pour rechercher par nom, symbole ou ISIN, puis choisissez un actif. Cliquez sur « Valider » sans rien choisir pour revenir aux types d'actifs.",
+          "description": "Quel actif voulez-vous suivre ?",
           "data": {
             "asset": "Actif"
+          },
+          "data_description": {
+            "asset": "Tapez pour rechercher par nom, symbole ou ISIN, puis choisissez un actif. Cliquez sur « Valider » sans rien choisir pour revenir aux types d'actifs."
           }
         }
       },

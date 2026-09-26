@@ -116,6 +116,8 @@ What every language keeps exactly as English has it:
 
 A text that sends the user to one of Home Assistant's menu items or buttons names it in quotation marks, exactly as Home Assistant's frontend labels it in that language — for example "Reconfigure" / „Neu konfigurieren“ / « Reconfigurer » / "Herconfigureer" / "Riconfigura" / "Reconfigurar" / „Rekonfiguracja” and "Configure" / „Konfigurieren“ / « Configurer » / "Configureren" / "Configura" / "Configurar" / „Konfiguruj” (`ui.panel.config.integrations.config_entry.*`), and a dialog's "Submit" / „OK“ / « Valider » / "Verzenden" / "Invia" / "Enviar" / „Zatwierdź” (`ui.panel.config.integrations.config_flow.submit`). A text that sends the user to this integration's own "Add price tracker" quotes it exactly as the same file labels it (`config_subentries.price_group.initiate_flow.user`).
 
+Every field of a dialog has a label (`data`) and a help text shown under it (`data_description`): what the field is for, what it needs, what changing it does. A step's `description` keeps only what concerns the whole step.
+
 Group titles (`selector.asset_group`) must differ from one another within a language. A group still titled a shipped default is retitled to the entry's language at every setup; a group whose title is no longer any language's default counts as renamed by the user, so changing a title leaves groups created under the old one alone. Attribute labels (`entity.sensor.*.state_attributes`) carry a group prefix — `Asset:`, `Balance:`, `Rewards:`, `24 h:`, `Conversion:` in English — because newer Home Assistant versions sort them alphabetically: keep the prefix identical within a group so related labels stay together.
 
 Write the files as UTF-8 without a BOM, formatted like the others (`json.dumps(..., indent=2, ensure_ascii=False)`).
@@ -133,7 +135,8 @@ These tests guard the files (`tests/test_strings.py` unless noted):
 | `test_no_language_is_an_untranslated_copy_of_english` | no sentence left in English, and most strings translated |
 | `test_every_language_titles_each_group_differently` | distinct group titles |
 | `test_every_shipped_language_is_offered_by_its_own_name` | the language option lists every shipped language by its own name, the same in every file (`_ENDONYMS`) |
-| `test_each_service_has_options_texts_of_its_own` | Configure has one step per service (`options.step.price_tracker`, `options.step.portfolio`), with a label for each of its fields and a description for the language |
+| `test_each_service_has_options_texts_of_its_own` | Configure has one step per service (`options.step.price_tracker`, `options.step.portfolio`), with a label and a help text for each of its fields |
+| `test_every_field_has_a_help_text` | every labelled field of every dialog step (`data`) has its help text (`data_description`); the flow tests `test_every_field_of_every_form_has_a_label_and_a_help_text` (`tests/test_config_flow.py`) and `test_every_field_of_both_steps_has_a_label_and_a_help_text` (`tests/test_asset_flow.py`) check that every field a form shows has both |
 | `test_menu_items_are_named_with_home_assistants_own_labels` | "Reconfigure", "Configure" and the dialog's "Submit" named by Home Assistant's own label, quoted (`_MENU_LABELS`) |
 | `test_texts_name_the_add_price_tracker_button_by_its_own_label` | texts that send the user to "Add price tracker" quote the same file's label for it |
 | `test_every_published_attribute_has_a_translated_label` | every attribute a sensor publishes has a label |

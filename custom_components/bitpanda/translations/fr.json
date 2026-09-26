@@ -275,18 +275,6 @@
           },
           "units": {
             "name": "Actif : quantité"
-          },
-          "average_buy_price": {
-            "name": "Position : prix d'achat moyen"
-          },
-          "invested_amount": {
-            "name": "Position : montant investi"
-          },
-          "total_return": {
-            "name": "Position : gain/perte"
-          },
-          "total_return_percent": {
-            "name": "Position : gain/perte en %"
           }
         }
       },

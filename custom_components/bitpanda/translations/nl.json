@@ -275,18 +275,6 @@
           },
           "units": {
             "name": "Asset: hoeveelheid"
-          },
-          "average_buy_price": {
-            "name": "Positie: gemiddelde aankoopprijs"
-          },
-          "invested_amount": {
-            "name": "Positie: geïnvesteerd bedrag"
-          },
-          "total_return": {
-            "name": "Positie: winst/verlies"
-          },
-          "total_return_percent": {
-            "name": "Positie: winst/verlies %"
           }
         }
       },

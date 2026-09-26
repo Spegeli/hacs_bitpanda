@@ -27,9 +27,9 @@ The integration offers two services. Set up either or both — each one once.
 - **Cash Plus** is the value of all your Cash Plus holdings in the Portfolio currency. Its attributes show each held product's own amount in its own currency — for example `eur: 250.75` while the Portfolio itself is shown in USD
 - One device per held asset, such as **Vision (VSN) Wallet**:
   - **Balance (available)** — the value of the units you can trade (not staked)
+  - **Balance (total)** — the whole position, with its performance: invested amount, average buy price and total return
   - **Balance (staking)** — the value of the staked units, with APR and lifetime rewards
-  - **Balance (total)** — the whole position, with invested amount, average buy price and total return
-  - Balance (staking) and Balance (total) appear as soon as something is staked or Bitpanda offers an Earn product for the asset, and stay while either is true
+  - Every wallet has Balance (available) and Balance (total). Balance (staking) appears as soon as something is staked or Bitpanda offers an Earn product for the asset, and stays while either is true
 - The wallets appear in groups by asset type, such as Cryptocurrencies or Precious metals, named in the language set under **Configure** — English unless you choose another (see [Languages](#languages)). The Portfolio device stays outside the groups (newer Home Assistant versions list it above them). Groups come and go with your holdings — there is nothing to add. Deleting a group (**⋮ → Delete**) only hides it until the next refresh while you still hold those assets: the group and its wallets come back, under the entity IDs the integration gives them; IDs you renamed yourself, and other customisations, survive only on newer Home Assistant versions
 - The wallet of an asset you no longer hold can be deleted from its device page (**⋮ → Delete**) instead of waiting for it to go. The Portfolio device and the wallets of assets you hold cannot be deleted: they would come straight back, and the dialog explains why
 - Updates every 5 minutes; Earn products every 24 hours; rewards every hour
@@ -162,7 +162,7 @@ Entity IDs are English and fixed, whatever language Home Assistant runs in: `sen
 | Portfolio Total value / Cash / Cash Plus | `sensor.bitpanda_portfolio_total`, `sensor.bitpanda_portfolio_cash`, `sensor.bitpanda_portfolio_cash_plus` |
 | Portfolio returns | `sensor.bitpanda_portfolio_return_day`, `_week`, `_month`, `_6_months`, `_year` |
 | Vision (VSN) Wallet: Balance (available) / (staking) / (total) | `sensor.bitpanda_vision_vsn_wallet_available`, `sensor.bitpanda_vision_vsn_wallet_staking`, `sensor.bitpanda_vision_vsn_wallet_total` |
-| Amundi PEA S&P 500 UCITS ETF (LYY1 / FR0011871136) Wallet: Balance (available) | `sensor.bitpanda_amundi_pea_s_p_500_ucits_etf_lyy1_fr0011871136_wallet_available` |
+| Amundi PEA S&P 500 UCITS ETF (LYY1 / FR0011871136) Wallet: Balance (available) / (total) | `sensor.bitpanda_amundi_pea_s_p_500_ucits_etf_lyy1_fr0011871136_wallet_available`, `sensor.bitpanda_amundi_pea_s_p_500_ucits_etf_lyy1_fr0011871136_wallet_total` |
 | Bitcoin (BTC) Price Tracker: EUR / USD | `sensor.bitpanda_bitcoin_btc_price_tracker_eur`, `sensor.bitpanda_bitcoin_btc_price_tracker_usd` |
 | Amundi PEA S&P 500 UCITS ETF (LYY1 / FR0011871136) Price Tracker: CHF | `sensor.bitpanda_amundi_pea_s_p_500_ucits_etf_lyy1_fr0011871136_price_tracker_chf` |
 
@@ -174,9 +174,9 @@ Home Assistant lists these in the entity's Details view (older versions: the Att
 
 | Sensor | Attributes |
 |---|---|
-| Balance (available) | `asset`, `asset_name`, `asset_isin`, `units` (tradable units). Without a Balance (total) sensor also `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
-| Balance (staking) | `asset`, `asset_name`, `asset_isin`, `units` (staked), `apr_percent`, `rewards_gross`, `rewards_fee`, `rewards_net`, `rewards_net_value`, `rewards_count`, `rewards_last_at` |
-| Balance (total) | `asset`, `asset_name`, `asset_isin`, `units` (whole position), `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
+| Balance (available) — every wallet | `asset`, `asset_name`, `asset_isin`, `units` (tradable units) |
+| Balance (total) — every wallet | `asset`, `asset_name`, `asset_isin`, `units` (whole position), and the position performance: `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
+| Balance (staking) — while something is staked or an Earn product is offered | `asset`, `asset_name`, `asset_isin`, `units` (staked), `apr_percent`, `rewards_gross`, `rewards_fee`, `rewards_net`, `rewards_net_value`, `rewards_count`, `rewards_last_at` |
 | Portfolio Cash Plus | `eur`, `usd`, `gbp` — the amount of each held Cash Plus product in its own currency |
 | Price (EUR) | `asset`, `asset_name`, `asset_isin`, `trading_pair`, `change_24h_pct`, `price_24h_ago` |
 | Price (other currencies) | as EUR, plus `conversion` (status `no_rate` until the first ECB rate is loaded), `conversion_rate`, `rate_date`, `rate_source` (`ECB`) |
@@ -252,7 +252,7 @@ If a **Bitpanda Portfolio** was set up while the old entry still waited for its 
 - **Every holding is tracked**, not only the wallets you picked, and each gets its own device, in a group by asset type.
 - **Group titles and the integration's own messages are English by default**, whatever language Home Assistant runs in. Choose another language under **Configure** on each service (see [Languages](#languages)). A group already titled in another language becomes English at the first start with this version unless you choose that language; a title you gave a group yourself stays.
 - **Wallets of assets you no longer hold go away.** They are migrated like the others, then removed together with their history after three portfolio refreshes without them — about ten minutes after the Portfolio starts working with your new key.
-- **The wallet sensor still shows the unstaked part**, as before, now named **Balance (available)**. The new **Balance (staking)** and **Balance (total)** sensors show the staked part and the whole position; they start without history.
+- **The wallet sensor still shows the unstaked part**, as before, now named **Balance (available)**. Beside it, every wallet gets the new **Balance (total)** for the whole position, and **Balance (staking)** for the staked part while something is staked or Bitpanda offers an Earn product for the asset; they start without history.
 - **Portfolio Total value now covers your whole account** — every holding plus all fiat. It used to add up only the wallets you tracked, so its value steps up at the upgrade: check automations that compare it against a threshold.
 - **The fiat wallet in your currency becomes Portfolio Cash**, which sums all your fiat balances. Other fiat wallets are left as `unavailable` entities you can delete.
 - **Prices in other currencies are converted with ECB daily rates** instead of being quoted by Bitpanda.

@@ -275,18 +275,6 @@
           },
           "units": {
             "name": "Asset: Menge"
-          },
-          "average_buy_price": {
-            "name": "Bilanz: Ø Kaufpreis"
-          },
-          "invested_amount": {
-            "name": "Bilanz: investiert"
-          },
-          "total_return": {
-            "name": "Bilanz: Gewinn/Verlust"
-          },
-          "total_return_percent": {
-            "name": "Bilanz: Gewinn/Verlust %"
           }
         }
       },

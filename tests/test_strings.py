@@ -616,8 +616,8 @@ _ETF = {"id": "1f0ed6c9-ee10-68c6-8a0e-55a29b7757fe", "symbol": "LYY1",
 
 def _wallet_portfolio_data() -> PortfolioData:
     """A holding of VSN and of the ETF, each with every performance figure
-    set, so WalletSensor and WalletTotalSensor both publish the full
-    performance set."""
+    set, so WalletTotalSensor publishes the full performance set -- and
+    WalletSensor, which never carries it, has no label for it."""
     data = PortfolioData(
         holdings={
             asset["id"]: Holding(
@@ -677,7 +677,7 @@ def _attribute_scenarios() -> list[tuple[str, dict]]:
         for asset in (_VSN, _ETF)
         for scenario in (
             ("wallet", WalletSensor(
-                wallet_coordinator, "eid", "EUR", asset, lambda _asset_id: False
+                wallet_coordinator, "eid", "EUR", asset
             ).extra_state_attributes),
             ("staking", StakingSensor(
                 wallet_coordinator, earn, rewards, "eid", "EUR", asset

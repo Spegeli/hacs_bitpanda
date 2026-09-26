@@ -230,7 +230,7 @@ def test_every_money_value_keeps_long_term_statistics_as_a_total():
         PortfolioTotalSensor(portfolio, "eid", "EUR"),
         PortfolioCashSensor(portfolio, "eid", "EUR"),
         PortfolioCashPlusSensor(portfolio, "eid", "EUR"),
-        WalletSensor(portfolio, "eid", "EUR", VSN, lambda _: True),
+        WalletSensor(portfolio, "eid", "EUR", VSN),
         StakingSensor(portfolio, earn, _Coordinator(None), "eid", "EUR", VSN),
         WalletTotalSensor(portfolio, "eid", "EUR", VSN),
     ]
@@ -251,8 +251,10 @@ def test_every_return_keeps_long_term_statistics_as_a_measurement():
 
 def test_wallet_is_the_unstaked_value():
     """Named by its translation key, like its Staking and Total siblings
-    (tests/test_init.py checks the names)."""
-    sensor = WalletSensor(_portfolio(**{VSN["id"]: _vsn()}), "eid", "EUR", VSN, lambda _: True)
+    (tests/test_init.py checks the names). Its attributes name the asset and
+    count the units -- never the position performance, which is on the Total
+    sensor every wallet has."""
+    sensor = WalletSensor(_portfolio(**{VSN["id"]: _vsn()}), "eid", "EUR", VSN)
     assert sensor.entity_id == "sensor.bitpanda_vision_vsn_wallet_available"
     assert sensor.unique_id == f"eid_wallet_{VSN['id']}"
     assert sensor.translation_key == "wallet"
@@ -262,19 +264,10 @@ def test_wallet_is_the_unstaked_value():
     }
 
 
-def test_wallet_carries_the_position_performance_while_no_total_sensor_exists():
-    sensor = WalletSensor(_portfolio(**{VSN["id"]: _vsn()}), "eid", "EUR", VSN, lambda _: False)
-    assert sensor.extra_state_attributes == {
-        "asset": "VSN", "asset_name": "Vision", "units": 25.0,
-        "average_buy_price": 1.5, "invested_amount": 150.0,
-        "total_return": 50.0, "total_return_percent": 33.33,
-    }
-
-
 def test_a_wallet_whose_asset_is_gone_is_unavailable():
     """/portfolio no longer lists the asset: unavailable until the wallet is
     removed."""
-    sensor = WalletSensor(_portfolio(), "eid", "EUR", VSN, lambda _: False)
+    sensor = WalletSensor(_portfolio(), "eid", "EUR", VSN)
     assert sensor.native_value is None
     assert sensor.available is False
 
@@ -284,7 +277,7 @@ def _held_parts(data: PortfolioData) -> list:
     coordinator = _Coordinator(data)
     earn = _Coordinator(EarnData(apr={}, offered=frozenset()))
     return [
-        WalletSensor(coordinator, "eid", "EUR", VSN, lambda _: True),
+        WalletSensor(coordinator, "eid", "EUR", VSN),
         StakingSensor(coordinator, earn, _Coordinator(None), "eid", "EUR", VSN),
         WalletTotalSensor(coordinator, "eid", "EUR", VSN),
     ]
@@ -308,7 +301,7 @@ def test_a_held_asset_whose_entry_cannot_be_read_is_unknown():
 
 def test_a_failed_refresh_makes_the_wallet_unavailable():
     coordinator = _Coordinator(_data(**{VSN["id"]: _vsn()}), last_update_success=False)
-    assert WalletSensor(coordinator, "eid", "EUR", VSN, lambda _: False).available is False
+    assert WalletSensor(coordinator, "eid", "EUR", VSN).available is False
 
 
 def test_staking_is_the_staked_value_with_earn_attributes():
@@ -410,7 +403,7 @@ def test_a_stock_etf_or_etc_shows_its_isin_on_every_wallet_part():
     data.assets = {etf["id"]: etf}
     coordinator = _Coordinator(data)
     earn = _Coordinator(EarnData(apr={}, offered=frozenset()))
-    wallet = WalletSensor(coordinator, "eid", "EUR", etf, lambda _: True)
+    wallet = WalletSensor(coordinator, "eid", "EUR", etf)
     assert wallet.extra_state_attributes == {
         "asset": "LYY1", "asset_name": "Amundi PEA S&P 500 UCITS ETF",
         "asset_isin": "FR0011871136", "units": 10.0,

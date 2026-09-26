@@ -307,7 +307,7 @@ def test_parse_earn_configs_counts_sold_out_products_but_not_disabled_ones():
     assert earn.apr == {"a": 0.05, "b": 0.04}
 
 
-# --- When a wallet has Staking and Total sensors ---------------------------------
+# --- When a wallet has a Staking sensor ------------------------------------------
 
 
 def _holding(staked: float) -> Holding:

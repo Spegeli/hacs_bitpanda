@@ -275,18 +275,6 @@
           },
           "units": {
             "name": "Aktywo: ilość"
-          },
-          "average_buy_price": {
-            "name": "Pozycja: średnia cena zakupu"
-          },
-          "invested_amount": {
-            "name": "Pozycja: zainwestowana kwota"
-          },
-          "total_return": {
-            "name": "Pozycja: zysk/strata"
-          },
-          "total_return_percent": {
-            "name": "Pozycja: zysk/strata %"
           }
         }
       },

@@ -275,18 +275,6 @@
           },
           "units": {
             "name": "Asset: quantity"
-          },
-          "average_buy_price": {
-            "name": "Balance: average buy price"
-          },
-          "invested_amount": {
-            "name": "Balance: invested"
-          },
-          "total_return": {
-            "name": "Balance: profit/loss"
-          },
-          "total_return_percent": {
-            "name": "Balance: profit/loss %"
           }
         }
       },

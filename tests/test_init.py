@@ -187,8 +187,8 @@ async def test_portfolio_setup_creates_its_devices_and_sensors(hass, portfolio_a
 
 
 async def test_the_wallet_sensor_keeps_its_name_without_staking(hass, portfolio_api):
-    """Named "Balance (available)" whether or not Staking and Total stand
-    beside it: nothing staked and no Earn product offered here."""
+    """Named "Balance (available)" whether or not Staking stands beside it:
+    nothing staked and no Earn product offered here."""
     position, cash = portfolio_api.return_value
     portfolio_api.return_value = [
         {**position, "available_balance": {"value": "100.00000000"}}, cash,
@@ -200,6 +200,42 @@ async def test_the_wallet_sensor_keeps_its_name_without_staking(hass, portfolio_
         hass.states.get("sensor.bitpanda_vision_vsn_wallet_available").attributes["friendly_name"]
         == "Vision (VSN) Wallet Balance (available)"
     )
+
+
+_PERFORMANCE = {
+    "average_buy_price": 1.5,
+    "invested_amount": 150.0,
+    "total_return": 50.0,
+    "total_return_percent": 33.33,
+}
+
+
+async def test_a_wallet_without_staking_shows_its_performance_on_its_total(hass, portfolio_api):
+    """Every wallet has its Balance (total), staking or not, and the
+    position performance is there only -- never on Balance (available), so
+    it does not move between sensors when staking starts or stops."""
+    position, cash = portfolio_api.return_value
+    portfolio_api.return_value = [
+        {
+            **position,
+            "available_balance": {"value": "100.00000000"},
+            "average_buy_price": {"value": "1.50000000"},
+            "invested_amount": {"value": "150.00"},
+            "total_return": {"value": "50.00"},
+            "total_return_percent": "33.33",
+        },
+        cash,
+    ]
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_staking") is None
+    total = hass.states.get("sensor.bitpanda_vision_vsn_wallet_total")
+    assert (float(total.state), total.attributes["friendly_name"]) == (
+        200.0, "Vision (VSN) Wallet Balance (total)"
+    )
+    assert {key: total.attributes.get(key) for key in _PERFORMANCE} == _PERFORMANCE
+    available = hass.states.get("sensor.bitpanda_vision_vsn_wallet_available").attributes
+    assert set(_PERFORMANCE) & set(available) == set()
 
 
 async def test_no_sensor_state_carries_an_icon(hass, portfolio_api, price_api):

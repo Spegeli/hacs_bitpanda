@@ -703,6 +703,15 @@ async def test_a_migrated_install_ends_with_its_wallets_in_groups(hass, legacy_a
     assert (gold.unique_id, gold.config_subentry_id) == (
         f"{eid}_wallet_{GOLD_ID}", groups["metal"].subentry_id,
     )
+    # Beside each, its Balance (total): a new sensor, nothing migrated into it.
+    for asset_id, entity_id, category in (
+        (BTC_ID, "sensor.bitpanda_bitcoin_btc_wallet_total", "crypto"),
+        (GOLD_ID, "sensor.bitpanda_gold_xau_wallet_total", "metal"),
+    ):
+        whole = ent_reg.async_get(entity_id)
+        assert (whole.unique_id, whole.config_subentry_id) == (
+            f"{eid}_total_{asset_id}", groups[category].subentry_id,
+        )
     total = ent_reg.async_get("sensor.bitpanda_portfolio_total")
     assert (total.unique_id, total.config_subentry_id) == (f"{eid}_portfolio_total", None)
     left = ent_reg.async_get(gone)

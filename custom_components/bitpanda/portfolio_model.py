@@ -412,7 +412,8 @@ def parse_earn_configs(configs: list[dict]) -> EarnData:
 
 
 def staking_applies(holding: Holding, earn: EarnData | None) -> bool | None:
-    """Whether a wallet carries Staking and Total sensors.
+    """Whether a wallet carries a Staking sensor; every wallet has its Total
+    sensor regardless.
 
     True while something is staked, or while Earn offers a product for the
     asset. False only when nothing is staked and a current Earn catalogue

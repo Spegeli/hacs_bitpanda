@@ -273,26 +273,17 @@ class _WalletPart(CoordinatorEntity, SensorEntity):
 
 
 class WalletSensor(_WalletPart):
-    """Value of the unstaked units, named like its Staking and Total siblings
-    by its part of the balance: "Vision (VSN) Wallet Balance (available)",
-    with or without them beside it.
+    """Value of the unstaked units, named like its Total and Staking siblings
+    by its part of the balance: "Vision (VSN) Wallet Balance (available)".
 
-    `has_total` says whether this asset currently has a Total sensor; while it
-    has none, the position performance is shown here instead.
+    Its attributes name the asset and count the units, never more: the
+    position performance is on the Total sensor, which every wallet has.
     """
 
     _attr_translation_key = "wallet"
 
-    def __init__(
-        self,
-        coordinator,
-        entry_id: str,
-        currency: str,
-        asset: dict,
-        has_total: Callable[[str], bool],
-    ) -> None:
+    def __init__(self, coordinator, entry_id: str, currency: str, asset: dict) -> None:
         super().__init__(coordinator, entry_id, currency, asset)
-        self._has_total = has_total
         self._attr_unique_id = wallet_unique_id(entry_id, asset["id"])
         self.entity_id = wallet_entity_id(asset)
 
@@ -304,11 +295,7 @@ class WalletSensor(_WalletPart):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        attrs = self._attributes()
-        holding = self._holding
-        if holding is not None and not self._has_total(self._asset_id):
-            attrs.update(_performance(holding))
-        return attrs
+        return self._attributes()
 
 
 class StakingSensor(_WalletPart):
@@ -371,7 +358,11 @@ class StakingSensor(_WalletPart):
 
 
 class WalletTotalSensor(_WalletPart):
-    """Value of the whole position, with its performance."""
+    """Value of the whole position, with its performance.
+
+    Every wallet has one for as long as the wallet exists, staking or not:
+    the performance stays on this sensor when staking starts or stops.
+    """
 
     _attr_translation_key = "wallet_total"
 
@@ -419,7 +410,12 @@ class PortfolioEntityManager:
     removed (naming.managed_asset_key): a legacy wallet the migration could
     not resolve is left for the user.
 
-    Each wallet goes, with its Staking and Total sensors, into the wallet
+    A wallet's Wallet and Total sensors come and go with the wallet. Its
+    Staking sensor follows portfolio_model.staking_applies: added while it
+    is True, removed as soon as it is False. Unknown neither adds nor
+    removes one; a Staking sensor registered before a restart is added back.
+
+    Each wallet goes, with its Total and Staking sensors, into the wallet
     group (a config subentry) of its asset's category: created when the
     first wallet of that category arrives, removed once no wallet is left in
     it. A wallet already in a group stays there, even when Bitpanda files its
@@ -445,12 +441,10 @@ class PortfolioEntityManager:
         self._add_entities = add_entities
         # Asset id -> the category of the wallet group its sensors sit in.
         self._wallets: dict[str, str] = {}
+        # The assets whose Staking sensor this manager has added.
         self._staking: set[str] = set()
         # Asset id -> its misses in a row, and when the first was asked for.
         self._misses: dict[str, tuple[int, datetime]] = {}
-
-    def has_total(self, asset_id: str) -> bool:
-        return asset_id in self._staking
 
     def _registered(self) -> dict[str, set[str]]:
         """Asset id -> the kinds ("wallet", "staking", "total") registered for it."""
@@ -523,9 +517,8 @@ class PortfolioEntityManager:
                 # 2026.9 warns about such a move, and 2027.8 will refuse it.
                 sits_in = self._registered_category(asset_id)
                 self._wallets[asset_id] = asset_category(asset) if sits_in is None else sits_in
-                entities.append(
-                    WalletSensor(portfolio, entry_id, self._currency, asset, self.has_total)
-                )
+                entities.append(WalletSensor(portfolio, entry_id, self._currency, asset))
+                entities.append(WalletTotalSensor(portfolio, entry_id, self._currency, asset))
             applies = staking_applies(data.holdings[asset_id], earn)
             kinds = registered.get(asset_id, set())
             wanted = applies is True or (applies is None and "staking" in kinds)
@@ -537,10 +530,9 @@ class PortfolioEntityManager:
                         entry_id, self._currency, asset,
                     )
                 )
-                entities.append(WalletTotalSensor(portfolio, entry_id, self._currency, asset))
-            elif applies is False and (asset_id in self._staking or kinds & {"staking", "total"}):
+            elif applies is False and (asset_id in self._staking or "staking" in kinds):
                 self._staking.discard(asset_id)
-                self._remove(asset_id, ("staking", "total"), device=False)
+                self._remove(asset_id, ("staking",), device=False)
             if entities:
                 new.setdefault(self._wallets[asset_id], []).extend(entities)
 
@@ -609,8 +601,8 @@ def _keep_polling() -> None:
     Staking sensor was just removed -- would freeze its catalogue forever at
     whatever the first refresh returned (or at `None` if that one failed),
     even though the manager reads it on every portfolio refresh: an Earn
-    product offered later gives a wallet its Staking and Total sensors even
-    with nothing staked yet.
+    product offered later gives a wallet its Staking sensor even with
+    nothing staked yet.
     """
 
 

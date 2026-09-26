@@ -144,9 +144,9 @@ def legacy_candidates(candidates: list[dict], prefix: str | None) -> list[dict]:
     instead of collapsing both into the same message.
     """
     if prefix == "fiat_":
-        # A currency is not an /assets record at all -- fiat balances live on
-        # as the portfolio sensor's `cash` attribute, never as a resolved
-        # asset -- so there is nothing here to narrow down to.
+        # A currency is not an /assets record at all -- fiat balances make up
+        # the Portfolio's own Cash sensor, never a resolved asset -- so there
+        # is nothing here to narrow down to.
         return []
 
     survivors = [a for a in candidates if is_legacy_supported(a)]

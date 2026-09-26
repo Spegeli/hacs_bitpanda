@@ -55,10 +55,10 @@ async def test_get_portfolio_passes_equivalent_currency():
     assert mocker.mock_calls[0][1].query_string == "equivalent_currency_id=uuid-usd"
 
 
-async def test_get_portfolio_history_uses_timeframe():
+async def test_get_portfolio_history_passes_timeframe_and_currency():
     with mock_aiohttp_client() as mocker:
         mocker.get(
-            f"{API_BASE_URL}/portfolio-history?timeframe=WEEK",
+            f"{API_BASE_URL}/portfolio-history?timeframe=WEEK&equivalent_currency_id=uuid-usd",
             json={
                 "data": {
                     "datapoints": [{"time": "t", "value": {"value": "1"}}],
@@ -68,12 +68,17 @@ async def test_get_portfolio_history_uses_timeframe():
         )
         async with mocker.create_session(asyncio.get_running_loop()) as session:
             client = BitpandaApiClient("key", session)
-            result = await client.async_get_portfolio_history(timeframe="WEEK")
+            result = await client.async_get_portfolio_history(
+                timeframe="WEEK", equivalent_currency_id="uuid-usd"
+            )
     assert result["return_percentage"] == 6.24
     assert len(result["datapoints"]) == 1
-    # Subset matching only proves timeframe=WEEK was present, not that no
-    # other parameter (e.g. a stray equivalent_currency_id) rode along.
-    assert mocker.mock_calls[0][1].query_string == "timeframe=WEEK"
+    # Subset matching only proves both were present, not that nothing else
+    # rode along: the query sent says so.
+    assert (
+        mocker.mock_calls[0][1].query_string
+        == "timeframe=WEEK&equivalent_currency_id=uuid-usd"
+    )
 
 
 async def test_get_portfolio_sends_no_params_when_no_currency():

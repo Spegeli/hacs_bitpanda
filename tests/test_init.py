@@ -152,7 +152,9 @@ async def test_every_portfolio_figure_is_one_the_currency_purge_knows(hass, port
     device = find_entry_device(dr.async_get(hass), entry.entry_id, f"{entry.entry_id}_portfolio")
     figures = {
         reg_entry.unique_id
-        for reg_entry in er.async_entries_for_device(er.async_get(hass), device.id)
+        for reg_entry in er.async_entries_for_device(
+            er.async_get(hass), device.id, include_disabled_entities=True
+        )
     }
     assert figures == {portfolio_unique_id(entry.entry_id, key) for key in PORTFOLIO_KEYS}
 
@@ -262,7 +264,9 @@ async def test_wallet_groups_the_manager_adds_or_removes_never_reload_the_portfo
     assert er.async_get(hass).async_get("sensor.bitpanda_gold_xau_wallet") is None
 
 
-async def test_a_staking_sensor_added_later_brings_old_rewards_up_to_date(hass, portfolio_api):
+async def test_a_staking_sensor_added_later_brings_old_rewards_up_to_date(
+    hass, portfolio_api, freezer
+):
     """The rewards are polled only while a Staking sensor listens. The first
     one added after setup -- once something is staked -- finds the totals of
     setup's own refresh; older than an interval, they are refreshed at once
@@ -277,13 +281,11 @@ async def test_a_staking_sensor_added_later_brings_old_rewards_up_to_date(hass, 
         await _setup(hass, entry)
         assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_staking") is None
         assert operations.await_count == 1
-        # As if the rewards had last been fetched an interval ago.
-        entry.runtime_data.rewards.last_update_success_time = (
-            dt_util.utcnow() - REWARDS_UPDATE_INTERVAL
-        )
 
+        # An interval later, something is staked.
         portfolio_api.return_value = staked
-        await _next_refresh(hass)
+        freezer.tick(REWARDS_UPDATE_INTERVAL)
+        async_fire_time_changed(hass)
         await hass.async_block_till_done(wait_background_tasks=True)
 
     assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_staking") is not None

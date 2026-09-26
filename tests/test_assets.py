@@ -215,6 +215,57 @@ def test_asset_label_map_appends_the_asset_id_when_the_suffix_still_collides():
     }
 
 
+def test_asset_label_map_keeps_a_suffixed_label_from_colliding_with_a_plain_one():
+    """Uniqueness must be global, not just within each raw-label group: a
+    computed type/group suffix can, by construction, equal a *different*
+    asset's own unrelated plain label. The escalated asset must move again
+    instead of silently overwriting the one already there."""
+    lookalike = {
+        "id": "aaaaaaaa-0000-0000-0000-000000000000",
+        "symbol": "SYM · alpha/one", "name": "Echo", "type": "gamma", "group": "three",
+    }
+    first = {
+        "id": "bbbbbbbb-0000-0000-0000-000000000000",
+        "symbol": "SYM", "name": "Echo", "type": "alpha", "group": "one",
+    }
+    second = {
+        "id": "cccccccc-0000-0000-0000-000000000000",
+        "symbol": "SYM", "name": "Echo", "type": "beta", "group": "two",
+    }
+    # By construction: lookalike's own (otherwise-unique) plain label is
+    # exactly the string `first` computes as its type/group suffix.
+    assert asset_label(lookalike) == "Echo / SYM · alpha/one"
+
+    result = asset_label_map([lookalike, first, second])
+
+    assert len(result) == 3
+    assert result["Echo / SYM · alpha/one"] == lookalike
+    assert first in result.values()
+    assert second in result.values()
+
+
+def test_asset_label_map_returns_exactly_one_entry_per_asset_in_a_mixed_set():
+    """A realistic mixed bag: some assets unique, some needing the
+    type/group suffix, some needing the id too. Every asset must still get
+    exactly one entry -- none dropped, none merged into another's."""
+    btc = {"id": "btc-id", "symbol": "BTC", "name": "Bitcoin", "type": "cryptocoin", "group": "coin"}
+    stock, equity = _stock_pair()
+    first = {
+        "id": "11111111-0000-0000-0000-000000000000",
+        "symbol": "DUP", "name": "Duplicate", "type": "cryptocoin", "group": "coin",
+    }
+    second = {
+        "id": "22222222-0000-0000-0000-000000000000",
+        "symbol": "DUP", "name": "Duplicate", "type": "cryptocoin", "group": "coin",
+    }
+    listing = [btc, stock, equity, first, second]
+
+    result = asset_label_map(listing)
+
+    assert len(result) == len(listing)
+    assert all(asset in result.values() for asset in listing)
+
+
 def test_asset_label_map_is_empty_for_an_empty_listing():
     assert asset_label_map([]) == {}
 

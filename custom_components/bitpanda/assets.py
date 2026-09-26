@@ -163,38 +163,72 @@ def asset_label(asset: dict) -> str:
     return " / ".join(parts)
 
 
-def asset_label_map(assets: Iterable[dict]) -> dict[str, dict]:
-    """`asset_label(asset)` -> asset, for one listing, with every label made
-    unique first.
+def _label_rungs(asset: dict, label: str) -> list[str]:
+    """`asset`'s escalation ladder from `label`, most preferred first: the
+    plain label, then with its type/group, then with the first 8 characters
+    of its id, then with the whole id. A caller starting partway down this
+    ladder just slices off the rungs its own local duplicates already rule
+    out."""
+    suffixed = f"{label} · {asset.get('type')}/{asset.get('group')}"
+    asset_id = asset.get("id", "")
+    return [label, suffixed, f"{suffixed} · {asset_id[:8]}", f"{suffixed} · {asset_id}"]
 
-    The asset picker is a searchable `SelectSelector` with `custom_value=True`;
-    the frontend shows an option's raw value back with no way to render its
-    label instead, so the value must already be the label the user picked.
-    Two or more assets that share a label all get " · <type>/<group>"
-    appended -- the real shape of a stock listed under both catalogue
-    families, same name, symbol and ISIN. If that still collides -- the same
-    type and group too -- " · " plus the first 8 characters of the id is
-    appended as well, so every asset ends up with exactly one, unique entry.
+
+def _place_asset(result: dict[str, dict], asset: dict, rungs: list[str]) -> None:
+    """Write `asset` into `result` at the first rung not already taken by a
+    *different* asset. `rungs` only encodes what `asset`'s own raw-label
+    duplicates require; this also guards against a rung colliding with an
+    unrelated asset placed under a different raw label entirely, escalating
+    past the last rung with a counter on the practically-unreachable chance
+    that even the full id collides too. Never overwrites an existing entry.
+    """
+    for candidate in rungs:
+        if candidate not in result:
+            result[candidate] = asset
+            return
+    base = rungs[-1]
+    counter = 2
+    candidate = f"{base} · {counter}"
+    while candidate in result:
+        counter += 1
+        candidate = f"{base} · {counter}"
+    result[candidate] = asset
+
+
+def asset_label_map(assets: Iterable[dict]) -> dict[str, dict]:
+    """`asset_label(asset)` -> asset, for one listing, with exactly one
+    globally-unique entry per input asset -- no asset is ever dropped or
+    silently overwritten by another one's computed label.
+
+    Two or more assets sharing a raw label skip it and start from
+    " · <type>/<group>" appended instead -- the real shape of a stock listed
+    under both catalogue families, same name, symbol and ISIN. Two or more
+    of those sharing their type and group too skip that as well and start
+    from " · " plus the first 8 characters of the id instead. Whatever rung
+    an asset's own duplicates require it to start from, every candidate is
+    then also checked against every *other* asset already placed -- not
+    just the ones it shares a raw label with -- so a computed suffix that
+    happens to equal an unrelated asset's plain or suffixed label still
+    escalates further instead of colliding with it. A record missing
+    `group` (never true for any catalogue entry filtered in today) renders
+    as "type/None" in the suffix -- still unique, just not pretty.
     """
     by_label: dict[str, list[dict]] = {}
     for asset in assets:
         by_label.setdefault(asset_label(asset), []).append(asset)
 
     result: dict[str, dict] = {}
-    for label, group in by_label.items():
-        if len(group) == 1:
-            result[label] = group[0]
+    for label, siblings in by_label.items():
+        if len(siblings) == 1:
+            _place_asset(result, siblings[0], _label_rungs(siblings[0], label))
             continue
         by_suffixed: dict[str, list[dict]] = {}
-        for asset in group:
-            suffixed = f"{label} · {asset.get('type')}/{asset.get('group')}"
-            by_suffixed.setdefault(suffixed, []).append(asset)
-        for suffixed_label, subgroup in by_suffixed.items():
-            if len(subgroup) == 1:
-                result[suffixed_label] = subgroup[0]
-                continue
+        for asset in siblings:
+            by_suffixed.setdefault(_label_rungs(asset, label)[1], []).append(asset)
+        for subgroup in by_suffixed.values():
+            skip = 1 if len(subgroup) == 1 else 2
             for asset in subgroup:
-                result[f"{suffixed_label} · {asset['id'][:8]}"] = asset
+                _place_asset(result, asset, _label_rungs(asset, label)[skip:])
     return result
 
 

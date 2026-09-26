@@ -965,6 +965,34 @@ async def test_the_price_tracker_polls_the_assets_of_every_group(hass, price_api
     assert _value(hass, "sensor.bitpanda_gold_xau_price_tracker_eur") == 100.0
 
 
+async def test_the_price_tracker_names_a_stock_etf_or_etc_with_its_isin(
+    hass, price_api, caplog
+):
+    """Its device, its sensors and the log carry the ISIN in the label; the
+    log names the asset itself, without the device's " Price Tracker"."""
+    ticker, _ = price_api
+    top500 = _fixture("SXR8", "security")
+
+    async def _ticker(asset_id):
+        if asset_id == top500["id"]:
+            raise BitpandaApiError("Timeout for /tickers")
+        return {"price": "100.00000000"}
+
+    ticker.side_effect = _ticker
+    entry = _price_entry(hass, [], price_group("crypto", BTC), price_group("etf", top500))
+    await _setup(hass, entry)
+    registry_entry = er.async_get(hass).async_get(
+        "sensor.bitpanda_top_500_us_stocks_x_acc_sxr8_ie00b5bmr087_price_tracker_eur"
+    )
+    assert dr.async_get(hass).async_get(registry_entry.device_id).name == (
+        "Top 500 US Stocks X Acc (SXR8 / IE00B5BMR087) Price Tracker"
+    )
+    assert (
+        "No price for Top 500 US Stocks X Acc (SXR8 / IE00B5BMR087); its price sensors"
+        in caplog.text
+    )
+
+
 async def test_a_group_without_assets_is_dropped_at_setup(hass, price_api):
     ticker, _ = price_api
     entry = _price_entry(hass, [], price_group("crypto", BTC), price_group("metal"))
@@ -1483,6 +1511,28 @@ async def test_the_wallet_of_a_held_asset_cannot_be_deleted(hass, portfolio_api)
     assert exc_info.value.translation_domain == DOMAIN
     assert exc_info.value.translation_key == "held_wallet_not_removable"
     assert exc_info.value.translation_placeholders == {"asset": "Vision (VSN)"}
+
+
+async def test_a_held_etf_is_named_with_its_isin(hass, portfolio_api):
+    """A stock's, ETF's or ETC's label carries its ISIN, and so do its
+    wallet device's name and its entity IDs. The refusal to delete its
+    wallet names the asset itself, without the device's " Wallet"."""
+    top500 = _fixture("SXR8", "security")
+    position, cash = portfolio_api.return_value
+    portfolio_api.return_value = [position, {**position, "asset_id": top500["id"]}, cash]
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    wallet = _own_device(hass, entry, "wallet", top500)
+    assert wallet.name == "Top 500 US Stocks X Acc (SXR8 / IE00B5BMR087) Wallet"
+    assert _value(
+        hass, "sensor.bitpanda_top_500_us_stocks_x_acc_sxr8_ie00b5bmr087_wallet_available"
+    ) == 50.0
+
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await async_remove_config_entry_device(hass, entry, wallet)
+    assert exc_info.value.translation_placeholders == {
+        "asset": "Top 500 US Stocks X Acc (SXR8 / IE00B5BMR087)"
+    }
 
 
 async def test_a_holding_whose_balances_cannot_be_read_is_still_held(hass, portfolio_api):

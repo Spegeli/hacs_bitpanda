@@ -296,6 +296,22 @@ async def test_an_asset_joins_the_group_of_its_type(hass):
     }
 
 
+async def test_a_stock_etf_or_etc_that_joins_its_group_is_named_with_its_isin(hass):
+    """By its label, as its device is -- without the device's " Price
+    Tracker"."""
+    top500, exia = _fixture("SXR8", "security"), _fixture("EXIA")
+    entry = _entry(hass, price_group("etf", exia, title="ETFs"))
+    with patch(_LIST, AsyncMock(return_value=[top500, exia])):
+        result = await _pick_category(hass, entry, "etf")
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {"asset": top500["id"]}
+        )
+    assert (result["type"], result["reason"]) == (_FLOW.ABORT, "asset_added")
+    assert result["description_placeholders"] == {
+        "asset": "Top 500 US Stocks X Acc (SXR8 / IE00B5BMR087)", "group": "ETFs",
+    }
+
+
 async def test_a_tracked_asset_typed_in_is_not_added_twice(hass):
     """The listing leaves tracked assets out; a typed-in id still arrives."""
     entry = _entry(hass, price_group("other", GOLD))

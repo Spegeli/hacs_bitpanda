@@ -12,6 +12,8 @@ import re
 
 from homeassistant.util import slugify
 
+from .assets import asset_isin
+
 _ENTITY_ID_PREFIX = "sensor.bitpanda_"
 
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
@@ -41,15 +43,20 @@ def _uuid_after(prefix: str, text: str) -> str | None:
 
 
 def asset_display_label(asset: dict) -> str:
-    """ "Name (SYMBOL)", or just SYMBOL when the name only repeats it.
+    """ "Name (SYMBOL)", or just SYMBOL when the name only repeats it; a
+    stock, ETF or ETC adds its ISIN (assets.asset_isin): "Name (SYMBOL /
+    ISIN)", or "SYMBOL (ISIN)".
 
-    Compared ignoring case and spaces, so "BCI 5" / BCI5 reads "BCI5".
+    Compared ignoring case and spaces, so "BCI 5" / BCI5 reads "BCI5". Every
+    name of an asset comes from here: its devices', its entity IDs, and
+    every text and log line that names it.
     """
     symbol = asset["symbol"]
     name = (asset.get("name") or "").strip()
-    if not name or _squash(name) == _squash(symbol):
-        return symbol
-    return f"{name} ({symbol})"
+    isin = asset_isin(asset)
+    if name and _squash(name) != _squash(symbol):
+        return f"{name} ({symbol})" if isin is None else f"{name} ({symbol} / {isin})"
+    return symbol if isin is None else f"{symbol} ({isin})"
 
 
 def _entity_id(device_name: str, ending: str) -> str:

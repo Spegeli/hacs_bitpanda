@@ -1,4 +1,5 @@
-"""Asset records: categories, legacy symbol resolution, holding metadata, list labels.
+"""Asset records: categories, the ISIN a security shows, legacy symbol
+resolution, holding metadata, list labels.
 
 Every endpoint except /assets and /currencies works on UUIDs. A symbol does
 not uniquely name an asset (`XAU` is both a stock and a metal), so nothing
@@ -41,6 +42,11 @@ ASSET_CATEGORY_FILTERS: dict[str, list[tuple[str, str | None]]] = {
 # The category of an asset no filter above lists, such as Cash Plus.
 CATEGORY_OTHER = "other"
 
+# The categories whose assets show their ISIN (asset_isin). The catalogue
+# gives one to every stock, ETF and ETC -- and to Cash Plus, which keeps its
+# plain label -- never to crypto, an index or a metal.
+_ISIN_CATEGORIES = frozenset({"stock", "etf", "etc"})
+
 
 def slim_asset(asset: dict) -> dict:
     """A catalogue record reduced to CATALOGUE_FIELDS."""
@@ -56,6 +62,15 @@ def asset_category(asset: dict) -> str:
             if asset.get("type") == type_ and (group is None or asset.get("group") == group):
                 return category
     return CATEGORY_OTHER
+
+
+def asset_isin(asset: dict) -> str | None:
+    """The ISIN a stock, ETF or ETC shows in its label
+    (naming.asset_display_label); None for any other asset, and for one
+    whose record carries none."""
+    if asset_category(asset) not in _ISIN_CATEGORIES:
+        return None
+    return asset.get("isin") or None
 
 
 class AssetDirectory:

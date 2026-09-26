@@ -155,14 +155,16 @@ The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stock
 
 ### Entity IDs
 
-Entity IDs are English and fixed, whatever language Home Assistant runs in: `sensor.bitpanda_`, then the device's name as an ID writes it (lower case, `_` for spaces and punctuation), then the sensor's own ending. Device names are English too — the asset's label followed by **Wallet** or **Price Tracker**. Assets are labelled `Name (SYMBOL)`, or just the symbol when the name only repeats it (BNB, BCI5).
+Entity IDs are English and fixed, whatever language Home Assistant runs in: `sensor.bitpanda_`, then the device's name as an ID writes it (lower case, `_` for spaces and punctuation), then the sensor's own ending. Device names are English too — the asset's label followed by **Wallet** or **Price Tracker**. Assets are labelled `Name (SYMBOL)`, or just the symbol when the name only repeats it (BNB, BCI5). Stocks, ETFs and ETCs add their ISIN: `Name (SYMBOL / ISIN)`, or `SYMBOL (ISIN)` when the name only repeats the symbol.
 
 | Sensor | Entity ID |
 |---|---|
 | Portfolio Total value / Cash / Cash Plus | `sensor.bitpanda_portfolio_total`, `sensor.bitpanda_portfolio_cash`, `sensor.bitpanda_portfolio_cash_plus` |
 | Portfolio returns | `sensor.bitpanda_portfolio_return_day`, `_week`, `_month`, `_6_months`, `_year` |
 | Vision (VSN) Wallet: Balance (available) / (staking) / (total) | `sensor.bitpanda_vision_vsn_wallet_available`, `sensor.bitpanda_vision_vsn_wallet_staking`, `sensor.bitpanda_vision_vsn_wallet_total` |
+| Amundi PEA S&P 500 UCITS ETF (LYY1 / FR0011871136) Wallet: Balance (available) | `sensor.bitpanda_amundi_pea_s_p_500_ucits_etf_lyy1_fr0011871136_wallet_available` |
 | Bitcoin (BTC) Price Tracker: EUR / USD | `sensor.bitpanda_bitcoin_btc_price_tracker_eur`, `sensor.bitpanda_bitcoin_btc_price_tracker_usd` |
+| Amundi PEA S&P 500 UCITS ETF (LYY1 / FR0011871136) Price Tracker: CHF | `sensor.bitpanda_amundi_pea_s_p_500_ucits_etf_lyy1_fr0011871136_price_tracker_chf` |
 
 When two assets share a label, Home Assistant appends `_2` to the second one's ID.
 

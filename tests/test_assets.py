@@ -5,6 +5,7 @@ from custom_components.bitpanda.assets import (
     ASSET_CATEGORY_FILTERS,
     CATEGORY_OTHER,
     asset_category,
+    asset_isin,
     asset_label,
     asset_label_map,
     is_legacy_supported,
@@ -329,3 +330,38 @@ def test_every_filter_sorts_into_its_own_category():
     for category, filters in ASSET_CATEGORY_FILTERS.items():
         for type_, group in filters:
             assert asset_category({"type": type_, "group": group or "any"}) == category
+
+
+# --- asset_isin ------------------------------------------------------------------
+#
+# The ISIN that labels a stock, ETF or ETC and shows as its `asset_isin`
+# attribute. The catalogue gives one to every stock, ETF and ETC and to Cash
+# Plus, never to crypto, an index or a metal (measured on the full catalogue).
+
+
+@pytest.mark.parametrize(
+    ("symbol", "type_", "isin"),
+    [
+        ("517", "equity_security", "BMG8114Z1014"),  # stock, group equity_stock
+        ("ESSITYB", "security", "SE0009922164"),  # stock, group stock
+        ("EXIA", "equity_security", "DE000A0Q4R69"),  # etf, group equity_etf
+        ("XMTH", "equity_security", "CH0016999861"),  # etf, group equity_complex_etf
+        ("SXR8", "security", "IE00B5BMR087"),  # etf, group etf
+        ("PPFB", "equity_security", "IE00B4ND3602"),  # etc, group equity_complex_etc
+        ("ALUMINIUM", "security", "GB00B15KXN58"),  # etc, group etc
+        ("BTC", "cryptocoin", None),
+        ("BCI5", "index", None),
+        ("XAU", "commodity", None),
+        ("BCPEUR", "security", None),  # Cash Plus: an ISIN, but no stock, ETF or ETC
+    ],
+)
+def test_the_isin_of_every_catalogue_family(symbol, type_, isin):
+    asset = next(a for a in _catalogue() if a["symbol"] == symbol and a["type"] == type_)
+    assert asset_isin(asset) == isin
+
+
+def test_a_stock_without_an_isin_has_none():
+    stock = {"id": "x", "symbol": "ABC", "name": "Abc", "type": "security", "group": "stock"}
+    assert asset_isin(stock) is None
+    assert asset_isin({**stock, "isin": None}) is None
+    assert asset_isin({**stock, "isin": ""}) is None

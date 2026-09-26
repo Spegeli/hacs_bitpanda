@@ -31,18 +31,47 @@ from custom_components.bitpanda.naming import (
 BTC = {"id": "b86c034b-efe3-11eb-b56f-0691764446a7", "symbol": "BTC", "name": "Bitcoin"}
 BNB = {"id": "b86cb91a-efe3-11eb-b56f-0691764446a7", "symbol": "BNB", "name": "BNB"}
 BCI5 = {"id": "b86ca64c-efe3-11eb-b56f-0691764446a7", "symbol": "BCI5", "name": "BCI 5"}
-GOLD = {"id": "b86c88d4-efe3-11eb-b56f-0691764446a7", "symbol": "XAU", "name": "Gold"}
+GOLD = {"id": "b86c88d4-efe3-11eb-b56f-0691764446a7", "symbol": "XAU", "name": "Gold",
+        "type": "commodity", "group": "metal"}
 GOLDMONEY = {
     "id": "1f0f13b5-0c40-638c-a180-6ba272521ad2",
     "symbol": "XAU",
     "name": "GoldMoney Inc",
+    "isin": "VGG4001R1047",
+    "type": "equity_security",
+    "group": "equity_stock",
 }
 VISION = {"id": "1f051b7c-5980-6dda-9d3d-cf107d8d4bfb", "symbol": "VSN", "name": "Vision"}
+# An ETF, and a stock whose name only repeats its symbol (as ~110 do).
+AMUNDI = {
+    "id": "1f0ed6c9-ee10-68c6-8a0e-55a29b7757fe",
+    "symbol": "LYY1",
+    "name": "Amundi PEA S&P 500 UCITS ETF",
+    "isin": "FR0011871136",
+    "type": "equity_security",
+    "group": "equity_etf",
+}
+GRAB = {
+    "id": "04717cf5-b0f4-11ec-a6ac-0a686dc2c129",
+    "symbol": "GRAB",
+    "name": "Grab",
+    "isin": "KYG4124C1096",
+    "type": "security",
+    "group": "stock",
+}
+CASH_PLUS = {
+    "id": "1edf9721-e545-644c-9796-ae5b69a774d7",
+    "symbol": "BCPEUR",
+    "name": "Bitpanda Cash Plus EUR",
+    "isin": "IE000GWTNRJ7",
+    "type": "security",
+    "group": "fiat_earn",
+}
 
 
 def test_label_is_name_and_symbol():
     assert asset_display_label(BTC) == "Bitcoin (BTC)"
-    assert asset_display_label(GOLDMONEY) == "GoldMoney Inc (XAU)"
+    assert asset_display_label(GOLD) == "Gold (XAU)"
 
 
 def test_label_is_the_symbol_when_the_name_only_repeats_it():
@@ -56,12 +85,35 @@ def test_label_without_a_name_is_the_symbol():
     assert asset_display_label({"id": "x", "symbol": "ABC"}) == "ABC"
 
 
+def test_a_stock_etf_or_etc_label_carries_its_isin():
+    """Name, symbol and ISIN: GoldMoney's stock no longer reads like a metal."""
+    assert asset_display_label(AMUNDI) == "Amundi PEA S&P 500 UCITS ETF (LYY1 / FR0011871136)"
+    assert asset_display_label(GOLDMONEY) == "GoldMoney Inc (XAU / VGG4001R1047)"
+
+
+def test_a_security_whose_name_only_repeats_its_symbol_is_symbol_and_isin():
+    assert asset_display_label(GRAB) == "GRAB (KYG4124C1096)"
+    assert asset_display_label({**GRAB, "name": None}) == "GRAB (KYG4124C1096)"
+
+
+def test_any_other_label_leaves_the_isin_out():
+    """Cash Plus has an ISIN, but is no stock, ETF or ETC; a stock without
+    an ISIN has none to show."""
+    assert asset_display_label(CASH_PLUS) == "Bitpanda Cash Plus EUR (BCPEUR)"
+    assert asset_display_label({**AMUNDI, "isin": None}) == "Amundi PEA S&P 500 UCITS ETF (LYY1)"
+
+
 def test_device_names_say_what_the_device_is_in_english():
     """Home Assistant lists an entity under its device's name, so the name
     tells a price sensor from a wallet's in every language."""
     assert wallet_device_name(VISION) == "Vision (VSN) Wallet"
     assert price_device_name(VISION) == "Vision (VSN) Price Tracker"
     assert price_device_name(BNB) == "BNB Price Tracker"
+    assert (
+        price_device_name(AMUNDI)
+        == "Amundi PEA S&P 500 UCITS ETF (LYY1 / FR0011871136) Price Tracker"
+    )
+    assert wallet_device_name(GRAB) == "GRAB (KYG4124C1096) Wallet"
 
 
 def test_entity_ids_match_the_spec_table():
@@ -92,10 +144,20 @@ def test_entity_ids_match_the_spec_table():
     assert price_entity_id(BTC, "EUR") == "sensor.bitpanda_bitcoin_btc_price_tracker_eur"
     assert price_entity_id(BTC, "USD") == "sensor.bitpanda_bitcoin_btc_price_tracker_usd"
     assert price_entity_id(BNB, "CHF") == "sensor.bitpanda_bnb_price_tracker_chf"
+    # A stock's, ETF's or ETC's ISIN is part of its label, so of its IDs.
+    assert (
+        price_entity_id(AMUNDI, "CHF")
+        == "sensor.bitpanda_amundi_pea_s_p_500_ucits_etf_lyy1_fr0011871136_price_tracker_chf"
+    )
+    assert (
+        wallet_entity_id(AMUNDI)
+        == "sensor.bitpanda_amundi_pea_s_p_500_ucits_etf_lyy1_fr0011871136_wallet_available"
+    )
     assert (
         price_entity_id(GOLDMONEY, "EUR")
-        == "sensor.bitpanda_goldmoney_inc_xau_price_tracker_eur"
+        == "sensor.bitpanda_goldmoney_inc_xau_vgg4001r1047_price_tracker_eur"
     )
+    assert price_entity_id(GRAB, "EUR") == "sensor.bitpanda_grab_kyg4124c1096_price_tracker_eur"
 
 
 def test_unique_ids_and_device_identifiers():

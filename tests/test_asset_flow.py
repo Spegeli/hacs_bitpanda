@@ -6,6 +6,7 @@ from homeassistant import data_entry_flow
 from homeassistant.config_entries import ConfigSubentryData, UnknownEntry
 from homeassistant.util import dt as dt_util
 import pytest
+import voluptuous as vol
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
@@ -250,6 +251,22 @@ async def test_an_empty_submit_goes_back_to_the_categories(hass):
         result = await _pick_category(hass, entry)
         result = await hass.config_entries.subentries.async_configure(result["flow_id"], {})
     assert result["step_id"] == "user"
+
+
+async def test_going_back_keeps_the_category_picked_before(hass):
+    """The first time, nothing is pre-selected; coming back from the asset
+    step, the category the user had picked is."""
+    entry = _entry(hass)
+    result = await _start(hass, entry)
+    with pytest.raises(vol.Invalid):
+        result["data_schema"]({})
+    with patch(_LIST, AsyncMock(return_value=_metals())):
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {"category": "metal"}
+        )
+        result = await hass.config_entries.subentries.async_configure(result["flow_id"], {})
+    assert result["step_id"] == "user"
+    assert result["data_schema"]({}) == {"category": "metal"}
 
 
 async def test_a_typed_value_that_is_no_asset_is_rejected(hass):

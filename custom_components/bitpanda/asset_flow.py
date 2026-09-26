@@ -102,15 +102,21 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
         """Which kind of asset. The options are labelled via
-        `selector.asset_category.options.<value>`."""
+        `selector.asset_category.options.<value>`. Coming back from the asset
+        step, the category picked before is pre-selected."""
         if user_input is not None:
             self._category = user_input["category"]
             return await self.async_step_asset()
+        category = (
+            vol.Required("category")
+            if self._category is None
+            else vol.Required("category", default=self._category)
+        )
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required("category"): SelectSelector(
+                    category: SelectSelector(
                         SelectSelectorConfig(
                             options=list(ASSET_CATEGORY_FILTERS),
                             translation_key="asset_category",
@@ -157,7 +163,6 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
         if user_input is not None and not user_input.get("asset"):
-            self._category = None
             return await self.async_step_user()
 
         catalogue, error = await self._async_listing()

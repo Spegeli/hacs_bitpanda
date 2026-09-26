@@ -174,14 +174,32 @@ async def test_portfolio_setup_creates_its_devices_and_sensors(hass, portfolio_a
     assert _value(hass, "sensor.bitpanda_vision_vsn_wallet") == 50.0
     assert _value(hass, "sensor.bitpanda_vision_vsn_wallet_staking") == 150.0
     assert _value(hass, "sensor.bitpanda_vision_vsn_wallet_total") == 200.0
-    wallet = hass.states.get("sensor.bitpanda_vision_vsn_wallet")
-    assert wallet.attributes["friendly_name"] == "Vision (VSN) Wallet"
-    assert (
-        hass.states.get("sensor.bitpanda_vision_vsn_wallet_staking").attributes["friendly_name"]
-        == "Vision (VSN) Wallet Staking"
-    )
+    assert {
+        entity_id: hass.states.get(entity_id).attributes["friendly_name"]
+        for entity_id in _VSN_ENTITIES
+    } == {
+        "sensor.bitpanda_vision_vsn_wallet": "Vision (VSN) Wallet Balance (available)",
+        "sensor.bitpanda_vision_vsn_wallet_staking": "Vision (VSN) Wallet Balance (staking)",
+        "sensor.bitpanda_vision_vsn_wallet_total": "Vision (VSN) Wallet Balance (total)",
+    }
     devices = {d.name for d in dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)}
     assert devices == {"Portfolio", "Vision (VSN) Wallet"}
+
+
+async def test_the_wallet_sensor_keeps_its_name_without_staking(hass, portfolio_api):
+    """Named "Balance (available)" whether or not Staking and Total stand
+    beside it: nothing staked and no Earn product offered here."""
+    position, cash = portfolio_api.return_value
+    portfolio_api.return_value = [
+        {**position, "available_balance": {"value": "100.00000000"}}, cash,
+    ]
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_staking") is None
+    assert (
+        hass.states.get("sensor.bitpanda_vision_vsn_wallet").attributes["friendly_name"]
+        == "Vision (VSN) Wallet Balance (available)"
+    )
 
 
 async def test_no_sensor_state_carries_an_icon(hass, portfolio_api, price_api):

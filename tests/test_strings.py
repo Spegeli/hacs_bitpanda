@@ -457,6 +457,31 @@ def test_every_currency_and_entity_name_is_translated():
     }
 
 
+# The three sensors of a wallet device, by translation key, named by the part
+# of the balance each shows, in sentence case (USER DECISION 2026-09-26).
+_WALLET_PART_NAMES = {
+    "de": ("Guthaben (verfügbar)", "Guthaben (Staking)", "Guthaben (gesamt)"),
+    "en": ("Balance (available)", "Balance (staking)", "Balance (total)"),
+    "es": ("Saldo (disponible)", "Saldo (staking)", "Saldo (total)"),
+    "fr": ("Solde (disponible)", "Solde (staking)", "Solde (total)"),
+    "it": ("Saldo (disponibile)", "Saldo (staking)", "Saldo (totale)"),
+    "nl": ("Saldo (beschikbaar)", "Saldo (staking)", "Saldo (totaal)"),
+    "pl": ("Saldo (dostępne)", "Saldo (staking)", "Saldo (łącznie)"),
+}
+
+
+def test_the_wallet_sensors_are_named_by_their_part_of_the_balance():
+    """The Wallet sensor has a name of its own, not its device's: "Vision
+    (VSN) Wallet Balance (available)" beside "… Balance (staking)" and
+    "… Balance (total)"."""
+    assert sorted(_WALLET_PART_NAMES) == _LANGUAGES
+    for language, names in _WALLET_PART_NAMES.items():
+        sensors = _load(f"translations/{language}.json")["entity"]["sensor"]
+        assert tuple(
+            sensors[key]["name"] for key in ("wallet", "staking", "wallet_total")
+        ) == names, language
+
+
 def test_the_price_group_flow_has_its_strings():
     strings = json.loads((_DIR / "strings.json").read_text(encoding="utf-8"))
     assert set(strings["config_subentries"]) == {"price_group", "wallet_group"}

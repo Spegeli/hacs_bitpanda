@@ -258,6 +258,7 @@
         "name": "Rendite Jahr"
       },
       "wallet": {
+        "name": "Guthaben (verfügbar)",
         "state_attributes": {
           "asset": {
             "name": "Asset: Symbol"
@@ -283,7 +284,7 @@
         }
       },
       "staking": {
-        "name": "Staking",
+        "name": "Guthaben (Staking)",
         "state_attributes": {
           "asset": {
             "name": "Asset: Symbol"
@@ -315,7 +316,7 @@
         }
       },
       "wallet_total": {
-        "name": "Gesamt",
+        "name": "Guthaben (gesamt)",
         "state_attributes": {
           "asset": {
             "name": "Asset: Symbol"

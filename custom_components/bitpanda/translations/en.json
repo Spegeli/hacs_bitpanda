@@ -258,6 +258,7 @@
         "name": "Return year"
       },
       "wallet": {
+        "name": "Balance (available)",
         "state_attributes": {
           "asset": {
             "name": "Asset: symbol"
@@ -283,7 +284,7 @@
         }
       },
       "staking": {
-        "name": "Staking",
+        "name": "Balance (staking)",
         "state_attributes": {
           "asset": {
             "name": "Asset: symbol"
@@ -315,7 +316,7 @@
         }
       },
       "wallet_total": {
-        "name": "Total",
+        "name": "Balance (total)",
         "state_attributes": {
           "asset": {
             "name": "Asset: symbol"

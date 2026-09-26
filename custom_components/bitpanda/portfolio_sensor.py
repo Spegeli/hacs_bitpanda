@@ -275,13 +275,14 @@ class _WalletPart(CoordinatorEntity, SensorEntity):
 
 
 class WalletSensor(_WalletPart):
-    """Value of the unstaked units. Takes its device's name: "Vision (VSN) Wallet".
+    """Value of the unstaked units, named like its Staking and Total siblings
+    by its part of the balance: "Vision (VSN) Wallet Balance (available)",
+    with or without them beside it.
 
     `has_total` says whether this asset currently has a Total sensor; while it
     has none, the position performance is shown here instead.
     """
 
-    _attr_name = None
     _attr_translation_key = "wallet"
 
     def __init__(

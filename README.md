@@ -26,10 +26,10 @@ The integration offers two services. Set up either or both — each one once.
 - A **Portfolio** device: **Total value** (every holding, Cash Plus included, plus all fiat), **Cash** (all fiat balances, including funds reserved by a pending order), **Cash Plus**, and your **return** over a day, a week, a month, six months and a year
 - **Cash Plus** is the value of all your Cash Plus holdings in the Portfolio currency. Its attributes show each held product's own amount in its own currency — for example `eur: 250.75` while the Portfolio itself is shown in USD
 - One device per held asset, such as **Vision (VSN) Wallet**:
-  - **Wallet** — the value of the units you can trade (not staked)
-  - **Staking** — the value of the staked units, with APR and lifetime rewards
-  - **Total** — the whole position, with invested amount, average buy price and total return
-  - Staking and Total appear as soon as something is staked or Bitpanda offers an Earn product for the asset, and stay while either is true
+  - **Balance (available)** — the value of the units you can trade (not staked)
+  - **Balance (staking)** — the value of the staked units, with APR and lifetime rewards
+  - **Balance (total)** — the whole position, with invested amount, average buy price and total return
+  - Balance (staking) and Balance (total) appear as soon as something is staked or Bitpanda offers an Earn product for the asset, and stay while either is true
 - The wallets appear in groups by asset type, such as Cryptocurrencies or Precious metals, named in the language set under **Configure** — English unless you choose another (see [Languages](#languages)). The Portfolio device stays outside the groups (newer Home Assistant versions list it above them). Groups come and go with your holdings — there is nothing to add. Deleting a group (**⋮ → Delete**) only hides it until the next refresh while you still hold those assets: the group and its wallets come back, under the entity IDs the integration gives them; IDs you renamed yourself, and other customisations, survive only on newer Home Assistant versions
 - The wallet of an asset you no longer hold can be deleted from its device page (**⋮ → Delete**) instead of waiting for it to go. The Portfolio device and the wallets of assets you hold cannot be deleted: they would come straight back, and the dialog explains why
 - Updates every 5 minutes; Earn products every 24 hours; rewards every hour
@@ -161,7 +161,7 @@ Entity IDs are English and fixed, whatever language Home Assistant runs in. Asse
 |---|---|
 | Portfolio Total value / Cash / Cash Plus | `sensor.bitpanda_portfolio_total`, `sensor.bitpanda_portfolio_cash`, `sensor.bitpanda_portfolio_cash_plus` |
 | Portfolio returns | `sensor.bitpanda_portfolio_return_day`, `_week`, `_month`, `_6_months`, `_year` |
-| Vision (VSN) Wallet / Staking / Total | `sensor.bitpanda_vision_vsn_wallet`, `sensor.bitpanda_vision_vsn_wallet_staking`, `sensor.bitpanda_vision_vsn_wallet_total` |
+| Vision (VSN) Wallet: Balance (available) / (staking) / (total) | `sensor.bitpanda_vision_vsn_wallet`, `sensor.bitpanda_vision_vsn_wallet_staking`, `sensor.bitpanda_vision_vsn_wallet_total` |
 | Bitcoin (BTC) in EUR / USD | `sensor.bitpanda_bitcoin_btc_eur`, `sensor.bitpanda_bitcoin_btc_usd` |
 
 When two assets share a label, Home Assistant appends `_2` to the second one's ID.
@@ -172,9 +172,9 @@ Home Assistant lists these in the entity's Details view (older versions: the Att
 
 | Sensor | Attributes |
 |---|---|
-| Wallet | `asset`, `asset_name`, `units` (tradable units). Without a Total sensor also `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
-| Staking | `asset`, `asset_name`, `units` (staked), `apr_percent`, `rewards_gross`, `rewards_fee`, `rewards_net`, `rewards_count`, `rewards_last_at` |
-| Total | `asset`, `asset_name`, `units` (whole position), `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
+| Balance (available) | `asset`, `asset_name`, `units` (tradable units). Without a Balance (total) sensor also `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
+| Balance (staking) | `asset`, `asset_name`, `units` (staked), `apr_percent`, `rewards_gross`, `rewards_fee`, `rewards_net`, `rewards_count`, `rewards_last_at` |
+| Balance (total) | `asset`, `asset_name`, `units` (whole position), `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
 | Portfolio Cash Plus | `eur`, `usd`, `gbp` — the amount of each held Cash Plus product in its own currency |
 | Price (EUR) | `asset`, `asset_name`, `trading_pair`, `change_24h_pct`, `price_24h_ago` |
 | Price (other currencies) | as EUR, plus `conversion` (status `no_rate` until the first ECB rate is loaded), `conversion_rate`, `rate_date`, `rate_source` (`ECB`) |
@@ -246,13 +246,13 @@ If a **Bitpanda Portfolio** was set up while the old entry still waited for its 
 - **Every holding is tracked**, not only the wallets you picked, and each gets its own device, in a group by asset type.
 - **Group titles and the integration's own messages are English by default**, whatever language Home Assistant runs in. Choose another language under **Configure** on each service (see [Languages](#languages)). A group already titled in another language becomes English at the first start with this version unless you choose that language; a title you gave a group yourself stays.
 - **Wallets of assets you no longer hold go away.** They are migrated like the others, then removed together with their history after three portfolio refreshes without them — about ten minutes after the Portfolio starts working with your new key.
-- **Wallet still means the unstaked part**, as before. The new **Staking** and **Total** sensors show the staked part and the whole position; they start without history.
+- **The wallet sensor still shows the unstaked part**, as before, now named **Balance (available)**. The new **Balance (staking)** and **Balance (total)** sensors show the staked part and the whole position; they start without history.
 - **Portfolio Total value now covers your whole account** — every holding plus all fiat. It used to add up only the wallets you tracked, so its value steps up at the upgrade: check automations that compare it against a threshold.
 - **The fiat wallet in your currency becomes Portfolio Cash**, which sums all your fiat balances. Other fiat wallets are left as `unavailable` entities you can delete.
 - **Prices in other currencies are converted with ECB daily rates** instead of being quoted by Bitpanda.
 - **Long-term statistics.** Every value sensor now keeps them, from the upgrade on (see [Long-term statistics](#long-term-statistics)).
 - **`bitpanda.refresh` can fail now.** The old action never did. A refresh that fails, or a call while neither service is loaded, now stops a script or automation at that step unless the step sets `continue_on_error: true` (see [Manual Refresh](#manual-refresh)).
-- **Attributes:** units are now `units` on each sensor (the Wallet's `units` are the unstaked units its old `balance` showed); the APR is `apr_percent` on the Staking sensor; the position performance is on the Total sensor. `breakdown`, `wallet_count`, `all_prices` and the wallet `price` attribute are gone. The price sensor's `conversion` attribute now carries the status `no_rate` (not a sentence) while no exchange rate is loaded.
+- **Attributes:** units are now `units` on each sensor (the `units` of Balance (available) are the unstaked units its old `balance` showed); the APR is `apr_percent` on Balance (staking); the position performance is on Balance (total). `breakdown`, `wallet_count`, `all_prices` and the wallet `price` attribute are gone. The price sensor's `conversion` attribute now carries the status `no_rate` (not a sentence) while no exchange rate is loaded.
 
 ---
 
@@ -294,7 +294,7 @@ The recorded history of the removed sensors stays in Home Assistant's database u
 | A return sensor is `unknown` | Bitpanda answered for that timeframe without a figure, for example while the account has no history for it yet |
 | A return sensor is `unavailable` while the other returns are not | Bitpanda's answer for that timeframe failed; it is asked again at the next refresh |
 | Portfolio Total value, Cash, Cash Plus and every wallet are `unavailable` at once (the returns are not) | Bitpanda reported an empty portfolio; it counts only once three answers in a row, at least ten minutes apart from first to last, confirm it — refreshing by hand does not make that sooner |
-| No Staking sensor for an asset | It appears once something is staked or Bitpanda offers an Earn product for the asset |
+| No Balance (staking) sensor for an asset | It appears once something is staked or Bitpanda offers an Earn product for the asset |
 | A price in another currency has no value and a `conversion` attribute | The ECB rates could not be loaded since Home Assistant started; the integration retries every 15 minutes and the value appears with the first success |
 | One asset's price sensors are `unavailable` | Bitpanda returned no price for it; see the warning in the log |
 | 24h price change missing | The Recorder integration must be active and have at least 24 hours of history |

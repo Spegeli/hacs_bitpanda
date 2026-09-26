@@ -258,6 +258,7 @@
         "name": "Rendement 1 an"
       },
       "wallet": {
+        "name": "Solde (disponible)",
         "state_attributes": {
           "asset": {
             "name": "Actif : symbole"
@@ -283,7 +284,7 @@
         }
       },
       "staking": {
-        "name": "Staking",
+        "name": "Solde (staking)",
         "state_attributes": {
           "asset": {
             "name": "Actif : symbole"
@@ -315,7 +316,7 @@
         }
       },
       "wallet_total": {
-        "name": "Total",
+        "name": "Solde (total)",
         "state_attributes": {
           "asset": {
             "name": "Actif : symbole"

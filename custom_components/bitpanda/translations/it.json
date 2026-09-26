@@ -258,6 +258,7 @@
         "name": "Rendimento 1 anno"
       },
       "wallet": {
+        "name": "Saldo (disponibile)",
         "state_attributes": {
           "asset": {
             "name": "Asset: simbolo"
@@ -283,7 +284,7 @@
         }
       },
       "staking": {
-        "name": "Staking",
+        "name": "Saldo (staking)",
         "state_attributes": {
           "asset": {
             "name": "Asset: simbolo"
@@ -315,7 +316,7 @@
         }
       },
       "wallet_total": {
-        "name": "Totale",
+        "name": "Saldo (totale)",
         "state_attributes": {
           "asset": {
             "name": "Asset: simbolo"

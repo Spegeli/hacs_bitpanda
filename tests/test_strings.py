@@ -738,8 +738,9 @@ def test_the_isin_is_labelled_on_every_sensor_that_names_its_asset():
 
 
 # The lifetime reward attributes of the Staking sensor, by language (USER
-# DECISION 2026-09-26). German and Polish count credits: their word for
-# payouts ("Auszahlungen", "wypłaty") also reads as money taken out.
+# DECISION 2026-09-26, ruling R46). German and Polish avoid their word for
+# payouts ("Auszahlungen", "wypłaty"), which also reads as money taken out,
+# and speak of credits instead.
 _REWARD_LABELS = {
     "de": {
         "rewards_count": "Belohnungen: Anzahl Gutschriften",
@@ -747,6 +748,7 @@ _REWARD_LABELS = {
         "rewards_fee": "Belohnungen: Gebühr (Menge)",
         "rewards_net": "Belohnungen: netto (Menge)",
         "rewards_net_value": "Belohnungen: Wert netto (aktuell)",
+        "rewards_last_at": "Belohnungen: zuletzt",
     },
     "en": {
         "rewards_count": "Rewards: number of payouts",
@@ -754,6 +756,7 @@ _REWARD_LABELS = {
         "rewards_fee": "Rewards: fee (quantity)",
         "rewards_net": "Rewards: net (quantity)",
         "rewards_net_value": "Rewards: net value (current)",
+        "rewards_last_at": "Rewards: last",
     },
     "es": {
         "rewards_count": "Recompensas: número de pagos",
@@ -761,6 +764,7 @@ _REWARD_LABELS = {
         "rewards_fee": "Recompensas: comisión (cantidad)",
         "rewards_net": "Recompensas: neto (cantidad)",
         "rewards_net_value": "Recompensas: valor neto (actual)",
+        "rewards_last_at": "Recompensas: último pago",
     },
     "fr": {
         "rewards_count": "Récompenses\u00a0: nombre de versements",
@@ -768,6 +772,7 @@ _REWARD_LABELS = {
         "rewards_fee": "Récompenses\u00a0: frais (quantité)",
         "rewards_net": "Récompenses\u00a0: net (quantité)",
         "rewards_net_value": "Récompenses\u00a0: valeur nette (actuelle)",
+        "rewards_last_at": "Récompenses\u00a0: dernier versement",
     },
     "it": {
         "rewards_count": "Ricompense: numero di accrediti",
@@ -775,6 +780,7 @@ _REWARD_LABELS = {
         "rewards_fee": "Ricompense: commissione (quantità)",
         "rewards_net": "Ricompense: netto (quantità)",
         "rewards_net_value": "Ricompense: valore netto (attuale)",
+        "rewards_last_at": "Ricompense: ultimo accredito",
     },
     "nl": {
         "rewards_count": "Beloningen: aantal uitbetalingen",
@@ -782,6 +788,7 @@ _REWARD_LABELS = {
         "rewards_fee": "Beloningen: kosten (hoeveelheid)",
         "rewards_net": "Beloningen: netto (hoeveelheid)",
         "rewards_net_value": "Beloningen: nettowaarde (actueel)",
+        "rewards_last_at": "Beloningen: laatste uitbetaling",
     },
     "pl": {
         "rewards_count": "Nagrody: liczba naliczeń",
@@ -789,6 +796,7 @@ _REWARD_LABELS = {
         "rewards_fee": "Nagrody: opłata (ilość)",
         "rewards_net": "Nagrody: netto (ilość)",
         "rewards_net_value": "Nagrody: wartość netto (bieżąca)",
+        "rewards_last_at": "Nagrody: ostatnie naliczenie",
     },
 }
 

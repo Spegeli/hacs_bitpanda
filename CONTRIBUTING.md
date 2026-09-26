@@ -61,7 +61,7 @@ Everything lives in `custom_components/bitpanda/`:
 | `groups.py` | Groups by asset type (config subentries): titles, lookups, the Price Tracker's tracked assets, the Portfolio's wallet groups |
 | `icons.json` | Every sensor's icon, by its translation key, and the `bitpanda.refresh` service's icon — never set an icon in code |
 | `language.py` | The language of the integration's own texts: each entry's language option, the shipped languages |
-| `migration.py` | Migration of version 1 (legacy API) entries to version 3; tells the user what changed as repair issues |
+| `migration.py` | Migration of version 1 (legacy API) entries to version 3; tells the user what changed, and what keeps an entry from being upgraded, as repair issues |
 | `naming.py` | Labels, entity IDs, unique_ids, device identifiers |
 | `portfolio_coordinator.py` | Portfolio, History, Earn and Rewards coordinators |
 | `portfolio_model.py` | Pure data model: holdings, value split, Cash Plus, Earn, rewards |
@@ -106,13 +106,13 @@ The integration ships seven languages under `translations/`: English (`en`), Ger
 
 Which language a text is shown in depends on who writes it out:
 
-- **Home Assistant's frontend**, in each user's profile language: dialogs and forms, attribute names, group subtitles, repair issues (`issues`, the upgrade details), the reason setup is being retried (`exceptions`, from the error's key and placeholders), and the errors of a `bitpanda.refresh` call made in the UI — `exceptions.nothing_to_refresh` while no entry is loaded, raised with its key alone, and `exceptions.refresh_failed` when a refresh failed, its placeholder the titles of the entries concerned (the log and automation traces show their English text, and no entry's language option applies: the call belongs to no single entry). Never write such a text out in the backend; hand the frontend its key and placeholders, and keep the placeholders free of words — entity IDs, codes, asset labels, entry titles and Markdown only.
+- **Home Assistant's frontend**, in each user's profile language: dialogs and forms, attribute names, group subtitles, repair issues (`issues`: the upgrade details and what blocks the upgrade), the reason setup is being retried (`exceptions`, from the error's key and placeholders), and the errors of a `bitpanda.refresh` call made in the UI — `exceptions.nothing_to_refresh` while no entry is loaded, raised with its key alone, and `exceptions.refresh_failed` when a refresh failed, its placeholder the titles of the entries concerned (the log and automation traces show their English text, and no entry's language option applies: the call belongs to no single entry). Never write such a text out in the backend; hand the frontend its key and placeholders, and keep the placeholders free of words — entity IDs, codes, asset labels, entry titles and Markdown only.
 - **Home Assistant's backend**, in its system language: sensor names (`entity.sensor.*.name`).
 - **This integration**, in the entry's own language option: group titles (`selector.asset_group`) and the refusals to delete a device (`exceptions.*_not_removable`), which Home Assistant shows as they arrive. The option lives under **Configure** on each service (`language` in the entry's options, English by default); `language.entry_language(entry)` reads it and `language.async_shipped_languages` lists the choices, one per file under `translations/`, each labelled with its own name (`selector.language`, identical in every file). Never resolve one of these texts in `hass.config.language`.
 
 What every language keeps exactly as English has it:
 
-- Placeholders such as `{api_key_url}`, `{old}`, `{new}`, `{asset}`, `{assets}`, `{group}`, `{currency}`, `{entities}`, `{path}`, `{status}` and `{services}` — each string uses the same ones as its English original. Never put an apostrophe directly before a placeholder (`l'{asset}`): the frontend reads it as the start of literal text.
+- Placeholders such as `{api_key_url}`, `{old}`, `{new}`, `{asset}`, `{assets}`, `{group}`, `{currency}`, `{entities}`, `{path}`, `{status}`, `{services}`, `{entry}`, `{portfolio}`, `{minimum}` and `{version}` — each string uses the same ones as its English original. Never put an apostrophe directly before a placeholder (`l'{asset}`): the frontend reads it as the start of literal text.
 - Markdown link targets (`[{api_key_url}]({api_key_url})`), product names (Bitpanda, Bitpanda Portfolio, Bitpanda Price Tracker, Cash Plus, Earn) and currency codes.
 - Bitpanda's permission names, `Guthaben (Balance)`, `Transaktion (Transaction)` and `Earn (Read)`, as Bitpanda's key page shows them (German uses the German names alone).
 
@@ -144,7 +144,7 @@ These tests guard the files (`tests/test_strings.py` unless noted):
 | `test_every_published_attribute_has_a_translated_label` | every attribute a sensor publishes has a label |
 | `test_each_kind_of_failed_request_has_a_text_of_its_own`, `test_every_failure_text_has_exactly_the_placeholders_the_code_fills_in` | each kind of failed request (`const.API_ERROR_KINDS`) has its own text in `exceptions`, with exactly the placeholders the code fills in — the request path and an HTTP status, never words |
 | `test_no_exception_text_takes_an_english_message` | no `exceptions` text has an `{error}` placeholder: the API client's English message stays in the log |
-| `tests/test_migration.py::test_every_issue_text_renders_in_every_language` | every repair issue of the upgrade (`migration.UPGRADE_ISSUES`) has a title and a description with exactly the placeholders the code supplies, in every language, and no issue text is unused |
+| `tests/test_migration.py::test_every_issue_text_renders_in_every_language`, `test_every_blocker_text_renders_in_every_language`, `test_every_issue_text_is_one_the_code_raises` | every repair issue of the upgrade (`migration.UPGRADE_ISSUES`) and of what blocks it (`migration.BLOCKER_ISSUES`) has a title and a description with exactly the placeholders the code supplies, in every language, and no issue text is unused |
 | `tests/test_groups.py::test_known_group_titles_are_read_from_every_shipped_language` | each language's group titles count as shipped defaults |
 
 CI's hassfest run validates `strings.json` and `translations/en.json` as well.

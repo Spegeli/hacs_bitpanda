@@ -445,6 +445,14 @@
     "price_tracker_exists": {
       "title": "Aktualizacja integracji Bitpanda: ceny do dodania w usłudze Price Tracker",
       "description": "W chwili aktualizacji usługa Bitpanda Price Tracker była już skonfigurowana, więc ceny śledzone przez Twój stary wpis Bitpanda nie zostały do niej przeniesione. Aby nadal je śledzić, dodaj te aktywa za pomocą „Dodaj śledzenie ceny” we wpisie „Bitpanda Price Tracker”:\n\n{assets}"
+    },
+    "home_assistant_too_old": {
+      "title": "Aktualizacja integracji Bitpanda wymaga Home Assistant {minimum}",
+      "description": "Wpis Bitpanda sprzed aktualizacji można zaktualizować dopiero w Home Assistant {minimum} lub nowszym, który zachowuje historię sensorów o zmienionych nazwach. Ta instalacja działa na Home Assistant {version}, dlatego nic nie zostało zmienione. Zaktualizuj Home Assistant; wpis zostanie zaktualizowany przy następnym uruchomieniu."
+    },
+    "portfolio_exists": {
+      "title": "Aktualizacja integracji Bitpanda zablokowana: usługa Bitpanda Portfolio jest już skonfigurowana",
+      "description": "Wpisu Bitpanda „{entry}” sprzed aktualizacji nie można zaktualizować: stałby się drugą usługą Bitpanda Portfolio obok „{portfolio}”, a można skonfigurować tylko jedną. Nic w nim nie zostało zmienione. Usuń jeden z dwóch wpisów. Jeśli zachowasz „{entry}”, uruchom następnie ponownie Home Assistant, aby go zaktualizować."
     }
   },
   "services": {

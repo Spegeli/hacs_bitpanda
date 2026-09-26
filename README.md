@@ -68,7 +68,7 @@ Cash Plus products are cash equivalents — one unit is one unit of their curren
 
 #### Three language settings
 The integration's texts follow three different settings:
-- **Profile language** (your user profile → **Language**): per user, in the browser, at once — dialogs and forms, attribute names, the group subtitles ("Wallet group", "Price tracker group"), the reason shown while setup fails or is retried, the upgrade details under **Settings → Repairs**, and the errors a `bitpanda.refresh` call shows in the UI — a failed refresh, or nothing to refresh while neither service is loaded (the log and automation traces keep them in English)
+- **Profile language** (your user profile → **Language**): per user, in the browser, at once — dialogs and forms, attribute names, the group subtitles ("Wallet group", "Price tracker group"), the reason shown while setup fails or is retried, the integration's issues under **Settings → Repairs**, and the errors a `bitpanda.refresh` call shows in the UI — a failed refresh, or nothing to refresh while neither service is loaded (the log and automation traces keep them in English)
 - **System language** (**Settings → System → General → Language**): shared by all users — sensor names, from the next start of Home Assistant
 - **Language of group titles and messages** (**Configure**, the ⚙ on each service's entry): shared by all users, English unless you choose another, as soon as you save — the titles of that service's groups (e.g. "Cryptocurrencies" → "Kryptowährungen") and the integration's own messages, such as why a device cannot be deleted — not the `bitpanda.refresh` errors, which follow the profile language; a group you renamed yourself keeps its name (newer versions offer **⋮ → Rename**)
 - Tip: to see everything in one language, choose it in all three and restart Home Assistant
@@ -177,7 +177,9 @@ Home Assistant lists these in the entity's Details view (older versions: the Att
 
 ## ⬆️ Upgrading from 2026.06.x
 
-This release moves to Bitpanda's new Public API and splits the integration into two services. It needs Home Assistant **2025.5** or newer — on an older version the entry is left unmigrated and the integration does not load.
+This release moves to Bitpanda's new Public API and splits the integration into two services. It needs Home Assistant **2025.5** or newer — on an older version the entry is left unmigrated, the integration does not load, and **Settings → Repairs** asks you to update Home Assistant.
+
+If you set up a **Bitpanda Portfolio** beside the old entry before upgrading, the old entry is not upgraded either — there can be only one Portfolio — and **Settings → Repairs** asks you to delete one of the two entries. If you keep the old one, restart Home Assistant afterwards to upgrade it.
 
 ⚠️ **The upgrade is one-way.** The previous release cannot load the migrated entries, so going back to it afterwards does not work. Make a backup before you update if you may want to return.
 

@@ -445,6 +445,14 @@
     "price_tracker_exists": {
       "title": "Bitpanda upgrade: prices to add to the Price Tracker",
       "description": "A Bitpanda Price Tracker was already set up when the upgrade ran, so the prices your old Bitpanda entry tracked were not moved into it. To keep tracking them, add these assets with \"Add price tracker\" on the Bitpanda Price Tracker entry:\n\n{assets}"
+    },
+    "home_assistant_too_old": {
+      "title": "Bitpanda upgrade needs Home Assistant {minimum}",
+      "description": "The Bitpanda entry from before the upgrade can only be upgraded on Home Assistant {minimum} or newer, which keeps the history of the renamed sensors. This installation runs Home Assistant {version}, so nothing has been changed. Update Home Assistant; the entry is upgraded at the next start."
+    },
+    "portfolio_exists": {
+      "title": "Bitpanda upgrade blocked: a Bitpanda Portfolio is already set up",
+      "description": "The Bitpanda entry \"{entry}\" from before the upgrade cannot be upgraded: it would become a second Bitpanda Portfolio beside \"{portfolio}\", and only one can be set up. Nothing of it has been changed. Delete one of the two entries. If you keep \"{entry}\", restart Home Assistant afterwards to upgrade it."
     }
   },
   "services": {

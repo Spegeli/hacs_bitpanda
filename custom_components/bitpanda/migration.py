@@ -20,6 +20,10 @@ their placeholders carry nothing but entity IDs, codes and asset labels.
 One WARNING in the log, in English like every log line, keeps the whole
 mapping with the reason for every entity left alone -- also once the
 issues are dismissed.
+
+What keeps a version 1 entry from being upgraded at all, and the user can
+remove -- Home Assistant older than 2025.5, a Portfolio set up beside it --
+is a repair issue too (BLOCKER_ISSUES), for as long as it lasts.
 """
 from __future__ import annotations
 
@@ -28,7 +32,7 @@ import logging
 from typing import Any
 
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
-from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
+from homeassistant.const import MAJOR_VERSION, MINOR_VERSION, __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import (
@@ -638,6 +642,68 @@ def async_delete_upgrade_issues(hass: HomeAssistant) -> None:
         ir.async_delete_issue(hass, DOMAIN, issue_id)
 
 
+# What keeps a version 1 entry from being upgraded, as repair issues -- each
+# id is also its translation key: Home Assistant too old to keep the history
+# of renamed entities, and a Portfolio set up beside the entry, which would
+# become a second one. tests/test_migration.py ties this to what the
+# migration raises and to the `issues` in strings.json.
+ISSUE_HOME_ASSISTANT_TOO_OLD = "home_assistant_too_old"
+ISSUE_PORTFOLIO_EXISTS = "portfolio_exists"
+BLOCKER_ISSUES = (ISSUE_HOME_ASSISTANT_TOO_OLD, ISSUE_PORTFOLIO_EXISTS)
+
+# The first Home Assistant whose recorder moves history along with the
+# entity-ID renames made while it starts (see async_migrate_entry).
+_MINIMUM_VERSION = (2025, 5)
+
+
+@callback
+def _async_raise_blocker(hass: HomeAssistant, key: str, placeholders: dict[str, str]) -> None:
+    """A repair issue for what blocks the upgrade, `key` both its id and its
+    translation key.
+
+    An error: the entry stays as it was while it lasts. Not kept across
+    restarts -- the migration runs again at every start and raises it again
+    while it lasts, and a cause gone meanwhile leaves nothing behind. "Learn
+    more" leads to the README's upgrade section, as for the upgrade's own
+    issues.
+    """
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        key,
+        is_fixable=False,
+        is_persistent=False,
+        learn_more_url=UPGRADE_URL,
+        severity=ir.IssueSeverity.ERROR,
+        translation_key=key,
+        translation_placeholders=placeholders,
+    )
+
+
+@callback
+def async_update_blocker_issues(hass: HomeAssistant, removed_entry_id: str) -> None:
+    """Delete each blocker issue whose cause went with the entry being
+    removed, `removed_entry_id`.
+
+    With no version 1 entry left there is nothing to upgrade. With no
+    Portfolio beside a version 1 entry, it no longer blocks one: the entry
+    is upgraded at the next start -- Home Assistant does not retry a failed
+    migration before, which the issue told the user. The entry being
+    removed is left out explicitly: whether Home Assistant still lists it
+    here differs between versions.
+    """
+    remaining = [
+        other
+        for other in hass.config_entries.async_entries(DOMAIN)
+        if other.entry_id != removed_entry_id
+    ]
+    waiting = any(other.version == 1 for other in remaining)
+    if not waiting:
+        ir.async_delete_issue(hass, DOMAIN, ISSUE_HOME_ASSISTANT_TOO_OLD)
+    if not waiting or not any(other.unique_id == ENTRY_TYPE_PORTFOLIO for other in remaining):
+        ir.async_delete_issue(hass, DOMAIN, ISSUE_PORTFOLIO_EXISTS)
+
+
 @callback
 def _async_raise_issue(hass: HomeAssistant, key: str, placeholders: dict[str, str]) -> None:
     """One repair issue of the upgrade, `key` both its id and its translation
@@ -688,10 +754,15 @@ def _async_report(
         _async_raise_issue(hass, note.issue, note.placeholders)
 
 
-def _portfolio_taken(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    return any(
-        other.entry_id != entry.entry_id and other.unique_id == ENTRY_TYPE_PORTFOLIO
-        for other in hass.config_entries.async_entries(DOMAIN)
+def _other_portfolio(hass: HomeAssistant, entry: ConfigEntry) -> ConfigEntry | None:
+    """The Portfolio set up beside `entry`, if there is one."""
+    return next(
+        (
+            other
+            for other in hass.config_entries.async_entries(DOMAIN)
+            if other.entry_id != entry.entry_id and other.unique_id == ENTRY_TYPE_PORTFOLIO
+        ),
+        None,
     )
 
 
@@ -718,20 +789,32 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Assistant 2025.5 it installed that listener only once Home Assistant had
     # started -- after config entry migrations such as this one -- so every
     # rename below would leave the history behind under the old ID. HACS
-    # enforces the floor (hacs.json); this covers a manual install.
-    if (MAJOR_VERSION, MINOR_VERSION) < (2025, 5):
+    # enforces the floor (hacs.json); this covers a manual install. The
+    # issue registry and its calls below are the same at 2025.3 and 2025.4.
+    if (MAJOR_VERSION, MINOR_VERSION) < _MINIMUM_VERSION:
         _LOGGER.error(
             "Updating the Bitpanda config entry needs Home Assistant 2025.5 or newer "
             "to keep entity history. Nothing has been changed; update Home Assistant "
             "and restart."
         )
+        _async_raise_blocker(
+            hass,
+            ISSUE_HOME_ASSISTANT_TOO_OLD,
+            {"minimum": ".".join(map(str, _MINIMUM_VERSION)), "version": HA_VERSION},
+        )
         return False
-    if _portfolio_taken(hass, entry):
+    ir.async_delete_issue(hass, DOMAIN, ISSUE_HOME_ASSISTANT_TOO_OLD)
+    if (portfolio := _other_portfolio(hass, entry)) is not None:
         _LOGGER.error(
             "Cannot migrate the Bitpanda config entry: a Bitpanda Portfolio is "
             "already set up. Remove one of the two entries."
         )
+        # Named by their titles, as the integration page shows them.
+        _async_raise_blocker(
+            hass, ISSUE_PORTFOLIO_EXISTS, {"entry": entry.title, "portfolio": portfolio.title}
+        )
         return False
+    ir.async_delete_issue(hass, DOMAIN, ISSUE_PORTFOLIO_EXISTS)
 
     _LOGGER.info("Migrating the Bitpanda config entry to version 3")
     try:

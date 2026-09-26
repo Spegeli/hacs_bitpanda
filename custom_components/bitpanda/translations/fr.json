@@ -445,6 +445,14 @@
     "price_tracker_exists": {
       "title": "Mise à jour de Bitpanda : prix à ajouter au Price Tracker",
       "description": "Un Bitpanda Price Tracker était déjà configuré lors de la mise à jour : les prix que suivait votre ancienne entrée Bitpanda n'y ont donc pas été transférés. Pour continuer à les suivre, ajoutez ces actifs avec « Ajouter un suivi de prix » sur l'entrée « Bitpanda Price Tracker » :\n\n{assets}"
+    },
+    "home_assistant_too_old": {
+      "title": "La mise à jour de Bitpanda nécessite Home Assistant {minimum}",
+      "description": "L'entrée Bitpanda d'avant la mise à jour ne peut être mise à jour qu'à partir de Home Assistant {minimum}, qui conserve l'historique des capteurs renommés. Cette installation utilise Home Assistant {version} : rien n'a donc été modifié. Mettez à jour Home Assistant ; l'entrée sera mise à jour au prochain démarrage."
+    },
+    "portfolio_exists": {
+      "title": "Mise à jour de Bitpanda bloquée : un Bitpanda Portfolio est déjà configuré",
+      "description": "L'entrée Bitpanda « {entry} » d'avant la mise à jour ne peut pas être mise à jour : elle deviendrait un second Bitpanda Portfolio à côté de « {portfolio} », et un seul peut être configuré. Elle n'a pas été modifiée. Supprimez l'une des deux entrées. Si vous conservez « {entry} », redémarrez ensuite Home Assistant pour la mettre à jour."
     }
   },
   "services": {

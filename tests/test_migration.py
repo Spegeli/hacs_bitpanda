@@ -1,4 +1,5 @@
 """Tests for v1 to v3 config entry migration."""
+from contextlib import contextmanager
 import json
 import logging
 from pathlib import Path
@@ -152,6 +153,15 @@ async def test_a_version_2_development_build_must_be_re_added(hass, caplog):
 _MIGRATION = "custom_components.bitpanda.migration"
 
 
+@contextmanager
+def _home_assistant(major: int, minor: int, version: str):
+    """Run the migration as if on Home Assistant `version`."""
+    with patch(f"{_MIGRATION}.MAJOR_VERSION", major), patch(
+        f"{_MIGRATION}.MINOR_VERSION", minor
+    ), patch(f"{_MIGRATION}.HA_VERSION", version):
+        yield
+
+
 @pytest.mark.parametrize("minor", [3, 4])
 async def test_home_assistant_before_2025_5_leaves_the_entry_alone(
     hass, legacy_api, no_setup, caplog, minor
@@ -159,14 +169,16 @@ async def test_home_assistant_before_2025_5_leaves_the_entry_alone(
     """Only from Home Assistant 2025.5 on does the recorder move history along
     with an entity-ID rename made while Home Assistant starts -- when this
     migration runs. Before, every migrated entity would lose its history, so
-    the migration refuses and changes nothing, not even with an API call."""
+    the migration refuses and changes nothing, not even with an API call.
+    Nothing was upgraded, so nothing is reported as changed: the one repair
+    issue asks to update Home Assistant."""
     currencies, assets = legacy_api
     entry = _v1_entry(hass, assets=["BTC"], wallets=["cryptocoin_BTC"])
     eid = entry.entry_id
     wallet = _legacy_entity(
         hass, entry, f"{eid}_wallet_cryptocoin_BTC", "bitpanda_wallets_btc_wallet"
     )
-    with patch(f"{_MIGRATION}.MAJOR_VERSION", 2025), patch(f"{_MIGRATION}.MINOR_VERSION", minor):
+    with _home_assistant(2025, minor, f"2025.{minor}.0"):
         assert not await async_migrate_entry(hass, entry)
     assert entry.version == 1
     assert dict(entry.data) == {"api_key": "legacy-key", "currency": "EUR"}
@@ -177,7 +189,7 @@ async def test_home_assistant_before_2025_5_leaves_the_entry_alone(
     assert _price_trackers(hass) == []
     currencies.assert_not_called()
     assets.assert_not_called()
-    assert _issues(hass) == {}
+    assert set(_issues(hass)) == {"home_assistant_too_old"}
     assert _migration_warnings(caplog) == []
     assert "Home Assistant 2025.5 or newer" in caplog.text
     assert "legacy-key" not in caplog.text
@@ -185,7 +197,7 @@ async def test_home_assistant_before_2025_5_leaves_the_entry_alone(
 
 async def test_home_assistant_2025_5_migrates(hass, legacy_api, no_setup):
     entry = _v1_entry(hass, wallets=["cryptocoin_BTC"])
-    with patch(f"{_MIGRATION}.MAJOR_VERSION", 2025), patch(f"{_MIGRATION}.MINOR_VERSION", 5):
+    with _home_assistant(2025, 5, "2025.5.0"):
         assert await async_migrate_entry(hass, entry)
     assert entry.version == 3
 
@@ -287,13 +299,137 @@ async def test_a_rate_limit_changes_nothing(hass, legacy_api, no_setup, caplog):
     assert "legacy-key" not in caplog.text
 
 
+def _portfolio_set_up_before(hass) -> MockConfigEntry:
+    """A Portfolio the user set up while the version 1 entry still waited for
+    its migration."""
+    portfolio = MockConfigEntry(
+        domain=DOMAIN, version=3, unique_id="portfolio", title="Bitpanda Portfolio",
+        data={"entry_type": "portfolio"},
+    )
+    portfolio.add_to_hass(hass)
+    return portfolio
+
+
 async def test_an_existing_portfolio_blocks_the_migration(hass, legacy_api, no_setup):
-    MockConfigEntry(
-        domain=DOMAIN, version=3, unique_id="portfolio", data={"entry_type": "portfolio"}
-    ).add_to_hass(hass)
+    _portfolio_set_up_before(hass)
     entry = _v1_entry(hass)
     assert not await async_migrate_entry(hass, entry)
     assert entry.version == 1
+
+
+# --- What blocks the upgrade ----------------------------------------------------------
+#
+# A version 1 entry is not upgraded while Home Assistant is older than 2025.5,
+# or while a Portfolio is set up beside it. Each cause the user can remove is a
+# repair issue: an error -- the entry stays as it was while it lasts -- raised
+# again at every start while it lasts (not kept across restarts), and deleted
+# as soon as it is gone. "Learn more" leads to the README's upgrade section.
+
+
+def _blocker_attributes(issue: ir.IssueEntry) -> tuple:
+    return (
+        issue.severity, issue.is_fixable, issue.is_persistent, issue.learn_more_url,
+        issue.issue_domain,
+    )
+
+
+_BLOCKER = (ir.IssueSeverity.ERROR, False, False, UPGRADE_URL, None)
+
+
+@pytest.mark.parametrize("minor", [3, 4])
+async def test_home_assistant_before_2025_5_asks_to_be_updated(
+    hass, legacy_api, no_setup, minor
+):
+    """Naming the version needed and the version running -- nothing secret."""
+    entry = _v1_entry(hass, wallets=["cryptocoin_BTC"])
+    with _home_assistant(2025, minor, f"2025.{minor}.2"):
+        assert not await async_migrate_entry(hass, entry)
+    issue = _issues(hass)["home_assistant_too_old"]
+    assert (issue.translation_key, issue.translation_placeholders) == (
+        "home_assistant_too_old", {"minimum": "2025.5", "version": f"2025.{minor}.2"}
+    )
+    assert _blocker_attributes(issue) == _BLOCKER
+
+
+async def test_the_update_issue_goes_once_home_assistant_is_new_enough(
+    hass, legacy_api, no_setup
+):
+    entry = _v1_entry(hass, wallets=["cryptocoin_BTC"])
+    with _home_assistant(2025, 4, "2025.4.2"):
+        assert not await async_migrate_entry(hass, entry)
+    assert "home_assistant_too_old" in _issues(hass)
+    with _home_assistant(2025, 5, "2025.5.0"):
+        assert await async_migrate_entry(hass, entry)
+    assert "home_assistant_too_old" not in _issues(hass)
+
+
+async def test_the_update_issue_goes_with_the_entry_it_is_about(hass, legacy_api, no_setup):
+    """Deleted instead of upgraded: nothing is left to upgrade."""
+    entry = _v1_entry(hass)
+    with _home_assistant(2025, 4, "2025.4.2"):
+        assert not await async_migrate_entry(hass, entry)
+    entry.mock_state(hass, ConfigEntryState.MIGRATION_ERROR)
+    await hass.config_entries.async_remove(entry.entry_id)
+    assert _issues(hass) == {}
+
+
+async def test_an_existing_portfolio_asks_to_delete_one_of_the_two_entries(
+    hass, legacy_api, no_setup
+):
+    """Both named by their titles, as the integration page shows them --
+    nothing secret. Nothing was upgraded, so nothing is reported as changed."""
+    _portfolio_set_up_before(hass)
+    entry = _v1_entry(hass, wallets=["cryptocoin_BTC"])
+    assert not await async_migrate_entry(hass, entry)
+    issue = _issues(hass)["portfolio_exists"]
+    assert (issue.translation_key, issue.translation_placeholders) == (
+        "portfolio_exists", {"entry": "Bitpanda", "portfolio": "Bitpanda Portfolio"}
+    )
+    assert _blocker_attributes(issue) == _BLOCKER
+    assert set(_issues(hass)) == {"portfolio_exists"}
+
+
+@pytest.mark.parametrize("removed", ["old entry", "portfolio"])
+async def test_deleting_either_entry_ends_the_portfolio_issue(
+    hass, legacy_api, no_setup, removed
+):
+    """Either way one Portfolio is left, and the issue goes at once. The old
+    entry, when kept, is upgraded at the next start -- as the issue says:
+    Home Assistant cannot retry a failed migration before."""
+    portfolio = _portfolio_set_up_before(hass)
+    entry = _v1_entry(hass)
+    assert not await async_migrate_entry(hass, entry)
+    entry.mock_state(hass, ConfigEntryState.MIGRATION_ERROR)
+
+    await hass.config_entries.async_remove(
+        entry.entry_id if removed == "old entry" else portfolio.entry_id
+    )
+
+    assert "portfolio_exists" not in _issues(hass)
+
+
+async def test_the_portfolio_issue_stays_while_both_entries_do(hass, legacy_api, no_setup):
+    """Deleting another entry -- the Price Tracker -- leaves the conflict."""
+    _portfolio_set_up_before(hass)
+    tracker = _price_tracker_set_up_before(hass)
+    entry = _v1_entry(hass)
+    assert not await async_migrate_entry(hass, entry)
+
+    await hass.config_entries.async_remove(tracker.entry_id)
+
+    assert "portfolio_exists" in _issues(hass)
+
+
+async def test_an_upgrade_that_runs_leaves_no_blocker_issue(hass, legacy_api, no_setup):
+    """For example once the Portfolio was deleted and Home Assistant
+    restarted: whatever blocked the upgrade before is gone."""
+    for issue_id in migration.BLOCKER_ISSUES:
+        ir.async_create_issue(
+            hass, DOMAIN, issue_id, is_fixable=False, severity=ir.IssueSeverity.ERROR,
+            translation_key=issue_id,
+        )
+    assert await async_migrate_entry(hass, _v1_entry(hass))
+    assert _issues(hass) == {}
 
 
 async def test_a_currency_no_longer_offered_falls_back_to_eur(hass, legacy_api, no_setup):
@@ -1148,24 +1284,22 @@ def _placeholders(template: str) -> frozenset[str]:
     )
 
 
-async def test_every_issue_text_renders_in_every_language(hass, legacy_api, no_setup):
-    """Every repair issue the upgrade raises -- all of them, from one
-    migration, read back from the issue registry: its translation key and
-    exactly the placeholders the code supplied -- has a title and a
-    description in every shipped language that use exactly those
-    placeholders and render with them. A list opens a paragraph of its own,
-    so the frontend renders it as a Markdown list. And strings.json has no
-    issue text the code never raises. Read from the files themselves: Home
-    Assistant would replace a mismatched translation with English, hiding
-    it."""
-    entry, _, _ = _upgrade_with_every_issue(hass)
-    assert await async_migrate_entry(hass, entry)
-    raised = {
+def _raised(hass) -> dict[str, dict[str, str]]:
+    """This integration's repair issues, read back from the issue registry:
+    translation key -> the placeholders the code supplied."""
+    return {
         issue.translation_key: issue.translation_placeholders
         for issue in _issues(hass).values()
     }
-    strings = json.loads((_INTEGRATION / "strings.json").read_text(encoding="utf-8"))
-    assert set(raised) == set(strings["issues"]) == set(migration.UPGRADE_ISSUES)
+
+
+def _assert_every_language_renders(raised: dict[str, dict[str, str]]) -> None:
+    """Every issue in `raised` has a title and a description in every
+    shipped language that use exactly the placeholders the code supplied and
+    render with them. A list opens a paragraph of its own, so the frontend
+    renders it as a Markdown list. Read from the files themselves: Home
+    Assistant would replace a mismatched translation with English, hiding
+    it."""
     languages = sorted(path.stem for path in (_INTEGRATION / "translations").glob("*.json"))
     assert len(languages) == 7
     for language in languages:
@@ -1173,6 +1307,7 @@ async def test_every_issue_text_renders_in_every_language(hass, legacy_api, no_s
             (_INTEGRATION / "translations" / f"{language}.json").read_text(encoding="utf-8")
         )["issues"]
         for key, placeholders in raised.items():
+            placeholders = placeholders or {}
             title, description = texts[key]["title"], texts[key]["description"]
             assert _placeholders(title) | _placeholders(description) == set(placeholders), (
                 language, key,
@@ -1182,6 +1317,37 @@ async def test_every_issue_text_renders_in_every_language(hass, legacy_api, no_s
             for name, value in placeholders.items():
                 if value.startswith("- "):
                     assert f"\n\n{{{name}}}" in description, (language, key, name)
+
+
+async def test_every_issue_text_renders_in_every_language(hass, legacy_api, no_setup):
+    """Every repair issue the upgrade raises -- all of them, from one
+    migration -- renders in every shipped language."""
+    entry, _, _ = _upgrade_with_every_issue(hass)
+    assert await async_migrate_entry(hass, entry)
+    raised = _raised(hass)
+    assert set(raised) == set(migration.UPGRADE_ISSUES)
+    _assert_every_language_renders(raised)
+
+
+async def test_every_blocker_text_renders_in_every_language(hass, legacy_api, no_setup):
+    """Both causes, one after the other: Home Assistant too old, then --
+    updated -- a Portfolio set up beside the old entry."""
+    entry = _v1_entry(hass)
+    with _home_assistant(2025, 4, "2025.4.2"):
+        assert not await async_migrate_entry(hass, entry)
+    raised = _raised(hass)
+    _portfolio_set_up_before(hass)
+    assert not await async_migrate_entry(hass, entry)
+    raised |= _raised(hass)
+    assert set(raised) == set(migration.BLOCKER_ISSUES)
+    _assert_every_language_renders(raised)
+
+
+def test_every_issue_text_is_one_the_code_raises():
+    """strings.json has no issue text the code never raises: the upgrade's
+    reports and what blocks the upgrade."""
+    strings = json.loads((_INTEGRATION / "strings.json").read_text(encoding="utf-8"))
+    assert set(strings["issues"]) == {*migration.UPGRADE_ISSUES, *migration.BLOCKER_ISSUES}
 
 
 async def test_the_upgrade_issues_go_with_the_last_bitpanda_entry(hass, legacy_api, no_setup):

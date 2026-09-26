@@ -89,15 +89,14 @@
     "step": {
       "price_tracker": {
         "title": "Price Tracker options",
-        "description": "Changes apply as soon as you save.",
         "sections": {
           "currencies": {
             "name": "Currencies",
             "data": {
-              "extra_currencies": "Additional currencies"
+              "extra_currencies": "In addition to EUR"
             },
             "data_description": {
-              "extra_currencies": "Every tracked asset always keeps its EUR sensor. Each selected currency adds one sensor per asset; removing a currency deletes those sensors."
+              "extra_currencies": "Each selected currency adds one sensor per asset; removing a currency deletes those sensors."
             }
           },
           "language": {

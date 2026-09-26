@@ -89,15 +89,14 @@
     "step": {
       "price_tracker": {
         "title": "Opzioni del Price Tracker",
-        "description": "Le modifiche si applicano non appena salvi.",
         "sections": {
           "currencies": {
             "name": "Valute",
             "data": {
-              "extra_currencies": "Valute aggiuntive"
+              "extra_currencies": "Oltre a EUR"
             },
             "data_description": {
-              "extra_currencies": "Ogni asset monitorato mantiene sempre il suo sensore in EUR. Ogni valuta selezionata aggiunge un sensore per asset; togliere una valuta elimina quei sensori."
+              "extra_currencies": "Ogni valuta selezionata aggiunge un sensore per asset; togliere una valuta elimina quei sensori."
             }
           },
           "language": {

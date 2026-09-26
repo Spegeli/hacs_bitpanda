@@ -325,6 +325,44 @@ def test_each_service_has_options_texts_of_its_own():
         assert set(texts["data_description"]) == set(texts["data"])
 
 
+# The label of the Price Tracker's currencies field under Configure: the
+# currencies beside EUR, which every asset always has. A label cannot be left
+# empty -- the frontend would show the key, and hassfest refuses blanks.
+_IN_ADDITION_TO_EUR = {
+    "de": "Zusätzlich zu EUR",
+    "en": "In addition to EUR",
+    "es": "Además de EUR",
+    "fr": "En plus de l'EUR",
+    "it": "Oltre a EUR",
+    "nl": "Naast EUR",
+    "pl": "Oprócz EUR",
+}
+
+
+def test_the_configure_currencies_field_says_what_comes_beside_eur():
+    """So its help text no longer says that EUR always stays -- none does,
+    in any language; it keeps what choosing and removing a currency do."""
+    assert sorted(_IN_ADDITION_TO_EUR) == _LANGUAGES
+    for language, label in _IN_ADDITION_TO_EUR.items():
+        currencies = _load(f"translations/{language}.json")["options"]["step"]["price_tracker"][
+            "sections"
+        ]["currencies"]
+        assert currencies["data"]["extra_currencies"] == label, language
+        assert "EUR" not in currencies["data_description"]["extra_currencies"], language
+    help_texts = {
+        language: _load(f"translations/{language}.json")["options"]["step"]["price_tracker"][
+            "sections"
+        ]["currencies"]["data_description"]["extra_currencies"]
+        for language in ("en", "de")
+    }
+    assert help_texts == {
+        "en": "Each selected currency adds one sensor per asset; removing a currency "
+        "deletes those sensors.",
+        "de": "Jede gewählte Währung fügt pro Asset einen Sensor hinzu; wird eine Währung "
+        "abgewählt, werden diese Sensoren gelöscht.",
+    }
+
+
 def test_every_field_has_a_help_text():
     """Under every field of every dialog -- setup, reauth, reconfigure,
     Configure and "Add price tracker" -- a help text (`data_description`)

@@ -89,15 +89,14 @@
     "step": {
       "price_tracker": {
         "title": "Opties van de Price Tracker",
-        "description": "Wijzigingen gelden zodra je opslaat.",
         "sections": {
           "currencies": {
             "name": "Valuta",
             "data": {
-              "extra_currencies": "Extra valuta"
+              "extra_currencies": "Naast EUR"
             },
             "data_description": {
-              "extra_currencies": "Elke gevolgde asset houdt altijd zijn EUR-sensor. Elke gekozen valuta voegt per asset een sensor toe; als je een valuta weghaalt, worden die sensoren verwijderd."
+              "extra_currencies": "Elke gekozen valuta voegt per asset een sensor toe; als je een valuta weghaalt, worden die sensoren verwijderd."
             }
           },
           "language": {

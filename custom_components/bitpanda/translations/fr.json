@@ -89,15 +89,14 @@
     "step": {
       "price_tracker": {
         "title": "Options du Price Tracker",
-        "description": "Les modifications s'appliquent dès que vous enregistrez.",
         "sections": {
           "currencies": {
             "name": "Devises",
             "data": {
-              "extra_currencies": "Devises supplémentaires"
+              "extra_currencies": "En plus de l'EUR"
             },
             "data_description": {
-              "extra_currencies": "Chaque actif suivi conserve toujours son capteur en EUR. Chaque devise sélectionnée ajoute un capteur par actif ; retirer une devise supprime ces capteurs."
+              "extra_currencies": "Chaque devise sélectionnée ajoute un capteur par actif ; retirer une devise supprime ces capteurs."
             }
           },
           "language": {

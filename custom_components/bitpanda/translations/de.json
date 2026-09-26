@@ -89,15 +89,14 @@
     "step": {
       "price_tracker": {
         "title": "Optionen des Price Trackers",
-        "description": "Änderungen gelten, sobald du sie speicherst.",
         "sections": {
           "currencies": {
             "name": "Währungen",
             "data": {
-              "extra_currencies": "Zusätzliche Währungen"
+              "extra_currencies": "Zusätzlich zu EUR"
             },
             "data_description": {
-              "extra_currencies": "Jedes verfolgte Asset behält immer seinen EUR-Sensor. Jede gewählte Währung fügt pro Asset einen Sensor hinzu; wird eine Währung abgewählt, werden diese Sensoren gelöscht."
+              "extra_currencies": "Jede gewählte Währung fügt pro Asset einen Sensor hinzu; wird eine Währung abgewählt, werden diese Sensoren gelöscht."
             }
           },
           "language": {

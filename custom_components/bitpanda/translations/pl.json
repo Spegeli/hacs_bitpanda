@@ -89,15 +89,14 @@
     "step": {
       "price_tracker": {
         "title": "Opcje usługi Price Tracker",
-        "description": "Zmiany obowiązują od razu po zapisaniu.",
         "sections": {
           "currencies": {
             "name": "Waluty",
             "data": {
-              "extra_currencies": "Dodatkowe waluty"
+              "extra_currencies": "Oprócz EUR"
             },
             "data_description": {
-              "extra_currencies": "Każde śledzone aktywo zawsze zachowuje swój sensor w EUR. Każda wybrana waluta dodaje jeden sensor na aktywo; usunięcie waluty usuwa te sensory."
+              "extra_currencies": "Każda wybrana waluta dodaje jeden sensor na aktywo; usunięcie waluty usuwa te sensory."
             }
           },
           "language": {

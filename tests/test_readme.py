@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 
 from homeassistant.setup import async_setup_component
+import pytest
+from pytest_homeassistant_custom_component.common import async_mock_service
 import yaml
 
 from custom_components.bitpanda.naming import price_entity_id
@@ -41,6 +43,64 @@ def test_the_price_alert_watches_the_price_sensor_the_integration_creates():
     alert, _ = _examples()
     [trigger] = alert["triggers"]
     assert trigger["entity_id"] == price_entity_id(btc, "EUR") == "sensor.bitpanda_bitcoin_btc_eur"
+
+
+_PRICE = "sensor.bitpanda_bitcoin_btc_eur"
+
+
+async def _set_up_the_alert(hass) -> list:
+    """The price alert as an automation; the notifications it sends."""
+    alert, _ = _examples()
+    assert await async_setup_component(hass, "automation", {"automation": [alert]})
+    await hass.async_block_till_done()
+    return async_mock_service(hass, "persistent_notification", "create")
+
+
+async def _price(hass, state: str) -> None:
+    hass.states.async_set(_PRICE, state)
+    await hass.async_block_till_done()
+
+
+async def _turn_off(hass) -> None:
+    await hass.services.async_call("automation", "turn_off", {"entity_id": "all"}, blocking=True)
+
+
+async def test_the_price_alert_fires_when_the_price_crosses_the_threshold(hass):
+    """Once per crossing -- not again while the price stays above, and not
+    when it merely comes back above after an outage."""
+    hass.states.async_set(_PRICE, "90000")
+    notifications = await _set_up_the_alert(hass)
+
+    await _price(hass, "100500")
+    await _price(hass, "101000")
+    assert len(notifications) == 1
+    assert notifications[0].data["message"] == "Bitcoin is at 100500 EUR."
+
+    for outage in ("unavailable", "unknown"):
+        await _price(hass, outage)
+        await _price(hass, "101500")
+    assert len(notifications) == 1
+
+    await _price(hass, "95000")
+    await _price(hass, "100100")
+    assert len(notifications) == 2
+    await _turn_off(hass)
+
+
+@pytest.mark.parametrize("at_start", [None, "unavailable"], ids=["no_state", "restored"])
+async def test_the_price_alert_stays_quiet_when_the_price_appears_after_a_restart(
+    hass, at_start
+):
+    """After a restart the automation may start before the sensor has a
+    value -- with no state at all, or with the `unavailable` placeholder
+    Home Assistant restores for it: the first price above the threshold is
+    no crossing."""
+    if at_start is not None:
+        hass.states.async_set(_PRICE, at_start, {"restored": True})
+    notifications = await _set_up_the_alert(hass)
+    await _price(hass, "102000")
+    assert notifications == []
+    await _turn_off(hass)
 
 
 async def test_every_example_loads_as_an_automation(hass):

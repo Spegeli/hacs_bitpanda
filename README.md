@@ -185,7 +185,7 @@ Home Assistant lists these in the entity's Details view (older versions: the Att
 
 Paste one into a new automation's YAML editor (in the automation editor: **⋮ → Edit in YAML**) and adjust the entity ID and the numbers.
 
-**Price alert** — a notification once Bitcoin rises above 100,000 EUR. It fires when the price crosses the threshold, not again while the price stays above it; use `below:` for a fall.
+**Price alert** — a notification once Bitcoin rises above 100,000 EUR. It fires when the price crosses the threshold, not again while the price stays above it; the condition keeps it quiet when the price only comes back above it after an outage or a restart. Use `below:` for a fall.
 
 ```yaml
 alias: Bitcoin above 100,000 EUR
@@ -193,6 +193,10 @@ triggers:
   - trigger: numeric_state
     entity_id: sensor.bitpanda_bitcoin_btc_eur
     above: 100000
+conditions:
+  # Only a real crossing: not the price coming back after an outage or a restart.
+  - condition: template
+    value_template: "{{ trigger.from_state is not none and trigger.from_state.state | is_number }}"
 actions:
   - action: persistent_notification.create
     data:

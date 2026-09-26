@@ -65,7 +65,8 @@
       "reconfigure_successful": "The API key was replaced.",
       "currency_changed": "The currency was changed. The Portfolio sensors are being recreated.",
       "no_changes": "Nothing was changed.",
-      "no_reconfigure": "The Price Tracker has nothing to reconfigure. Use \"Configure\" to choose its currencies."
+      "no_reconfigure": "The Price Tracker has nothing to reconfigure. Use \"Configure\" to choose its currencies.",
+      "unload_failed": "The Portfolio could not be stopped, so the currency was not changed and nothing was deleted. Restart Home Assistant and try again."
     }
   },
   "options": {

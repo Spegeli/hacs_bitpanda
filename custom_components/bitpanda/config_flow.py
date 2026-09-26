@@ -413,7 +413,8 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Warn, then delete every Portfolio sensor with its history.
 
         Closing the dialog is the way back: nothing has changed until this
-        step is submitted.
+        step is submitted -- nor after it, when the Portfolio cannot be
+        unloaded first (see async_purge_portfolio).
         """
         entry = self._get_reconfigure_entry()
         if user_input is None:
@@ -431,7 +432,8 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         }
         if self._api_key:
             updates[CONF_API_KEY] = self._api_key
-        await async_purge_portfolio(self.hass, entry)
+        if not await async_purge_portfolio(self.hass, entry):
+            return self.async_abort(reason="unload_failed")
         # The purge unloaded the entry, which removed its update listener:
         # this reload is the only one.
         return self.async_update_reload_and_abort(

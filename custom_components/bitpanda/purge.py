@@ -39,7 +39,7 @@ def _is_managed_device(entry_id: str, device: dr.DeviceEntry) -> bool:
     )
 
 
-async def async_purge_portfolio(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def async_purge_portfolio(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Remove what the Portfolio manages (see above), with history and statistics.
 
     Order matters. The entry is unloaded first, so no sensor writes a state
@@ -47,9 +47,18 @@ async def async_purge_portfolio(hass: HomeAssistant, entry: ConfigEntry) -> None
     called (keep_days 0: now) and removes only what was recorded before it,
     so the states the recreated sensors write after the caller's reload are
     never touched -- however long the recorder takes to work its queue.
+
+    Returns False, with nothing changed, when the entry cannot be unloaded
+    -- its unload fails now, or it is in a state Home Assistant can neither
+    unload nor reload before a restart (an earlier failed unload, a failed
+    migration). The currency change would be left half done: the reload
+    that follows a purge cannot bring such an entry back.
     """
     if entry.state is ConfigEntryState.LOADED:
-        await hass.config_entries.async_unload(entry.entry_id)
+        if not await hass.config_entries.async_unload(entry.entry_id):
+            return False
+    elif not entry.state.recoverable:
+        return False
 
     entry_id = entry.entry_id
     figures = {portfolio_unique_id(entry_id, key) for key in PORTFOLIO_KEYS}
@@ -68,7 +77,7 @@ async def async_purge_portfolio(hass: HomeAssistant, entry: ConfigEntry) -> None
             dev_reg.async_remove_device(device.id)
 
     if not entity_ids or _RECORDER not in hass.config.components:
-        return
+        return True
     await hass.services.async_call(
         _RECORDER,
         "purge_entities",
@@ -76,3 +85,4 @@ async def async_purge_portfolio(hass: HomeAssistant, entry: ConfigEntry) -> None
         blocking=True,
     )
     get_instance(hass).async_clear_statistics(entity_ids)
+    return True

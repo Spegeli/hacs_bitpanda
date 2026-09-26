@@ -1,6 +1,7 @@
 """Deleting what the Portfolio manages, with its history, on a currency change."""
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -78,7 +79,7 @@ async def test_purge_removes_what_the_portfolio_manages_with_history_and_statist
     instance = _fake_recorder(hass, calls)
 
     with patch("custom_components.bitpanda.purge.get_instance", return_value=instance):
-        await async_purge_portfolio(hass, entry)
+        assert await async_purge_portfolio(hass, entry) is True
 
     ent_reg = er.async_get(hass)
     assert er.async_entries_for_config_entry(ent_reg, entry.entry_id) == []
@@ -134,5 +135,52 @@ async def test_purge_unloads_a_loaded_entry_first(hass):
     entry = _entry(hass)
     entry.mock_state(hass, ConfigEntryState.LOADED)
     with patch.object(hass.config_entries, "async_unload", AsyncMock(return_value=True)) as unload:
-        await async_purge_portfolio(hass, entry)
+        assert await async_purge_portfolio(hass, entry) is True
     unload.assert_awaited_once_with(entry.entry_id)
+
+
+def _registered(hass, entry) -> tuple[list[str], int]:
+    """The entry's entity IDs and its number of devices."""
+    return (
+        sorted(
+            reg_entry.entity_id
+            for reg_entry in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+        ),
+        len(dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)),
+    )
+
+
+async def test_a_failed_unload_changes_nothing(hass):
+    """Purging under sensors that still run would race them, and the reload
+    that follows a purge cannot bring back an entry whose unload failed."""
+    entry = _entry(hass)
+    managed = _managed(hass, entry)
+    entry.mock_state(hass, ConfigEntryState.LOADED)
+    calls: list = []
+    instance = _fake_recorder(hass, calls)
+
+    with patch.object(
+        hass.config_entries, "async_unload", AsyncMock(return_value=False)
+    ), patch("custom_components.bitpanda.purge.get_instance", return_value=instance):
+        assert await async_purge_portfolio(hass, entry) is False
+
+    assert _registered(hass, entry) == (managed, 2)
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "state", [ConfigEntryState.FAILED_UNLOAD, ConfigEntryState.MIGRATION_ERROR]
+)
+async def test_an_entry_home_assistant_cannot_reload_changes_nothing(hass, state):
+    """An entry whose unload failed earlier, or whose migration did, cannot
+    be reloaded until Home Assistant restarts: the currency change would be
+    left half done."""
+    entry = _entry(hass)
+    managed = _managed(hass, entry)
+    entry.mock_state(hass, state)
+
+    with patch.object(hass.config_entries, "async_unload", AsyncMock()) as unload:
+        assert await async_purge_portfolio(hass, entry) is False
+
+    unload.assert_not_called()
+    assert _registered(hass, entry) == (managed, 2)

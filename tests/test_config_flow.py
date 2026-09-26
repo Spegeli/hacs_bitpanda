@@ -530,7 +530,7 @@ async def test_currency_change_asks_for_confirmation_first(hass):
 async def test_confirmed_currency_change_purges_then_stores_and_reloads(hass):
     entry = _portfolio_entry()
     entry.add_to_hass(hass)
-    with patch(_PURGE, AsyncMock()) as purge, patch(
+    with patch(_PURGE, AsyncMock(return_value=True)) as purge, patch(
         "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
     ) as reload:
         result = await _reconfigure(hass, entry, {"api_key": "new", "currency": "usd"})
@@ -546,13 +546,31 @@ async def test_confirmed_currency_change_purges_then_stores_and_reloads(hass):
 async def test_confirmed_currency_change_without_a_new_key_keeps_the_old_one(hass):
     entry = _portfolio_entry()
     entry.add_to_hass(hass)
-    with patch(_PURGE, AsyncMock()), patch(
+    with patch(_PURGE, AsyncMock(return_value=True)), patch(
         "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
     ):
         result = await _reconfigure(hass, entry, {"currency": "chf"})
         await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert entry.data["api_key"] == "key"
     assert entry.data["currency"] == "CHF"
+
+
+async def test_a_currency_change_whose_unload_fails_changes_nothing(hass):
+    """The purge refuses when the Portfolio cannot be unloaded first; the
+    currency, the key and the entry stay as they were."""
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    before = dict(entry.data)
+    with patch(_PURGE, AsyncMock(return_value=False)) as purge, patch(
+        "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
+    ) as reload:
+        result = await _reconfigure(hass, entry, {"api_key": "new", "currency": "usd"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["type"] == _FLOW.ABORT
+    assert result["reason"] == "unload_failed"
+    purge.assert_awaited_once_with(hass, entry)
+    reload.assert_not_called()
+    assert dict(entry.data) == before
 
 
 async def test_currency_listing_failure_maps_to_cannot_connect(hass):

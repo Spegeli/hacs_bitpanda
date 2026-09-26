@@ -65,7 +65,8 @@
       "reconfigure_successful": "La chiave API è stata sostituita.",
       "currency_changed": "La valuta è stata cambiata. I sensori del Portfolio vengono ricreati.",
       "no_changes": "Non è stato modificato nulla.",
-      "no_reconfigure": "Il Price Tracker non ha nulla da riconfigurare. Usa \"Configura\" per scegliere le sue valute."
+      "no_reconfigure": "Il Price Tracker non ha nulla da riconfigurare. Usa \"Configura\" per scegliere le sue valute.",
+      "unload_failed": "Non è stato possibile arrestare il Portfolio, quindi la valuta non è stata cambiata e non è stato eliminato nulla. Riavvia Home Assistant e riprova."
     }
   },
   "options": {

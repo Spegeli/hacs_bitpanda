@@ -42,9 +42,9 @@ async def test_finds_the_device_of_its_own_entry(hass):
     dev_reg.async_get_or_create(
         config_entry_id=other.entry_id, identifiers={(DOMAIN, "elsewhere")}
     )
-    assert find_entry_device(hass, mine.entry_id, "shared").id == own.id
-    assert find_entry_device(hass, mine.entry_id, "elsewhere") is None
-    assert find_entry_device(hass, other.entry_id, "shared") is None
+    assert find_entry_device(dev_reg, mine.entry_id, "shared").id == own.id
+    assert find_entry_device(dev_reg, mine.entry_id, "elsewhere") is None
+    assert find_entry_device(dev_reg, other.entry_id, "shared") is None
 
 
 async def test_device_identifiers_are_every_one_under_this_domain(hass):

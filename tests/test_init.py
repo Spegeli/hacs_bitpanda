@@ -160,7 +160,7 @@ async def test_every_portfolio_figure_is_one_the_currency_purge_knows(hass, port
     would keep its old-currency history through a currency change."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
-    device = find_entry_device(hass, entry.entry_id, f"{entry.entry_id}_portfolio")
+    device = find_entry_device(dr.async_get(hass), entry.entry_id, f"{entry.entry_id}_portfolio")
     figures = {
         reg_entry.unique_id
         for reg_entry in er.async_entries_for_device(er.async_get(hass), device.id)
@@ -750,7 +750,7 @@ def _identifier(entry, kind: str, asset: dict | None = None) -> str:
 
 
 def _own_device(hass, entry, kind: str, asset: dict | None = None) -> dr.DeviceEntry:
-    return find_entry_device(hass, entry.entry_id, _identifier(entry, kind, asset))
+    return find_entry_device(dr.async_get(hass), entry.entry_id, _identifier(entry, kind, asset))
 
 
 def _add_device(hass, entry, name: str, kind: str, asset: dict | None = None) -> dr.DeviceEntry:

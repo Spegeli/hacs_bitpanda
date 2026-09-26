@@ -429,12 +429,13 @@ def remove_empty_legacy_device(hass: HomeAssistant, entry_id: str, identifier: s
     legacy entity the migration left alone is kept. The device is looked up
     within its own config entry, `entry_id` (see `devices.find_entry_device`).
     """
-    device = find_entry_device(hass, entry_id, identifier)
+    dev_reg = dr.async_get(hass)
+    device = find_entry_device(dev_reg, entry_id, identifier)
     if device is None:
         return
     if er.async_entries_for_device(er.async_get(hass), device.id, include_disabled_entities=True):
         return
-    dr.async_get(hass).async_remove_device(device.id)
+    dev_reg.async_remove_device(device.id)
 
 
 @callback

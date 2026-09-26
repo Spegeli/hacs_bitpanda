@@ -450,11 +450,12 @@ class PortfolioEntityManager:
             if entity_id is not None:
                 ent_reg.async_remove(entity_id)
         if device:
+            dev_reg = dr.async_get(self._hass)
             found = find_entry_device(
-                self._hass, entry_id, wallet_device_identifier(entry_id, asset_id)
+                dev_reg, entry_id, wallet_device_identifier(entry_id, asset_id)
             )
             if found is not None:
-                dr.async_get(self._hass).async_remove_device(found.id)
+                dev_reg.async_remove_device(found.id)
 
     @callback
     def async_reconcile(self) -> None:

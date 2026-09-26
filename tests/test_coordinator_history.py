@@ -59,8 +59,11 @@ async def test_collect_returns_raises_when_every_timeframe_fails():
             )
         async with mocker.create_session(asyncio.get_running_loop()) as session:
             client = BitpandaApiClient("key", session)
-            with pytest.raises(UpdateFailed):
+            with pytest.raises(UpdateFailed) as excinfo:
                 await collect_returns(client, None)
+    assert (excinfo.value.translation_domain, excinfo.value.translation_key) == (
+        "bitpanda", "history_unavailable"
+    )
 
 
 async def test_collect_returns_drops_a_boolean_percentage():
@@ -197,5 +200,8 @@ async def test_history_coordinator_raises_config_entry_auth_failed_on_401():
         hass=None, entry=None, client=client, currency_id=None
     )
 
-    with pytest.raises(ConfigEntryAuthFailed):
+    with pytest.raises(ConfigEntryAuthFailed) as excinfo:
         await coordinator._async_update_data()
+    assert (excinfo.value.translation_domain, excinfo.value.translation_key) == (
+        "bitpanda", "api_key_rejected"
+    )

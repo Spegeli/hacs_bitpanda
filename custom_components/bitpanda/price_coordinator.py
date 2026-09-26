@@ -120,7 +120,9 @@ class TickerCoordinator(DataUpdateCoordinator[dict[str, float]]):
                     )
                 self._backoff = min(self._backoff * 2, _MAX_BACKOFF)
                 self.update_interval = self._base_interval * self._backoff
-                raise UpdateFailed("Rate limited by Bitpanda") from None
+                raise UpdateFailed(
+                    translation_domain=DOMAIN, translation_key="prices_rate_limited"
+                ) from None
             except BitpandaApiError:
                 failed.add(asset_id)
                 continue
@@ -131,7 +133,7 @@ class TickerCoordinator(DataUpdateCoordinator[dict[str, float]]):
             prices[asset_id] = price
 
         if self._tracked and not prices:
-            raise UpdateFailed("No prices could be fetched")
+            raise UpdateFailed(translation_domain=DOMAIN, translation_key="no_prices")
 
         if self._backoff != 1:
             self._backoff = 1
@@ -178,7 +180,11 @@ class EcbCoordinator(DataUpdateCoordinator[EcbRates]):
         except EcbError as err:
             if self.data is None:
                 self.update_interval = _ECB_RETRY
-            raise UpdateFailed(str(err)) from None
+            raise UpdateFailed(
+                translation_domain=DOMAIN,
+                translation_key="ecb_rates_failed",
+                translation_placeholders={"error": str(err)},
+            ) from None
         self.update_interval = ECB_UPDATE_INTERVAL
         return rates
 

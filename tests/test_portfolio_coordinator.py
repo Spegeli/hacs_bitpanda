@@ -85,12 +85,18 @@ async def test_portfolio_update_keeps_an_unnamed_holding_out_of_assets():
     assert data.assets == {}
 
 
-async def test_portfolio_401_starts_reauth_with_a_fixed_message():
+def _translation(err: Exception) -> tuple:
+    """What the frontend translates an error from; its English text comes
+    from the same entry of strings.json (see test_init.py)."""
+    return err.translation_domain, err.translation_key, err.translation_placeholders
+
+
+async def test_portfolio_401_starts_reauth_with_a_translated_message():
     client = _Client(error=BitpandaAuthError("Unauthorized for /portfolio"))
     coordinator = PortfolioCoordinator(None, None, client, "c", _Directory({}))
     with pytest.raises(ConfigEntryAuthFailed) as excinfo:
         await coordinator._async_update_data()
-    assert str(excinfo.value) == "Bitpanda rejected the API key"
+    assert _translation(excinfo.value) == ("bitpanda", "api_key_rejected", None)
     assert excinfo.value.__cause__ is None
     assert excinfo.value.__suppress_context__
 
@@ -99,8 +105,12 @@ async def test_portfolio_error_fails_the_update_before_any_lookup():
     directory = _Directory({})
     client = _Client(error=BitpandaApiError("Timeout for /portfolio"))
     coordinator = PortfolioCoordinator(None, None, client, "c", directory)
-    with pytest.raises(UpdateFailed, match="Timeout for /portfolio"):
+    with pytest.raises(UpdateFailed) as excinfo:
         await coordinator._async_update_data()
+    assert _translation(excinfo.value) == (
+        "bitpanda", "update_failed", {"error": "Timeout for /portfolio"}
+    )
+    assert excinfo.value.__cause__ is None
     assert directory.resolved == []
 
 
@@ -114,13 +124,17 @@ async def test_earn_update_returns_the_catalogue():
 
 async def test_earn_401_starts_reauth():
     coordinator = EarnCoordinator(None, None, _EarnClient(error=BitpandaAuthError("x")))
-    with pytest.raises(ConfigEntryAuthFailed):
+    with pytest.raises(ConfigEntryAuthFailed) as excinfo:
         await coordinator._async_update_data()
+    assert _translation(excinfo.value) == ("bitpanda", "api_key_rejected", None)
 
 
 async def test_earn_error_fails_the_update():
     coordinator = EarnCoordinator(
         None, None, _EarnClient(error=BitpandaApiError("HTTP 503 from /earn/configs"))
     )
-    with pytest.raises(UpdateFailed, match="503"):
+    with pytest.raises(UpdateFailed) as excinfo:
         await coordinator._async_update_data()
+    assert _translation(excinfo.value) == (
+        "bitpanda", "update_failed", {"error": "HTTP 503 from /earn/configs"}
+    )

@@ -7,9 +7,10 @@ from time import monotonic
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from . import migration
 from .api import BitpandaApiClient
@@ -105,7 +106,7 @@ async def _async_start_portfolio(hass: HomeAssistant, entry: ConfigEntry) -> Por
         data_at_setup=dict(entry.data),
         options_at_setup=dict(entry.options),
     )
-    await runtime.portfolio.async_config_entry_first_refresh()
+    await _async_first_refresh(runtime.portfolio)
     # Earn, rewards and history are additive: a failure there must not block
     # setup, so they refresh with async_refresh(), which never raises
     # ConfigEntryNotReady. A 401 from any of them still reaches the reauth
@@ -139,12 +140,41 @@ async def _async_start_price_tracker(
         if entry.options.get(CONF_EXTRA_CURRENCIES)
         else None
     )
-    await tickers.async_config_entry_first_refresh()
+    await _async_first_refresh(tickers)
     if ecb is not None:
         # Not a first refresh: without rates the EUR sensors still work and
         # the other currencies say why they have no value.
         await ecb.async_refresh()
     return PriceTrackerRuntime(tickers=tickers, ecb=ecb)
+
+
+async def _async_first_refresh(coordinator: DataUpdateCoordinator) -> None:
+    """`async_config_entry_first_refresh`, its failure translated on every
+    supported Home Assistant version.
+
+    A failed first refresh raises ConfigEntryNotReady, and the integration
+    page shows its message as the reason setup is being retried. From Home
+    Assistant 2026.9 on it carries the translation of the UpdateFailed that
+    caused it; before -- the 2025.5 floor included -- it carries none, and
+    the page shows that UpdateFailed's English text instead. So it is raised
+    again here with that translation. Its cause stays that UpdateFailed, as
+    Home Assistant links it too: raised from None, with no request data.
+    """
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except ConfigEntryNotReady as err:
+        cause = err.__cause__
+        if (
+            err.translation_key is not None
+            or not isinstance(cause, HomeAssistantError)
+            or cause.translation_key is None
+        ):
+            raise
+        raise ConfigEntryNotReady(
+            translation_domain=cause.translation_domain,
+            translation_key=cause.translation_key,
+            translation_placeholders=cause.translation_placeholders,
+        ) from cause
 
 
 async def _async_reload(hass: HomeAssistant, entry: ConfigEntry) -> None:

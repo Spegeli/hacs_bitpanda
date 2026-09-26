@@ -80,16 +80,24 @@ async def test_rewards_coordinator_raises_config_entry_auth_failed_on_401():
     client = _FakeClient(error=BitpandaAuthError("Unauthorized for /operations"))
     coordinator = RewardsCoordinator(hass=None, entry=None, client=client)
 
-    with pytest.raises(ConfigEntryAuthFailed):
+    with pytest.raises(ConfigEntryAuthFailed) as excinfo:
         await coordinator._async_update_data()
+    assert (excinfo.value.translation_domain, excinfo.value.translation_key) == (
+        "bitpanda", "api_key_rejected"
+    )
 
 
 async def test_rewards_coordinator_raises_update_failed_on_other_errors():
     client = _FakeClient(error=BitpandaApiError("simulated outage"))
     coordinator = RewardsCoordinator(hass=None, entry=None, client=client)
 
-    with pytest.raises(UpdateFailed):
+    with pytest.raises(UpdateFailed) as excinfo:
         await coordinator._async_update_data()
+    assert (
+        excinfo.value.translation_domain,
+        excinfo.value.translation_key,
+        excinfo.value.translation_placeholders,
+    ) == ("bitpanda", "update_failed", {"error": "simulated outage"})
 
 
 # ---------------------------------------------------------------------------

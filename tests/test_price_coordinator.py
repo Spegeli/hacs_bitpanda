@@ -133,10 +133,15 @@ async def test_a_recovered_asset_is_warned_about_again_when_it_fails_again(caplo
     assert caplog.text.count("Bitcoin (BTC)") == 2
 
 
+def _translation(err: Exception) -> tuple:
+    return err.translation_domain, err.translation_key, err.translation_placeholders
+
+
 async def test_every_asset_failing_fails_the_update():
     coordinator = _coordinator(_Client(failing={BTC, SOL}))
-    with pytest.raises(UpdateFailed, match="No prices"):
+    with pytest.raises(UpdateFailed) as excinfo:
         await coordinator._async_update_data()
+    assert _translation(excinfo.value) == ("bitpanda", "no_prices", None)
 
 
 async def test_a_rate_limit_doubles_the_interval_and_is_logged_once(caplog):
@@ -144,8 +149,9 @@ async def test_a_rate_limit_doubles_the_interval_and_is_logged_once(caplog):
     coordinator = _coordinator(client)
     base = coordinator.update_interval
     with caplog.at_level(logging.WARNING):
-        with pytest.raises(UpdateFailed):
+        with pytest.raises(UpdateFailed) as excinfo:
             await coordinator._async_update_data()
+        assert _translation(excinfo.value) == ("bitpanda", "prices_rate_limited", None)
         assert coordinator.update_interval == base * 2
         with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()
@@ -187,8 +193,11 @@ async def test_ecb_retries_sooner_while_no_rates_were_ever_loaded():
         "custom_components.bitpanda.price_coordinator.async_fetch_ecb_rates",
         AsyncMock(side_effect=[EcbError("Timeout fetching the ECB rates"), _RATES]),
     ):
-        with pytest.raises(UpdateFailed):
+        with pytest.raises(UpdateFailed) as excinfo:
             await coordinator._async_update_data()
+        assert _translation(excinfo.value) == (
+            "bitpanda", "ecb_rates_failed", {"error": "Timeout fetching the ECB rates"}
+        )
         assert coordinator.update_interval == timedelta(minutes=15)
         await coordinator._async_update_data()
     assert coordinator.update_interval == timedelta(hours=6)

@@ -321,6 +321,24 @@
     },
     "held_wallet_not_removable": {
       "message": "You still hold {asset}, so this wallet would come straight back. It is removed automatically once you no longer hold it."
+    },
+    "api_key_rejected": {
+      "message": "Bitpanda rejected the API key."
+    },
+    "update_failed": {
+      "message": "Could not fetch data from Bitpanda: {error}"
+    },
+    "history_unavailable": {
+      "message": "No portfolio history could be fetched."
+    },
+    "prices_rate_limited": {
+      "message": "Bitpanda received too many price requests. Retrying later."
+    },
+    "no_prices": {
+      "message": "No prices could be fetched from Bitpanda."
+    },
+    "ecb_rates_failed": {
+      "message": "Could not fetch the ECB exchange rates: {error}"
     }
   },
   "services": {

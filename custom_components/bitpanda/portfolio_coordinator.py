@@ -36,7 +36,22 @@ from .portfolio_model import (
 
 _LOGGER = logging.getLogger(__name__)
 
-_AUTH_FAILED = "Bitpanda rejected the API key"
+
+def _auth_failed() -> ConfigEntryAuthFailed:
+    """The key was rejected: Home Assistant asks for a new one. Translated,
+    so the integration page gives the reason in the user's language; nothing
+    of the request reaches the message."""
+    return ConfigEntryAuthFailed(translation_domain=DOMAIN, translation_key="api_key_rejected")
+
+
+def _update_failed(err: BitpandaApiError) -> UpdateFailed:
+    """A failed request, translated. {error} is the API client's own
+    message, which names a path and a cause, never request data."""
+    return UpdateFailed(
+        translation_domain=DOMAIN,
+        translation_key="update_failed",
+        translation_placeholders={"error": str(err)},
+    )
 
 
 class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
@@ -71,9 +86,9 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
                 equivalent_currency_id=self._currency_id
             )
         except BitpandaAuthError:
-            raise ConfigEntryAuthFailed(_AUTH_FAILED) from None
+            raise _auth_failed() from None
         except BitpandaApiError as err:
-            raise UpdateFailed(str(err)) from None
+            raise _update_failed(err) from None
         data = parse_portfolio(entries)
         # Never raises: a lookup that fails leaves that one holding unnamed
         # until the next refresh instead of failing the portfolio.
@@ -105,9 +120,9 @@ class EarnCoordinator(DataUpdateCoordinator[EarnData]):
         try:
             return parse_earn_configs(await self._client.async_get_earn_configs())
         except BitpandaAuthError:
-            raise ConfigEntryAuthFailed(_AUTH_FAILED) from None
+            raise _auth_failed() from None
         except BitpandaApiError as err:
-            raise UpdateFailed(str(err)) from None
+            raise _update_failed(err) from None
 
 
 class RewardsCoordinator(DataUpdateCoordinator[dict]):
@@ -141,9 +156,9 @@ class RewardsCoordinator(DataUpdateCoordinator[dict]):
         try:
             operations = await self._client.async_get_operations()
         except BitpandaAuthError:
-            raise ConfigEntryAuthFailed(_AUTH_FAILED) from None
+            raise _auth_failed() from None
         except BitpandaApiError as err:
-            raise UpdateFailed(str(err)) from None
+            raise _update_failed(err) from None
         return sum_rewards(operations)
 
 
@@ -202,7 +217,9 @@ async def collect_returns(
     # no usable return_percentage, and that must not be reported as an
     # outage, or it would fail on every cycle.
     if failures == len(PORTFOLIO_TIMEFRAMES):
-        raise UpdateFailed("No portfolio history could be fetched")
+        raise UpdateFailed(
+            translation_domain=DOMAIN, translation_key="history_unavailable"
+        )
 
     return out
 
@@ -231,7 +248,7 @@ class HistoryCoordinator(DataUpdateCoordinator[dict]):
         try:
             return await collect_returns(self._client, self._currency_id)
         except BitpandaAuthError:
-            raise ConfigEntryAuthFailed(_AUTH_FAILED) from None
+            raise _auth_failed() from None
 
 
 @dataclass

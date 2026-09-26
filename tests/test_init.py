@@ -1,13 +1,15 @@
 """Both services set up, reload and unload end to end (API mocked)."""
 import asyncio
+from contextlib import nullcontext
 from datetime import timedelta
 from types import MappingProxyType
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentry, ConfigSubentryData
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
@@ -16,7 +18,7 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.bitpanda import async_remove_config_entry_device
-from custom_components.bitpanda.api import BitpandaAuthError
+from custom_components.bitpanda.api import BitpandaApiError, BitpandaAuthError
 from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.devices import find_entry_device
@@ -285,6 +287,66 @@ async def test_a_rejected_key_fails_setup_and_asks_for_a_new_one(hass, portfolio
     assert entry.state is ConfigEntryState.SETUP_ERROR
     flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
     assert [flow["context"]["source"] for flow in flows] == ["reauth"]
+    # The integration page shows the reason translated, from its key; the
+    # English text is what Home Assistant keeps as the reason itself.
+    assert entry.error_reason_translation_key == "api_key_rejected"
+    assert entry.reason == "Bitpanda rejected the API key"
+
+
+async def _first_refresh_before_2026_9(self) -> None:
+    """DataUpdateCoordinator.async_config_entry_first_refresh as Home
+    Assistant 2025.5 to 2026.8 have it: the ConfigEntryNotReady it raises
+    carries no translation, only the failed update as its cause."""
+    await self._async_refresh(
+        log_failures=False, raise_on_auth_failed=True, raise_on_entry_error=True
+    )
+    if self.last_update_success:
+        return
+    ex = ConfigEntryNotReady()
+    ex.__cause__ = self.last_exception
+    raise ex
+
+
+_FIRST_REFRESH = pytest.mark.parametrize(
+    "first_refresh", [None, _first_refresh_before_2026_9], ids=["current", "before_2026_9"]
+)
+
+
+def _home_assistant_first_refresh(first_refresh):
+    return (
+        nullcontext() if first_refresh is None
+        else patch.object(DataUpdateCoordinator, "async_config_entry_first_refresh", first_refresh)
+    )
+
+
+@_FIRST_REFRESH
+async def test_a_failed_first_portfolio_refresh_retries_with_a_translated_reason(
+    hass, portfolio_api, first_refresh
+):
+    """The "retrying setup" reason on the integration page is translated on
+    every supported Home Assistant version, the floor included."""
+    portfolio_api.side_effect = BitpandaApiError("HTTP 503 from /portfolio")
+    entry = _portfolio_entry(hass)
+    with _home_assistant_first_refresh(first_refresh):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    assert entry.error_reason_translation_key == "update_failed"
+    assert entry.error_reason_translation_placeholders == {"error": "HTTP 503 from /portfolio"}
+    assert entry.reason == "Could not fetch data from Bitpanda: HTTP 503 from /portfolio"
+
+
+@_FIRST_REFRESH
+async def test_a_failed_first_price_refresh_retries_with_a_translated_reason(
+    hass, price_api, first_refresh
+):
+    ticker, _ = price_api
+    ticker.side_effect = BitpandaApiError("HTTP 503 from /tickers")
+    entry = _price_entry(hass, [], price_group("crypto", BTC))
+    with _home_assistant_first_refresh(first_refresh):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    assert entry.error_reason_translation_key == "no_prices"
+    assert entry.reason == "No prices could be fetched from Bitpanda"
 
 
 def _reauth_flows(hass) -> list[dict]:

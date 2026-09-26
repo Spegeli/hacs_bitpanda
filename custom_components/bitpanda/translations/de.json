@@ -321,6 +321,24 @@
     },
     "held_wallet_not_removable": {
       "message": "Du hältst {asset} noch, daher käme dieses Wallet sofort zurück. Es wird automatisch entfernt, sobald du es nicht mehr hältst."
+    },
+    "api_key_rejected": {
+      "message": "Bitpanda hat den API-Schlüssel abgelehnt."
+    },
+    "update_failed": {
+      "message": "Daten von Bitpanda konnten nicht abgerufen werden: {error}"
+    },
+    "history_unavailable": {
+      "message": "Es konnte kein Portfolio-Verlauf abgerufen werden."
+    },
+    "prices_rate_limited": {
+      "message": "Bitpanda hat zu viele Preisabfragen erhalten. Es wird später erneut versucht."
+    },
+    "no_prices": {
+      "message": "Von Bitpanda konnten keine Preise abgerufen werden."
+    },
+    "ecb_rates_failed": {
+      "message": "Die Wechselkurse der EZB konnten nicht abgerufen werden: {error}"
     }
   },
   "services": {

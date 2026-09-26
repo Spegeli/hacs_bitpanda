@@ -26,12 +26,12 @@
           "currency": "Valuta"
         },
         "data_description": {
-          "currency": "Bitpanda geeft alle waarden van je portfolio in deze valuta weer. Je kunt de valuta later wijzigen met \"Herconfigureer\"."
+          "currency": "Bitpanda geeft alle waarden van je portfolio in deze valuta weer. Om de valuta later te wijzigen, open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies je \"Herconfigureer\"."
         }
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "Extra valuta zijn optioneel; je kunt ze ook later kiezen via \"Configureren\". Voeg daarna assets toe met \"Prijstracker toevoegen\".",
+        "description": "Extra valuta zijn optioneel; je kunt ze ook later kiezen via \"Configureren\" (⚙) bij de invoer \"Bitpanda Price Tracker\" op de integratiepagina van Bitpanda. Voeg daarna assets toe met \"Prijstracker toevoegen\" bij dezelfde invoer.",
         "data": {
           "extra_currencies": "Extra valuta"
         },
@@ -81,7 +81,7 @@
       "reconfigure_successful": "De API-sleutel is vervangen.",
       "currency_changed": "De valuta is gewijzigd. De Portfolio-sensoren worden opnieuw aangemaakt.",
       "no_changes": "Er is niets gewijzigd.",
-      "no_reconfigure": "Bij de Price Tracker valt niets te herconfigureren. Kies de valuta via \"Configureren\".",
+      "no_reconfigure": "Bij de Price Tracker valt niets te herconfigureren. Kies de valuta via \"Configureren\" (⚙) bij dezelfde invoer.",
       "unload_failed": "Het Portfolio kon niet worden gestopt, dus de valuta is niet gewijzigd en er is niets verwijderd. Herstart Home Assistant en probeer het opnieuw."
     }
   },
@@ -101,7 +101,7 @@
       },
       "portfolio": {
         "title": "Opties van het Portfolio",
-        "description": "Gebruik \"Herconfigureer\" om de API-sleutel te vervangen of de valuta te wijzigen.",
+        "description": "Om de API-sleutel te vervangen of de valuta te wijzigen, open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies je \"Herconfigureer\".",
         "data": {
           "language": "Taal van groepstitels en meldingen"
         },
@@ -366,7 +366,7 @@
   },
   "exceptions": {
     "portfolio_device_not_removable": {
-      "message": "Het apparaat \"Portfolio\" hoort bij de dienst Bitpanda Portfolio en kan niet apart worden verwijderd. Wil je het kwijt, verwijder dan de invoer \"Bitpanda Portfolio\"."
+      "message": "Het apparaat \"Portfolio\" hoort bij de dienst Bitpanda Portfolio en kan niet apart worden verwijderd. Wil je het kwijt, verwijder dan de invoer \"Bitpanda Portfolio\" op de integratiepagina van Bitpanda (⋮ → \"Verwijderen\")."
     },
     "held_wallet_not_removable": {
       "message": "Je bezit nog {asset}, dus deze wallet zou meteen terugkomen. Hij wordt automatisch verwijderd zodra je het niet meer bezit."
@@ -440,11 +440,11 @@
     },
     "currency_dropped": {
       "title": "Bitpanda-update: Portfolio-valuta gewijzigd in EUR",
-      "description": "{currency}, de valuta van je Bitpanda-invoer vóór de update, is niet beschikbaar voor Bitpanda Portfolio; dat rapporteert daarom nu alle waarden in EUR. Kies een andere valuta via \"Herconfigureer\" bij de invoer \"Bitpanda Portfolio\"."
+      "description": "{currency}, de valuta van je Bitpanda-invoer vóór de update, is niet beschikbaar voor Bitpanda Portfolio; dat rapporteert daarom nu alle waarden in EUR. Om een andere valuta te kiezen, open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies je \"Herconfigureer\"."
     },
     "price_tracker_exists": {
       "title": "Bitpanda-update: prijzen toevoegen aan de Price Tracker",
-      "description": "Bij de update was er al een Bitpanda Price Tracker ingesteld, dus de prijzen die je oude Bitpanda-invoer volgde, zijn daar niet naartoe verplaatst. Voeg deze assets toe met \"Prijstracker toevoegen\" bij de invoer \"Bitpanda Price Tracker\" om ze te blijven volgen:\n\n{assets}"
+      "description": "Bij de update was er al een Bitpanda Price Tracker ingesteld, dus de prijzen die je oude Bitpanda-invoer volgde, zijn daar niet naartoe verplaatst. Voeg deze assets toe met \"Prijstracker toevoegen\" bij de invoer \"Bitpanda Price Tracker\" op de integratiepagina van Bitpanda om ze te blijven volgen:\n\n{assets}"
     },
     "home_assistant_too_old": {
       "title": "Bitpanda-update vereist Home Assistant {minimum}",
@@ -452,11 +452,11 @@
     },
     "portfolio_exists": {
       "title": "Bitpanda-update geblokkeerd: er is al een Bitpanda Portfolio ingesteld",
-      "description": "De Bitpanda-invoer \"{entry}\" van vóór de update kan niet worden bijgewerkt: die zou naast \"{portfolio}\" een tweede Bitpanda Portfolio worden, en er kan er maar één worden ingesteld. Er is niets aan gewijzigd. Verwijder een van beide: \"{entry}\" of \"{portfolio}\". Houd je \"{entry}\", herstart Home Assistant daarna om die bij te werken."
+      "description": "De Bitpanda-invoer \"{entry}\" van vóór de update kan niet worden bijgewerkt: die zou naast \"{portfolio}\" een tweede Bitpanda Portfolio worden, en er kan er maar één worden ingesteld. Er is niets aan gewijzigd. Verwijder een van beide op de integratiepagina van Bitpanda (⋮ → \"Verwijderen\"): \"{entry}\" of \"{portfolio}\". Houd je \"{entry}\", herstart Home Assistant daarna om die bij te werken."
     },
     "slow_price_interval": {
       "title": "Bitpanda Price Tracker: prijzen slechts elke {minutes} minuten vernieuwd",
-      "description": "De Bitpanda Price Tracker volgt {count} assets en heeft per vernieuwing één verzoek per asset nodig. Om binnen zijn verzoekbudget te blijven, vernieuwt hij hun prijzen slechts elke {minutes} minuten. Volg minder assets voor snellere updates: verwijder de apparaten van assets die je niet meer nodig hebt, of een hele groep."
+      "description": "De Bitpanda Price Tracker volgt {count} assets en heeft per vernieuwing één verzoek per asset nodig. Om binnen zijn verzoekbudget te blijven, vernieuwt hij hun prijzen slechts elke {minutes} minuten. Volg minder assets voor snellere updates: verwijder het apparaat van een asset (⋮ op de apparaatpagina) of een hele groep (⋮ op de integratiepagina van Bitpanda)."
     }
   },
   "services": {

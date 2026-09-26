@@ -130,21 +130,43 @@ def test_no_language_is_an_untranslated_copy_of_english():
 
 
 # Home Assistant's own labels, per language, from its frontend translations as
-# bundled with 2026.9: an integration entry's menu items "Reconfigure" and
-# "Configure" (ui.panel.config.integrations.config_entry.reconfigure /
-# .configure) and a dialog's button (ui.panel.config.integrations.config_flow
-# .submit, which is ui.common.submit). The button reads "Next" instead
-# (config_flow.next: en "Next", de "Weiter", fr "Suivant", nl "Volgende",
-# it "Prossimo", es "Siguiente", pl "Dalej") only on a step shown with
-# last_step=False, and no step of this integration is.
+# bundled with 2026.9: an integration entry's menu items "Reconfigure",
+# "Configure" and "Delete" (ui.panel.config.integrations.config_entry
+# .reconfigure / .configure / .delete) and a dialog's button
+# (ui.panel.config.integrations.config_flow.submit, which is
+# ui.common.submit). The button reads "Next" instead (config_flow.next: en
+# "Next", de "Weiter", fr "Suivant", nl "Volgende", it "Prossimo", es
+# "Siguiente", pl "Dalej") only on a step shown with last_step=False, and no
+# step of this integration is.
 _MENU_LABELS = {
-    "de": {"reconfigure": "Neu konfigurieren", "configure": "Konfigurieren", "submit": "OK"},
-    "en": {"reconfigure": "Reconfigure", "configure": "Configure", "submit": "Submit"},
-    "es": {"reconfigure": "Reconfigurar", "configure": "Configurar", "submit": "Enviar"},
-    "fr": {"reconfigure": "Reconfigurer", "configure": "Configurer", "submit": "Valider"},
-    "it": {"reconfigure": "Riconfigura", "configure": "Configura", "submit": "Invia"},
-    "nl": {"reconfigure": "Herconfigureer", "configure": "Configureren", "submit": "Verzenden"},
-    "pl": {"reconfigure": "Rekonfiguracja", "configure": "Konfiguruj", "submit": "Zatwierdź"},
+    "de": {
+        "reconfigure": "Neu konfigurieren", "configure": "Konfigurieren", "submit": "OK",
+        "delete": "Löschen",
+    },
+    "en": {
+        "reconfigure": "Reconfigure", "configure": "Configure", "submit": "Submit",
+        "delete": "Delete",
+    },
+    "es": {
+        "reconfigure": "Reconfigurar", "configure": "Configurar", "submit": "Enviar",
+        "delete": "Eliminar",
+    },
+    "fr": {
+        "reconfigure": "Reconfigurer", "configure": "Configurer", "submit": "Valider",
+        "delete": "Supprimer",
+    },
+    "it": {
+        "reconfigure": "Riconfigura", "configure": "Configura", "submit": "Invia",
+        "delete": "Elimina",
+    },
+    "nl": {
+        "reconfigure": "Herconfigureer", "configure": "Configureren", "submit": "Verzenden",
+        "delete": "Verwijderen",
+    },
+    "pl": {
+        "reconfigure": "Rekonfiguracja", "configure": "Konfiguruj", "submit": "Zatwierdź",
+        "delete": "Usuń",
+    },
 }
 
 # The texts that send the user to one of those controls, by the control.
@@ -161,6 +183,10 @@ _LABEL_REFERENCES = {
     "submit": [
         ("config", "step", "confirm_currency", "description"),
         ("config_subentries", "price_group", "step", "asset", "data_description", "asset"),
+    ],
+    "delete": [
+        ("issues", "portfolio_exists", "description"),
+        ("exceptions", "portfolio_device_not_removable", "message"),
     ],
 }
 
@@ -184,6 +210,63 @@ def test_menu_items_are_named_with_home_assistants_own_labels():
                 for part in key:
                     text = text[part]
                 assert _quoted(labels[control]).search(text), (language, ".".join(key))
+
+
+def _text(strings: dict, key: tuple[str, ...]) -> str:
+    for part in key:
+        strings = strings[part]
+    return strings
+
+
+# Where those controls sit, in Home Assistant's frontend at the 2025.5 floor as
+# at 2026.9: "Reconfigure" and "Delete" in the ⋮ menu of an entry on the
+# integration page; "Configure" on the entry itself (a button, ⚙ in newer
+# versions); "Add price tracker" on the entry too (in its ⋮ menu at 2025.5, a
+# button later). A text that sends the user to one of them -- or to delete a
+# device or a group, which the ⋮ menu on its page offers -- says where: on the
+# Bitpanda integration page, by the entry's name, with the ⋮ or ⚙ to look for.
+_INTEGRATION_PAGE = {
+    "de": "Bitpanda-Integrationsseite",
+    "en": "Bitpanda integration page",
+    "es": "página de la integración Bitpanda",
+    "fr": "page de l'intégration Bitpanda",
+    "it": "pagina dell'integrazione Bitpanda",
+    "nl": "integratiepagina van Bitpanda",
+    "pl": "stronie integracji Bitpanda",
+}
+# Each text, and the symbol it points to ("" for "Add price tracker", a button
+# or a menu item depending on the version).
+_LOCATED_TEXTS = {
+    ("config", "step", "currency", "data_description", "currency"): "⋮",
+    ("options", "step", "portfolio", "description"): "⋮",
+    ("issues", "currency_dropped", "description"): "⋮",
+    ("config", "step", "price_tracker", "description"): "⚙",
+    ("issues", "price_tracker_exists", "description"): "",
+    ("issues", "portfolio_exists", "description"): "⋮",
+    ("exceptions", "portfolio_device_not_removable", "message"): "⋮",
+    ("issues", "slow_price_interval", "description"): "⋮",
+}
+# Shown right on the Price Tracker's entry, after its ⋮ -> "Reconfigure": it
+# sends the user to "Configure" (⚙) on "the same entry".
+_ON_THE_SAME_ENTRY = ("config", "abort", "no_reconfigure")
+
+
+def test_texts_say_where_to_find_what_they_send_the_user_to():
+    """For users new to Home Assistant: a text never names a menu item
+    without saying where to find it."""
+    assert sorted(_INTEGRATION_PAGE) == _LANGUAGES
+    menu_items = {
+        key for control in ("reconfigure", "configure", "delete")
+        for key in _LABEL_REFERENCES[control]
+    }
+    assert menu_items - {_ON_THE_SAME_ENTRY} <= set(_LOCATED_TEXTS)
+    for language in _LANGUAGES:
+        strings = _load(f"translations/{language}.json")
+        for key, symbol in _LOCATED_TEXTS.items():
+            text = _text(strings, key)
+            assert _INTEGRATION_PAGE[language] in text, (language, ".".join(key))
+            assert symbol in text, (language, ".".join(key))
+        assert "⚙" in _text(strings, _ON_THE_SAME_ENTRY), language
 
 
 def test_texts_name_the_add_price_tracker_button_by_its_own_label():

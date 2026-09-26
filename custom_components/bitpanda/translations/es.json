@@ -26,12 +26,12 @@
           "currency": "Moneda"
         },
         "data_description": {
-          "currency": "Bitpanda expresa todos los valores de tu cartera en esta moneda. Puedes cambiarla más adelante con \"Reconfigurar\"."
+          "currency": "Bitpanda expresa todos los valores de tu cartera en esta moneda. Para cambiarla más adelante, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda y elige \"Reconfigurar\"."
         }
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "Las monedas adicionales son opcionales; también puedes elegirlas más adelante con \"Configurar\". Después, añade activos con \"Añadir seguimiento de precio\".",
+        "description": "Las monedas adicionales son opcionales; también puedes elegirlas más adelante con \"Configurar\" (⚙) en la entrada \"Bitpanda Price Tracker\" de la página de la integración Bitpanda. Después, añade activos con \"Añadir seguimiento de precio\" en la misma entrada.",
         "data": {
           "extra_currencies": "Monedas adicionales"
         },
@@ -81,7 +81,7 @@
       "reconfigure_successful": "La clave API se ha sustituido.",
       "currency_changed": "La moneda se ha cambiado. Los sensores del Portfolio se están volviendo a crear.",
       "no_changes": "No se ha cambiado nada.",
-      "no_reconfigure": "El Price Tracker no tiene nada que reconfigurar. Usa \"Configurar\" para elegir sus monedas.",
+      "no_reconfigure": "El Price Tracker no tiene nada que reconfigurar. Elige sus monedas con \"Configurar\" (⚙) en la misma entrada.",
       "unload_failed": "No se ha podido detener el Portfolio, así que no se ha cambiado la moneda ni se ha eliminado nada. Reinicia Home Assistant e inténtalo de nuevo."
     }
   },
@@ -101,7 +101,7 @@
       },
       "portfolio": {
         "title": "Opciones del Portfolio",
-        "description": "Para sustituir la clave API o cambiar la moneda, usa \"Reconfigurar\".",
+        "description": "Para sustituir la clave API o cambiar la moneda, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda y elige \"Reconfigurar\".",
         "data": {
           "language": "Idioma de los títulos de grupo y de los mensajes"
         },
@@ -366,7 +366,7 @@
   },
   "exceptions": {
     "portfolio_device_not_removable": {
-      "message": "El dispositivo \"Portfolio\" forma parte del servicio Bitpanda Portfolio y no se puede eliminar por separado. Para quitarlo, elimina la entrada \"Bitpanda Portfolio\"."
+      "message": "El dispositivo \"Portfolio\" forma parte del servicio Bitpanda Portfolio y no se puede eliminar por separado. Para quitarlo, elimina la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda (⋮ → \"Eliminar\")."
     },
     "held_wallet_not_removable": {
       "message": "Todavía tienes {asset}, así que este wallet volvería a aparecer enseguida. Se elimina automáticamente en cuanto dejes de tenerlo."
@@ -440,11 +440,11 @@
     },
     "currency_dropped": {
       "title": "Actualización de Bitpanda: moneda del Portfolio cambiada a EUR",
-      "description": "{currency}, la moneda de tu entrada de Bitpanda antes de la actualización, no está disponible para Bitpanda Portfolio, así que ahora expresa todos sus valores en EUR. Para elegir otra moneda, usa \"Reconfigurar\" en la entrada \"Bitpanda Portfolio\"."
+      "description": "{currency}, la moneda de tu entrada de Bitpanda antes de la actualización, no está disponible para Bitpanda Portfolio, así que ahora expresa todos sus valores en EUR. Para elegir otra moneda, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda y elige \"Reconfigurar\"."
     },
     "price_tracker_exists": {
       "title": "Actualización de Bitpanda: precios que añadir al Price Tracker",
-      "description": "Al actualizar ya había un Bitpanda Price Tracker configurado, así que los precios que seguía tu antigua entrada de Bitpanda no se han trasladado a él. Para seguir sus precios, añade estos activos con \"Añadir seguimiento de precio\" en la entrada \"Bitpanda Price Tracker\":\n\n{assets}"
+      "description": "Al actualizar ya había un Bitpanda Price Tracker configurado, así que los precios que seguía tu antigua entrada de Bitpanda no se han trasladado a él. Para seguir sus precios, añade estos activos con \"Añadir seguimiento de precio\" en la entrada \"Bitpanda Price Tracker\" de la página de la integración Bitpanda:\n\n{assets}"
     },
     "home_assistant_too_old": {
       "title": "La actualización de Bitpanda requiere Home Assistant {minimum}",
@@ -452,11 +452,11 @@
     },
     "portfolio_exists": {
       "title": "Actualización de Bitpanda bloqueada: ya hay un Bitpanda Portfolio configurado",
-      "description": "La entrada de Bitpanda \"{entry}\" de antes de la actualización no se puede actualizar: se convertiría en un segundo Bitpanda Portfolio junto a \"{portfolio}\", y solo se puede configurar uno. No se ha modificado nada en ella. Elimina una de las dos entradas. Si conservas \"{entry}\", reinicia después Home Assistant para actualizarla."
+      "description": "La entrada de Bitpanda \"{entry}\" de antes de la actualización no se puede actualizar: se convertiría en un segundo Bitpanda Portfolio junto a \"{portfolio}\", y solo se puede configurar uno. No se ha modificado nada en ella. Elimina una de las dos entradas en la página de la integración Bitpanda (⋮ → \"Eliminar\"). Si conservas \"{entry}\", reinicia después Home Assistant para actualizarla."
     },
     "slow_price_interval": {
       "title": "Bitpanda Price Tracker: precios actualizados solo cada {minutes} minutos",
-      "description": "El Bitpanda Price Tracker sigue {count} activos y necesita una solicitud por activo en cada actualización. Para no superar su presupuesto de solicitudes, actualiza sus precios solo cada {minutes} minutos. Sigue menos activos para obtener actualizaciones más rápidas: elimina los dispositivos de los activos que ya no necesites, o un grupo entero."
+      "description": "El Bitpanda Price Tracker sigue {count} activos y necesita una solicitud por activo en cada actualización. Para no superar su presupuesto de solicitudes, actualiza sus precios solo cada {minutes} minutos. Sigue menos activos para obtener actualizaciones más rápidas: elimina el dispositivo de un activo (⋮ en su página de dispositivo) o un grupo entero (⋮ en la página de la integración Bitpanda)."
     }
   },
   "services": {

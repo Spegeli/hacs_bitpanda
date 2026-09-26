@@ -1590,8 +1590,8 @@ _REFUSALS = {
     "en": {
         "portfolio": (
             "The Portfolio device is part of the Bitpanda Portfolio service and "
-            "cannot be deleted on its own. To remove it, delete the Bitpanda "
-            "Portfolio entry"
+            'cannot be deleted on its own. To remove it, delete the "Bitpanda '
+            'Portfolio" entry on the Bitpanda integration page (⋮ → "Delete")'
         ),
         "wallet": (
             "You still hold Vision (VSN), so this wallet would come straight "
@@ -1602,7 +1602,7 @@ _REFUSALS = {
         "portfolio": (
             "Das Gerät „Portfolio“ gehört zum Dienst Bitpanda Portfolio und lässt sich "
             "nicht einzeln löschen. Um es zu entfernen, lösche den Eintrag „Bitpanda "
-            "Portfolio“"
+            "Portfolio“ auf der Bitpanda-Integrationsseite (⋮ → „Löschen“)"
         ),
         "wallet": (
             "Du hältst Vision (VSN) noch, daher käme dieses Wallet sofort zurück. Es "

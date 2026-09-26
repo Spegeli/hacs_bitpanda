@@ -26,12 +26,12 @@
           "currency": "Waluta"
         },
         "data_description": {
-          "currency": "Bitpanda podaje wszystkie wartości Twojego portfolio w tej walucie. Możesz ją później zmienić za pomocą opcji „Rekonfiguracja”."
+          "currency": "Bitpanda podaje wszystkie wartości Twojego portfolio w tej walucie. Aby ją później zmienić, otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio” i wybierz „Rekonfiguracja”."
         }
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "Dodatkowe waluty są opcjonalne; możesz je też wybrać później, klikając „Konfiguruj”. Aktywa dodasz potem za pomocą „Dodaj śledzenie ceny”.",
+        "description": "Dodatkowe waluty są opcjonalne; możesz je też wybrać później, klikając „Konfiguruj” (⚙) przy wpisie „Bitpanda Price Tracker” na stronie integracji Bitpanda. Aktywa dodasz potem za pomocą „Dodaj śledzenie ceny” przy tym samym wpisie.",
         "data": {
           "extra_currencies": "Dodatkowe waluty"
         },
@@ -81,7 +81,7 @@
       "reconfigure_successful": "Klucz API został zastąpiony.",
       "currency_changed": "Waluta została zmieniona. Sensory Portfolio są tworzone od nowa.",
       "no_changes": "Nic nie zostało zmienione.",
-      "no_reconfigure": "W usłudze Price Tracker nie ma nic do rekonfiguracji. Jej waluty wybierzesz, klikając „Konfiguruj”.",
+      "no_reconfigure": "W usłudze Price Tracker nie ma nic do rekonfiguracji. Jej waluty wybierzesz, klikając „Konfiguruj” (⚙) przy tym samym wpisie.",
       "unload_failed": "Nie udało się zatrzymać Portfolio, więc waluta nie została zmieniona i nic nie zostało usunięte. Uruchom ponownie Home Assistant i spróbuj jeszcze raz."
     }
   },
@@ -101,7 +101,7 @@
       },
       "portfolio": {
         "title": "Opcje Portfolio",
-        "description": "Aby zastąpić klucz API lub zmienić walutę, użyj opcji „Rekonfiguracja”.",
+        "description": "Aby zastąpić klucz API lub zmienić walutę, otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio” i wybierz „Rekonfiguracja”.",
         "data": {
           "language": "Język tytułów grup i komunikatów"
         },
@@ -366,7 +366,7 @@
   },
   "exceptions": {
     "portfolio_device_not_removable": {
-      "message": "Urządzenie „Portfolio” należy do usługi Bitpanda Portfolio i nie można go usunąć osobno. Aby się go pozbyć, usuń wpis „Bitpanda Portfolio”."
+      "message": "Urządzenie „Portfolio” należy do usługi Bitpanda Portfolio i nie można go usunąć osobno. Aby się go pozbyć, usuń wpis „Bitpanda Portfolio” na stronie integracji Bitpanda (⋮ → „Usuń”)."
     },
     "held_wallet_not_removable": {
       "message": "Nadal posiadasz {asset}, więc ten portfel od razu by wrócił. Zostanie usunięty automatycznie, gdy przestaniesz posiadać to aktywo."
@@ -440,11 +440,11 @@
     },
     "currency_dropped": {
       "title": "Aktualizacja integracji Bitpanda: waluta Portfolio zmieniona na EUR",
-      "description": "Waluta {currency}, używana przez wpis Bitpanda przed aktualizacją, nie jest dostępna dla usługi Bitpanda Portfolio, dlatego podaje ona teraz wszystkie wartości w EUR. Aby wybrać inną walutę, użyj opcji „Rekonfiguracja” we wpisie „Bitpanda Portfolio”."
+      "description": "Waluta {currency}, używana przez wpis Bitpanda przed aktualizacją, nie jest dostępna dla usługi Bitpanda Portfolio, dlatego podaje ona teraz wszystkie wartości w EUR. Aby wybrać inną walutę, otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio” i wybierz „Rekonfiguracja”."
     },
     "price_tracker_exists": {
       "title": "Aktualizacja integracji Bitpanda: ceny do dodania w usłudze Price Tracker",
-      "description": "W chwili aktualizacji usługa Bitpanda Price Tracker była już skonfigurowana, więc ceny śledzone przez Twój stary wpis Bitpanda nie zostały do niej przeniesione. Aby nadal je śledzić, dodaj te aktywa za pomocą „Dodaj śledzenie ceny” we wpisie „Bitpanda Price Tracker”:\n\n{assets}"
+      "description": "W chwili aktualizacji usługa Bitpanda Price Tracker była już skonfigurowana, więc ceny śledzone przez Twój stary wpis Bitpanda nie zostały do niej przeniesione. Aby nadal je śledzić, dodaj te aktywa za pomocą „Dodaj śledzenie ceny” przy wpisie „Bitpanda Price Tracker” na stronie integracji Bitpanda:\n\n{assets}"
     },
     "home_assistant_too_old": {
       "title": "Aktualizacja integracji Bitpanda wymaga Home Assistant {minimum}",
@@ -452,11 +452,11 @@
     },
     "portfolio_exists": {
       "title": "Aktualizacja integracji Bitpanda zablokowana: usługa Bitpanda Portfolio jest już skonfigurowana",
-      "description": "Wpisu Bitpanda „{entry}” sprzed aktualizacji nie można zaktualizować: stałby się drugą usługą Bitpanda Portfolio obok „{portfolio}”, a można skonfigurować tylko jedną. Nic w nim nie zostało zmienione. Usuń jeden z dwóch wpisów. Jeśli zachowasz „{entry}”, uruchom następnie ponownie Home Assistant, aby go zaktualizować."
+      "description": "Wpisu Bitpanda „{entry}” sprzed aktualizacji nie można zaktualizować: stałby się drugą usługą Bitpanda Portfolio obok „{portfolio}”, a można skonfigurować tylko jedną. Nic w nim nie zostało zmienione. Usuń jeden z dwóch wpisów na stronie integracji Bitpanda (⋮ → „Usuń”). Jeśli zachowasz „{entry}”, uruchom następnie ponownie Home Assistant, aby go zaktualizować."
     },
     "slow_price_interval": {
       "title": "Bitpanda Price Tracker: ceny odświeżane tylko co {minutes} min",
-      "description": "Liczba aktywów śledzonych przez usługę Bitpanda Price Tracker: {count}. Każde odświeżenie wymaga jednego zapytania na aktywo, dlatego — aby nie przekroczyć budżetu zapytań — ceny są odświeżane tylko co {minutes} min. Śledź mniej aktywów, aby odświeżanie było szybsze: usuń urządzenia aktywów, których już nie potrzebujesz, albo całą grupę."
+      "description": "Liczba aktywów śledzonych przez usługę Bitpanda Price Tracker: {count}. Każde odświeżenie wymaga jednego zapytania na aktywo, dlatego — aby nie przekroczyć budżetu zapytań — ceny są odświeżane tylko co {minutes} min. Śledź mniej aktywów, aby odświeżanie było szybsze: usuń urządzenie aktywa (⋮ na jego stronie urządzenia) albo całą grupę (⋮ na stronie integracji Bitpanda)."
     }
   },
   "services": {

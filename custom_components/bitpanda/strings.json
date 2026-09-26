@@ -26,12 +26,12 @@
           "currency": "Currency"
         },
         "data_description": {
-          "currency": "Bitpanda reports every value of your portfolio in this currency. You can change it later with \"Reconfigure\"."
+          "currency": "Bitpanda reports every value of your portfolio in this currency. To change it later, open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page and choose \"Reconfigure\"."
         }
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "Additional currencies are optional; you can also choose them later with \"Configure\". Add assets afterwards with \"Add price tracker\".",
+        "description": "Additional currencies are optional; you can also choose them later with \"Configure\" (⚙) on the \"Bitpanda Price Tracker\" entry of the Bitpanda integration page. Add assets afterwards with \"Add price tracker\" on the same entry.",
         "data": {
           "extra_currencies": "Additional currencies"
         },
@@ -81,7 +81,7 @@
       "reconfigure_successful": "The API key was replaced.",
       "currency_changed": "The currency was changed. The Portfolio sensors are being recreated.",
       "no_changes": "Nothing was changed.",
-      "no_reconfigure": "The Price Tracker has nothing to reconfigure. Use \"Configure\" to choose its currencies.",
+      "no_reconfigure": "The Price Tracker has nothing to reconfigure. Choose its currencies with \"Configure\" (⚙) on the same entry.",
       "unload_failed": "The Portfolio could not be stopped, so the currency was not changed and nothing was deleted. Restart Home Assistant and try again."
     }
   },
@@ -101,7 +101,7 @@
       },
       "portfolio": {
         "title": "Portfolio options",
-        "description": "To replace the API key or change the currency, use \"Reconfigure\".",
+        "description": "To replace the API key or change the currency, open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page and choose \"Reconfigure\".",
         "data": {
           "language": "Language of group titles and messages"
         },
@@ -366,7 +366,7 @@
   },
   "exceptions": {
     "portfolio_device_not_removable": {
-      "message": "The Portfolio device is part of the Bitpanda Portfolio service and cannot be deleted on its own. To remove it, delete the Bitpanda Portfolio entry."
+      "message": "The Portfolio device is part of the Bitpanda Portfolio service and cannot be deleted on its own. To remove it, delete the \"Bitpanda Portfolio\" entry on the Bitpanda integration page (⋮ → \"Delete\")."
     },
     "held_wallet_not_removable": {
       "message": "You still hold {asset}, so this wallet would come straight back. It is removed automatically once you no longer hold it."
@@ -440,11 +440,11 @@
     },
     "currency_dropped": {
       "title": "Bitpanda upgrade: Portfolio currency changed to EUR",
-      "description": "{currency}, the currency of your Bitpanda entry before the upgrade, is not available for the Bitpanda Portfolio, so it now reports every value in EUR. To choose another currency, use \"Reconfigure\" on the Bitpanda Portfolio entry."
+      "description": "{currency}, the currency of your Bitpanda entry before the upgrade, is not available for the Bitpanda Portfolio, so it now reports every value in EUR. To choose another currency, open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page and choose \"Reconfigure\"."
     },
     "price_tracker_exists": {
       "title": "Bitpanda upgrade: prices to add to the Price Tracker",
-      "description": "A Bitpanda Price Tracker was already set up when the upgrade ran, so the prices your old Bitpanda entry tracked were not moved into it. To keep tracking them, add these assets with \"Add price tracker\" on the Bitpanda Price Tracker entry:\n\n{assets}"
+      "description": "A Bitpanda Price Tracker was already set up when the upgrade ran, so the prices your old Bitpanda entry tracked were not moved into it. To keep tracking them, add these assets with \"Add price tracker\" on the \"Bitpanda Price Tracker\" entry of the Bitpanda integration page:\n\n{assets}"
     },
     "home_assistant_too_old": {
       "title": "Bitpanda upgrade needs Home Assistant {minimum}",
@@ -452,11 +452,11 @@
     },
     "portfolio_exists": {
       "title": "Bitpanda upgrade blocked: a Bitpanda Portfolio is already set up",
-      "description": "The Bitpanda entry \"{entry}\" from before the upgrade cannot be upgraded: it would become a second Bitpanda Portfolio beside \"{portfolio}\", and only one can be set up. It has been left unchanged. Delete one of the two entries. If you keep \"{entry}\", restart Home Assistant afterwards to upgrade it."
+      "description": "The Bitpanda entry \"{entry}\" from before the upgrade cannot be upgraded: it would become a second Bitpanda Portfolio beside \"{portfolio}\", and only one can be set up. It has been left unchanged. Delete one of the two entries on the Bitpanda integration page (⋮ → \"Delete\"). If you keep \"{entry}\", restart Home Assistant afterwards to upgrade it."
     },
     "slow_price_interval": {
       "title": "Bitpanda Price Tracker: prices refresh only every {minutes} minutes",
-      "description": "The Bitpanda Price Tracker tracks {count} assets and needs one request per asset for every refresh. To stay within its request budget, it refreshes their prices only every {minutes} minutes. Track fewer assets for faster updates: delete the devices of assets you no longer need, or a whole group."
+      "description": "The Bitpanda Price Tracker tracks {count} assets and needs one request per asset for every refresh. To stay within its request budget, it refreshes their prices only every {minutes} minutes. Track fewer assets for faster updates: delete an asset's device (⋮ on its device page), or a whole group (⋮ on the Bitpanda integration page)."
     }
   },
   "services": {

@@ -26,12 +26,12 @@
           "currency": "Valuta"
         },
         "data_description": {
-          "currency": "Bitpanda esprime ogni valore del tuo portafoglio in questa valuta. Potrai cambiarla in seguito con \"Riconfigura\"."
+          "currency": "Bitpanda esprime ogni valore del tuo portafoglio in questa valuta. Per cambiarla in seguito, apri il menu ⋮ della voce \"Bitpanda Portfolio\" nella pagina dell'integrazione Bitpanda e scegli \"Riconfigura\"."
         }
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "Le valute aggiuntive sono facoltative; puoi sceglierle anche in seguito con \"Configura\". Aggiungi poi gli asset con \"Aggiungi monitoraggio prezzo\".",
+        "description": "Le valute aggiuntive sono facoltative; puoi sceglierle anche in seguito con \"Configura\" (⚙) sulla voce \"Bitpanda Price Tracker\" nella pagina dell'integrazione Bitpanda. Aggiungi poi gli asset con \"Aggiungi monitoraggio prezzo\" sulla stessa voce.",
         "data": {
           "extra_currencies": "Valute aggiuntive"
         },
@@ -81,7 +81,7 @@
       "reconfigure_successful": "La chiave API è stata sostituita.",
       "currency_changed": "La valuta è stata cambiata. I sensori del Portfolio vengono ricreati.",
       "no_changes": "Non è stato modificato nulla.",
-      "no_reconfigure": "Il Price Tracker non ha nulla da riconfigurare. Usa \"Configura\" per scegliere le sue valute.",
+      "no_reconfigure": "Il Price Tracker non ha nulla da riconfigurare. Scegli le sue valute con \"Configura\" (⚙) sulla stessa voce.",
       "unload_failed": "Non è stato possibile arrestare il Portfolio, quindi la valuta non è stata cambiata e non è stato eliminato nulla. Riavvia Home Assistant e riprova."
     }
   },
@@ -101,7 +101,7 @@
       },
       "portfolio": {
         "title": "Opzioni del Portfolio",
-        "description": "Per sostituire la chiave API o cambiare la valuta, usa \"Riconfigura\".",
+        "description": "Per sostituire la chiave API o cambiare la valuta, apri il menu ⋮ della voce \"Bitpanda Portfolio\" nella pagina dell'integrazione Bitpanda e scegli \"Riconfigura\".",
         "data": {
           "language": "Lingua dei titoli dei gruppi e dei messaggi"
         },
@@ -366,7 +366,7 @@
   },
   "exceptions": {
     "portfolio_device_not_removable": {
-      "message": "Il dispositivo \"Portfolio\" fa parte del servizio Bitpanda Portfolio e non può essere eliminato da solo. Per rimuoverlo, elimina la voce \"Bitpanda Portfolio\"."
+      "message": "Il dispositivo \"Portfolio\" fa parte del servizio Bitpanda Portfolio e non può essere eliminato da solo. Per rimuoverlo, elimina la voce \"Bitpanda Portfolio\" nella pagina dell'integrazione Bitpanda (⋮ → \"Elimina\")."
     },
     "held_wallet_not_removable": {
       "message": "Possiedi ancora {asset}, quindi questo wallet ricomparirebbe subito. Verrà rimosso automaticamente quando non lo possiederai più."
@@ -440,11 +440,11 @@
     },
     "currency_dropped": {
       "title": "Aggiornamento di Bitpanda: valuta del Portfolio cambiata in EUR",
-      "description": "{currency}, la valuta della tua voce Bitpanda prima dell'aggiornamento, non è disponibile per Bitpanda Portfolio, che ora esprime quindi tutti i valori in EUR. Per scegliere un'altra valuta, usa \"Riconfigura\" sulla voce \"Bitpanda Portfolio\"."
+      "description": "{currency}, la valuta della tua voce Bitpanda prima dell'aggiornamento, non è disponibile per Bitpanda Portfolio, che ora esprime quindi tutti i valori in EUR. Per scegliere un'altra valuta, apri il menu ⋮ della voce \"Bitpanda Portfolio\" nella pagina dell'integrazione Bitpanda e scegli \"Riconfigura\"."
     },
     "price_tracker_exists": {
       "title": "Aggiornamento di Bitpanda: prezzi da aggiungere al Price Tracker",
-      "description": "Al momento dell'aggiornamento era già configurato un Bitpanda Price Tracker, quindi i prezzi monitorati dalla tua vecchia voce Bitpanda non vi sono stati trasferiti. Per continuare a monitorarli, aggiungi questi asset con \"Aggiungi monitoraggio prezzo\" sulla voce \"Bitpanda Price Tracker\":\n\n{assets}"
+      "description": "Al momento dell'aggiornamento era già configurato un Bitpanda Price Tracker, quindi i prezzi monitorati dalla tua vecchia voce Bitpanda non vi sono stati trasferiti. Per continuare a monitorarli, aggiungi questi asset con \"Aggiungi monitoraggio prezzo\" sulla voce \"Bitpanda Price Tracker\" nella pagina dell'integrazione Bitpanda:\n\n{assets}"
     },
     "home_assistant_too_old": {
       "title": "L'aggiornamento di Bitpanda richiede Home Assistant {minimum}",
@@ -452,11 +452,11 @@
     },
     "portfolio_exists": {
       "title": "Aggiornamento di Bitpanda bloccato: è già configurato un Bitpanda Portfolio",
-      "description": "La voce Bitpanda \"{entry}\" precedente all'aggiornamento non può essere aggiornata: diventerebbe un secondo Bitpanda Portfolio accanto a \"{portfolio}\", e se ne può configurare uno solo. Non è stata modificata. Elimina una delle due voci. Se tieni \"{entry}\", riavvia poi Home Assistant per aggiornarla."
+      "description": "La voce Bitpanda \"{entry}\" precedente all'aggiornamento non può essere aggiornata: diventerebbe un secondo Bitpanda Portfolio accanto a \"{portfolio}\", e se ne può configurare uno solo. Non è stata modificata. Elimina una delle due voci nella pagina dell'integrazione Bitpanda (⋮ → \"Elimina\"). Se tieni \"{entry}\", riavvia poi Home Assistant per aggiornarla."
     },
     "slow_price_interval": {
       "title": "Bitpanda Price Tracker: prezzi aggiornati solo ogni {minutes} minuti",
-      "description": "Il Bitpanda Price Tracker monitora {count} asset e per ogni aggiornamento gli serve una richiesta per asset. Per restare nel suo budget di richieste, aggiorna i loro prezzi solo ogni {minutes} minuti. Monitora meno asset per aggiornamenti più rapidi: elimina i dispositivi degli asset che non ti servono più, oppure un intero gruppo."
+      "description": "Il Bitpanda Price Tracker monitora {count} asset e per ogni aggiornamento gli serve una richiesta per asset. Per restare nel suo budget di richieste, aggiorna i loro prezzi solo ogni {minutes} minuti. Monitora meno asset per aggiornamenti più rapidi: elimina il dispositivo di un asset (⋮ nella pagina del dispositivo) oppure un intero gruppo (⋮ nella pagina dell'integrazione Bitpanda)."
     }
   },
   "services": {

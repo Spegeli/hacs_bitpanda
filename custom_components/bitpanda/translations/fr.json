@@ -309,16 +309,16 @@
             "name": "Récompenses : taux annuel (APR %)"
           },
           "rewards_gross": {
-            "name": "Récompenses : brut"
+            "name": "Récompenses : brut (quantité)"
           },
           "rewards_fee": {
-            "name": "Récompenses : frais"
+            "name": "Récompenses : frais (quantité)"
           },
           "rewards_net": {
-            "name": "Récompenses : net"
+            "name": "Récompenses : net (quantité)"
           },
           "rewards_count": {
-            "name": "Récompenses : nombre"
+            "name": "Récompenses : nombre de versements"
           },
           "rewards_last_at": {
             "name": "Récompenses : dernier versement"

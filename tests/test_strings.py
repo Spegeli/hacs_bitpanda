@@ -737,6 +737,70 @@ def test_the_isin_is_labelled_on_every_sensor_that_names_its_asset():
             )
 
 
+# The lifetime reward attributes of the Staking sensor, by language (USER
+# DECISION 2026-09-26).
+_REWARD_LABELS = {
+    "de": {
+        "rewards_count": "Belohnungen: Anzahl Auszahlungen",
+        "rewards_gross": "Belohnungen: brutto (Menge)",
+        "rewards_fee": "Belohnungen: Gebühr (Menge)",
+        "rewards_net": "Belohnungen: netto (Menge)",
+    },
+    "en": {
+        "rewards_count": "Rewards: number of payouts",
+        "rewards_gross": "Rewards: gross (quantity)",
+        "rewards_fee": "Rewards: fee (quantity)",
+        "rewards_net": "Rewards: net (quantity)",
+    },
+    "es": {
+        "rewards_count": "Recompensas: número de pagos",
+        "rewards_gross": "Recompensas: bruto (cantidad)",
+        "rewards_fee": "Recompensas: comisión (cantidad)",
+        "rewards_net": "Recompensas: neto (cantidad)",
+    },
+    "fr": {
+        "rewards_count": "Récompenses\u00a0: nombre de versements",
+        "rewards_gross": "Récompenses\u00a0: brut (quantité)",
+        "rewards_fee": "Récompenses\u00a0: frais (quantité)",
+        "rewards_net": "Récompenses\u00a0: net (quantité)",
+    },
+    "it": {
+        "rewards_count": "Ricompense: numero di accrediti",
+        "rewards_gross": "Ricompense: lordo (quantità)",
+        "rewards_fee": "Ricompense: commissione (quantità)",
+        "rewards_net": "Ricompense: netto (quantità)",
+    },
+    "nl": {
+        "rewards_count": "Beloningen: aantal uitbetalingen",
+        "rewards_gross": "Beloningen: bruto (hoeveelheid)",
+        "rewards_fee": "Beloningen: kosten (hoeveelheid)",
+        "rewards_net": "Beloningen: netto (hoeveelheid)",
+    },
+    "pl": {
+        "rewards_count": "Nagrody: liczba wypłat",
+        "rewards_gross": "Nagrody: brutto (ilość)",
+        "rewards_fee": "Nagrody: opłata (ilość)",
+        "rewards_net": "Nagrody: netto (ilość)",
+    },
+}
+
+
+def test_the_reward_attributes_say_what_they_count():
+    """ "Rewards: count" passed for a sum of money. The count is the number
+    of payouts; gross, fee and net are quantities of the asset, named with
+    the word the language uses for `units` ("Asset: Menge"). Only the labels
+    change: the keys, which templates use, stay."""
+    assert sorted(_REWARD_LABELS) == _LANGUAGES
+    for language, labels in _REWARD_LABELS.items():
+        attributes = _load(f"translations/{language}.json")["entity"]["sensor"]["staking"][
+            "state_attributes"
+        ]
+        assert {key: attributes[key]["name"] for key in labels} == labels, language
+        quantity = attributes["units"]["name"].split(":", 1)[1].strip()
+        for key in ("rewards_gross", "rewards_fee", "rewards_net"):
+            assert labels[key].endswith(f" ({quantity})"), (language, key)
+
+
 def test_the_conversion_status_has_a_translated_name_and_state():
     """`conversion` is a status key, not a raw sentence: its own name plus a
     `state` translation for `no_rate` -- the only value it ever takes."""

@@ -309,13 +309,13 @@
             "name": "Ricompense: tasso annuo (APR %)"
           },
           "rewards_gross": {
-            "name": "Ricompense: lordo"
+            "name": "Ricompense: lordo (quantità)"
           },
           "rewards_fee": {
-            "name": "Ricompense: commissione"
+            "name": "Ricompense: commissione (quantità)"
           },
           "rewards_net": {
-            "name": "Ricompense: netto"
+            "name": "Ricompense: netto (quantità)"
           },
           "rewards_count": {
             "name": "Ricompense: numero di accrediti"

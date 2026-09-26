@@ -309,16 +309,16 @@
             "name": "Nagrody: roczne oprocentowanie (APR %)"
           },
           "rewards_gross": {
-            "name": "Nagrody: brutto"
+            "name": "Nagrody: brutto (ilość)"
           },
           "rewards_fee": {
-            "name": "Nagrody: opłata"
+            "name": "Nagrody: opłata (ilość)"
           },
           "rewards_net": {
-            "name": "Nagrody: netto"
+            "name": "Nagrody: netto (ilość)"
           },
           "rewards_count": {
-            "name": "Nagrody: liczba"
+            "name": "Nagrody: liczba wypłat"
           },
           "rewards_last_at": {
             "name": "Nagrody: ostatnia wypłata"

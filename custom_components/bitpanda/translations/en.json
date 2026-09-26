@@ -309,16 +309,16 @@
             "name": "Rewards: APR %"
           },
           "rewards_gross": {
-            "name": "Rewards: gross"
+            "name": "Rewards: gross (quantity)"
           },
           "rewards_fee": {
-            "name": "Rewards: fee"
+            "name": "Rewards: fee (quantity)"
           },
           "rewards_net": {
-            "name": "Rewards: net"
+            "name": "Rewards: net (quantity)"
           },
           "rewards_count": {
-            "name": "Rewards: count"
+            "name": "Rewards: number of payouts"
           },
           "rewards_last_at": {
             "name": "Rewards: last"

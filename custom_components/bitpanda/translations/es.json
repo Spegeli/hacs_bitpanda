@@ -309,13 +309,13 @@
             "name": "Recompensas: tasa anual (APR %)"
           },
           "rewards_gross": {
-            "name": "Recompensas: importe bruto"
+            "name": "Recompensas: bruto (cantidad)"
           },
           "rewards_fee": {
-            "name": "Recompensas: comisión"
+            "name": "Recompensas: comisión (cantidad)"
           },
           "rewards_net": {
-            "name": "Recompensas: importe neto"
+            "name": "Recompensas: neto (cantidad)"
           },
           "rewards_count": {
             "name": "Recompensas: número de pagos"

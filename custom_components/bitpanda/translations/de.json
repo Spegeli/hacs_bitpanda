@@ -309,16 +309,16 @@
             "name": "Belohnungen: Zinssatz (APR %)"
           },
           "rewards_gross": {
-            "name": "Belohnungen: brutto"
+            "name": "Belohnungen: brutto (Menge)"
           },
           "rewards_fee": {
-            "name": "Belohnungen: Gebühr"
+            "name": "Belohnungen: Gebühr (Menge)"
           },
           "rewards_net": {
-            "name": "Belohnungen: netto"
+            "name": "Belohnungen: netto (Menge)"
           },
           "rewards_count": {
-            "name": "Belohnungen: Anzahl"
+            "name": "Belohnungen: Anzahl Auszahlungen"
           },
           "rewards_last_at": {
             "name": "Belohnungen: zuletzt"

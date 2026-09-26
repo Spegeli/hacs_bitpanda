@@ -309,16 +309,16 @@
             "name": "Beloningen: jaarlijks rendement (APR %)"
           },
           "rewards_gross": {
-            "name": "Beloningen: bruto"
+            "name": "Beloningen: bruto (hoeveelheid)"
           },
           "rewards_fee": {
-            "name": "Beloningen: kosten"
+            "name": "Beloningen: kosten (hoeveelheid)"
           },
           "rewards_net": {
-            "name": "Beloningen: netto"
+            "name": "Beloningen: netto (hoeveelheid)"
           },
           "rewards_count": {
-            "name": "Beloningen: aantal"
+            "name": "Beloningen: aantal uitbetalingen"
           },
           "rewards_last_at": {
             "name": "Beloningen: laatste uitbetaling"

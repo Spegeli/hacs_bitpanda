@@ -1,0 +1,52 @@
+name: Tests
+
+# The suite with its coverage, and strict typing, for every push to any
+# branch and every pull request. No schedule: GitHub disables a workflow
+# that has one after 60 days without repository activity, and it then runs
+# on no push either.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: Tests with coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements_test.txt
+      - name: Install the test requirements
+        run: python -m pip install -r requirements_test.txt
+      - name: Run the tests
+        run: >-
+          python -m pytest tests/ -q
+          --cov=custom_components.bitpanda
+          --cov-report=term-missing
+          --cov-fail-under=95
+
+  mypy:
+    name: Strict typing
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements_test.txt
+      # Home Assistant included: mypy checks the integration against its types.
+      - name: Install the test requirements
+        run: python -m pip install -r requirements_test.txt
+      - name: Run mypy --strict
+        run: python -m mypy --strict

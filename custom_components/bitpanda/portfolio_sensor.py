@@ -42,6 +42,7 @@ from .groups import (
     groups_of_type,
 )
 from .naming import (
+    PORTFOLIO_DEVICE_NAME,
     managed_asset_key,
     portfolio_device_identifier,
     portfolio_entity_id,
@@ -73,7 +74,7 @@ _CONFIGURATION_URL = "https://www.bitpanda.com"
 def portfolio_device_info(entry_id: str) -> DeviceInfo:
     return DeviceInfo(
         identifiers={(DOMAIN, portfolio_device_identifier(entry_id))},
-        name="Portfolio",
+        name=PORTFOLIO_DEVICE_NAME,
         manufacturer="Bitpanda",
         model="Portfolio",
         entry_type=DeviceEntryType.SERVICE,

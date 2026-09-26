@@ -83,6 +83,9 @@ PORTFOLIO_KEYS: tuple[str, ...] = (
 # --- Portfolio device ---------------------------------------------------------
 
 
+PORTFOLIO_DEVICE_NAME = "Portfolio"
+
+
 def portfolio_device_identifier(entry_id: str) -> str:
     return f"{entry_id}_portfolio"
 
@@ -94,8 +97,8 @@ def portfolio_unique_id(entry_id: str, key: str) -> str:
 def portfolio_entity_id(key: str) -> str:
     for timeframe, suffix in RETURN_SUFFIXES.items():
         if key == return_key(timeframe):
-            return f"{_ENTITY_ID_PREFIX}portfolio_return_{suffix}"
-    return f"{_ENTITY_ID_PREFIX}portfolio_{key}"
+            return _entity_id(PORTFOLIO_DEVICE_NAME, f"return_{suffix}")
+    return _entity_id(PORTFOLIO_DEVICE_NAME, key)
 
 
 # --- Wallet devices -------------------------------------------------------------

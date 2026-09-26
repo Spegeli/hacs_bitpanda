@@ -1,6 +1,7 @@
 """Tests for labels, entity IDs, unique_ids and legacy default IDs."""
 from custom_components.bitpanda.naming import (
     LEGACY_PORTFOLIO_OBJECT_ID,
+    PORTFOLIO_DEVICE_NAME,
     asset_display_label,
     is_default_entity_id,
     legacy_price_object_id,
@@ -106,6 +107,7 @@ def test_any_other_label_leaves_the_isin_out():
 def test_device_names_say_what_the_device_is_in_english():
     """Home Assistant lists an entity under its device's name, so the name
     tells a price sensor from a wallet's in every language."""
+    assert PORTFOLIO_DEVICE_NAME == "Portfolio"
     assert wallet_device_name(VISION) == "Vision (VSN) Wallet"
     assert price_device_name(VISION) == "Vision (VSN) Price Tracker"
     assert price_device_name(BNB) == "BNB Price Tracker"

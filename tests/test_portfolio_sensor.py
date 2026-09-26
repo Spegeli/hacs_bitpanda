@@ -1,6 +1,7 @@
 """Tests for the Portfolio service's sensor entities."""
 from homeassistant.components.sensor import SensorStateClass
 
+from custom_components.bitpanda.naming import PORTFOLIO_DEVICE_NAME
 from custom_components.bitpanda.portfolio_model import (
     EarnData,
     Holding,
@@ -56,7 +57,8 @@ def _portfolio(**holdings) -> _Coordinator:
 
 
 def test_devices_are_named_after_the_service_and_the_asset():
-    assert portfolio_device_info("eid")["name"] == "Portfolio"
+    """By naming.py, which builds every entity ID from these names."""
+    assert portfolio_device_info("eid")["name"] == PORTFOLIO_DEVICE_NAME == "Portfolio"
     assert portfolio_device_info("eid")["identifiers"] == {("bitpanda", "eid_portfolio")}
     wallet = wallet_device_info("eid", VSN)
     assert wallet["name"] == "Vision (VSN) Wallet"

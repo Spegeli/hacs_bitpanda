@@ -377,7 +377,7 @@
     },
     "entities_not_migrated": {
       "title": "Aktualizacja integracji Bitpanda: niezmigrowane encje",
-      "description": "Aktualizacja pozostawiła te encje bez zmian i nie są one już aktualizowane. Usuń je, gdy nie będą już potrzebne. Mogą być wśród nich portfele fiat: sensor „Gotówka” w Portfolio obejmuje teraz wszystkie salda fiat. Logi Home Assistanta podają powód dla każdej encji.\n\n{entities}"
+      "description": "Aktualizacja pozostawiła te encje bez zmian i nie są one już aktualizowane. Usuń je, gdy nie będą już potrzebne. Mogą być wśród nich portfele fiat: sensor „Gotówka” w Portfolio obejmuje teraz wszystkie salda fiat. Logi Home Assistant podają powód dla każdej encji.\n\n{entities}"
     },
     "currency_dropped": {
       "title": "Aktualizacja integracji Bitpanda: waluta Portfolio zmieniona na EUR",

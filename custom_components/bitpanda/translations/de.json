@@ -322,5 +322,11 @@
     "held_wallet_not_removable": {
       "message": "Du hältst {asset} noch, daher käme dieses Wallet sofort zurück. Es wird automatisch entfernt, sobald du es nicht mehr hältst."
     }
+  },
+  "services": {
+    "refresh": {
+      "name": "Aktualisieren",
+      "description": "Aktualisiert sofort alle Preis- und Wallet-Daten von Bitpanda."
+    }
   }
 }

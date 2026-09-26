@@ -6,10 +6,14 @@ self-imposed budget, so the cooldown follows it and never drops below 10 s.
 The clock is the module's own `monotonic` name, patched there alone.
 """
 from datetime import timedelta
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.helpers.service import async_get_all_descriptions
+from homeassistant.helpers.translation import async_get_translations
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+import yaml
 
 from custom_components.bitpanda import _async_register_refresh_service
 from custom_components.bitpanda.const import DOMAIN
@@ -98,3 +102,30 @@ async def test_first_refresh_is_accepted_right_after_boot(hass):
     with patch("custom_components.bitpanda.monotonic", _Clock(5.0)):
         await _call(hass)
     assert tickers.async_request_refresh.await_count == 1
+
+
+_SERVICES_YAML = Path(__file__).parent.parent / "custom_components" / "bitpanda" / "services.yaml"
+
+
+async def test_the_refresh_service_is_named_and_described_in_every_language(hass):
+    """Name and description are translations (`services.refresh`): the
+    frontend shows them in the user's language -- Home Assistant 2025.5 also
+    copies the English ones into its service descriptions, later versions
+    leave that to the frontend. services.yaml only declares the service."""
+    _register(hass, timedelta(seconds=60))
+    assert (await async_get_all_descriptions(hass))[DOMAIN]["refresh"]["fields"] == {}
+    name, description = (
+        f"component.{DOMAIN}.services.refresh.name",
+        f"component.{DOMAIN}.services.refresh.description",
+    )
+    english = await async_get_translations(hass, "en", "services", {DOMAIN})
+    assert (english[name], english[description]) == (
+        "Refresh",
+        "Manually trigger an immediate refresh of all Bitpanda price and wallet data.",
+    )
+    german = await async_get_translations(hass, "de", "services", {DOMAIN})
+    assert (german[name], german[description]) == (
+        "Aktualisieren",
+        "Aktualisiert sofort alle Preis- und Wallet-Daten von Bitpanda.",
+    )
+    assert yaml.safe_load(_SERVICES_YAML.read_text(encoding="utf-8")) == {"refresh": None}

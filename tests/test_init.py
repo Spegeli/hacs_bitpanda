@@ -384,6 +384,33 @@ async def test_a_sudden_empty_portfolio_changes_nothing_until_it_is_confirmed(
     assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet") is None
 
 
+async def test_a_figure_bitpanda_leaves_unreadable_is_unknown_not_unavailable(
+    hass, portfolio_api
+):
+    """The answer arrived, but an entry in it cannot be read: Total value and
+    Cash Plus -- which it might belong to -- show `unknown`, never a figure
+    that quietly leaves it out; Cash, which it cannot belong to, is shown.
+    An unreadable fiat balance makes Cash, and so Total value, unknown."""
+    readable = portfolio_api.return_value
+    portfolio_api.return_value = [
+        *readable,
+        {"asset_id": BTC["id"], "balance": {"value": "unreadable"}},
+    ]
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unknown"
+    assert hass.states.get("sensor.bitpanda_portfolio_cash_plus").state == "unknown"
+    assert _value(hass, "sensor.bitpanda_portfolio_cash") == 10.0
+
+    portfolio_api.return_value = [
+        readable[0], {"currency_id": _EUR_ID, "balance": {"value": "unreadable"}},
+    ]
+    await _next_refresh(hass)
+    assert hass.states.get("sensor.bitpanda_portfolio_cash").state == "unknown"
+    assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unknown"
+    assert _value(hass, "sensor.bitpanda_portfolio_cash_plus") == 0.0
+
+
 def _registered_wallet(hass, entry) -> str:
     """The VSN wallet of `entry` as a restart finds it: its device and its
     Wallet sensor in the registries, nothing loaded yet."""

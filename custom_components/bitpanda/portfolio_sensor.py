@@ -78,7 +78,15 @@ def wallet_device_info(entry_id: str, asset: dict) -> DeviceInfo:
 
 
 class _PortfolioFigure(CoordinatorEntity, SensorEntity):
-    """One figure of the whole account."""
+    """One figure of the whole account.
+
+    Unavailable only while the update failed -- an empty answer held back
+    until it is confirmed included (PortfolioCoordinator). When the answer
+    arrived but the figure cannot be told from it -- an entry that could not
+    be read, a holding not classified yet, a value Bitpanda did not send --
+    the sensor stays available and its state is unknown: never a figure that
+    quietly leaves something out.
+    """
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.MONETARY
@@ -100,10 +108,6 @@ class _PortfolioFigure(CoordinatorEntity, SensorEntity):
     def native_value(self) -> float | None:
         data = self.coordinator.data
         return None if data is None else self._figure(data)
-
-    @property
-    def available(self) -> bool:
-        return super().available and self.native_value is not None
 
 
 class PortfolioTotalSensor(_PortfolioFigure):
@@ -127,7 +131,8 @@ class PortfolioCashSensor(_PortfolioFigure):
 
 
 class PortfolioCashPlusSensor(_PortfolioFigure):
-    """Value of the Cash Plus holdings. Unknown while any holding is unnamed."""
+    """Value of the Cash Plus holdings. Unknown while any holding is
+    unclassified."""
 
     _key = "cash_plus"
     _attr_translation_key = "cash_plus"

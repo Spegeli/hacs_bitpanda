@@ -115,9 +115,9 @@ def test_cash_plus_attributes_are_empty_when_cash_plus_itself_is_unknown():
     assert sensor.extra_state_attributes == {}
 
 
-def test_cash_plus_is_unavailable_while_it_is_unknown():
-    """An unclassified holding makes Cash Plus unknown: the sensor goes
-    unavailable rather than show 0."""
+def test_cash_plus_is_unknown_while_a_holding_is_unclassified():
+    """An unclassified holding makes Cash Plus unknown: the fetch succeeded,
+    so the sensor stays available and shows `unknown` -- never 0."""
     unknown_id = "unresolved-asset-id"
     data = PortfolioData(
         holdings={
@@ -127,7 +127,7 @@ def test_cash_plus_is_unavailable_while_it_is_unknown():
     )
     sensor = PortfolioCashPlusSensor(_Coordinator(data), "eid", "EUR")
     assert sensor.native_value is None
-    assert sensor.available is False
+    assert sensor.available is True
 
 
 def test_cash_plus_attributes_are_empty_before_the_first_refresh():
@@ -135,21 +135,47 @@ def test_cash_plus_attributes_are_empty_before_the_first_refresh():
     assert sensor.extra_state_attributes == {}
 
 
-def test_cash_is_unavailable_when_a_fiat_entry_could_not_be_read():
+def test_cash_is_unknown_when_a_fiat_entry_could_not_be_read():
     """`PortfolioData.cash` is None, never 0, when a fiat balance failed to
-    parse -- the Cash sensor must go unavailable, not show a quietly low
-    total."""
+    parse -- the Cash sensor shows `unknown`, not a quietly low total."""
     coordinator = _Coordinator(PortfolioData(cash=None))
     sensor = PortfolioCashSensor(coordinator, "eid", "EUR")
     assert sensor.native_value is None
-    assert sensor.available is False
+    assert sensor.available is True
 
 
-def test_an_unknown_figure_makes_its_sensor_unavailable_not_zero():
+def test_an_unknown_figure_is_unknown_not_zero():
     data = _data(**{VSN["id"]: _vsn(value=None)})
     sensor = PortfolioTotalSensor(_Coordinator(data), "eid", "EUR")
     assert sensor.native_value is None
-    assert sensor.available is False
+    assert sensor.available is True
+
+
+def test_an_entry_that_could_not_be_read_makes_total_value_and_cash_plus_unknown():
+    """It might hold anything, Cash Plus included: neither figure is told."""
+    data = _data(**{VSN["id"]: _vsn()})
+    data.unparsed_assets = {"unreadable-asset-id"}
+    coordinator = _Coordinator(data)
+    for sensor_class in (PortfolioTotalSensor, PortfolioCashPlusSensor):
+        sensor = sensor_class(coordinator, "eid", "EUR")
+        assert (sensor.native_value, sensor.available) == (None, True), sensor_class
+    assert PortfolioCashSensor(coordinator, "eid", "EUR").native_value == 10.0
+
+
+def test_a_failed_update_makes_every_figure_unavailable():
+    """Unavailable only when the update failed -- such as an empty answer
+    held back until it is confirmed -- whatever the last data said."""
+    coordinator = _Coordinator(_data(**{VSN["id"]: _vsn()}), last_update_success=False)
+    for sensor_class in (PortfolioTotalSensor, PortfolioCashSensor, PortfolioCashPlusSensor):
+        assert sensor_class(coordinator, "eid", "EUR").available is False, sensor_class
+
+
+def test_before_any_answer_was_taken_as_the_truth_the_figures_are_unavailable():
+    """An empty first answer held back at setup: no data, a failed update."""
+    coordinator = _Coordinator(None, last_update_success=False)
+    for sensor_class in (PortfolioTotalSensor, PortfolioCashSensor, PortfolioCashPlusSensor):
+        sensor = sensor_class(coordinator, "eid", "EUR")
+        assert (sensor.native_value, sensor.available) == (None, False), sensor_class
 
 
 def test_return_sensors_read_their_timeframe():

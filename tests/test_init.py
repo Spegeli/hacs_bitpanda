@@ -24,6 +24,7 @@ from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.devices import find_entry_device
 from custom_components.bitpanda.ecb import EcbRates
+from custom_components.bitpanda.naming import PORTFOLIO_KEYS, portfolio_unique_id
 
 from tests.conftest import device_names_in_subentry, load_fixture, price_group, wallet_group
 
@@ -151,6 +152,20 @@ async def test_portfolio_setup_creates_its_devices_and_sensors(hass, portfolio_a
     )
     devices = {d.name for d in dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)}
     assert devices == {"Portfolio", "Vision (VSN) Wallet"}
+
+
+async def test_every_portfolio_figure_is_one_the_currency_purge_knows(hass, portfolio_api):
+    """The currency purge (purge.py) tells the Portfolio device's sensors
+    apart by naming.PORTFOLIO_KEYS: a figure added without its key there
+    would keep its old-currency history through a currency change."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    device = find_entry_device(hass, entry.entry_id, f"{entry.entry_id}_portfolio")
+    figures = {
+        reg_entry.unique_id
+        for reg_entry in er.async_entries_for_device(er.async_get(hass), device.id)
+    }
+    assert figures == {portfolio_unique_id(entry.entry_id, key) for key in PORTFOLIO_KEYS}
 
 
 _RUNTIME_SECRET = "totally-secret-runtime-key"

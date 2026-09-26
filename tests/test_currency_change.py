@@ -2,7 +2,8 @@
 
 Confirming the change deletes every Portfolio sensor with its history, then
 recreates them in the new currency under the same entity IDs -- with exactly
-one reload, and without the update listener Home Assistant warns about.
+one reload, and without the update listener Home Assistant warns about. What
+the version 1 migration left in place keeps its entity and its history.
 """
 from datetime import timedelta
 from unittest.mock import AsyncMock, patch
@@ -27,6 +28,9 @@ _CLIENT = "custom_components.bitpanda.api.BitpandaApiClient."
 _EUR_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
 _USD_ID = "b88b8879-efe3-11eb-b56f-0691764446a7"
 _WALLET = "sensor.bitpanda_vision_vsn_wallet"
+# A fiat wallet the version 1 migration left in place: Portfolio Cash covers
+# every fiat balance now.
+_LEFTOVER = "sensor.bitpanda_wallets_usd_wallet"
 
 VSN = next(a for a in load_fixture("assets-sample.json") if a["symbol"] == "VSN")
 
@@ -92,11 +96,17 @@ async def test_a_currency_change_recreates_the_sensors_without_the_old_history(
               "currency_id": _EUR_ID},
     )
     entry.add_to_hass(hass)
+    er.async_get(hass).async_get_or_create(
+        "sensor", DOMAIN, f"{entry.entry_id}_wallet_fiat_USD", config_entry=entry,
+        suggested_object_id=_LEFTOVER.split(".", 1)[1],
+    )
+    hass.states.async_set(_LEFTOVER, "5.0", {"unit_of_measurement": "USD"})
     assert await hass.config_entries.async_setup(entry.entry_id)
     await async_wait_recording_done(hass)
     entity_ids = _entity_ids(hass, entry)
-    assert _WALLET in entity_ids
+    assert {_WALLET, _LEFTOVER} <= set(entity_ids)
     assert await _history(hass, _WALLET) == [("50.0", "EUR")]
+    assert await _history(hass, _LEFTOVER) == [("5.0", "USD")]
     calls = portfolio_api.call_count
     [group] = entry.subentries.values()
 
@@ -121,4 +131,7 @@ async def test_a_currency_change_recreates_the_sensors_without_the_old_history(
     assert portfolio_api.call_args.kwargs == {"equivalent_currency_id": _USD_ID}
     # The EUR history is gone; the state the recreated sensor wrote is kept.
     assert await _history(hass, _WALLET) == [("50.0", "USD")]
+    # The leftover is not the Portfolio's own: the migration promised it
+    # stays until the user deletes it, and so does its history.
+    assert await _history(hass, _LEFTOVER) == [("5.0", "USD")]
     assert "update listener" not in caplog.text

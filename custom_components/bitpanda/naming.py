@@ -59,6 +59,17 @@ def return_key(timeframe: str) -> str:
     return f"return_{timeframe.lower()}"
 
 
+# The figures of the Portfolio device, by the key each of its sensors passes
+# to portfolio_unique_id and portfolio_entity_id: three values, then one
+# return per /portfolio-history timeframe.
+PORTFOLIO_KEYS: tuple[str, ...] = (
+    "total",
+    "cash",
+    "cash_plus",
+    *(return_key(timeframe) for timeframe in RETURN_SUFFIXES),
+)
+
+
 # --- Portfolio device ---------------------------------------------------------
 
 

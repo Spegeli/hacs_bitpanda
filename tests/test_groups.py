@@ -212,13 +212,15 @@ async def test_known_group_titles_are_read_from_every_shipped_language(hass):
     known = await async_known_group_titles(hass)
     assert known["crypto"] == {
         "Cryptocurrencies", "Kryptowährungen", "Cryptomonnaies", "Cryptovaluta",
-        "Criptovalute", "Criptomonedas",
+        "Criptovalute", "Criptomonedas", "Kryptowaluty",
     }
     assert known["metal"] == {
         "Precious metals", "Edelmetalle", "Métaux précieux", "Edelmetalen",
-        "Metalli preziosi", "Metales preciosos",
+        "Metalli preziosi", "Metales preciosos", "Metale szlachetne",
     }
-    assert known["other"] == {"Other", "Sonstige", "Autres", "Overige", "Altro", "Otros"}
+    assert known["other"] == {
+        "Other", "Sonstige", "Autres", "Overige", "Altro", "Otros", "Inne",
+    }
 
 
 async def test_a_group_titled_a_default_in_another_language_is_retitled(hass):

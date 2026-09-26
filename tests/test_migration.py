@@ -204,12 +204,17 @@ async def test_any_api_error_changes_nothing(hass, legacy_api, no_setup, caplog)
     assert "legacy-key" not in caplog.text
 
 
-async def test_a_rate_limit_changes_nothing(hass, legacy_api, no_setup):
+async def test_a_rate_limit_changes_nothing(hass, legacy_api, no_setup, caplog):
     currencies, _ = legacy_api
     currencies.side_effect = BitpandaRateLimitError("Rate limited on /currencies")
     entry = _v1_entry(hass)
     assert not await async_migrate_entry(hass, entry)
     assert entry.version == 1
+    assert (
+        "Cannot migrate the Bitpanda config entry: rate limited by the Bitpanda API. "
+        "Nothing has been changed; migration will be retried on the next restart."
+    ) in caplog.text
+    assert "legacy-key" not in caplog.text
 
 
 async def test_an_existing_portfolio_blocks_the_migration(hass, legacy_api, no_setup):
@@ -226,6 +231,19 @@ async def test_a_currency_no_longer_offered_falls_back_to_eur(hass, legacy_api, 
     assert await async_migrate_entry(hass, entry)
     assert entry.data["currency"] == "EUR"
     assert entry.data["currency_id"] == _EUR_ID
+
+
+async def test_a_listed_currency_the_integration_does_not_support_falls_back_to_eur(
+    hass, legacy_api, no_setup, notify
+):
+    """Being on /currencies is not enough: the Portfolio reports only in the
+    currencies it supports."""
+    currencies, _ = legacy_api
+    currencies.return_value = [*load_fixture("currencies.json"), {"symbol": "JPY", "id": "jpy"}]
+    entry = _v1_entry(hass, currency="JPY")
+    assert await async_migrate_entry(hass, entry)
+    assert (entry.data["currency"], entry.data["currency_id"]) == ("EUR", _EUR_ID)
+    assert "Bitpanda no longer offers JPY; the Portfolio now reports in EUR." in _message(notify)
 
 
 async def test_each_symbol_is_looked_up_once(hass, legacy_api, no_setup):
@@ -540,6 +558,27 @@ async def test_an_unresolvable_wallet_is_left_alone_and_listed(hass, legacy_api,
     assert f"`{gone}`: GONE no longer exists at Bitpanda" in _message(notify)
 
 
+async def test_a_legacy_wallet_whose_asset_already_has_a_wallet_is_left_and_listed(
+    hass, legacy_api, no_setup, notify
+):
+    """Its new unique_id is taken already -- by an entity an earlier run
+    re-keyed, say: the legacy wallet is left alone rather than collide."""
+    entry = _v1_entry(hass, wallets=["cryptocoin_BTC"])
+    eid = entry.entry_id
+    legacy = _legacy_entity(
+        hass, entry, f"{eid}_wallet_cryptocoin_BTC", "bitpanda_wallets_btc_wallet"
+    )
+    _legacy_entity(hass, entry, f"{eid}_wallet_{BTC_ID}", "bitpanda_bitcoin_btc_wallet")
+
+    assert await async_migrate_entry(hass, entry)
+
+    left = er.async_get(hass).async_get(legacy)
+    assert (left.unique_id, left.entity_id) == (
+        f"{eid}_wallet_cryptocoin_BTC", "sensor.bitpanda_wallets_btc_wallet",
+    )
+    assert f"`{legacy}`: another entity already stands for the same asset" in _message(notify)
+
+
 async def test_a_wallet_prefix_decides_between_legacy_types(hass, legacy_api, no_setup, notify):
     """A wallet id's category prefix, not just its bare symbol, drives resolution.
 
@@ -665,6 +704,64 @@ async def test_adoption_skips_an_entity_whose_asset_no_group_tracks(hass):
     )
     left = ent_reg.async_get(gold)
     assert (left.config_entry_id, left.unique_id) == (sid, f"{sid}_XAU_price_EUR")
+
+
+def _tracker_adopting(hass, source_id: str, *items: dict) -> MockConfigEntry:
+    """A Price Tracker tracking BTC, set to adopt `items` on its first setup."""
+    tracker = MockConfigEntry(
+        domain=DOMAIN,
+        version=3,
+        data={"entry_type": "price_tracker",
+              "legacy_adopt": {"source_entry_id": source_id, "entities": list(items)}},
+        options={"extra_currencies": []},
+        subentries_data=[price_group("crypto", *_by_symbol(symbol="BTC"))],
+    )
+    tracker.add_to_hass(hass)
+    return tracker
+
+
+async def test_adoption_skips_an_entity_that_no_longer_exists(hass):
+    """Deleted since the migration planned it: nothing to move, no error."""
+    source = MockConfigEntry(domain=DOMAIN, version=3, data={"entry_type": "portfolio"})
+    source.add_to_hass(hass)
+    sid = source.entry_id
+    tracker = _tracker_adopting(
+        hass, sid,
+        {"entity_id": "sensor.bitpanda_price_tracker_btc_eur", "unique_id": f"{sid}_BTC_price_EUR",
+         "asset_id": BTC_ID, "currency": "EUR", "new_entity_id": "sensor.bitpanda_bitcoin_btc_eur"},
+    )
+
+    async_adopt_legacy_prices(hass, tracker)
+
+    assert er.async_entries_for_config_entry(er.async_get(hass), tracker.entry_id) == []
+    assert "legacy_adopt" not in tracker.data
+
+
+async def test_adoption_leaves_a_legacy_entity_whose_price_is_already_taken(hass, caplog):
+    """Another entity already stands for the same asset and currency: the
+    legacy one stays where it is, and the log says so."""
+    source = MockConfigEntry(domain=DOMAIN, version=3, data={"entry_type": "portfolio"})
+    source.add_to_hass(hass)
+    sid = source.entry_id
+    legacy = _legacy_entity(hass, source, f"{sid}_BTC_price_EUR", "bitpanda_price_tracker_btc_eur")
+    tracker = _tracker_adopting(
+        hass, sid,
+        {"entity_id": legacy, "unique_id": f"{sid}_BTC_price_EUR", "asset_id": BTC_ID,
+         "currency": "EUR", "new_entity_id": "sensor.bitpanda_bitcoin_btc_eur"},
+    )
+    taken = er.async_get(hass).async_get_or_create(
+        "sensor", DOMAIN, f"{tracker.entry_id}_{BTC_ID}_price_EUR", config_entry=tracker,
+        suggested_object_id="bitpanda_bitcoin_btc_eur",
+    ).entity_id
+
+    async_adopt_legacy_prices(hass, tracker)
+
+    left = er.async_get(hass).async_get(legacy)
+    assert (left.config_entry_id, left.unique_id, left.entity_id) == (
+        sid, f"{sid}_BTC_price_EUR", "sensor.bitpanda_price_tracker_btc_eur",
+    )
+    assert er.async_get(hass).async_get(taken).unique_id == f"{tracker.entry_id}_{BTC_ID}_price_EUR"
+    assert f"Not adopting {legacy}" in caplog.text
 
 
 async def test_an_unresolvable_price_is_left_alone_and_listed(hass, legacy_api, no_setup, notify):
@@ -926,3 +1023,17 @@ async def test_an_empty_currency_list_aborts_the_migration(hass, legacy_api, no_
     assert entry.version == 1
     assert dict(entry.options) == {"tracked_assets": [], "tracked_wallets": []}
     assert _price_trackers(hass) == []
+
+
+async def test_a_currency_list_without_eur_aborts_the_migration(hass, legacy_api, no_setup):
+    """Not empty, yet without EUR -- the currency every fallback needs: as
+    broken as an empty answer, so nothing changes, not even for a user whose
+    own currency is on the list."""
+    currencies, _ = legacy_api
+    currencies.return_value = [
+        currency for currency in load_fixture("currencies.json") if currency["symbol"] != "EUR"
+    ]
+    entry = _v1_entry(hass, currency="USD")
+    assert not await async_migrate_entry(hass, entry)
+    assert entry.version == 1
+    assert dict(entry.data) == {"api_key": "legacy-key", "currency": "USD"}

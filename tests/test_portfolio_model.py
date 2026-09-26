@@ -240,6 +240,14 @@ def test_cash_plus_amounts_uses_the_whole_symbol_for_a_non_standard_product():
     assert data.cash_plus_amounts == {"bcpx": 10.0}
 
 
+def test_cash_plus_amounts_reads_only_ascii_letters_as_a_currency_code():
+    """`BCP` plus three ASCII letters names a currency; other letters do not,
+    and the whole symbol stands in."""
+    data = parse_portfolio([_asset_entry(BCPEUR, "10.0", "10.0", "10.00")])
+    data.assets = {BCPEUR: _cash_plus_asset(BCPEUR, "BCPÄÖÜ")}
+    assert data.cash_plus_amounts == {"bcpäöü": 10.0}
+
+
 def test_cash_plus_amounts_is_empty_without_cash_plus_holdings():
     data = parse_portfolio([_asset_entry(VSN, "1.0", "1.0", "5.00")])
     data.assets = {VSN: {"id": VSN, "group": "token"}}

@@ -27,14 +27,15 @@ def to_float(container: dict | None, key: str = "value") -> float | None:
 def _cash_plus_currency_code(symbol: str) -> str:
     """The currency code a Cash Plus product's amount is keyed by.
 
-    `BCP` plus exactly three letters names the product's currency
+    `BCP` plus exactly three ASCII letters names the product's currency
     (`BCPEUR` -> `eur`, 1:1 with EUR regardless of the Portfolio currency).
     Any other shape -- a future product Bitpanda names differently -- falls
     back to the whole symbol, lowercased, so it still gets some key rather
     than being dropped.
     """
-    if len(symbol) == 6 and symbol.startswith("BCP") and symbol[3:].isalpha():
-        return symbol[3:].lower()
+    code = symbol[3:]
+    if len(symbol) == 6 and symbol.startswith("BCP") and code.isascii() and code.isalpha():
+        return code.lower()
     return symbol.lower()
 
 

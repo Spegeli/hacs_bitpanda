@@ -7,9 +7,10 @@ next to the new one. What goes is what the Portfolio manages: its figures
 wallet devices -- and their history and statistics. Anything else of the
 entry -- a legacy entity the version 1 migration left in place, such as an
 unresolved wallet, another fiat wallet or a legacy price sensor, and the
-legacy device it sits on -- keeps its entity and its history: the migration
-notification promised it stays until the user deletes it. The wallet groups
-stay too; the recreated wallets go back into them.
+legacy device it sits on -- keeps its entity and its history: the
+`entities_not_migrated` repair issue tells the user it stays until they
+delete it. The wallet groups stay too; the recreated wallets go back into
+them.
 """
 from __future__ import annotations
 

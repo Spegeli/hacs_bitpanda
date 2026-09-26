@@ -140,7 +140,8 @@ def legacy_candidates(candidates: list[dict], prefix: str | None) -> list[dict]:
     Shared by `pick_legacy` (which wants exactly one survivor) and
     migration.py's own reason-building, which needs to tell "no survivor"
     apart from "more than one" so it can name the count in the reason it
-    lists -- with the entity left in place -- in the migration notification,
+    gives for an entity it leaves in place -- in the English log; the
+    entity itself is listed in the `entities_not_migrated` repair issue --
     instead of collapsing both into the same message.
     """
     if prefix == "fiat_":
@@ -170,8 +171,9 @@ def pick_legacy(candidates: list[dict], prefix: str | None) -> dict | None:
     Filters to legacy-supported types first — the legacy API never offered a
     stock or an ETF, so a stock can never be what a v1 entry meant. A wallet's
     category prefix then narrows further. More than one survivor returns None:
-    an entity left in place, and listed with the reason in the migration
-    notification, beats one silently tracking the wrong asset.
+    an entity left in place -- listed in the `entities_not_migrated` repair
+    issue, with the reason in the English log -- beats one silently tracking
+    the wrong asset.
     """
     survivors = legacy_candidates(candidates, prefix)
     return survivors[0] if len(survivors) == 1 else None

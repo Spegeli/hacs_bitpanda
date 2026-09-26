@@ -7,6 +7,7 @@ from custom_components.bitpanda.naming import (
     legacy_price_object_id,
     legacy_wallet_object_id,
     managed_asset_id,
+    managed_asset_key,
     portfolio_device_identifier,
     portfolio_entity_id,
     portfolio_unique_id,
@@ -107,6 +108,15 @@ def test_managed_asset_id_reads_only_uuid_suffixes_of_this_entry():
     assert managed_asset_id("eid", "eid_wallet_cryptocoin_BTC") is None
     assert managed_asset_id("eid", "eid_portfolio_total") is None
     assert managed_asset_id("eid", f"other_wallet_{asset_id}") is None
+
+
+def test_managed_asset_key_reads_the_kind_as_well():
+    asset_id = VISION["id"]
+    assert managed_asset_key("eid", wallet_unique_id("eid", asset_id)) == ("wallet", asset_id)
+    assert managed_asset_key("eid", staking_unique_id("eid", asset_id)) == ("staking", asset_id)
+    assert managed_asset_key("eid", total_unique_id("eid", asset_id)) == ("total", asset_id)
+    assert managed_asset_key("eid", "eid_wallet_cryptocoin_BTC") is None
+    assert managed_asset_key("eid", portfolio_unique_id("eid", "total")) is None
 
 
 def test_price_key_reads_asset_and_currency_of_this_entry():

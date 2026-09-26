@@ -119,19 +119,27 @@ def total_entity_id(asset: dict) -> str:
     return f"{_ENTITY_ID_PREFIX}{asset_slug(asset)}_wallet_total"
 
 
-def managed_asset_id(entry_id: str, unique_id: str) -> str | None:
-    """The asset a wallet, staking or total unique_id of this entry names.
+def managed_asset_key(entry_id: str, unique_id: str) -> tuple[str, str] | None:
+    """(kind, asset id) of a wallet, staking or total unique_id of this
+    entry, kind being "wallet", "staking" or "total".
 
     None for anything else -- including a legacy wallet the migration could
     not resolve, whose unique_id still ends in a legacy id such as
     "cryptocoin_BTC" rather than a UUID. The lifecycle manager only ever
-    removes what this returns an asset for.
+    removes what this names an asset for.
     """
     for kind in ("wallet", "staking", "total"):
         asset_id = _uuid_after(f"{entry_id}_{kind}_", unique_id)
         if asset_id is not None:
-            return asset_id
+            return kind, asset_id
     return None
+
+
+def managed_asset_id(entry_id: str, unique_id: str) -> str | None:
+    """The asset a wallet, staking or total unique_id of this entry names,
+    or None (see managed_asset_key)."""
+    key = managed_asset_key(entry_id, unique_id)
+    return None if key is None else key[1]
 
 
 def wallet_device_asset_id(entry_id: str, identifier: str) -> str | None:

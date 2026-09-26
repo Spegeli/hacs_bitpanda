@@ -33,7 +33,7 @@ from .groups import (
 )
 from .naming import (
     asset_display_label,
-    managed_asset_id,
+    managed_asset_key,
     portfolio_device_identifier,
     portfolio_entity_id,
     portfolio_unique_id,
@@ -374,7 +374,7 @@ class PortfolioEntityManager:
     A holding absent from WALLET_REMOVAL_MISSES consecutive successful
     refreshes loses its sensors and device -- a wallet migrated from version
     1 whose asset is no longer held included. Only unique_ids that name an
-    asset UUID are ever removed (naming.managed_asset_id): a legacy wallet
+    asset UUID are ever removed (naming.managed_asset_key): a legacy wallet
     the migration could not resolve is left for the user.
 
     Each wallet goes, with its Staking and Total sensors, into the wallet
@@ -415,9 +415,9 @@ class PortfolioEntityManager:
         out: dict[str, set[str]] = {}
         ent_reg = er.async_get(self._hass)
         for reg_entry in er.async_entries_for_config_entry(ent_reg, entry_id):
-            asset_id = managed_asset_id(entry_id, reg_entry.unique_id)
-            if asset_id is not None:
-                kind = reg_entry.unique_id[len(entry_id) + 1 :].split("_", 1)[0]
+            key = managed_asset_key(entry_id, reg_entry.unique_id)
+            if key is not None:
+                kind, asset_id = key
                 out.setdefault(asset_id, set()).add(kind)
         return out
 

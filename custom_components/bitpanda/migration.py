@@ -43,6 +43,7 @@ from .const import (
     DOMAIN,
     ENTRY_TYPE,
     ENTRY_TYPE_PORTFOLIO,
+    ENTRY_TYPE_PRICE_TRACKER,
     EUR_CURRENCY_ID,
     IMPORT_ASSETS,
     PORTFOLIO_TITLE,
@@ -291,7 +292,9 @@ def plan_price_adoption(
     """Which legacy price entities the Price Tracker adopts, and as what.
 
     Changes nothing: the Price Tracker entry does the moving on its first
-    setup, before it creates any entity (migration.async_adopt_legacy_prices).
+    setup, before it creates any entity (migration.async_adopt_legacy_prices),
+    and what it did is read back afterwards (adopted_prices). The renames
+    returned are the planned ones.
     """
     items: list[dict] = []
     renames: list[tuple[str, str]] = []
@@ -364,6 +367,52 @@ async def _async_create_price_tracker(
         result.get("reason"),
     )
     return "failed"
+
+
+def adopted_prices(
+    hass: HomeAssistant, items: list[dict], planned: list[tuple[str, str]]
+) -> tuple[list[tuple[str, str]], list[tuple[str, Message]]]:
+    """What the new Price Tracker made of the legacy price entities it was
+    handed, read back from the entity registry: the renames it made, and
+    every entity it left in place, with the reason.
+
+    Its first setup adopts them inside the import that created it, so by
+    now this reads the finished result. An adopted entity carries its legacy
+    unique_id as `previous_unique_id`; one that still carries the legacy
+    unique_id itself was left because another entity already stood for the
+    same price. Should that setup have stopped before adopting anything,
+    the adoption list is still in the Price Tracker's data, its next setup
+    adopts them, and `planned` stands.
+    """
+    tracker = next(
+        (
+            other
+            for other in hass.config_entries.async_entries(DOMAIN)
+            if other.unique_id == ENTRY_TYPE_PRICE_TRACKER
+        ),
+        None,
+    )
+    if tracker is None or CONF_LEGACY_ADOPT in tracker.data:
+        return planned, []
+    ent_reg = er.async_get(hass)
+    renames: list[tuple[str, str]] = []
+    skipped: list[tuple[str, Message]] = []
+    for item in items:
+        if ent_reg.async_get_entity_id("sensor", DOMAIN, item["unique_id"]) is not None:
+            skipped.append((item["entity_id"], Message("migration_duplicate")))
+            continue
+        entity_id = ent_reg.async_get_entity_id(
+            "sensor",
+            DOMAIN,
+            price_unique_id(tracker.entry_id, item["asset_id"], item["currency"]),
+        )
+        if entity_id is None or entity_id == item["entity_id"]:
+            continue
+        # Not a sensor the Price Tracker created afresh because the legacy
+        # entity was gone by the time it adopted.
+        if ent_reg.async_get(entity_id).previous_unique_id == item["unique_id"]:
+            renames.append((item["entity_id"], entity_id))
+    return renames, skipped
 
 
 def rewrite_portfolio_registry(
@@ -604,7 +653,10 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # entity registry itself saves later than config entries, and that
     # residual gap is an accepted risk, not one this code closes.
     renames, skipped = rewrite_portfolio_registry(hass, entry, plan)
-    if outcome == "exists":
+    if outcome == "created":
+        price_renames, not_adopted = adopted_prices(hass, items, price_renames)
+        price_skipped += not_adopted
+    elif outcome == "exists":
         price_renames = []
         price_skipped += [
             (item["entity_id"], Message("migration_price_tracker_exists")) for item in items

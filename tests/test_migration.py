@@ -646,6 +646,97 @@ async def test_legacy_price_sensors_move_to_the_price_tracker(hass, legacy_api, 
     )
 
 
+def _adoption_preceded_by(prepare):
+    """async_adopt_legacy_prices, with `prepare(hass, tracker)` run first:
+    something that happens between the migration's plan and the adoption
+    in the new Price Tracker's first setup."""
+    adopt = migration.async_adopt_legacy_prices
+
+    def _adopt(hass, tracker):
+        prepare(hass, tracker)
+        adopt(hass, tracker)
+
+    return patch(f"{_MIGRATION}.async_adopt_legacy_prices", _adopt)
+
+
+async def test_the_notification_reports_the_id_the_adoption_gave(
+    hass, legacy_api, price_api, notify
+):
+    """The migration plans the new IDs; the Price Tracker adopts the
+    entities later, in its own setup. Should the planned ID be taken by
+    then, the entity gets the next free one -- and the notification names
+    that one, not the plan."""
+    entry = _v1_entry(hass, assets=["BTC"])
+    legacy = _legacy_entity(
+        hass, entry, f"{entry.entry_id}_BTC_price_EUR", "bitpanda_price_tracker_btc_eur"
+    )
+
+    def _take_the_planned_id(hass, tracker):
+        er.async_get(hass).async_get_or_create(
+            "sensor", "other", "x", suggested_object_id="bitpanda_bitcoin_btc_eur"
+        )
+
+    with _adoption_preceded_by(_take_the_planned_id):
+        assert await async_migrate_entry(hass, entry)
+        await hass.async_block_till_done()
+
+    [tracker] = _price_trackers(hass)
+    adopted = er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_eur_2")
+    assert adopted.unique_id == f"{tracker.entry_id}_{BTC_ID}_price_EUR"
+    message = _message(notify)
+    assert f"- `{legacy}` → `sensor.bitpanda_bitcoin_btc_eur_2`" in message
+    assert f"- `{legacy}` → `sensor.bitpanda_bitcoin_btc_eur`\n" not in message
+
+
+async def test_the_notification_lists_a_price_entity_the_adoption_left(
+    hass, legacy_api, price_api, notify
+):
+    """Another entity already stands for the same price when the Price
+    Tracker adopts: the legacy entity stays where it is, and the
+    notification lists it as not migrated instead of renamed."""
+    entry = _v1_entry(hass, assets=["BTC"])
+    legacy = _legacy_entity(
+        hass, entry, f"{entry.entry_id}_BTC_price_EUR", "bitpanda_price_tracker_btc_eur"
+    )
+
+    def _take_the_price(hass, tracker):
+        er.async_get(hass).async_get_or_create(
+            "sensor", DOMAIN, f"{tracker.entry_id}_{BTC_ID}_price_EUR", config_entry=tracker,
+            suggested_object_id="bitpanda_btc_elsewhere",
+        )
+
+    with _adoption_preceded_by(_take_the_price):
+        assert await async_migrate_entry(hass, entry)
+        await hass.async_block_till_done()
+
+    left = er.async_get(hass).async_get(legacy)
+    assert (left.config_entry_id, left.unique_id) == (entry.entry_id, f"{entry.entry_id}_BTC_price_EUR")
+    message = _message(notify)
+    assert f"`{legacy}` →" not in message
+    assert f"- `{legacy}`: another entity already stands for the same asset" in message
+
+
+async def test_the_notification_claims_no_rename_for_an_entity_gone_before_adoption(
+    hass, legacy_api, price_api, notify
+):
+    """The Price Tracker then creates its sensor afresh under the planned
+    ID: nothing was renamed, and nothing is left to list."""
+    entry = _v1_entry(hass, assets=["BTC"])
+    legacy = _legacy_entity(
+        hass, entry, f"{entry.entry_id}_BTC_price_EUR", "bitpanda_price_tracker_btc_eur"
+    )
+
+    def _delete_it(hass, tracker):
+        er.async_get(hass).async_remove(legacy)
+
+    with _adoption_preceded_by(_delete_it):
+        assert await async_migrate_entry(hass, entry)
+        await hass.async_block_till_done()
+
+    assert er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_eur") is not None
+    assert f"`{legacy}`" not in _message(notify)
+
+
 async def test_each_legacy_price_sensor_moves_into_the_group_of_its_asset(
     hass, legacy_api, price_api, notify
 ):

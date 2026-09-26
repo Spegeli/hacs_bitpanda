@@ -36,6 +36,7 @@ from .groups import (
     price_group_data,
     tracked_assets,
 )
+from .language import entry_language
 from .naming import asset_display_label
 
 # The stock listing alone is ~103 requests; a day-old catalogue is current
@@ -203,11 +204,12 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
         is created, so Home Assistant's own confirmation would not fit.
         """
         category = asset_category(record)
-        titles = await async_group_titles(self.hass)
-        # Looked up after the last await, so no other dialog can start the
-        # same group before this step ends. Raises UnknownEntry if the Price
-        # Tracker was removed while the dialog was open, as Home Assistant
-        # itself does when a group is created then.
+        # A new group is titled in the entry's language. _get_entry() raises
+        # UnknownEntry if the Price Tracker was removed while the dialog was
+        # open, as Home Assistant itself does when a group is created then.
+        titles = await async_group_titles(self.hass, entry_language(self._get_entry()))
+        # Looked up again after the last await, so no other dialog can start
+        # the same group before this step ends.
         entry = self._get_entry()
         group = group_of_category(entry, SUBENTRY_TYPE_PRICE_GROUP, category)
         if group is None:

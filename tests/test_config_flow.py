@@ -310,7 +310,9 @@ async def test_import_creates_the_price_tracker_with_one_group_per_asset_type(ha
     }
 
 
-async def test_imported_groups_are_titled_in_the_language_home_assistant_runs_in(hass):
+async def test_imported_groups_are_english_whatever_language_home_assistant_runs_in(hass):
+    """The imported Price Tracker has no language option yet: English, the
+    default (language.py)."""
     hass.config.language = "de"
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
@@ -318,7 +320,8 @@ async def test_imported_groups_are_titled_in_the_language_home_assistant_runs_in
         data={"assets": [_asset("BTC"), _asset("BCI5")]},
     )
     titles = {s.unique_id: s.title for s in result["result"].subentries.values()}
-    assert titles == {"crypto": "Kryptowährungen", "index": "Krypto-Indizes"}
+    assert titles == {"crypto": "Cryptocurrencies", "index": "Crypto indices"}
+    assert "language" not in result["result"].options
 
 
 @pytest.mark.parametrize("extra", [{}, {"legacy_adopt": {}}], ids=["absent", "empty"])

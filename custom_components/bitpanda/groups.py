@@ -3,12 +3,14 @@
 Home Assistant shows every config subentry of an entry as a group on the
 integration page, with the subentry's devices inside. A group stands for one
 asset category (assets.asset_category) and carries it as its unique_id. Its
-title is set once, in Home Assistant's language, when the group is created.
-At every later setup, a group still titled one of this integration's own
-default titles for its category -- in any language it ships -- but not the
-one for the current language, is retitled to the current language
-(async_retitle_groups_to_current_language). A title the user chose is never
-touched; newer Home Assistant versions also let the user rename a group.
+title is set when the group is created, in the entry's own language
+(language.py: English unless chosen otherwise under Configure) -- never in
+Home Assistant's. At every setup, a group still titled one of this
+integration's own default titles for its category -- in any language it
+ships -- but not the one for the entry's language, is retitled to it
+(async_retitle_groups); changing the language under Configure reloads the
+entry, which retitles its groups. A title the user chose is never touched;
+newer Home Assistant versions also let the user rename a group.
 
 The Price Tracker keeps its tracked assets in its groups (type price_group):
 each group's data holds the slim records of its assets by asset id.
@@ -41,15 +43,14 @@ from .language import async_shipped_languages
 _TITLE_KEY = f"component.{DOMAIN}.selector.asset_group.options."
 
 
-async def async_group_titles(hass: HomeAssistant) -> dict[str, str]:
-    """Category -> group title, in the language Home Assistant runs in.
+async def async_group_titles(hass: HomeAssistant, language: str) -> dict[str, str]:
+    """Category -> group title in `language`, an entry's language
+    (language.entry_language).
 
     Read from the `selector.asset_group` translations, English where the
     language has none; a category without any is titled with its own key.
     """
-    translations = await async_get_translations(
-        hass, hass.config.language, "selector", {DOMAIN}
-    )
+    translations = await async_get_translations(hass, language, "selector", {DOMAIN})
     return {
         category: translations.get(f"{_TITLE_KEY}{category}", category)
         for category in (*ASSET_CATEGORY_FILTERS, CATEGORY_OTHER)
@@ -74,15 +75,15 @@ async def async_known_group_titles(hass: HomeAssistant) -> dict[str, set[str]]:
     return known
 
 
-async def async_retitle_groups_to_current_language(
-    hass: HomeAssistant, entry: ConfigEntry, subentry_type: str, current: dict[str, str]
+async def async_retitle_groups(
+    hass: HomeAssistant, entry: ConfigEntry, subentry_type: str, titles: dict[str, str]
 ) -> None:
     """Retitle every `subentry_type` group of `entry` that is still titled one
     of this integration's own default group titles for its category -- in any
-    language it ships -- to its title in `current`, the titles for Home
-    Assistant's current language (async_group_titles), which the caller
-    reads once and reuses. A title the user chose, one that is not a shipped
-    default for the group's category, is never touched.
+    language it ships -- to its title in `titles`, the titles for the entry's
+    language (async_group_titles), which the caller reads once and reuses. A
+    title the user chose, one that is not a shipped default for the group's
+    category, is never touched.
 
     Call this once at every setup of the Price Tracker and the Portfolio,
     before the entry's update listener is registered: the Price Tracker
@@ -93,11 +94,11 @@ async def async_retitle_groups_to_current_language(
     Accepted edge case: a user who renamed a group to exactly a shipped
     default title of the same category, in another language, ends up
     retitled too -- from the group's own data there is no way to tell that
-    apart from a default title that simply predates a later language change.
+    apart from a default title that simply predates a change of language.
     """
     known = await async_known_group_titles(hass)
     for group in groups_of_type(entry, subentry_type):
-        target = current.get(group.unique_id)
+        target = titles.get(group.unique_id)
         if target is None or group.title == target:
             continue
         if group.title in known.get(group.unique_id, set()):

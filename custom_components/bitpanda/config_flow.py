@@ -285,8 +285,9 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_import(self, import_data: dict[str, Any]) -> ConfigFlowResult:
         """The Price Tracker of a migrated version 1 entry (see migration.py),
-        its assets in one group per asset type."""
-        titles = await async_group_titles(self.hass)
+        its assets in one group per asset type -- titled in English: the new
+        entry has no language option yet (language.entry_language)."""
+        titles = await async_group_titles(self.hass, DEFAULT_LANGUAGE)
         await self.async_set_unique_id(ENTRY_TYPE_PRICE_TRACKER)
         self._abort_if_unique_id_configured()
         data: dict[str, Any] = {ENTRY_TYPE: ENTRY_TYPE_PRICE_TRACKER}

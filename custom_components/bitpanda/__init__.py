@@ -34,10 +34,11 @@ from .devices import device_identifiers
 from .groups import (
     async_group_titles,
     async_remove_asset_from_group,
-    async_retitle_groups_to_current_language,
+    async_retitle_groups,
     groups_of_type,
     tracked_assets,
 )
+from .language import entry_language
 from .naming import (
     asset_display_label,
     portfolio_device_identifier,
@@ -70,12 +71,14 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up one of the two services."""
     is_price_tracker = entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER
-    group_titles = await async_group_titles(hass)
+    # In the entry's own language (language.py), which changing under
+    # Configure reloads the entry to apply.
+    group_titles = await async_group_titles(hass, entry_language(entry))
     # Before anything else, and before the update listener below: the Price
     # Tracker's listener reloads on any change to the entry, subentries
     # included, so retitling after it existed would reload the entry this
     # same call is setting up.
-    await async_retitle_groups_to_current_language(
+    await async_retitle_groups(
         hass,
         entry,
         SUBENTRY_TYPE_PRICE_GROUP if is_price_tracker else SUBENTRY_TYPE_WALLET_GROUP,

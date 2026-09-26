@@ -33,13 +33,13 @@ def _metals() -> list[dict]:
 GOLD, SILVER = _fixture("XAU", "commodity"), _fixture("XAG")
 
 
-def _entry(hass, *groups: ConfigSubentryData) -> MockConfigEntry:
+def _entry(hass, *groups: ConfigSubentryData, **options) -> MockConfigEntry:
     entry = MockConfigEntry(
         domain=DOMAIN,
         version=3,
         unique_id="price_tracker",
         data={"entry_type": "price_tracker"},
-        options={"extra_currencies": []},
+        options={"extra_currencies": [], **options},
         subentries_data=list(groups),
     )
     entry.add_to_hass(hass)
@@ -209,12 +209,21 @@ async def test_the_picked_label_is_submitted_and_resolves_to_the_asset(hass):
     }
 
 
-async def test_a_new_group_is_titled_in_the_language_home_assistant_runs_in(hass):
+async def test_a_new_group_is_titled_in_the_entrys_language(hass):
+    entry = _entry(hass, language="de")
+    await _pick_metal(hass, entry, SILVER)
+    [group] = entry.subentries.values()
+    assert group.title == "Edelmetalle"
+
+
+async def test_a_new_group_is_english_by_default_whatever_language_home_assistant_runs_in(
+    hass,
+):
     hass.config.language = "de"
     entry = _entry(hass)
     await _pick_metal(hass, entry, SILVER)
     [group] = entry.subentries.values()
-    assert group.title == "Edelmetalle"
+    assert group.title == "Precious metals"
 
 
 async def test_an_asset_joins_the_group_of_its_type(hass):

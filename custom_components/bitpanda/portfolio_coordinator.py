@@ -352,8 +352,8 @@ class PortfolioRuntime:
     history: HistoryCoordinator
     earn: EarnCoordinator
     rewards: RewardsCoordinator
-    # Category -> wallet group title, in the language Home Assistant ran in
-    # at setup (groups.async_group_titles). The wallet manager reconciles
+    # Category -> wallet group title, in the entry's language at setup
+    # (groups.async_group_titles). The wallet manager reconciles
     # synchronously and titles the groups it creates from these.
     group_titles: dict[str, str]
     # entry.data and entry.options as they were at setup: the update listener

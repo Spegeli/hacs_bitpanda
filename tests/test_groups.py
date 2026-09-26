@@ -13,7 +13,7 @@ from custom_components.bitpanda.groups import (
     async_group_titles,
     async_known_group_titles,
     async_remove_asset_from_group,
-    async_retitle_groups_to_current_language,
+    async_retitle_groups,
     entities_by_group,
     group_of_category,
     groups_of_type,
@@ -51,18 +51,20 @@ def _entry(hass, *groups: ConfigSubentryData) -> MockConfigEntry:
 # --- Titles --------------------------------------------------------------------
 
 
-async def test_group_titles_are_in_the_language_home_assistant_runs_in(hass):
-    assert await async_group_titles(hass) == {
-        "crypto": "Cryptocurrencies",
-        "stock": "Stocks",
-        "etf": "ETFs",
-        "etc": "ETCs",
-        "index": "Crypto indices",
-        "metal": "Precious metals",
-        "other": "Other",
-    }
-    hass.config.language = "de"
-    assert await async_group_titles(hass) == {
+_ENGLISH_TITLES = {
+    "crypto": "Cryptocurrencies",
+    "stock": "Stocks",
+    "etf": "ETFs",
+    "etc": "ETCs",
+    "index": "Crypto indices",
+    "metal": "Precious metals",
+    "other": "Other",
+}
+
+
+async def test_group_titles_are_in_the_language_asked_for(hass):
+    assert await async_group_titles(hass, "en") == _ENGLISH_TITLES
+    assert await async_group_titles(hass, "de") == {
         "crypto": "Kryptowährungen",
         "stock": "Aktien",
         "etf": "ETFs",
@@ -73,13 +75,20 @@ async def test_group_titles_are_in_the_language_home_assistant_runs_in(hass):
     }
 
 
+async def test_home_assistants_language_plays_no_part_in_group_titles(hass):
+    """Titles follow an entry's own language setting (language.py), never
+    the system language."""
+    hass.config.language = "de"
+    assert await async_group_titles(hass, "en") == _ENGLISH_TITLES
+
+
 async def test_a_category_without_a_translation_is_titled_with_its_key(hass):
     translations = AsyncMock(
         return_value={"component.bitpanda.selector.asset_group.options.crypto": "Krypto"}
     )
     with patch(_TRANSLATIONS, translations):
-        titles = await async_group_titles(hass)
-    translations.assert_awaited_once_with(hass, "en", "selector", {"bitpanda"})
+        titles = await async_group_titles(hass, "fr")
+    translations.assert_awaited_once_with(hass, "fr", "selector", {"bitpanda"})
     assert titles["crypto"] == "Krypto"
     assert titles["metal"] == "metal"
     assert titles["other"] == "other"
@@ -189,7 +198,7 @@ async def test_an_asset_leaves_its_group_and_the_last_one_takes_the_group_along(
 async def test_a_wallet_group_is_created_once_and_holds_just_its_category(hass):
     entry = MockConfigEntry(domain=DOMAIN, version=3, data={"entry_type": "portfolio"})
     entry.add_to_hass(hass)
-    titles = await async_group_titles(hass)
+    titles = await async_group_titles(hass, "en")
 
     group = async_get_or_create_wallet_group(hass, entry, "metal", titles)
 
@@ -203,14 +212,14 @@ async def test_a_wallet_group_is_created_once_and_holds_just_its_category(hass):
     assert list(entry.subentries) == [group.subentry_id]
 
 
-# --- Retitling to Home Assistant's current language -------------------------------
+# --- Retitling to an entry's language ------------------------------------------------
 
 
-async def _retitle(hass, entry) -> None:
-    """Retitle the Price Tracker's groups as setup does: to the titles of the
-    language Home Assistant runs in now."""
-    await async_retitle_groups_to_current_language(
-        hass, entry, "price_group", await async_group_titles(hass)
+async def _retitle(hass, entry, language: str) -> None:
+    """Retitle the Price Tracker's groups as setup does: to the titles of
+    the entry's language."""
+    await async_retitle_groups(
+        hass, entry, "price_group", await async_group_titles(hass, language)
     )
 
 
@@ -232,16 +241,31 @@ async def test_known_group_titles_are_read_from_every_shipped_language(hass):
 
 
 async def test_a_group_titled_a_default_in_another_language_is_retitled(hass):
-    hass.config.language = "de"
     entry = _entry(hass, price_group("crypto", BTC, title="Cryptocurrencies"))
 
-    await _retitle(hass, entry)
+    await _retitle(hass, entry, "de")
 
     assert group_of_category(entry, "price_group", "crypto").title == "Kryptowährungen"
 
 
-async def test_a_group_already_titled_for_the_current_language_is_left_alone(hass):
+async def test_a_german_default_title_is_retitled_to_english(hass):
+    """The way back, and the upgrade case: groups titled in German before the
+    language became a setting of its own become English -- the default --
+    whatever language Home Assistant runs in."""
     hass.config.language = "de"
+    entry = _entry(
+        hass,
+        price_group("crypto", BTC, title="Kryptowährungen"),
+        price_group("metal", GOLD, title="Meine Metalle"),
+    )
+
+    await _retitle(hass, entry, "en")
+
+    assert group_of_category(entry, "price_group", "crypto").title == "Cryptocurrencies"
+    assert group_of_category(entry, "price_group", "metal").title == "Meine Metalle"
+
+
+async def test_a_group_already_titled_in_the_entrys_language_is_left_alone(hass):
     entry = _entry(hass, price_group("crypto", BTC, title="Kryptowährungen"))
     group_before = group_of_category(entry, "price_group", "crypto")
 
@@ -249,7 +273,7 @@ async def test_a_group_already_titled_for_the_current_language_is_left_alone(has
         hass.config_entries, "async_update_subentry",
         wraps=hass.config_entries.async_update_subentry,
     ) as spy:
-        await _retitle(hass, entry)
+        await _retitle(hass, entry, "de")
 
     spy.assert_not_called()
     assert group_of_category(entry, "price_group", "crypto") is group_before
@@ -259,10 +283,9 @@ async def test_a_user_renamed_group_is_left_alone(hass):
     """A title the user chose, "Meine Coins", is not a shipped default of any
     language, so it is never mistaken for one, whatever category it sits in.
     """
-    hass.config.language = "de"
     entry = _entry(hass, price_group("crypto", BTC, title="Meine Coins"))
 
-    await _retitle(hass, entry)
+    await _retitle(hass, entry, "de")
 
     assert group_of_category(entry, "price_group", "crypto").title == "Meine Coins"
 
@@ -274,9 +297,8 @@ async def test_retitling_ignores_groups_of_another_subentry_type(hass):
         title="Cryptocurrencies", unique_id="crypto",
     )
     entry = _entry(hass, price_group("crypto", BTC, title="Cryptocurrencies"), wallets)
-    hass.config.language = "de"
 
-    await _retitle(hass, entry)
+    await _retitle(hass, entry, "de")
 
     assert group_of_category(entry, "wallet_group", "crypto").title == "Cryptocurrencies"
     assert group_of_category(entry, "price_group", "crypto").title == "Kryptowährungen"

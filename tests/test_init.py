@@ -78,23 +78,32 @@ def price_api():
         yield ticker, ecb
 
 
+def _language(language: str | None) -> dict:
+    """The entry option of `language`; none at all -- English -- for None."""
+    return {} if language is None else {"language": language}
+
+
 def _portfolio_entry(
-    hass, *groups: ConfigSubentryData, api_key: str = "key"
+    hass, *groups: ConfigSubentryData, api_key: str = "key", language: str | None = None
 ) -> MockConfigEntry:
     entry = MockConfigEntry(
         domain=DOMAIN, version=3, unique_id="portfolio", title="Bitpanda Portfolio",
         data={"entry_type": "portfolio", "api_key": api_key, "currency": "EUR",
               "currency_id": _EUR_ID},
+        options=_language(language),
         subentries_data=list(groups),
     )
     entry.add_to_hass(hass)
     return entry
 
 
-def _price_entry(hass, extra, *groups: ConfigSubentryData) -> MockConfigEntry:
+def _price_entry(
+    hass, extra, *groups: ConfigSubentryData, language: str | None = None
+) -> MockConfigEntry:
     entry = MockConfigEntry(
         domain=DOMAIN, version=3, unique_id="price_tracker", title="Bitpanda Price Tracker",
-        data={"entry_type": "price_tracker"}, options={"extra_currencies": extra},
+        data={"entry_type": "price_tracker"},
+        options={"extra_currencies": extra, **_language(language)},
         subentries_data=list(groups),
     )
     entry.add_to_hass(hass)
@@ -188,8 +197,8 @@ def _group_devices(hass, entry, group: ConfigSubentry | None) -> set[str]:
 async def test_the_portfolio_groups_its_wallets_and_keeps_its_own_device_outside(
     hass, portfolio_api
 ):
-    hass.config.language = "de"
-    entry = _portfolio_entry(hass)
+    """The group the wallet manager creates is titled in the entry's language."""
+    entry = _portfolio_entry(hass, language="de")
     await _setup(hass, entry)
     [group] = entry.subentries.values()
     assert (group.subentry_type, group.unique_id, group.title) == (
@@ -741,18 +750,21 @@ async def test_the_refresh_service_lives_while_any_entry_is_loaded(hass, portfol
     assert not hass.services.has_service(DOMAIN, "refresh")
 
 
-# --- Groups follow Home Assistant's language at setup ------------------------------
+# --- Groups follow the entry's language at setup ------------------------------------
+#
+# Each entry's own language setting (Configure, language.py), English by
+# default; Home Assistant's system language plays no part.
 
 
-async def test_a_price_tracker_group_is_retitled_to_the_new_language_at_setup(
+async def test_a_price_tracker_group_is_retitled_to_the_entrys_language_at_setup(
     hass, price_api
 ):
     ticker, _ = price_api
-    hass.config.language = "de"
     entry = _price_entry(
         hass, [],
         price_group("crypto", BTC, title="Cryptocurrencies"),
         price_group("metal", GOLD, title="Meine Coins"),
+        language="de",
     )
     await _setup(hass, entry)
     assert _group(entry, "crypto").title == "Kryptowährungen"
@@ -762,12 +774,34 @@ async def test_a_price_tracker_group_is_retitled_to_the_new_language_at_setup(
     assert ticker.call_count == 2
 
 
-async def test_a_price_tracker_group_already_in_the_current_language_is_untouched(
+async def test_groups_are_english_by_default_whatever_language_home_assistant_runs_in(
+    hass, price_api, portfolio_api
+):
+    """Groups titled in the system language before the language became a
+    setting of its own become English on the first start with it -- unless
+    the entry's language says otherwise; the user's own titles stay."""
+    hass.config.language = "de"
+    tracker = _price_entry(
+        hass, [],
+        price_group("crypto", BTC, title="Kryptowährungen"),
+        price_group("metal", GOLD, title="Meine Metalle"),
+    )
+    portfolio = _portfolio_entry(hass, wallet_group("crypto", title="Kryptowährungen"))
+    # The first setup of the domain sets up both entries.
+    await _setup(hass, tracker)
+    assert portfolio.state is ConfigEntryState.LOADED
+    assert _group(tracker, "crypto").title == "Cryptocurrencies"
+    assert _group(tracker, "metal").title == "Meine Metalle"
+    assert _group(portfolio, "crypto").title == "Cryptocurrencies"
+
+
+async def test_a_price_tracker_group_already_in_the_entrys_language_is_untouched(
     hass, price_api
 ):
     ticker, _ = price_api
-    hass.config.language = "de"
-    entry = _price_entry(hass, [], price_group("crypto", BTC, title="Kryptowährungen"))
+    entry = _price_entry(
+        hass, [], price_group("crypto", BTC, title="Kryptowährungen"), language="de"
+    )
     group_before = _group(entry, "crypto")
 
     with patch.object(
@@ -782,21 +816,23 @@ async def test_a_price_tracker_group_already_in_the_current_language_is_untouche
     assert ticker.call_count == 1
 
 
-async def test_a_portfolio_wallet_group_is_retitled_to_the_new_language_at_setup(
+async def test_a_portfolio_wallet_group_is_retitled_to_the_entrys_language_at_setup(
     hass, portfolio_api
 ):
-    hass.config.language = "de"
-    entry = _portfolio_entry(hass, wallet_group("crypto", title="Cryptocurrencies"))
+    entry = _portfolio_entry(
+        hass, wallet_group("crypto", title="Cryptocurrencies"), language="de"
+    )
     await _setup(hass, entry)
     assert _group(entry, "crypto").title == "Kryptowährungen"
     assert portfolio_api.call_count == 1
 
 
-async def test_a_portfolio_wallet_group_already_in_the_current_language_is_untouched(
+async def test_a_portfolio_wallet_group_already_in_the_entrys_language_is_untouched(
     hass, portfolio_api
 ):
-    hass.config.language = "de"
-    entry = _portfolio_entry(hass, wallet_group("crypto", title="Kryptowährungen"))
+    entry = _portfolio_entry(
+        hass, wallet_group("crypto", title="Kryptowährungen"), language="de"
+    )
     group_before = _group(entry, "crypto")
 
     with patch.object(
@@ -811,34 +847,57 @@ async def test_a_portfolio_wallet_group_already_in_the_current_language_is_untou
     assert portfolio_api.call_count == 1
 
 
-async def test_a_price_tracker_group_is_retitled_during_a_reload_after_a_runtime_language_switch(
-    hass, price_api
-):
-    """Not just at the first setup (the test above): the same guarantee --
-    retitling before the update listener is registered, so no extra reload
-    follows -- has to hold when the retitle happens inside a later reload,
-    triggered after the system language changed at runtime with no restart."""
+async def _configure(hass, entry, user_input: dict) -> None:
+    """Save `user_input` through the entry's Configure dialog."""
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input)
+    assert result["type"] == "create_entry"
+    await hass.async_block_till_done()
+
+
+async def test_switching_the_price_trackers_language_retitles_its_groups(hass, price_api):
+    """From German to English under Configure: saving reloads the entry, and
+    the reload's setup retitles the German default titles -- before its
+    update listener exists again, so the retitle adds no second reload. The
+    system language, German here too, plays no part."""
     ticker, _ = price_api
+    hass.config.language = "de"
     entry = _price_entry(
         hass, [],
         price_group("crypto", BTC, title="Cryptocurrencies"),
-        price_group("metal", GOLD, title="Precious metals"),
+        price_group("metal", GOLD, title="Meine Metalle"),
+        language="de",
     )
     await _setup(hass, entry)
-    assert _group(entry, "crypto").title == "Cryptocurrencies"
+    assert _group(entry, "crypto").title == "Kryptowährungen"
     calls = ticker.call_count
 
-    hass.config.language = "de"
-    await hass.config_entries.async_reload(entry.entry_id)
-    await hass.async_block_till_done()
+    await _configure(hass, entry, {"extra_currencies": [], "language": "en"})
 
     assert entry.state is ConfigEntryState.LOADED
-    assert _group(entry, "crypto").title == "Kryptowährungen"
-    assert _group(entry, "metal").title == "Edelmetalle"
-    # One more round of first-refresh calls (BTC, GOLD): the reload's own
-    # setup retitles before its update listener exists again, so the retitle
-    # itself does not trigger a second reload on top of this one.
+    assert entry.options["language"] == "en"
+    assert _group(entry, "crypto").title == "Cryptocurrencies"
+    assert _group(entry, "metal").title == "Meine Metalle"
+    # One reload: one more round of first-refresh calls (BTC, GOLD).
     assert ticker.call_count == calls + 2
+
+
+async def test_switching_the_portfolios_language_retitles_its_wallet_groups(
+    hass, portfolio_api
+):
+    """The group the wallet manager created in German becomes English with
+    the one reload that saving the option causes."""
+    entry = _portfolio_entry(hass, language="de")
+    await _setup(hass, entry)
+    assert _group(entry, "crypto").title == "Kryptowährungen"
+    calls = portfolio_api.call_count
+
+    await _configure(hass, entry, {"language": "en"})
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert dict(entry.options) == {"language": "en"}
+    assert _group(entry, "crypto").title == "Cryptocurrencies"
+    assert portfolio_api.call_count == calls + 1
 
 
 # --- Deleting a device from its device page ------------------------------------------

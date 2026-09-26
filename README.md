@@ -58,9 +58,14 @@ The integration offers two services. Set up either or both — each one once.
 Cash Plus products are cash equivalents — one unit is one unit of their currency — so the Price Tracker leaves them out.
 
 ### Languages
-- English, German, French, Dutch, Italian, Spanish and Polish. Dialogs, sensor and attribute names, group titles, error messages and the upgrade notification appear in the language Home Assistant runs in; any other language gets English. Entity IDs, device names (such as **Vision (VSN) Wallet**) and log messages stay English
-- The groups of both services — the Portfolio's wallet groups and the Price Tracker's asset groups — are titled in that language when they are created, and follow Home Assistant's system language at every later start, unless you renamed the group yourself. Newer Home Assistant versions let you rename a group with **⋮ → Rename**
+- English, German, French, Dutch, Italian, Spanish and Polish; any other language gets English. Entity IDs, device names (such as **Vision (VSN) Wallet**) and log messages stay English
 - Native speakers: corrections are welcome as an [issue](https://github.com/Spegeli/hacs_bitpanda/issues) or a pull request (see [CONTRIBUTING](CONTRIBUTING.md#translations))
+
+#### Two language settings
+Home Assistant has two, and you may need to change both:
+- **Profile language** (your user profile → **Language**): per user, in the browser, at once — dialogs and forms, attribute names, the group subtitles ("Wallet group", "Price tracker group") and the reason shown while setup fails or is retried
+- **System language** (**Settings → System → General → Language**): shared by all users — sensor names and the titles of both services' groups (e.g. "Kryptowährungen" → "Cryptocurrencies"), from the next start of Home Assistant; a group you renamed yourself keeps its name (newer versions offer **⋮ → Rename**). Also the integration's own messages: the refusal to delete a device and the upgrade notification
+- Tip: to see everything in one language, set both and restart Home Assistant
 
 ---
 

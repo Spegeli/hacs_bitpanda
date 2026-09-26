@@ -266,6 +266,9 @@
           "asset_name": {
             "name": "Activo: nombre"
           },
+          "asset_isin": {
+            "name": "Activo: ISIN"
+          },
           "units": {
             "name": "Activo: cantidad"
           },
@@ -291,6 +294,9 @@
           },
           "asset_name": {
             "name": "Activo: nombre"
+          },
+          "asset_isin": {
+            "name": "Activo: ISIN"
           },
           "units": {
             "name": "Activo: cantidad"
@@ -324,6 +330,9 @@
           "asset_name": {
             "name": "Activo: nombre"
           },
+          "asset_isin": {
+            "name": "Activo: ISIN"
+          },
           "units": {
             "name": "Activo: cantidad"
           },
@@ -348,6 +357,9 @@
           },
           "asset_name": {
             "name": "Activo: nombre"
+          },
+          "asset_isin": {
+            "name": "Activo: ISIN"
           },
           "trading_pair": {
             "name": "Activo: par de negociación"

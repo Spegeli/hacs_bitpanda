@@ -61,6 +61,19 @@ def test_eur_is_the_ticker_price():
     }
 
 
+def test_a_stock_etf_or_etc_shows_its_isin():
+    """Beside `asset` and `asset_name`; any other asset has no such key at
+    all (see test_eur_is_the_ticker_price)."""
+    etf = {"id": "1f0ed6c9-ee10-68c6-8a0e-55a29b7757fe", "symbol": "LYY1",
+           "name": "Amundi PEA S&P 500 UCITS ETF", "isin": "FR0011871136",
+           "type": "equity_security", "group": "equity_etf"}
+    sensor = PriceSensor(_Coordinator({etf["id"]: 540.5}), None, "eid", etf, "EUR")
+    assert sensor.extra_state_attributes == {
+        "asset": "LYY1", "asset_name": "Amundi PEA S&P 500 UCITS ETF",
+        "asset_isin": "FR0011871136", "trading_pair": "LYY1/EUR",
+    }
+
+
 def test_other_currencies_are_converted_with_the_ecb_rate():
     sensor = _sensor("USD")
     assert sensor.native_value == round(73188.51648958 * 1.1367, 8)

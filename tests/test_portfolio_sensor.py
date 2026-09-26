@@ -364,6 +364,31 @@ def test_a_performance_figure_bitpanda_did_not_send_is_left_out():
     }
 
 
+def test_a_stock_etf_or_etc_shows_its_isin_on_every_wallet_part():
+    """`asset_isin` beside `asset` and `asset_name`. Any other asset has no
+    such key at all -- the tests above compare VSN's whole attributes."""
+    etf = {"id": "1f0ed6c9-ee10-68c6-8a0e-55a29b7757fe", "symbol": "LYY1",
+           "name": "Amundi PEA S&P 500 UCITS ETF", "isin": "FR0011871136",
+           "type": "equity_security", "group": "equity_etf"}
+    data = PortfolioData(holdings={etf["id"]: Holding(
+        asset_id=etf["id"], balance=10.0, available=10.0, value=5000.0)}, cash=0.0)
+    data.assets = {etf["id"]: etf}
+    coordinator = _Coordinator(data)
+    earn = _Coordinator(EarnData(apr={}, offered=frozenset()))
+    wallet = WalletSensor(coordinator, "eid", "EUR", etf, lambda _: True)
+    assert wallet.extra_state_attributes == {
+        "asset": "LYY1", "asset_name": "Amundi PEA S&P 500 UCITS ETF",
+        "asset_isin": "FR0011871136", "units": 10.0,
+    }
+    for sensor in (
+        StakingSensor(coordinator, earn, _Coordinator(None), "eid", "EUR", etf),
+        WalletTotalSensor(coordinator, "eid", "EUR", etf),
+    ):
+        assert sensor.extra_state_attributes["asset_isin"] == "FR0011871136", (
+            type(sensor).__name__
+        )
+
+
 def test_total_is_the_whole_position_with_its_performance():
     sensor = WalletTotalSensor(_portfolio(**{VSN["id"]: _vsn()}), "eid", "EUR", VSN)
     assert sensor.entity_id == "sensor.bitpanda_vision_vsn_wallet_total"

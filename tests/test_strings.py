@@ -560,17 +560,27 @@ _BCPGBP = {"id": "cash-plus-gbp", "symbol": "BCPGBP", "name": "Bitpanda Cash Plu
            "group": "fiat_earn"}
 _BTC = {"id": "b86c034b-efe3-11eb-b56f-0691764446a7", "symbol": "BTC", "name": "Bitcoin",
         "group": "coin"}
+# An ETF: every sensor of a stock, ETF or ETC adds its ISIN.
+_ETF = {"id": "1f0ed6c9-ee10-68c6-8a0e-55a29b7757fe", "symbol": "LYY1",
+        "name": "Amundi PEA S&P 500 UCITS ETF", "isin": "FR0011871136",
+        "type": "equity_security", "group": "equity_etf"}
 
 
 def _wallet_portfolio_data() -> PortfolioData:
-    """One holding with every performance figure set, so WalletSensor and
-    WalletTotalSensor both publish the full performance set."""
-    holding = Holding(
-        asset_id=_VSN["id"], balance=100.0, available=25.0, value=200.0,
-        invested=150.0, avg_buy_price=1.5, total_return=50.0, total_return_pct=33.33,
+    """A holding of VSN and of the ETF, each with every performance figure
+    set, so WalletSensor and WalletTotalSensor both publish the full
+    performance set."""
+    data = PortfolioData(
+        holdings={
+            asset["id"]: Holding(
+                asset_id=asset["id"], balance=100.0, available=25.0, value=200.0,
+                invested=150.0, avg_buy_price=1.5, total_return=50.0, total_return_pct=33.33,
+            )
+            for asset in (_VSN, _ETF)
+        },
+        cash=0.0,
     )
-    data = PortfolioData(holdings={_VSN["id"]: holding}, cash=0.0)
-    data.assets = {_VSN["id"]: _VSN}
+    data.assets = {asset["id"]: asset for asset in (_VSN, _ETF)}
     return data
 
 
@@ -612,19 +622,28 @@ def _attribute_scenarios() -> list[tuple[str, dict]]:
     price_without_rate = PriceSensor(
         _Coordinator({_BTC["id"]: 100.0}), _Coordinator(None), "eid", _BTC, "USD",
     )
+    etf_price = PriceSensor(_Coordinator({_ETF["id"]: 100.0}), None, "eid", _ETF, "EUR")
 
+    wallet_parts = [
+        scenario
+        for asset in (_VSN, _ETF)
+        for scenario in (
+            ("wallet", WalletSensor(
+                wallet_coordinator, "eid", "EUR", asset, lambda _asset_id: False
+            ).extra_state_attributes),
+            ("staking", StakingSensor(
+                wallet_coordinator, earn, rewards, "eid", "EUR", asset
+            ).extra_state_attributes),
+            ("wallet_total", WalletTotalSensor(
+                wallet_coordinator, "eid", "EUR", asset
+            ).extra_state_attributes),
+        )
+    ]
     return [
-        ("wallet", WalletSensor(
-            wallet_coordinator, "eid", "EUR", _VSN, lambda _asset_id: False
-        ).extra_state_attributes),
-        ("staking", StakingSensor(
-            wallet_coordinator, earn, rewards, "eid", "EUR", _VSN
-        ).extra_state_attributes),
-        ("wallet_total", WalletTotalSensor(
-            wallet_coordinator, "eid", "EUR", _VSN
-        ).extra_state_attributes),
+        *wallet_parts,
         ("price", price_with_rate.extra_state_attributes),
         ("price", price_without_rate.extra_state_attributes),
+        ("price", etf_price.extra_state_attributes),
         ("cash_plus", PortfolioCashPlusSensor(
             _Coordinator(_cash_plus_portfolio_data()), "eid", "EUR"
         ).extra_state_attributes),
@@ -645,6 +664,29 @@ def test_every_published_attribute_has_a_translated_label():
         assert english["entity"]["sensor"][translation_key]["state_attributes"] == labels, (
             translation_key
         )
+
+
+# The label of `asset_isin`, with the prefix of the other asset attributes of
+# its language -- French with a no-break space before the colon.
+_ISIN_LABELS = {
+    "de": "Asset: ISIN",
+    "en": "Asset: ISIN",
+    "es": "Activo: ISIN",
+    "fr": "Actif : ISIN",
+    "it": "Asset: ISIN",
+    "nl": "Asset: ISIN",
+    "pl": "Aktywo: ISIN",
+}
+
+
+def test_the_isin_is_labelled_on_every_sensor_that_names_its_asset():
+    assert sorted(_ISIN_LABELS) == _LANGUAGES
+    for language, label in _ISIN_LABELS.items():
+        sensors = _load(f"translations/{language}.json")["entity"]["sensor"]
+        for key in ("price", "wallet", "staking", "wallet_total"):
+            assert sensors[key]["state_attributes"]["asset_isin"] == {"name": label}, (
+                language, key,
+            )
 
 
 def test_the_conversion_status_has_a_translated_name_and_state():

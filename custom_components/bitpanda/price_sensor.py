@@ -25,6 +25,7 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
+from .assets import asset_attributes
 from .const import (
     CHANGE_24H_UPDATE_INTERVAL,
     CONF_ASSETS,
@@ -177,11 +178,9 @@ class PriceSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        symbol = self._asset.get("symbol")
         attrs: dict[str, Any] = {
-            "asset": symbol,
-            "asset_name": self._asset.get("name"),
-            "trading_pair": f"{symbol}/{self._currency}",
+            **asset_attributes(self._asset),
+            "trading_pair": f"{self._asset.get('symbol')}/{self._currency}",
         }
         if self._currency != "EUR":
             rate = self._rate

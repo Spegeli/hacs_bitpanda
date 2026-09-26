@@ -27,7 +27,7 @@ from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .assets import asset_category
+from .assets import asset_attributes, asset_category
 from .const import (
     CONF_CURRENCY,
     DOMAIN,
@@ -264,10 +264,7 @@ class _WalletPart(CoordinatorEntity, SensorEntity):
         return super().available and data is not None and self._asset_id in data.held
 
     def _attributes(self) -> dict[str, Any]:
-        attrs: dict[str, Any] = {
-            "asset": self._asset.get("symbol"),
-            "asset_name": self._asset.get("name"),
-        }
+        attrs: dict[str, Any] = asset_attributes(self._asset)
         holding = self._holding
         if holding is not None:
             attrs["units"] = self._units(holding)

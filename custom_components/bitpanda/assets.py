@@ -66,11 +66,22 @@ def asset_category(asset: dict) -> str:
 
 def asset_isin(asset: dict) -> str | None:
     """The ISIN a stock, ETF or ETC shows in its label
-    (naming.asset_display_label); None for any other asset, and for one
-    whose record carries none."""
+    (naming.asset_display_label) and attributes; None for any other asset,
+    and for one whose record carries none."""
     if asset_category(asset) not in _ISIN_CATEGORIES:
         return None
     return asset.get("isin") or None
+
+
+def asset_attributes(asset: dict) -> dict[str, str | None]:
+    """What every sensor of `asset` shows about it: `asset` (the symbol),
+    `asset_name`, and `asset_isin` where asset_isin gives one -- no such
+    key at all for any other asset."""
+    attrs = {"asset": asset.get("symbol"), "asset_name": asset.get("name")}
+    isin = asset_isin(asset)
+    if isin is not None:
+        attrs["asset_isin"] = isin
+    return attrs
 
 
 class AssetDirectory:

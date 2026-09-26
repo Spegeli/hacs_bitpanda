@@ -174,12 +174,14 @@ Home Assistant lists these in the entity's Details view (older versions: the Att
 
 | Sensor | Attributes |
 |---|---|
-| Balance (available) | `asset`, `asset_name`, `units` (tradable units). Without a Balance (total) sensor also `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
-| Balance (staking) | `asset`, `asset_name`, `units` (staked), `apr_percent`, `rewards_gross`, `rewards_fee`, `rewards_net`, `rewards_count`, `rewards_last_at` |
-| Balance (total) | `asset`, `asset_name`, `units` (whole position), `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
+| Balance (available) | `asset`, `asset_name`, `asset_isin`, `units` (tradable units). Without a Balance (total) sensor also `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
+| Balance (staking) | `asset`, `asset_name`, `asset_isin`, `units` (staked), `apr_percent`, `rewards_gross`, `rewards_fee`, `rewards_net`, `rewards_count`, `rewards_last_at` |
+| Balance (total) | `asset`, `asset_name`, `asset_isin`, `units` (whole position), `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
 | Portfolio Cash Plus | `eur`, `usd`, `gbp` — the amount of each held Cash Plus product in its own currency |
-| Price (EUR) | `asset`, `asset_name`, `trading_pair`, `change_24h_pct`, `price_24h_ago` |
+| Price (EUR) | `asset`, `asset_name`, `asset_isin`, `trading_pair`, `change_24h_pct`, `price_24h_ago` |
 | Price (other currencies) | as EUR, plus `conversion` (status `no_rate` until the first ECB rate is loaded), `conversion_rate`, `rate_date`, `rate_source` (`ECB`) |
+
+`asset_isin`, the ISIN, is there for stocks, ETFs and ETCs only.
 
 ---
 

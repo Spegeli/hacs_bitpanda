@@ -266,6 +266,9 @@
           "asset_name": {
             "name": "Asset: naam"
           },
+          "asset_isin": {
+            "name": "Asset: ISIN"
+          },
           "units": {
             "name": "Asset: hoeveelheid"
           },
@@ -291,6 +294,9 @@
           },
           "asset_name": {
             "name": "Asset: naam"
+          },
+          "asset_isin": {
+            "name": "Asset: ISIN"
           },
           "units": {
             "name": "Asset: hoeveelheid"
@@ -324,6 +330,9 @@
           "asset_name": {
             "name": "Asset: naam"
           },
+          "asset_isin": {
+            "name": "Asset: ISIN"
+          },
           "units": {
             "name": "Asset: hoeveelheid"
           },
@@ -348,6 +357,9 @@
           },
           "asset_name": {
             "name": "Asset: naam"
+          },
+          "asset_isin": {
+            "name": "Asset: ISIN"
           },
           "trading_pair": {
             "name": "Asset: handelspaar"

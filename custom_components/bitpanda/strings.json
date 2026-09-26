@@ -332,16 +332,16 @@
             "name": "Asset: quantity"
           },
           "average_buy_price": {
-            "name": "Balance: average buy price"
+            "name": "Position: average buy price"
           },
           "invested_amount": {
-            "name": "Balance: invested"
+            "name": "Position: invested"
           },
           "total_return": {
-            "name": "Balance: profit/loss"
+            "name": "Position: profit/loss"
           },
           "total_return_percent": {
-            "name": "Balance: profit/loss %"
+            "name": "Position: profit/loss %"
           }
         }
       },

@@ -817,6 +817,60 @@ def test_the_reward_attributes_say_what_they_count():
             assert labels[key].endswith(f" ({quantity})"), (language, key)
 
 
+# The position performance on a wallet's Total sensor, by language, in the
+# order of _POSITION_KEYS. French puts a no-break space before the colon and
+# the percent sign.
+_POSITION_KEYS = ("average_buy_price", "invested_amount", "total_return", "total_return_percent")
+_POSITION_LABELS = {
+    "de": (
+        "Bilanz: Ø Kaufpreis", "Bilanz: investiert", "Bilanz: Gewinn/Verlust",
+        "Bilanz: Gewinn/Verlust %",
+    ),
+    "en": (
+        "Position: average buy price", "Position: invested", "Position: profit/loss",
+        "Position: profit/loss %",
+    ),
+    "es": (
+        "Posición: precio medio de compra", "Posición: importe invertido",
+        "Posición: ganancia/pérdida", "Posición: ganancia/pérdida %",
+    ),
+    "fr": (
+        "Position\u00a0: prix d'achat moyen", "Position\u00a0: montant investi",
+        "Position\u00a0: gain/perte", "Position\u00a0: gain/perte en\u00a0%",
+    ),
+    "it": (
+        "Posizione: prezzo medio di acquisto", "Posizione: importo investito",
+        "Posizione: profitto/perdita", "Posizione: profitto/perdita %",
+    ),
+    "nl": (
+        "Positie: gemiddelde aankoopprijs", "Positie: geïnvesteerd bedrag",
+        "Positie: winst/verlies", "Positie: winst/verlies %",
+    ),
+    "pl": (
+        "Pozycja: średnia cena zakupu", "Pozycja: zainwestowana kwota",
+        "Pozycja: zysk/strata", "Pozycja: zysk/strata %",
+    ),
+}
+
+
+def test_the_position_figures_are_not_labelled_like_the_wallet_sensors():
+    """The Total sensor lists the position's performance under a prefix of
+    its own, the same for all four: never the word the wallet sensors are
+    named with, or "Balance (total)" would list "Balance: invested" -- one
+    word for two things. Only the labels say so: the keys, which templates
+    use, stay."""
+    assert sorted(_POSITION_LABELS) == _LANGUAGES
+    for language, labels in _POSITION_LABELS.items():
+        sensors = _load(f"translations/{language}.json")["entity"]["sensor"]
+        attributes = sensors["wallet_total"]["state_attributes"]
+        assert tuple(attributes[key]["name"] for key in _POSITION_KEYS) == labels, language
+        prefixes = {label.split(":", 1)[0].strip() for label in labels}
+        assert len(prefixes) == 1, (language, prefixes)
+        [prefix] = prefixes
+        for key in ("wallet", "staking", "wallet_total"):
+            assert not sensors[key]["name"].startswith(prefix), (language, key)
+
+
 def test_the_conversion_status_has_a_translated_name_and_state():
     """`conversion` is a status key, not a raw sentence: its own name plus a
     `state` translation for `no_rate` -- the only value it ever takes."""

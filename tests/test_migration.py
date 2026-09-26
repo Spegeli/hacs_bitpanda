@@ -1,5 +1,4 @@
 """Tests for v1 to v3 config entry migration."""
-import ast
 import json
 import logging
 from pathlib import Path
@@ -9,7 +8,11 @@ from unittest.mock import ANY, AsyncMock, patch
 import pytest
 from homeassistant import data_entry_flow
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import (
+    device_registry as dr,
+    entity_registry as er,
+    issue_registry as ir,
+)
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda import migration
@@ -17,6 +20,7 @@ from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitEr
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.ecb import EcbRates
 from custom_components.bitpanda.migration import (
+    UPGRADE_URL,
     async_adopt_legacy_prices,
     async_migrate_entry,
     free_entity_id,
@@ -78,6 +82,53 @@ def _price_trackers(hass) -> list:
     ]
 
 
+# --- What the upgrade tells the user ------------------------------------------------
+#
+# Repair issues (Settings -> Repairs), which the frontend shows in each user's
+# own language, and one English WARNING in the log with the full mapping.
+
+
+def _issues(hass) -> dict[str, ir.IssueEntry]:
+    """This integration's repair issues, by issue id."""
+    return {
+        issue_id: issue
+        for (domain, issue_id), issue in ir.async_get(hass).issues.items()
+        if domain == DOMAIN
+    }
+
+
+def _listed(hass, issue_id: str) -> str:
+    """The Markdown list an entity issue carries, "" without the issue."""
+    issue = _issues(hass).get(issue_id)
+    return "" if issue is None else issue.translation_placeholders["entities"]
+
+
+def _renamed(hass) -> str:
+    return _listed(hass, "renamed_entities")
+
+
+def _not_migrated(hass) -> str:
+    return _listed(hass, "entities_not_migrated")
+
+
+def _migration_warnings(caplog) -> list[str]:
+    return [
+        record.getMessage() for record in caplog.records
+        if record.name == "custom_components.bitpanda.migration"
+        and record.levelno == logging.WARNING
+    ]
+
+
+def _logged(caplog) -> str:
+    """The migration's report: its one English WARNING about the upgrade.
+    (The adoption may warn besides, about an entity it leaves alone.)"""
+    [logged] = [
+        message for message in _migration_warnings(caplog)
+        if message.startswith("Bitpanda is now two services")
+    ]
+    return logged
+
+
 async def test_version_3_is_current(hass):
     entry = MockConfigEntry(domain=DOMAIN, version=3, data={"entry_type": "portfolio"})
     entry.add_to_hass(hass)
@@ -103,7 +154,7 @@ _MIGRATION = "custom_components.bitpanda.migration"
 
 @pytest.mark.parametrize("minor", [3, 4])
 async def test_home_assistant_before_2025_5_leaves_the_entry_alone(
-    hass, legacy_api, no_setup, notify, caplog, minor
+    hass, legacy_api, no_setup, caplog, minor
 ):
     """Only from Home Assistant 2025.5 on does the recorder move history along
     with an entity-ID rename made while Home Assistant starts -- when this
@@ -126,12 +177,13 @@ async def test_home_assistant_before_2025_5_leaves_the_entry_alone(
     assert _price_trackers(hass) == []
     currencies.assert_not_called()
     assets.assert_not_called()
-    notify.assert_not_called()
+    assert _issues(hass) == {}
+    assert _migration_warnings(caplog) == []
     assert "Home Assistant 2025.5 or newer" in caplog.text
     assert "legacy-key" not in caplog.text
 
 
-async def test_home_assistant_2025_5_migrates(hass, legacy_api, no_setup, notify):
+async def test_home_assistant_2025_5_migrates(hass, legacy_api, no_setup):
     entry = _v1_entry(hass, wallets=["cryptocoin_BTC"])
     with patch(f"{_MIGRATION}.MAJOR_VERSION", 2025), patch(f"{_MIGRATION}.MINOR_VERSION", 5):
         assert await async_migrate_entry(hass, entry)
@@ -234,16 +286,20 @@ async def test_a_currency_no_longer_offered_falls_back_to_eur(hass, legacy_api, 
 
 
 async def test_a_listed_currency_the_integration_does_not_support_falls_back_to_eur(
-    hass, legacy_api, no_setup, notify
+    hass, legacy_api, no_setup, caplog
 ):
     """Being on /currencies is not enough: the Portfolio reports only in the
-    currencies it supports."""
+    currencies it supports. The fallback is a repair issue of its own."""
     currencies, _ = legacy_api
     currencies.return_value = [*load_fixture("currencies.json"), {"symbol": "JPY", "id": "jpy"}]
     entry = _v1_entry(hass, currency="JPY")
     assert await async_migrate_entry(hass, entry)
     assert (entry.data["currency"], entry.data["currency_id"]) == ("EUR", _EUR_ID)
-    assert "Bitpanda no longer offers JPY; the Portfolio now reports in EUR." in _message(notify)
+    issue = _issues(hass)["currency_dropped"]
+    assert issue.translation_placeholders == {"currency": "JPY"}
+    assert "JPY is not available for the Bitpanda Portfolio; it now reports in EUR." in _logged(
+        caplog
+    )
 
 
 async def test_each_symbol_is_looked_up_once(hass, legacy_api, no_setup):
@@ -367,20 +423,7 @@ async def test_free_entity_id_skips_every_id_home_assistant_counts_as_taken(hass
     assert free_entity_id(hass, "sensor.reserved") == "sensor.reserved_2"
 
 
-# --- Registry, adoption and notification -----------------------------------------
-
-
-@pytest.fixture
-def notify():
-    with patch(
-        "custom_components.bitpanda.migration.persistent_notification.async_create"
-    ) as create:
-        yield create
-
-
-def _message(notify) -> str:
-    notify.assert_called_once()
-    return notify.call_args.args[1]
+# --- Registry, adoption and what the user is told --------------------------------
 
 
 @pytest.fixture
@@ -411,7 +454,7 @@ def _legacy_entity(hass, entry, unique_id: str, object_id: str, device_id=None) 
     ).entity_id
 
 
-async def test_wallets_are_rekeyed_and_default_ids_renamed(hass, legacy_api, no_setup, notify):
+async def test_wallets_are_rekeyed_and_default_ids_renamed(hass, legacy_api, no_setup):
     entry = _v1_entry(hass, wallets=["cryptocoin_BTC", "commodity_metal_XAU", "index_index_BCI5"])
     device = _legacy_device(hass, entry, "wallets")
     eid = entry.entry_id
@@ -430,9 +473,9 @@ async def test_wallets_are_rekeyed_and_default_ids_renamed(hass, legacy_api, no_
     # A user's own ID is kept; only the unique_id moves.
     assert ent_reg.async_get("sensor.my_index").unique_id == f"{eid}_wallet_{BCI5_ID}"
     assert dr.async_get(hass).async_get(device) is None
-    message = _message(notify)
-    assert "`sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet`" in message
-    assert "sensor.my_index" not in message
+    renamed = _renamed(hass)
+    assert "- `sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet`" in renamed
+    assert "sensor.my_index" not in renamed
 
 
 def _by_symbol_or_id(**kwargs):
@@ -452,7 +495,7 @@ def _position(asset_id: str, value: str) -> dict:
     }
 
 
-async def test_a_migrated_install_ends_with_its_wallets_in_groups(hass, legacy_api, notify):
+async def test_a_migrated_install_ends_with_its_wallets_in_groups(hass, legacy_api):
     """The upgrade end to end: the migration, then the Portfolio's first
     setup. The wallets the migration re-keyed move into the groups of their
     asset types; the Portfolio's own sensors, and a legacy wallet it left
@@ -512,7 +555,7 @@ async def test_a_migrated_install_ends_with_its_wallets_in_groups(hass, legacy_a
 
 
 async def test_the_fiat_wallet_of_the_entry_currency_becomes_portfolio_cash(
-    hass, legacy_api, no_setup, notify
+    hass, legacy_api, no_setup, caplog
 ):
     entry = _v1_entry(hass, wallets=["fiat_EUR", "fiat_USD"])
     device = _legacy_device(hass, entry, "wallets")
@@ -527,11 +570,12 @@ async def test_the_fiat_wallet_of_the_entry_currency_becomes_portfolio_cash(
     assert ent_reg.async_get(usd).unique_id == f"{eid}_wallet_fiat_USD"
     # Still holds the USD wallet: the legacy device stays.
     assert dr.async_get(hass).async_get(device) is not None
-    assert f"`{usd}`" in _message(notify)
+    assert _not_migrated(hass) == f"- `{usd}`"
+    assert f"- `{usd}`: Portfolio Cash now covers every fiat balance" in _logged(caplog)
 
 
 async def test_the_only_fiat_wallet_becomes_portfolio_cash_whatever_its_currency(
-    hass, legacy_api, no_setup, notify
+    hass, legacy_api, no_setup
 ):
     entry = _v1_entry(hass, wallets=["fiat_USD"])
     eid = entry.entry_id
@@ -540,7 +584,7 @@ async def test_the_only_fiat_wallet_becomes_portfolio_cash_whatever_its_currency
     assert er.async_get(hass).async_get("sensor.bitpanda_portfolio_cash").unique_id == f"{eid}_portfolio_cash"
 
 
-async def test_portfolio_total_keeps_its_unique_id_and_gets_the_new_id(hass, legacy_api, no_setup, notify):
+async def test_portfolio_total_keeps_its_unique_id_and_gets_the_new_id(hass, legacy_api, no_setup):
     entry = _v1_entry(hass)
     eid = entry.entry_id
     _legacy_entity(hass, entry, f"{eid}_portfolio_total", "bitpanda_wallets_portfolio_total")
@@ -549,17 +593,22 @@ async def test_portfolio_total_keeps_its_unique_id_and_gets_the_new_id(hass, leg
     assert total.unique_id == f"{eid}_portfolio_total"
 
 
-async def test_an_unresolvable_wallet_is_left_alone_and_listed(hass, legacy_api, no_setup, notify):
+async def test_an_unresolvable_wallet_is_left_alone_and_listed(
+    hass, legacy_api, no_setup, caplog
+):
+    """Listed in the repair issue by its entity ID alone -- no English prose
+    in a placeholder; the log names the reason."""
     entry = _v1_entry(hass, wallets=["cryptocoin_GONE"])
     eid = entry.entry_id
     gone = _legacy_entity(hass, entry, f"{eid}_wallet_cryptocoin_GONE", "bitpanda_wallets_gone_wallet")
     assert await async_migrate_entry(hass, entry)
     assert er.async_get(hass).async_get(gone).unique_id == f"{eid}_wallet_cryptocoin_GONE"
-    assert f"`{gone}`: GONE no longer exists at Bitpanda" in _message(notify)
+    assert _not_migrated(hass) == f"- `{gone}`"
+    assert f"- `{gone}`: GONE no longer exists at Bitpanda" in _logged(caplog)
 
 
 async def test_a_legacy_wallet_whose_asset_already_has_a_wallet_is_left_and_listed(
-    hass, legacy_api, no_setup, notify
+    hass, legacy_api, no_setup, caplog
 ):
     """Its new unique_id is taken already -- by an entity an earlier run
     re-keyed, say: the legacy wallet is left alone rather than collide."""
@@ -576,10 +625,11 @@ async def test_a_legacy_wallet_whose_asset_already_has_a_wallet_is_left_and_list
     assert (left.unique_id, left.entity_id) == (
         f"{eid}_wallet_cryptocoin_BTC", "sensor.bitpanda_wallets_btc_wallet",
     )
-    assert f"`{legacy}`: another entity already stands for the same asset" in _message(notify)
+    assert _not_migrated(hass) == f"- `{legacy}`"
+    assert f"- `{legacy}`: another entity already stands for the same asset" in _logged(caplog)
 
 
-async def test_a_wallet_prefix_decides_between_legacy_types(hass, legacy_api, no_setup, notify):
+async def test_a_wallet_prefix_decides_between_legacy_types(hass, legacy_api, no_setup):
     """A wallet id's category prefix, not just its bare symbol, drives resolution.
 
     "TWIN" alone is ambiguous between a coin and a metal of the same symbol;
@@ -619,7 +669,7 @@ async def test_a_wallet_prefix_decides_between_legacy_types(hass, legacy_api, no
     ) == "sensor.bitpanda_twin_metal_twin_wallet"
 
 
-async def test_legacy_price_sensors_move_to_the_price_tracker(hass, legacy_api, price_api, notify):
+async def test_legacy_price_sensors_move_to_the_price_tracker(hass, legacy_api, price_api):
     entry = _v1_entry(hass, currency="USD", assets=["BTC"])
     device = _legacy_device(hass, entry, "price_tracker")
     eid = entry.entry_id
@@ -641,8 +691,8 @@ async def test_legacy_price_sensors_move_to_the_price_tracker(hass, legacy_api, 
     assert "legacy_adopt" not in tracker.data
     assert dr.async_get(hass).async_get(device) is None
     assert (
-        "`sensor.bitpanda_price_tracker_btc_usd` → `sensor.bitpanda_bitcoin_btc_usd`"
-        in _message(notify)
+        "- `sensor.bitpanda_price_tracker_btc_usd` → `sensor.bitpanda_bitcoin_btc_usd`"
+        in _renamed(hass)
     )
 
 
@@ -659,12 +709,10 @@ def _adoption_preceded_by(prepare):
     return patch(f"{_MIGRATION}.async_adopt_legacy_prices", _adopt)
 
 
-async def test_the_notification_reports_the_id_the_adoption_gave(
-    hass, legacy_api, price_api, notify
-):
+async def test_the_renamed_issue_reports_the_id_the_adoption_gave(hass, legacy_api, price_api):
     """The migration plans the new IDs; the Price Tracker adopts the
     entities later, in its own setup. Should the planned ID be taken by
-    then, the entity gets the next free one -- and the notification names
+    then, the entity gets the next free one -- and the repair issue names
     that one, not the plan."""
     entry = _v1_entry(hass, assets=["BTC"])
     legacy = _legacy_entity(
@@ -683,17 +731,15 @@ async def test_the_notification_reports_the_id_the_adoption_gave(
     [tracker] = _price_trackers(hass)
     adopted = er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_eur_2")
     assert adopted.unique_id == f"{tracker.entry_id}_{BTC_ID}_price_EUR"
-    message = _message(notify)
-    assert f"- `{legacy}` → `sensor.bitpanda_bitcoin_btc_eur_2`" in message
-    assert f"- `{legacy}` → `sensor.bitpanda_bitcoin_btc_eur`\n" not in message
+    assert _renamed(hass) == f"- `{legacy}` → `sensor.bitpanda_bitcoin_btc_eur_2`"
 
 
-async def test_the_notification_lists_a_price_entity_the_adoption_left(
-    hass, legacy_api, price_api, notify
+async def test_the_issues_list_a_price_entity_the_adoption_left(
+    hass, legacy_api, price_api, caplog
 ):
     """Another entity already stands for the same price when the Price
-    Tracker adopts: the legacy entity stays where it is, and the
-    notification lists it as not migrated instead of renamed."""
+    Tracker adopts: the legacy entity stays where it is, and it is listed
+    as not migrated instead of renamed."""
     entry = _v1_entry(hass, assets=["BTC"])
     legacy = _legacy_entity(
         hass, entry, f"{entry.entry_id}_BTC_price_EUR", "bitpanda_price_tracker_btc_eur"
@@ -711,13 +757,15 @@ async def test_the_notification_lists_a_price_entity_the_adoption_left(
 
     left = er.async_get(hass).async_get(legacy)
     assert (left.config_entry_id, left.unique_id) == (entry.entry_id, f"{entry.entry_id}_BTC_price_EUR")
-    message = _message(notify)
-    assert f"`{legacy}` →" not in message
-    assert f"- `{legacy}`: another entity already stands for the same asset" in message
+    assert "renamed_entities" not in _issues(hass)
+    assert _not_migrated(hass) == f"- `{legacy}`"
+    logged = _logged(caplog)
+    assert f"`{legacy}` →" not in logged
+    assert f"- `{legacy}`: another entity already stands for the same asset" in logged
 
 
-async def test_the_notification_claims_no_rename_for_an_entity_gone_before_adoption(
-    hass, legacy_api, price_api, notify
+async def test_the_issues_claim_no_rename_for_an_entity_gone_before_adoption(
+    hass, legacy_api, price_api
 ):
     """The Price Tracker then creates its sensor afresh under the planned
     ID: nothing was renamed, and nothing is left to list."""
@@ -734,11 +782,11 @@ async def test_the_notification_claims_no_rename_for_an_entity_gone_before_adopt
         await hass.async_block_till_done()
 
     assert er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_eur") is not None
-    assert f"`{legacy}`" not in _message(notify)
+    assert _issues(hass) == {}
 
 
 async def test_each_legacy_price_sensor_moves_into_the_group_of_its_asset(
-    hass, legacy_api, price_api, notify
+    hass, legacy_api, price_api
 ):
     entry = _v1_entry(hass, assets=["BTC", "XAU"])
     eid = entry.entry_id
@@ -855,17 +903,17 @@ async def test_adoption_leaves_a_legacy_entity_whose_price_is_already_taken(hass
     assert f"Not adopting {legacy}" in caplog.text
 
 
-async def test_an_unresolvable_price_is_left_alone_and_listed(hass, legacy_api, no_setup, notify):
+async def test_an_unresolvable_price_is_left_alone_and_listed(hass, legacy_api, no_setup):
     entry = _v1_entry(hass, assets=["GONE"])
     old = _legacy_entity(hass, entry, f"{entry.entry_id}_GONE_price_EUR", "bitpanda_price_tracker_gone_eur")
     assert await async_migrate_entry(hass, entry)
     assert _price_trackers(hass) == []
     assert er.async_get(hass).async_get(old).config_entry_id == entry.entry_id
-    assert f"`{old}`" in _message(notify)
+    assert _not_migrated(hass) == f"- `{old}`"
 
 
 async def test_an_existing_price_tracker_does_not_block_the_migration(
-    hass, legacy_api, no_setup, notify
+    hass, legacy_api, no_setup, caplog
 ):
     MockConfigEntry(
         domain=DOMAIN,
@@ -887,7 +935,10 @@ async def test_an_existing_price_tracker_does_not_block_the_migration(
     # was ever created for this migration to hand it to.
     assert reg_entry.config_entry_id == eid
     assert reg_entry.unique_id == f"{eid}_BTC_price_EUR"
-    assert f"`{old}`: a Price Tracker was already set up" in _message(notify)
+    assert _not_migrated(hass) == f"- `{old}`"
+    assert f"- `{old}`: a Price Tracker was already set up; add the asset there" in _logged(
+        caplog
+    )
 
 
 async def test_a_failed_price_tracker_import_changes_nothing(hass, legacy_api, no_setup):
@@ -918,186 +969,169 @@ async def test_a_failed_price_tracker_import_changes_nothing(hass, legacy_api, n
     assert dr.async_get(hass).async_get(device) is not None
 
 
-async def test_the_notification_text_is_also_logged_once(
-    hass, legacy_api, no_setup, notify, caplog
-):
-    """A persistent notification lives in memory only; the log keeps the
-    old -> new mapping across a restart."""
-    entry = _v1_entry(hass, wallets=["cryptocoin_BTC", "cryptocoin_GONE"])
-    eid = entry.entry_id
-    _legacy_entity(hass, entry, f"{eid}_wallet_cryptocoin_BTC", "bitpanda_wallets_btc_wallet")
-    gone = _legacy_entity(
-        hass, entry, f"{eid}_wallet_cryptocoin_GONE", "bitpanda_wallets_gone_wallet"
-    )
-
-    assert await async_migrate_entry(hass, entry)
-
-    warnings = [
-        record for record in caplog.records
-        if record.name == "custom_components.bitpanda.migration"
-        and record.levelno == logging.WARNING
-    ]
-    assert len(warnings) == 1
-    logged = warnings[0].getMessage()
-    assert "`sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet`" in logged
-    assert f"`{gone}`: GONE no longer exists at Bitpanda" in logged
-    assert logged == _message(notify)
-    assert "legacy-key" not in caplog.text
-
-
-async def test_the_notification_asks_for_a_new_key(hass, legacy_api, no_setup, notify):
-    assert await async_migrate_entry(hass, _v1_entry(hass))
-    message = _message(notify)
-    assert "https://app.bitpanda.com/my-account/apikey" in message
-    assert "Earn (Read)" in message
-    assert notify.call_args.kwargs["notification_id"] == "bitpanda_migration"
-    assert notify.call_args.kwargs["title"] == "Bitpanda upgraded"
-
-
-def _migration_warnings(caplog) -> list[str]:
-    return [
-        record.getMessage() for record in caplog.records
-        if record.name == "custom_components.bitpanda.migration"
-        and record.levelno == logging.WARNING
-    ]
-
-
-async def test_the_notification_is_in_home_assistants_language_and_the_log_in_english(
-    hass, legacy_api, no_setup, notify, caplog
-):
-    """Every text of the notification -- headings, reasons, notes -- comes
-    from the translations of the language Home Assistant runs in; the log
-    line keeps English, like every other."""
-    hass.config.language = "de"
+def _upgrade_with_every_issue(hass) -> tuple[MockConfigEntry, str]:
+    """A version 1 entry whose migration raises every repair issue there is:
+    a renamed wallet, a wallet left alone and the currency fallback. Returns
+    the entry and the entity ID of the wallet left alone."""
     entry = _v1_entry(hass, currency="JPY", wallets=["cryptocoin_BTC", "cryptocoin_GONE"])
     eid = entry.entry_id
     _legacy_entity(hass, entry, f"{eid}_wallet_cryptocoin_BTC", "bitpanda_wallets_btc_wallet")
     gone = _legacy_entity(
         hass, entry, f"{eid}_wallet_cryptocoin_GONE", "bitpanda_wallets_gone_wallet"
     )
-
-    assert await async_migrate_entry(hass, entry)
-
-    assert notify.call_args.kwargs["title"] == "Bitpanda aktualisiert"
-    assert _message(notify) == (
-        "Bitpanda besteht jetzt aus zwei Diensten: Bitpanda Portfolio und Bitpanda Price "
-        "Tracker.\n\n"
-        "**Umbenannte Entitäts-IDs.** Prüfe Dashboards, Automationen und Skripte, die sie "
-        "verwenden:\n"
-        "- `sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet`\n\n"
-        "**Nicht migriert** (unverändert gelassen; lösche sie, wenn du sie nicht mehr "
-        "brauchst):\n"
-        f"- `{gone}`: GONE gibt es bei Bitpanda nicht mehr\n\n"
-        "Bitpanda bietet JPY nicht mehr an; das Portfolio meldet seine Werte jetzt in EUR.\n\n"
-        "Bitpanda braucht einen neuen API-Schlüssel mit den Berechtigungen Guthaben, "
-        "Transaktion und Earn (Read). Erstelle ihn unter "
-        "https://app.bitpanda.com/my-account/apikey und gib ihn ein, wenn Home Assistant "
-        "danach fragt. Zeigt ein Bitpanda-Dialog Rohtext, lade den Browser-Tab neu."
-    )
-    [logged] = _migration_warnings(caplog)
-    assert logged.startswith("Bitpanda is now two services")
-    assert f"- `{gone}`: GONE no longer exists at Bitpanda" in logged
-    assert "Bitpanda no longer offers JPY; the Portfolio now reports in EUR." in logged
+    return entry, gone
 
 
-async def test_a_language_without_translations_gets_the_english_notification(
-    hass, legacy_api, no_setup, notify, caplog
+async def test_the_upgrade_raises_exactly_the_repair_issues_that_apply(
+    hass, legacy_api, no_setup
 ):
-    hass.config.language = "ja"
-    entry = _v1_entry(hass, wallets=["cryptocoin_GONE"])
-    gone = _legacy_entity(
-        hass, entry, f"{entry.entry_id}_wallet_cryptocoin_GONE", "bitpanda_wallets_gone_wallet"
-    )
+    """Renamed entity IDs, entities left alone and the currency fallback,
+    each an issue of its own; an entity list is a language-neutral Markdown
+    list of entity IDs. Informational (not fixable), kept across restarts
+    until the user dismisses it, "Learn more" on the README's upgrade
+    section. Nothing else: no persistent notification, and no issue for the
+    new API key -- Home Assistant's reauthentication dialog asks for it."""
+    entry, gone = _upgrade_with_every_issue(hass)
+
+    with patch("homeassistant.components.persistent_notification.async_create") as notification:
+        assert await async_migrate_entry(hass, entry)
+
+    notification.assert_not_called()
+    issues = _issues(hass)
+    assert {
+        issue_id: (issue.translation_key, issue.translation_placeholders)
+        for issue_id, issue in issues.items()
+    } == {
+        "renamed_entities": (
+            "renamed_entities",
+            {"entities": "- `sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet`"},
+        ),
+        "entities_not_migrated": ("entities_not_migrated", {"entities": f"- `{gone}`"}),
+        "currency_dropped": ("currency_dropped", {"currency": "JPY"}),
+    }
+    for issue in issues.values():
+        assert (
+            issue.severity, issue.is_fixable, issue.is_persistent, issue.learn_more_url,
+            issue.issue_domain,
+        ) == (ir.IssueSeverity.WARNING, False, True, UPGRADE_URL, None)
+
+
+async def test_an_upgrade_with_nothing_to_report_raises_no_issue(
+    hass, legacy_api, no_setup, caplog
+):
+    """Nothing renamed, nothing left alone, the currency kept: Repairs stays
+    empty. The log still records the upgrade and asks for the new key."""
+    assert await async_migrate_entry(hass, _v1_entry(hass))
+    assert _issues(hass) == {}
+    logged = _logged(caplog)
+    assert logged.startswith("Bitpanda is now two services")
+    assert "https://app.bitpanda.com/my-account/apikey" in logged
+    assert "Earn (Read)" in logged
+
+
+async def test_the_full_mapping_is_logged_once_in_english(
+    hass, legacy_api, no_setup, caplog
+):
+    """Repair issues can be dismissed, and list the entities left alone
+    without the reason for each: one WARNING keeps the whole mapping, with
+    every reason -- in English like every log line, also where Home
+    Assistant runs in another language."""
+    hass.config.language = "de"
+    entry, gone = _upgrade_with_every_issue(hass)
+
     assert await async_migrate_entry(hass, entry)
-    assert notify.call_args.kwargs["title"] == "Bitpanda upgraded"
-    assert f"`{gone}`: GONE no longer exists at Bitpanda" in _message(notify)
-    assert _migration_warnings(caplog) == [_message(notify)]
+
+    assert _logged(caplog) == (
+        "Bitpanda is now two services: Bitpanda Portfolio and Bitpanda Price Tracker.\n\n"
+        "Renamed entity IDs. Check dashboards, automations and scripts that use them:\n"
+        "- `sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet`\n\n"
+        "Not migrated (left unchanged; delete them when you no longer need them):\n"
+        f"- `{gone}`: GONE no longer exists at Bitpanda\n\n"
+        "JPY is not available for the Bitpanda Portfolio; it now reports in EUR.\n\n"
+        "Bitpanda needs a new API key with the permissions Guthaben (Balance), Transaktion "
+        "(Transaction) and Earn (Read). Create it at https://app.bitpanda.com/my-account/apikey "
+        "and enter it when Home Assistant asks for it."
+    )
+    assert "legacy-key" not in caplog.text
+
+
+def test_learn_more_leads_to_the_readmes_upgrade_section():
+    """The anchor GitHub gives the upgrade heading -- an arrow emoji (U+2B06
+    U+FE0F), then "Upgrading from 2026.06.x" -- as read from the page GitHub
+    renders for this README: the variation selector U+FE0F kept, the arrow
+    and the dots dropped. Renaming the heading breaks the link -- and fails
+    this test first."""
+    readme = (Path(__file__).parent.parent / "README.md").read_text(encoding="utf-8")
+    assert "\n## ⬆️ Upgrading from 2026.06.x\n" in readme
+    assert UPGRADE_URL == (
+        "https://github.com/Spegeli/hacs_bitpanda#%EF%B8%8F-upgrading-from-202606x"
+    )
 
 
 _INTEGRATION = Path(migration.__file__).parent
 
 
-def _messages_in_migration() -> list[tuple[str, frozenset[str]]]:
-    """Every Message migration.py builds, read from its source: the
-    template key and the names of the placeholders the code fills."""
-    tree = ast.parse(Path(migration.__file__).read_text(encoding="utf-8"))
-    found: list[tuple[str, frozenset[str]]] = []
-    for node in ast.walk(tree):
-        if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "Message"):
-            continue
-        key = node.args[0]
-        assert isinstance(key, ast.Constant) and isinstance(key.value, str), ast.dump(node)
-        filled = [*node.args[1:], *(kw.value for kw in node.keywords if kw.arg == "placeholders")]
-        names: set[str] = set()
-        for placeholders in filled:
-            assert isinstance(placeholders, ast.Dict), ast.dump(node)
-            names |= {name.value for name in placeholders.keys}
-        found.append((key.value, frozenset(names)))
-    return found
-
-
 def _placeholders(template: str) -> frozenset[str]:
+    """The {placeholders} of a text, parsed as Home Assistant parses them."""
     return frozenset(
         field for _, field, _, _ in string.Formatter().parse(template) if field is not None
     )
 
 
-def _exception_templates(name: str) -> dict[str, str]:
-    """The `exceptions` texts of one strings file, keyed the way
-    async_get_translations returns them."""
-    exceptions = json.loads((_INTEGRATION / name).read_text(encoding="utf-8"))["exceptions"]
-    return {
-        f"component.{DOMAIN}.exceptions.{key}.message": value["message"]
-        for key, value in exceptions.items()
+async def test_every_issue_text_renders_in_every_language(hass, legacy_api, no_setup):
+    """Every repair issue the upgrade raises -- all of them, from one
+    migration, read back from the issue registry: its translation key and
+    exactly the placeholders the code supplied -- has a title and a
+    description in every shipped language that use exactly those
+    placeholders and render with them. An entity list opens a paragraph of
+    its own, so the frontend renders it as a Markdown list. And strings.json
+    has no issue text the code never raises. Read from the files themselves:
+    Home Assistant would replace a mismatched translation with English,
+    hiding it."""
+    entry, _ = _upgrade_with_every_issue(hass)
+    assert await async_migrate_entry(hass, entry)
+    raised = {
+        issue.translation_key: issue.translation_placeholders
+        for issue in _issues(hass).values()
     }
-
-
-def test_every_text_of_the_migration_has_a_template():
-    """A text without a template would show as its bare key: every key
-    migration.py names must exist under `exceptions` in strings.json -- and
-    every migration template there must still be in use."""
-    used = {key for key, _ in _messages_in_migration()}
     strings = json.loads((_INTEGRATION / "strings.json").read_text(encoding="utf-8"))
-    templates = {key for key in strings["exceptions"] if key.startswith("migration_")}
-    assert used
-    assert used == templates
-
-
-def test_every_text_of_the_migration_renders_in_every_language():
-    """The notification is written after the entry is already saved as
-    version 3, so a template must never fail there: in every shipped
-    language, each text migration.py builds has a template with exactly the
-    placeholders the code fills, and renders with them. Read from the files
-    themselves -- Home Assistant would replace a mismatched translation with
-    English, hiding it."""
-    messages = _messages_in_migration()
+    assert set(raised) == set(strings["issues"])
     languages = sorted(path.stem for path in (_INTEGRATION / "translations").glob("*.json"))
-    assert messages
     assert len(languages) == 7
     for language in languages:
-        templates = _exception_templates(f"translations/{language}.json")
-        for key, names in messages:
-            template = templates[f"component.{DOMAIN}.exceptions.{key}.message"]
-            assert _placeholders(template) == names, (language, key)
-            text = migration.Message(key, {name: f"<{name}>" for name in names}).render(templates)
-            assert all(f"<{name}>" in text for name in names), (language, key)
+        texts = json.loads(
+            (_INTEGRATION / "translations" / f"{language}.json").read_text(encoding="utf-8")
+        )["issues"]
+        for key, placeholders in raised.items():
+            title, description = texts[key]["title"], texts[key]["description"]
+            assert _placeholders(title) | _placeholders(description) == set(placeholders), (
+                language, key,
+            )
+            rendered = title.format(**placeholders) + description.format(**placeholders)
+            assert all(value in rendered for value in placeholders.values()), (language, key)
+            if "entities" in placeholders:
+                assert "\n\n{entities}" in description, (language, key)
 
 
-async def test_an_interrupted_migration_can_run_again(hass, legacy_api, no_setup, notify):
+async def test_an_interrupted_migration_can_run_again(hass, legacy_api, no_setup):
+    """The second run finds the wallet re-keyed already: it lists nothing as
+    not migrated, and the first run's renamed issue stays as it was."""
     entry = _v1_entry(hass, wallets=["cryptocoin_BTC"])
     eid = entry.entry_id
     _legacy_entity(hass, entry, f"{eid}_wallet_cryptocoin_BTC", "bitpanda_wallets_btc_wallet")
     assert await async_migrate_entry(hass, entry)
+    renamed = _renamed(hass)
+    assert renamed
     # As if the version bump had never been saved.
     hass.config_entries.async_update_entry(
         entry, version=1, data={"api_key": "legacy-key", "currency": "EUR"},
         options={"tracked_assets": [], "tracked_wallets": ["cryptocoin_BTC"]},
     )
-    notify.reset_mock()
     assert await async_migrate_entry(hass, entry)
     wallet = er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_wallet")
     assert wallet.unique_id == f"{eid}_wallet_{BTC_ID}"
-    assert "Not migrated" not in _message(notify)
+    assert "entities_not_migrated" not in _issues(hass)
+    assert _renamed(hass) == renamed
 
 
 async def test_an_empty_currency_list_aborts_the_migration(hass, legacy_api, no_setup):

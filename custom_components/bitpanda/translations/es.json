@@ -368,48 +368,20 @@
     },
     "ecb_rates_failed": {
       "message": "No se han podido obtener los tipos de cambio del BCE: {error}"
+    }
+  },
+  "issues": {
+    "renamed_entities": {
+      "title": "Actualización de Bitpanda: ID de entidad renombrados",
+      "description": "La actualización a los dos servicios Bitpanda Portfolio y Bitpanda Price Tracker ha renombrado estos ID de entidad; su historial se ha trasladado con ellos. Revisa los paneles, automatizaciones y scripts que aún usan los ID antiguos:\n\n{entities}"
     },
-    "migration_title": {
-      "message": "Bitpanda actualizado"
+    "entities_not_migrated": {
+      "title": "Actualización de Bitpanda: entidades sin migrar",
+      "description": "La actualización ha dejado estas entidades sin cambios y ya no se actualizan. Elimínalas cuando ya no las necesites. Puede haber wallets fiat entre ellas: el sensor \"Efectivo\" del Portfolio incluye ahora todos los saldos fiat. Los registros de Home Assistant indican el motivo de cada entidad.\n\n{entities}"
     },
-    "migration_intro": {
-      "message": "Bitpanda consta ahora de dos servicios: Bitpanda Portfolio y Bitpanda Price Tracker."
-    },
-    "migration_renamed": {
-      "message": "**ID de entidad renombrados.** Revisa los paneles, automatizaciones y scripts que los usan:\n{renames}"
-    },
-    "migration_not_migrated": {
-      "message": "**Entidades sin migrar** (se han dejado sin cambios; elimínalas cuando ya no las necesites):\n{entities}"
-    },
-    "migration_new_key": {
-      "message": "Bitpanda necesita una nueva clave API con los permisos Guthaben (Balance), Transaktion (Transaction) y Earn (Read). Créala en {api_key_url} e introdúcela cuando Home Assistant te la pida. Si un cuadro de diálogo de Bitpanda muestra texto sin formato, recarga la pestaña del navegador."
-    },
-    "migration_currency_dropped": {
-      "message": "Bitpanda ya no ofrece {currency}; el Portfolio expresa ahora sus valores en EUR."
-    },
-    "migration_asset_ambiguous": {
-      "message": "{symbol} coincide con {count} activos y no está claro cuál"
-    },
-    "migration_asset_gone": {
-      "message": "{symbol} ya no existe en Bitpanda"
-    },
-    "migration_fiat_in_cash": {
-      "message": "el sensor \"Efectivo\" del Portfolio incluye ahora todos los saldos fiat"
-    },
-    "migration_currency_gone": {
-      "message": "Bitpanda ya no ofrece {currency}"
-    },
-    "migration_duplicate": {
-      "message": "otra entidad ya representa el mismo activo"
-    },
-    "migration_price_tracker_exists": {
-      "message": "ya había un Price Tracker configurado; añade allí el activo"
-    },
-    "migration_unknown_asset": {
-      "message": "activo desconocido"
-    },
-    "migration_unknown_wallet": {
-      "message": "wallet desconocido"
+    "currency_dropped": {
+      "title": "Actualización de Bitpanda: moneda del Portfolio cambiada a EUR",
+      "description": "{currency}, la moneda de tu entrada de Bitpanda antes de la actualización, no está disponible para Bitpanda Portfolio, así que ahora expresa todos sus valores en EUR. Para elegir otra moneda, usa \"Reconfigurar\" en la entrada \"Bitpanda Portfolio\"."
     }
   },
   "services": {

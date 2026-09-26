@@ -147,6 +147,7 @@ _LABEL_REFERENCES = {
     "reconfigure": [
         ("config", "step", "currency", "description"),
         ("options", "step", "portfolio", "description"),
+        ("issues", "currency_dropped", "description"),
     ],
     "configure": [("config", "abort", "no_reconfigure")],
     "submit": [

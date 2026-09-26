@@ -368,48 +368,20 @@
     },
     "ecb_rates_failed": {
       "message": "Kan de wisselkoersen van de ECB niet ophalen: {error}"
+    }
+  },
+  "issues": {
+    "renamed_entities": {
+      "title": "Bitpanda-update: entiteit-ID's hernoemd",
+      "description": "Bij de overstap naar de twee diensten Bitpanda Portfolio en Bitpanda Price Tracker zijn deze entiteit-ID's hernoemd; hun geschiedenis is meegegaan. Controleer dashboards, automatiseringen en scripts die nog de oude ID's gebruiken:\n\n{entities}"
     },
-    "migration_title": {
-      "message": "Bitpanda bijgewerkt"
+    "entities_not_migrated": {
+      "title": "Bitpanda-update: entiteiten niet gemigreerd",
+      "description": "De update heeft deze entiteiten ongewijzigd gelaten; ze worden niet meer bijgewerkt. Verwijder ze zodra je ze niet meer nodig hebt. Er kunnen fiatwallets tussen zitten: de sensor \"Contanten\" van het Portfolio omvat nu alle fiatsaldi. De logs van Home Assistant noemen per entiteit de reden.\n\n{entities}"
     },
-    "migration_intro": {
-      "message": "Bitpanda bestaat nu uit twee diensten: Bitpanda Portfolio en Bitpanda Price Tracker."
-    },
-    "migration_renamed": {
-      "message": "**Hernoemde entiteit-ID's.** Controleer dashboards, automatiseringen en scripts die ze gebruiken:\n{renames}"
-    },
-    "migration_not_migrated": {
-      "message": "**Niet gemigreerd** (ongewijzigd gelaten; verwijder ze als je ze niet meer nodig hebt):\n{entities}"
-    },
-    "migration_new_key": {
-      "message": "Bitpanda heeft een nieuwe API-sleutel nodig met de rechten Guthaben (Balance), Transaktion (Transaction) en Earn (Read). Maak hem aan op {api_key_url} en voer hem in wanneer Home Assistant erom vraagt. Toont een Bitpanda-venster ruwe tekst, herlaad dan het browsertabblad."
-    },
-    "migration_currency_dropped": {
-      "message": "Bitpanda biedt {currency} niet meer aan; het Portfolio rapporteert nu in EUR."
-    },
-    "migration_asset_ambiguous": {
-      "message": "{symbol} komt overeen met {count} assets; onduidelijk welke bedoeld is"
-    },
-    "migration_asset_gone": {
-      "message": "{symbol} bestaat niet meer bij Bitpanda"
-    },
-    "migration_fiat_in_cash": {
-      "message": "de sensor \"Contanten\" van het Portfolio omvat nu alle fiatsaldi"
-    },
-    "migration_currency_gone": {
-      "message": "Bitpanda biedt {currency} niet meer aan"
-    },
-    "migration_duplicate": {
-      "message": "een andere entiteit vertegenwoordigt al dezelfde asset"
-    },
-    "migration_price_tracker_exists": {
-      "message": "er was al een Price Tracker ingesteld; voeg de asset daar toe"
-    },
-    "migration_unknown_asset": {
-      "message": "onbekende asset"
-    },
-    "migration_unknown_wallet": {
-      "message": "onbekende wallet"
+    "currency_dropped": {
+      "title": "Bitpanda-update: Portfolio-valuta gewijzigd in EUR",
+      "description": "{currency}, de valuta van je Bitpanda-invoer vóór de update, is niet beschikbaar voor Bitpanda Portfolio; dat rapporteert daarom nu alle waarden in EUR. Kies een andere valuta via \"Herconfigureer\" bij de invoer \"Bitpanda Portfolio\"."
     }
   },
   "services": {

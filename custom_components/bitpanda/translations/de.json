@@ -332,6 +332,9 @@
     "history_unavailable": {
       "message": "Es konnte kein Portfolio-Verlauf abgerufen werden."
     },
+    "portfolio_empty": {
+      "message": "Bitpanda hat ein leeres Portfolio gemeldet. Bis die nächsten Antworten das bestätigen, gilt es als Störung und es wird nichts entfernt."
+    },
     "prices_rate_limited": {
       "message": "Bitpanda hat zu viele Preisabfragen erhalten. Es wird später erneut versucht."
     },

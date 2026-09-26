@@ -273,6 +273,32 @@ async def test_wallet_groups_the_manager_adds_or_removes_never_reload_the_portfo
     assert er.async_get(hass).async_get("sensor.bitpanda_gold_xau_wallet") is None
 
 
+async def test_a_sudden_empty_portfolio_changes_nothing_until_it_is_confirmed(
+    hass, portfolio_api
+):
+    """A Bitpanda glitch must not read as a sale of everything: the Portfolio
+    goes unavailable, and its wallets stay, until three empty answers in a
+    row confirm it. From then on the usual rules apply."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    portfolio_api.return_value = []
+    ent_reg = er.async_get(hass)
+
+    for _ in range(2):
+        await _next_refresh(hass)
+        for entity_id in ("sensor.bitpanda_portfolio_total", "sensor.bitpanda_vision_vsn_wallet"):
+            assert hass.states.get(entity_id).state == "unavailable"
+    assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet") is not None
+
+    # Confirmed: the truth from here on, and the wallet's first miss.
+    await _next_refresh(hass)
+    assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
+    await _next_refresh(hass)
+    assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet") is not None
+    await _next_refresh(hass)
+    assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet") is None
+
+
 @pytest.mark.parametrize(
     "change",
     [

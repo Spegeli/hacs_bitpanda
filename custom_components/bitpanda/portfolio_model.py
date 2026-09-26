@@ -176,6 +176,15 @@ class PortfolioData:
         return set(self.holdings) | self.unparsed_assets
 
 
+def lists_nothing(entries: list[dict]) -> bool:
+    """Whether a /portfolio answer lists no asset and no fiat entry at all.
+
+    An entry with neither `asset_id` nor `currency_id` does not count:
+    parse_portfolio ignores it, the same as an entry that never existed.
+    """
+    return not any(entry.get("asset_id") or entry.get("currency_id") for entry in entries)
+
+
 def parse_portfolio(entries: list[dict]) -> PortfolioData:
     """Normalise a /portfolio response.
 

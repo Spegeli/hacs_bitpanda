@@ -24,11 +24,13 @@ from .const import (
     PORTFOLIO_TIMEFRAMES,
     PORTFOLIO_UPDATE_INTERVAL,
     REWARDS_UPDATE_INTERVAL,
+    WALLET_REMOVAL_MISSES,
 )
 from .portfolio_model import (
     EarnData,
     PortfolioData,
     RewardTotals,
+    lists_nothing,
     parse_earn_configs,
     parse_portfolio,
     sum_rewards,
@@ -59,6 +61,18 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
 
     Values arrive converted by Bitpanda (`equivalent_currency_id`): no
     exchange rate is derived or applied here.
+
+    A completely empty answer -- no asset and no fiat entry at all -- right
+    after one that listed something is far more likely a glitch at Bitpanda
+    than a sale of everything. It fails the update instead: the sensors go
+    unavailable, and the wallet manager, which acts only on successful
+    refreshes, counts no miss and removes nothing. Only the answer that
+    makes WALLET_REMOVAL_MISSES empty ones in a row is taken as the truth:
+    Total 0, and from then on every empty answer is too, and the wallets
+    count as missing as usual. A failed request in between neither counts
+    nor resets. An empty first answer -- a new, empty account -- is the
+    truth at once, so setup works; the count lives in memory, so after a
+    restart or reload the first answer is a first answer again.
     """
 
     def __init__(
@@ -79,6 +93,11 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
         self._client = client
         self._currency_id = currency_id
         self._directory = directory
+        # Whether the last answer taken as the truth listed anything (False
+        # before the first), and the empty answers in a row since the last
+        # one that did -- see the class docstring.
+        self._listed = False
+        self._empty_in_a_row = 0
 
     async def _async_update_data(self) -> PortfolioData:
         try:
@@ -89,6 +108,16 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
             raise _auth_failed() from None
         except BitpandaApiError as err:
             raise _update_failed(err) from None
+        if not lists_nothing(entries):
+            self._listed = True
+            self._empty_in_a_row = 0
+        elif self._listed:
+            self._empty_in_a_row += 1
+            if self._empty_in_a_row < WALLET_REMOVAL_MISSES:
+                raise UpdateFailed(
+                    translation_domain=DOMAIN, translation_key="portfolio_empty"
+                )
+            self._listed = False
         data = parse_portfolio(entries)
         # Never raises: a failed lookup leaves the holdings not named yet
         # unnamed until the next refresh instead of failing the portfolio.

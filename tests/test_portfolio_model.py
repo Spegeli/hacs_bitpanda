@@ -4,6 +4,7 @@ from custom_components.bitpanda.portfolio_model import (
     Holding,
     PortfolioData,
     _is_later,
+    lists_nothing,
     parse_earn_configs,
     parse_portfolio,
     staking_applies,
@@ -133,6 +134,14 @@ def test_an_unparsable_holding_makes_total_and_cash_plus_unknown():
     assert data.total is None
     assert data.cash_plus is None
     assert data.wallet_ids == [VSN]
+
+
+def test_an_answer_lists_nothing_only_without_any_asset_or_fiat_entry():
+    """An unreadable entry is still listed; one of no documented shape is not."""
+    assert lists_nothing([])
+    assert lists_nothing([{"something": "else"}])
+    assert not lists_nothing([_fiat_entry("0.00")])
+    assert not lists_nothing([{"asset_id": VSN, "balance": {"value": "x"}}])
 
 
 def test_an_unparsable_fiat_balance_makes_cash_and_total_unknown():

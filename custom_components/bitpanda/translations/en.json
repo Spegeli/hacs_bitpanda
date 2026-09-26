@@ -332,6 +332,9 @@
     "history_unavailable": {
       "message": "No portfolio history could be fetched."
     },
+    "portfolio_empty": {
+      "message": "Bitpanda reported an empty portfolio. Until the next answers confirm it, it counts as a glitch and nothing is removed."
+    },
     "prices_rate_limited": {
       "message": "Bitpanda received too many price requests. Retrying later."
     },

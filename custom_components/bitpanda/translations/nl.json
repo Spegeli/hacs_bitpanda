@@ -332,6 +332,9 @@
     "history_unavailable": {
       "message": "Er kon geen portfoliogeschiedenis worden opgehaald."
     },
+    "portfolio_empty": {
+      "message": "Bitpanda heeft een leeg portfolio gemeld. Zolang de volgende antwoorden dat niet bevestigen, geldt het als storing en wordt er niets verwijderd."
+    },
     "prices_rate_limited": {
       "message": "Bitpanda heeft te veel prijsverzoeken ontvangen. Er volgt later een nieuwe poging."
     },

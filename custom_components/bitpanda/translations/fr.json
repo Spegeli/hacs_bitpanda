@@ -332,6 +332,9 @@
     "history_unavailable": {
       "message": "Impossible de récupérer l'historique du Portfolio."
     },
+    "portfolio_empty": {
+      "message": "Bitpanda a signalé un Portfolio vide. Tant que les réponses suivantes ne le confirment pas, cela compte comme une anomalie et rien n'est supprimé."
+    },
     "prices_rate_limited": {
       "message": "Bitpanda a reçu trop de demandes de prix. Nouvelle tentative plus tard."
     },

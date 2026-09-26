@@ -931,27 +931,56 @@ async def test_a_price_sensor_registered_before_keeps_its_id_and_takes_the_new_n
     assert dr.async_get(hass).async_get(device.id).name == "Bitcoin (BTC) Price Tracker"
 
 
-async def test_a_wallet_sensor_registered_before_keeps_its_id_and_takes_its_new_name(
+# An ETF missing from assets-sample.json: the one the brief names.
+_AMUNDI = {
+    "id": "1f0ed6c9-ee10-68c6-8a0e-55a29b7757fe",
+    "symbol": "LYY1",
+    "name": "Amundi PEA S&P 500 UCITS ETF",
+    "isin": "FR0011871136",
+    "type": "equity_security",
+    "group": "equity_etf",
+}
+
+
+async def test_a_wallet_registered_before_keeps_its_id_and_takes_the_new_names(
     hass, portfolio_api
 ):
-    """The same for a wallet: its sensor was `…_wallet`, and read as its
-    device's name."""
+    """The same for a wallet, here an ETF's from before its label carried
+    the ISIN: its device was "… (LYY1) Wallet" and its sensor `…_wallet`,
+    named as the device. The device takes its new name, the sensor its
+    name "Balance (available)"; the sensor keeps its entity ID."""
+    position, cash = portfolio_api.return_value
+    portfolio_api.return_value = [
+        {**position, "asset_id": _AMUNDI["id"], "available_balance": {"value": "100.00000000"}},
+        cash,
+    ]
     entry = _portfolio_entry(hass)
     device = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
-        identifiers={(DOMAIN, f"{entry.entry_id}_wallet_{VSN['id']}")},
-        name="Vision (VSN) Wallet",
+        identifiers={(DOMAIN, f"{entry.entry_id}_wallet_{_AMUNDI['id']}")},
+        name="Amundi PEA S&P 500 UCITS ETF (LYY1) Wallet",
     )
+    registered = "sensor.bitpanda_amundi_pea_s_p_500_ucits_etf_lyy1_wallet"
     er.async_get(hass).async_get_or_create(
-        "sensor", DOMAIN, f"{entry.entry_id}_wallet_{VSN['id']}", config_entry=entry,
-        device_id=device.id, suggested_object_id="bitpanda_vision_vsn_wallet",
+        "sensor", DOMAIN, f"{entry.entry_id}_wallet_{_AMUNDI['id']}", config_entry=entry,
+        device_id=device.id, suggested_object_id=registered.split(".", 1)[1],
     )
-    await _setup(hass, entry)
-    assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_available") is None
-    assert _value(hass, "sensor.bitpanda_vision_vsn_wallet") == 50.0
-    assert (
-        hass.states.get("sensor.bitpanda_vision_vsn_wallet").attributes["friendly_name"]
-        == "Vision (VSN) Wallet Balance (available)"
+
+    def _assets(**kwargs):
+        return [_AMUNDI] if kwargs.get("asset_id") == _AMUNDI["id"] else _lookup(**kwargs)
+
+    with patch(f"{_CLIENT}async_get_assets", AsyncMock(side_effect=_assets)):
+        await _setup(hass, entry)
+
+    assert dr.async_get(hass).async_get(device.id).name == (
+        "Amundi PEA S&P 500 UCITS ETF (LYY1 / FR0011871136) Wallet"
+    )
+    assert hass.states.get(
+        "sensor.bitpanda_amundi_pea_s_p_500_ucits_etf_lyy1_fr0011871136_wallet_available"
+    ) is None
+    assert _value(hass, registered) == 200.0
+    assert hass.states.get(registered).attributes["friendly_name"] == (
+        "Amundi PEA S&P 500 UCITS ETF (LYY1 / FR0011871136) Wallet Balance (available)"
     )
 
 

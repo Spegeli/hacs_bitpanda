@@ -1,9 +1,16 @@
 pytest>=8.0.0
 pytest-asyncio>=0.24.0
-# Tracks the Home Assistant release the live instance runs. The suite mocks
-# HTTP through homeassistant's own AiohttpClientMocker, which ships inside this
-# package, so there is no separate mocking library to keep in step with aiohttp.
-pytest-homeassistant-custom-component>=0.13.316
+# Pinned, and with it the Home Assistant release the suite runs against
+# (0.13.366: Home Assistant 2026.9.3, on Python 3.14), so that CI turns red
+# only for a change in this repository, never because Home Assistant
+# released. It pins pytest and its plugins exactly as well, so the ">=" lines
+# here are floors only. To move to another Home Assistant release, pick the
+# version whose homeassistant requirement names that release, and rebuild
+# any local test image built from this file along with it: local runs and CI
+# then test against the same release. The suite mocks HTTP through
+# homeassistant's own AiohttpClientMocker, which ships inside this package,
+# so there is no separate mocking library to keep in step with aiohttp.
+pytest-homeassistant-custom-component==0.13.366
 # Declared explicitly although the line above pulls it in today. The
 # stuck-cursor pagination test is guarded by @pytest.mark.timeout, and an
 # undeclared transitive dependency that later disappears would turn that
@@ -12,6 +19,13 @@ pytest-homeassistant-custom-component>=0.13.316
 pytest-timeout>=2.4.0
 # Line coverage, measured with
 #   pytest tests/ --cov=custom_components.bitpanda --cov-report=term-missing
-# config_flow.py and asset_flow.py stay at 100 % (quality scale rules
+# CI fails under 95 % overall (.github/workflows/tests.yml); config_flow.py
+# and asset_flow.py stay at 100 % (quality scale rules
 # config-flow-test-coverage and test-coverage).
 pytest-cov>=6.0.0
+# Strict typing of the integration, `mypy --strict` as configured in mypy.ini
+# (quality scale rule strict-typing). Pinned for the same reason as Home
+# Assistant above — a new mypy release can find new errors in unchanged
+# code — and bumped the same way, with any local test image rebuilt along
+# with it.
+mypy==2.3.1

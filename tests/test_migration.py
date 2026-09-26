@@ -623,16 +623,18 @@ async def test_wallets_are_rekeyed_and_default_ids_renamed(hass, legacy_api, no_
     assert await async_migrate_entry(hass, entry)
 
     ent_reg = er.async_get(hass)
-    btc = ent_reg.async_get("sensor.bitpanda_bitcoin_btc_wallet")
+    # A legacy wallet showed the unstaked units: it becomes Balance
+    # (available), `…_wallet_available`, with its history.
+    btc = ent_reg.async_get("sensor.bitpanda_bitcoin_btc_wallet_available")
     assert btc.unique_id == f"{eid}_wallet_{BTC_ID}"
     assert btc.device_id is None
     # A "_2" suffix still counts as the legacy default.
-    assert ent_reg.async_get("sensor.bitpanda_gold_xau_wallet").unique_id == f"{eid}_wallet_{GOLD_ID}"
+    assert ent_reg.async_get("sensor.bitpanda_gold_xau_wallet_available").unique_id == f"{eid}_wallet_{GOLD_ID}"
     # A user's own ID is kept; only the unique_id moves.
     assert ent_reg.async_get("sensor.my_index").unique_id == f"{eid}_wallet_{BCI5_ID}"
     assert dr.async_get(hass).async_get(device) is None
     renamed = _renamed(hass)
-    assert "- `sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet`" in renamed
+    assert "- `sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet_available`" in renamed
     assert "sensor.my_index" not in renamed
 
 
@@ -691,8 +693,8 @@ async def test_a_migrated_install_ends_with_its_wallets_in_groups(hass, legacy_a
         "metal": "Precious metals",
     }
     ent_reg = er.async_get(hass)
-    btc = ent_reg.async_get("sensor.bitpanda_bitcoin_btc_wallet")
-    gold = ent_reg.async_get("sensor.bitpanda_gold_xau_wallet")
+    btc = ent_reg.async_get("sensor.bitpanda_bitcoin_btc_wallet_available")
+    gold = ent_reg.async_get("sensor.bitpanda_gold_xau_wallet_available")
     assert (btc.unique_id, btc.config_subentry_id) == (
         f"{eid}_wallet_{BTC_ID}", groups["crypto"].subentry_id,
     )
@@ -775,7 +777,7 @@ async def test_a_legacy_wallet_whose_asset_already_has_a_wallet_is_left_and_list
     legacy = _legacy_entity(
         hass, entry, f"{eid}_wallet_cryptocoin_BTC", "bitpanda_wallets_btc_wallet"
     )
-    _legacy_entity(hass, entry, f"{eid}_wallet_{BTC_ID}", "bitpanda_bitcoin_btc_wallet")
+    _legacy_entity(hass, entry, f"{eid}_wallet_{BTC_ID}", "bitpanda_bitcoin_btc_wallet_available")
 
     assert await async_migrate_entry(hass, entry)
 
@@ -824,7 +826,7 @@ async def test_a_wallet_prefix_decides_between_legacy_types(hass, legacy_api, no
     ent_reg = er.async_get(hass)
     assert ent_reg.async_get_entity_id(
         "sensor", DOMAIN, f"{eid}_wallet_22222222-2222-2222-2222-222222222222"
-    ) == "sensor.bitpanda_twin_metal_twin_wallet"
+    ) == "sensor.bitpanda_twin_metal_twin_wallet_available"
 
 
 async def test_legacy_price_sensors_move_to_the_price_tracker(hass, legacy_api, price_api):
@@ -839,17 +841,17 @@ async def test_legacy_price_sensors_move_to_the_price_tracker(hass, legacy_api, 
     [tracker] = _price_trackers(hass)
     [group] = tracker.subentries.values()
     ent_reg = er.async_get(hass)
-    moved = ent_reg.async_get("sensor.bitpanda_bitcoin_btc_usd")
+    moved = ent_reg.async_get("sensor.bitpanda_bitcoin_btc_price_tracker_usd")
     assert moved.config_entry_id == tracker.entry_id
     assert moved.config_subentry_id == group.subentry_id
     assert moved.unique_id == f"{tracker.entry_id}_{BTC_ID}_price_USD"
     # The adopted entity IS the live USD sensor: no "_2" twin beside it.
-    assert ent_reg.async_get("sensor.bitpanda_bitcoin_btc_usd_2") is None
-    assert float(hass.states.get("sensor.bitpanda_bitcoin_btc_usd").state) == 200.0
+    assert ent_reg.async_get("sensor.bitpanda_bitcoin_btc_price_tracker_usd_2") is None
+    assert float(hass.states.get("sensor.bitpanda_bitcoin_btc_price_tracker_usd").state) == 200.0
     assert "legacy_adopt" not in tracker.data
     assert dr.async_get(hass).async_get(device) is None
     assert (
-        "- `sensor.bitpanda_price_tracker_btc_usd` → `sensor.bitpanda_bitcoin_btc_usd`"
+        "- `sensor.bitpanda_price_tracker_btc_usd` → `sensor.bitpanda_bitcoin_btc_price_tracker_usd`"
         in _renamed(hass)
     )
 
@@ -879,7 +881,7 @@ async def test_the_renamed_issue_reports_the_id_the_adoption_gave(hass, legacy_a
 
     def _take_the_planned_id(hass, tracker):
         er.async_get(hass).async_get_or_create(
-            "sensor", "other", "x", suggested_object_id="bitpanda_bitcoin_btc_eur"
+            "sensor", "other", "x", suggested_object_id="bitpanda_bitcoin_btc_price_tracker_eur"
         )
 
     with _adoption_preceded_by(_take_the_planned_id):
@@ -887,9 +889,9 @@ async def test_the_renamed_issue_reports_the_id_the_adoption_gave(hass, legacy_a
         await hass.async_block_till_done()
 
     [tracker] = _price_trackers(hass)
-    adopted = er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_eur_2")
+    adopted = er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_price_tracker_eur_2")
     assert adopted.unique_id == f"{tracker.entry_id}_{BTC_ID}_price_EUR"
-    assert _renamed(hass) == f"- `{legacy}` → `sensor.bitpanda_bitcoin_btc_eur_2`"
+    assert _renamed(hass) == f"- `{legacy}` → `sensor.bitpanda_bitcoin_btc_price_tracker_eur_2`"
 
 
 async def test_the_issues_list_a_price_entity_the_adoption_left(
@@ -939,7 +941,7 @@ async def test_the_issues_claim_no_rename_for_an_entity_gone_before_adoption(
         assert await async_migrate_entry(hass, entry)
         await hass.async_block_till_done()
 
-    assert er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_eur") is not None
+    assert er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_price_tracker_eur") is not None
     assert _issues(hass) == {}
 
 
@@ -957,8 +959,8 @@ async def test_each_legacy_price_sensor_moves_into_the_group_of_its_asset(
     [tracker] = _price_trackers(hass)
     groups = {s.unique_id: s.subentry_id for s in tracker.subentries.values()}
     ent_reg = er.async_get(hass)
-    btc = ent_reg.async_get("sensor.bitpanda_bitcoin_btc_eur")
-    gold = ent_reg.async_get("sensor.bitpanda_gold_xau_eur")
+    btc = ent_reg.async_get("sensor.bitpanda_bitcoin_btc_price_tracker_eur")
+    gold = ent_reg.async_get("sensor.bitpanda_gold_xau_price_tracker_eur")
     assert (btc.config_subentry_id, btc.unique_id) == (
         groups["crypto"], f"{tracker.entry_id}_{BTC_ID}_price_EUR",
     )
@@ -1025,7 +1027,7 @@ async def test_adoption_skips_an_entity_that_no_longer_exists(hass):
     tracker = _tracker_adopting(
         hass, sid,
         {"entity_id": "sensor.bitpanda_price_tracker_btc_eur", "unique_id": f"{sid}_BTC_price_EUR",
-         "asset_id": BTC_ID, "currency": "EUR", "new_entity_id": "sensor.bitpanda_bitcoin_btc_eur"},
+         "asset_id": BTC_ID, "currency": "EUR", "new_entity_id": "sensor.bitpanda_bitcoin_btc_price_tracker_eur"},
     )
 
     async_adopt_legacy_prices(hass, tracker)
@@ -1044,11 +1046,11 @@ async def test_adoption_leaves_a_legacy_entity_whose_price_is_already_taken(hass
     tracker = _tracker_adopting(
         hass, sid,
         {"entity_id": legacy, "unique_id": f"{sid}_BTC_price_EUR", "asset_id": BTC_ID,
-         "currency": "EUR", "new_entity_id": "sensor.bitpanda_bitcoin_btc_eur"},
+         "currency": "EUR", "new_entity_id": "sensor.bitpanda_bitcoin_btc_price_tracker_eur"},
     )
     taken = er.async_get(hass).async_get_or_create(
         "sensor", DOMAIN, f"{tracker.entry_id}_{BTC_ID}_price_EUR", config_entry=tracker,
-        suggested_object_id="bitpanda_bitcoin_btc_eur",
+        suggested_object_id="bitpanda_bitcoin_btc_price_tracker_eur",
     ).entity_id
 
     async_adopt_legacy_prices(hass, tracker)
@@ -1207,7 +1209,7 @@ async def test_the_upgrade_raises_exactly_the_repair_issues_that_apply(
     } == {
         "renamed_entities": (
             "renamed_entities",
-            {"entities": "- `sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet`"},
+            {"entities": "- `sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet_available`"},
         ),
         "entities_not_migrated": (
             "entities_not_migrated", {"entities": f"- `{gone}`\n- `{price}`"},
@@ -1250,7 +1252,7 @@ async def test_the_full_mapping_is_logged_once_in_english(
     assert _logged(caplog) == (
         "Bitpanda is now two services: Bitpanda Portfolio and Bitpanda Price Tracker.\n\n"
         "Renamed entity IDs. Check dashboards, automations and scripts that use them:\n"
-        "- `sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet`\n\n"
+        "- `sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet_available`\n\n"
         "Not migrated (left unchanged; delete them when you no longer need them):\n"
         f"- `{gone}`: GONE no longer exists at Bitpanda\n"
         f"- `{price}`: a Price Tracker was already set up\n\n"
@@ -1339,7 +1341,7 @@ async def test_an_interrupted_migration_can_run_again(hass, legacy_api, no_setup
         options={"tracked_assets": [], "tracked_wallets": ["cryptocoin_BTC"]},
     )
     assert await async_migrate_entry(hass, entry)
-    wallet = er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_wallet")
+    wallet = er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_wallet_available")
     assert wallet.unique_id == f"{eid}_wallet_{BTC_ID}"
     assert "entities_not_migrated" not in _issues(hass)
     assert _renamed(hass) == renamed

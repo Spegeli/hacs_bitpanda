@@ -38,7 +38,7 @@ def _sensor(currency="EUR", prices=None, rates=_RATES, ecb=True):
 
 def test_ids_names_and_device():
     sensor = _sensor("USD")
-    assert sensor.entity_id == "sensor.bitpanda_bitcoin_btc_usd"
+    assert sensor.entity_id == "sensor.bitpanda_bitcoin_btc_price_tracker_usd"
     assert sensor.unique_id == f"eid_{BTC['id']}_price_USD"
     assert sensor.name == "USD"
     assert sensor.translation_key == "price"
@@ -47,7 +47,9 @@ def test_ids_names_and_device():
     # Long-term statistics: Home Assistant allows only `total` for money.
     assert (sensor.device_class, sensor.state_class) == ("monetary", SensorStateClass.TOTAL)
     info = price_device_info("eid", BTC)
-    assert info["name"] == "Bitcoin (BTC)"
+    # English, like the wallet's "… Wallet": Home Assistant lists an entity
+    # under its device's name, and this one says what the sensor is.
+    assert info["name"] == "Bitcoin (BTC) Price Tracker"
     assert info["identifiers"] == {("bitpanda", f"eid_price_{BTC['id']}")}
 
 
@@ -146,10 +148,10 @@ async def test_each_group_adds_the_sensors_of_its_assets_under_its_subentry(hass
     subentry_ids = {s.unique_id: s.subentry_id for s in entry.subentries.values()}
     assert by_subentry == {
         subentry_ids["crypto"]: [
-            "sensor.bitpanda_bitcoin_btc_eur", "sensor.bitpanda_bitcoin_btc_usd",
-            "sensor.bitpanda_solana_sol_eur", "sensor.bitpanda_solana_sol_usd",
+            "sensor.bitpanda_bitcoin_btc_price_tracker_eur", "sensor.bitpanda_bitcoin_btc_price_tracker_usd",
+            "sensor.bitpanda_solana_sol_price_tracker_eur", "sensor.bitpanda_solana_sol_price_tracker_usd",
         ],
-        subentry_ids["metal"]: ["sensor.bitpanda_gold_xau_eur", "sensor.bitpanda_gold_xau_usd"],
+        subentry_ids["metal"]: ["sensor.bitpanda_gold_xau_price_tracker_eur", "sensor.bitpanda_gold_xau_price_tracker_usd"],
     }
 
 

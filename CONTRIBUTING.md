@@ -62,7 +62,7 @@ Everything lives in `custom_components/bitpanda/`:
 | `icons.json` | Every sensor's icon, by its translation key, and the `bitpanda.refresh` service's icon — never set an icon in code |
 | `language.py` | The language of the integration's own texts: each entry's language option, the shipped languages |
 | `migration.py` | Migration of version 1 (legacy API) entries to version 3; tells the user what changed, and what keeps an entry from being upgraded, as repair issues |
-| `naming.py` | Labels, entity IDs, unique_ids, device identifiers |
+| `naming.py` | Labels, device names, entity IDs, unique_ids, device identifiers |
 | `portfolio_coordinator.py` | Portfolio, History, Earn and Rewards coordinators |
 | `portfolio_model.py` | Pure data model: holdings, value split, Cash Plus, Earn, rewards |
 | `portfolio_sensor.py` | Portfolio sensors and the wallet lifecycle manager, which also keeps the wallet groups |
@@ -82,7 +82,7 @@ The wallet lifecycle manager (`PortfolioEntityManager`) runs after every portfol
 
 **`/portfolio` has no staked field.** Staked units are `balance − available_balance`, and the cent-rounded `currency_balance` of the whole position is split in that proportion (`portfolio_model.py`). A missing `currency_balance` is no value, never 0.
 
-**Entity IDs are set explicitly.** Every entity sets its own `entity_id` from `naming.py`, in English. Never let one derive from a translated name.
+**Entity IDs are set explicitly.** Every entity sets its own `entity_id` from `naming.py`, in English: `sensor.bitpanda_`, the slug of its device's name — English too, "Vision (VSN) Wallet", "Bitcoin (BTC) Price Tracker" — and the sensor's own ending. Never let one derive from a translated name.
 
 **Every value sensor keeps long-term statistics.** Money values set `state_class` `total` — the only state class Home Assistant allows for the monetary device class — and the returns `measurement`; a new sensor needs one too. Statistics are recorded in the sensor's unit, so a sensor whose currency can change must have its statistics cleared with its history: the currency purge (`purge.py`) does that for every Portfolio sensor, and `tests/test_currency_change.py` checks it with a real recorder.
 

@@ -42,7 +42,6 @@ from .groups import (
     groups_of_type,
 )
 from .naming import (
-    asset_display_label,
     managed_asset_key,
     portfolio_device_identifier,
     portfolio_entity_id,
@@ -53,6 +52,7 @@ from .naming import (
     total_entity_id,
     total_unique_id,
     wallet_device_identifier,
+    wallet_device_name,
     wallet_entity_id,
     wallet_unique_id,
 )
@@ -84,7 +84,7 @@ def portfolio_device_info(entry_id: str) -> DeviceInfo:
 def wallet_device_info(entry_id: str, asset: dict) -> DeviceInfo:
     return DeviceInfo(
         identifiers={(DOMAIN, wallet_device_identifier(entry_id, asset["id"]))},
-        name=f"{asset_display_label(asset)} Wallet",
+        name=wallet_device_name(asset),
         manufacturer="Bitpanda",
         model="Wallet",
         entry_type=DeviceEntryType.SERVICE,

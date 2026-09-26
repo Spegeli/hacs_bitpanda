@@ -42,10 +42,10 @@ def test_the_price_alert_watches_the_price_sensor_the_integration_creates():
     btc = next(asset for asset in load_fixture("assets-sample.json") if asset["symbol"] == "BTC")
     alert, _ = _examples()
     [trigger] = alert["triggers"]
-    assert trigger["entity_id"] == price_entity_id(btc, "EUR") == "sensor.bitpanda_bitcoin_btc_eur"
+    assert trigger["entity_id"] == price_entity_id(btc, "EUR") == "sensor.bitpanda_bitcoin_btc_price_tracker_eur"
 
 
-_PRICE = "sensor.bitpanda_bitcoin_btc_eur"
+_PRICE = "sensor.bitpanda_bitcoin_btc_price_tracker_eur"
 
 
 async def _set_up_the_alert(hass) -> list:

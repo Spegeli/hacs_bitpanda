@@ -18,7 +18,7 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.bitpanda.const import DOMAIN, PORTFOLIO_UPDATE_INTERVAL
 from custom_components.bitpanda.groups import async_get_or_create_wallet_group
-from custom_components.bitpanda.naming import asset_display_label, wallet_entity_id
+from custom_components.bitpanda.naming import wallet_device_name, wallet_entity_id
 from custom_components.bitpanda.portfolio_coordinator import PortfolioRuntime, RewardsCoordinator
 from custom_components.bitpanda.portfolio_model import EarnData, Holding, PortfolioData
 from custom_components.bitpanda.portfolio_sensor import (
@@ -45,9 +45,13 @@ _TITLES = json.loads(
     ).read_text(encoding="utf-8")
 )["selector"]["asset_group"]["options"]
 
-VSN_WALLET = "sensor.bitpanda_vision_vsn_wallet"
-VSN_ENTITIES = {VSN_WALLET, f"{VSN_WALLET}_staking", f"{VSN_WALLET}_total"}
-GOLD_WALLET = "sensor.bitpanda_gold_xau_wallet"
+VSN_WALLET = "sensor.bitpanda_vision_vsn_wallet_available"
+VSN_ENTITIES = {
+    VSN_WALLET,
+    "sensor.bitpanda_vision_vsn_wallet_staking",
+    "sensor.bitpanda_vision_vsn_wallet_total",
+}
+GOLD_WALLET = "sensor.bitpanda_gold_xau_wallet_available"
 
 
 def _holding(asset, staked=0.0) -> Holding:
@@ -163,7 +167,7 @@ class _Harness:
             config_entry_id=eid,
             config_subentry_id=group.subentry_id,
             identifiers={(DOMAIN, f"{eid}_wallet_{asset['id']}")},
-            name=f"{asset_display_label(asset)} Wallet",
+            name=wallet_device_name(asset),
         )
         er.async_get(self.hass).async_get_or_create(
             "sensor", DOMAIN, f"{eid}_wallet_{asset['id']}", config_entry=self.entry,
@@ -176,7 +180,7 @@ class _Harness:
 async def test_a_held_asset_gets_its_wallet_device(hass):
     harness = _Harness(hass)
     await harness.refresh(_data(_holding(VSN)))
-    assert harness.entity_ids() == {"sensor.bitpanda_vision_vsn_wallet"}
+    assert harness.entity_ids() == {"sensor.bitpanda_vision_vsn_wallet_available"}
     assert harness.devices() == {"Vision (VSN) Wallet"}
 
 
@@ -191,7 +195,7 @@ async def test_something_staked_adds_staking_and_total(hass):
     harness = _Harness(hass)
     await harness.refresh(_data(_holding(VSN, staked=4.0)))
     assert harness.entity_ids() == {
-        "sensor.bitpanda_vision_vsn_wallet",
+        "sensor.bitpanda_vision_vsn_wallet_available",
         "sensor.bitpanda_vision_vsn_wallet_staking",
         "sensor.bitpanda_vision_vsn_wallet_total",
     }
@@ -209,7 +213,7 @@ async def test_staking_leaves_when_nothing_is_staked_and_no_product_is_offered(h
     harness = _Harness(hass)
     await harness.refresh(_data(_holding(VSN, staked=4.0)))
     await harness.refresh(_data(_holding(VSN)))
-    assert harness.entity_ids() == {"sensor.bitpanda_vision_vsn_wallet"}
+    assert harness.entity_ids() == {"sensor.bitpanda_vision_vsn_wallet_available"}
     assert not harness.manager.has_total(VSN["id"])
 
 
@@ -221,7 +225,7 @@ async def test_unknown_earn_never_creates_staking(hass):
     harness.runtime.earn.data = EarnData(apr={}, offered=frozenset({VSN["id"]}))
     harness.runtime.earn.last_update_success = False
     await harness.refresh(_data(_holding(VSN)))
-    assert harness.entity_ids() == {"sensor.bitpanda_vision_vsn_wallet"}
+    assert harness.entity_ids() == {"sensor.bitpanda_vision_vsn_wallet_available"}
     assert not harness.manager.has_total(VSN["id"])
 
 
@@ -240,9 +244,9 @@ async def test_a_sold_asset_leaves_after_three_successful_refreshes_only(hass):
         await harness.refresh(_data(_holding(BTC)))
     # A failed refresh neither counts nor resets.
     await harness.refresh(_data(_holding(BTC)), success=False)
-    assert "sensor.bitpanda_vision_vsn_wallet" in harness.entity_ids()
+    assert "sensor.bitpanda_vision_vsn_wallet_available" in harness.entity_ids()
     await harness.refresh(_data(_holding(BTC)))
-    assert harness.entity_ids() == {"sensor.bitpanda_bitcoin_btc_wallet"}
+    assert harness.entity_ids() == {"sensor.bitpanda_bitcoin_btc_wallet_available"}
     assert harness.devices() == {"Bitcoin (BTC) Wallet"}
 
 
@@ -266,7 +270,7 @@ async def test_misses_in_quick_succession_remove_nothing(hass):
     )
     assert VSN_WALLET in harness.entity_ids()
     await harness.refresh(_data(_holding(BTC)), after=timedelta(seconds=30))
-    assert harness.entity_ids() == {"sensor.bitpanda_bitcoin_btc_wallet"}
+    assert harness.entity_ids() == {"sensor.bitpanda_bitcoin_btc_wallet_available"}
 
 
 async def test_the_regular_pace_removes_with_the_third_miss_even_a_hair_early(hass):
@@ -279,7 +283,7 @@ async def test_the_regular_pace_removes_with_the_third_miss_even_a_hair_early(ha
         await harness.refresh(
             _data(_holding(BTC)), after=PORTFOLIO_UPDATE_INTERVAL - timedelta(seconds=1)
         )
-    assert harness.entity_ids() == {"sensor.bitpanda_bitcoin_btc_wallet"}
+    assert harness.entity_ids() == {"sensor.bitpanda_bitcoin_btc_wallet_available"}
 
 
 async def test_answers_without_a_time_of_their_own_count_by_the_clock(hass, freezer):
@@ -309,7 +313,7 @@ async def test_a_returning_holding_resets_the_count(hass):
     await harness.refresh(_data(_holding(VSN), _holding(BTC)))
     await harness.refresh(_data(_holding(BTC)))
     await harness.refresh(_data(_holding(BTC)))
-    assert "sensor.bitpanda_vision_vsn_wallet" in harness.entity_ids()
+    assert "sensor.bitpanda_vision_vsn_wallet_available" in harness.entity_ids()
 
 
 async def test_an_unnamed_holding_is_not_a_miss(hass):
@@ -317,7 +321,7 @@ async def test_an_unnamed_holding_is_not_a_miss(hass):
     await harness.refresh(_data(_holding(VSN)))
     for _ in range(3):
         await harness.refresh(_data(_holding(VSN), unnamed={VSN["id"]}))
-    assert "sensor.bitpanda_vision_vsn_wallet" in harness.entity_ids()
+    assert "sensor.bitpanda_vision_vsn_wallet_available" in harness.entity_ids()
 
 
 async def test_an_unparsable_holding_is_not_a_miss(hass):
@@ -330,7 +334,7 @@ async def test_an_unparsable_holding_is_not_a_miss(hass):
         data = _data()
         data.unparsed_assets = {VSN["id"]}
         await harness.refresh(data)
-    assert "sensor.bitpanda_vision_vsn_wallet" in harness.entity_ids()
+    assert "sensor.bitpanda_vision_vsn_wallet_available" in harness.entity_ids()
 
 
 async def test_a_rebought_asset_reclaims_its_entity_id(hass):
@@ -340,7 +344,7 @@ async def test_a_rebought_asset_reclaims_its_entity_id(hass):
         await harness.refresh(_data())
     assert harness.entity_ids() == set()
     await harness.refresh(_data(_holding(VSN)))
-    assert harness.entity_ids() == {"sensor.bitpanda_vision_vsn_wallet"}
+    assert harness.entity_ids() == {"sensor.bitpanda_vision_vsn_wallet_available"}
 
 
 async def test_a_migrated_wallet_for_a_sold_asset_leaves_after_three_refreshes(hass):
@@ -348,7 +352,7 @@ async def test_a_migrated_wallet_for_a_sold_asset_leaves_after_three_refreshes(h
     ent_reg = er.async_get(hass)
     ent_reg.async_get_or_create(
         "sensor", DOMAIN, f"{harness.entry.entry_id}_wallet_{VSN['id']}",
-        config_entry=harness.entry, suggested_object_id="bitpanda_vision_vsn_wallet",
+        config_entry=harness.entry, suggested_object_id="bitpanda_vision_vsn_wallet_available",
     )
     unresolved = ent_reg.async_get_or_create(
         "sensor", DOMAIN, f"{harness.entry.entry_id}_wallet_cryptocoin_XYZ",
@@ -384,7 +388,7 @@ async def test_a_second_wallet_of_a_type_joins_its_group(hass):
     await harness.refresh(_data(_holding(VSN), _holding(BTC)))
     assert harness.groups() == {"crypto": "Cryptocurrencies"}
     assert harness.group("crypto").subentry_id == crypto.subentry_id
-    assert harness.subentry_of("sensor.bitpanda_bitcoin_btc_wallet") == crypto.subentry_id
+    assert harness.subentry_of("sensor.bitpanda_bitcoin_btc_wallet_available") == crypto.subentry_id
     assert harness.group_devices("crypto") == {"Vision (VSN) Wallet", "Bitcoin (BTC) Wallet"}
 
 

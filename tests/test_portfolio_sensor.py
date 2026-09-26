@@ -251,7 +251,7 @@ def test_wallet_is_the_unstaked_value():
     """Named by its translation key, like its Staking and Total siblings
     (tests/test_init.py checks the names)."""
     sensor = WalletSensor(_portfolio(**{VSN["id"]: _vsn()}), "eid", "EUR", VSN, lambda _: True)
-    assert sensor.entity_id == "sensor.bitpanda_vision_vsn_wallet"
+    assert sensor.entity_id == "sensor.bitpanda_vision_vsn_wallet_available"
     assert sensor.unique_id == f"eid_wallet_{VSN['id']}"
     assert sensor.translation_key == "wallet"
     assert sensor.native_value == 50.0

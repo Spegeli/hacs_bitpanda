@@ -35,9 +35,9 @@ from .const import (
 from .devices import device_identifiers
 from .groups import groups_of_type, tracked_assets
 from .naming import (
-    asset_display_label,
     price_device_asset_id,
     price_device_identifier,
+    price_device_name,
     price_entity_id,
     price_key,
     price_unique_id,
@@ -73,7 +73,7 @@ def display_precision(value: float | None) -> int:
 def price_device_info(entry_id: str, asset: dict) -> DeviceInfo:
     return DeviceInfo(
         identifiers={(DOMAIN, price_device_identifier(entry_id, asset["id"]))},
-        name=asset_display_label(asset),
+        name=price_device_name(asset),
         manufacturer="Bitpanda",
         model="Price Tracker",
         entry_type=DeviceEntryType.SERVICE,
@@ -89,8 +89,8 @@ def tracked_currencies(entry: ConfigEntry) -> list[str]:
 class PriceSensor(CoordinatorEntity, SensorEntity):
     """Price of one asset in one currency.
 
-    Named by its currency and inherits the asset label from its device, so
-    it reads "Bitcoin (BTC) EUR" on every Home Assistant version.
+    Named by its currency after its device, so it reads "Bitcoin (BTC) Price
+    Tracker EUR" on every Home Assistant version.
     """
 
     _attr_has_entity_name = True

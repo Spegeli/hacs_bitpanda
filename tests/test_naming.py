@@ -2,7 +2,6 @@
 from custom_components.bitpanda.naming import (
     LEGACY_PORTFOLIO_OBJECT_ID,
     asset_display_label,
-    asset_slug,
     is_default_entity_id,
     legacy_price_object_id,
     legacy_wallet_object_id,
@@ -13,6 +12,7 @@ from custom_components.bitpanda.naming import (
     portfolio_unique_id,
     price_device_asset_id,
     price_device_identifier,
+    price_device_name,
     price_entity_id,
     price_key,
     price_unique_id,
@@ -23,6 +23,7 @@ from custom_components.bitpanda.naming import (
     total_unique_id,
     wallet_device_asset_id,
     wallet_device_identifier,
+    wallet_device_name,
     wallet_entity_id,
     wallet_unique_id,
 )
@@ -55,12 +56,17 @@ def test_label_without_a_name_is_the_symbol():
     assert asset_display_label({"id": "x", "symbol": "ABC"}) == "ABC"
 
 
-def test_slug():
-    assert asset_slug(VISION) == "vision_vsn"
-    assert asset_slug(GOLDMONEY) == "goldmoney_inc_xau"
+def test_device_names_say_what_the_device_is_in_english():
+    """Home Assistant lists an entity under its device's name, so the name
+    tells a price sensor from a wallet's in every language."""
+    assert wallet_device_name(VISION) == "Vision (VSN) Wallet"
+    assert price_device_name(VISION) == "Vision (VSN) Price Tracker"
+    assert price_device_name(BNB) == "BNB Price Tracker"
 
 
 def test_entity_ids_match_the_spec_table():
+    """sensor.bitpanda_ + the slug of the device's name + the sensor's own
+    ending, in both services: the Portfolio device is "Portfolio"."""
     assert portfolio_entity_id("total") == "sensor.bitpanda_portfolio_total"
     assert portfolio_entity_id("cash") == "sensor.bitpanda_portfolio_cash"
     assert portfolio_entity_id("cash_plus") == "sensor.bitpanda_portfolio_cash_plus"
@@ -75,14 +81,21 @@ def test_entity_ids_match_the_spec_table():
         == "sensor.bitpanda_portfolio_return_6_months"
     )
     assert portfolio_entity_id(return_key("YEAR")) == "sensor.bitpanda_portfolio_return_year"
-    assert wallet_entity_id(VISION) == "sensor.bitpanda_vision_vsn_wallet"
+    # The wallet sensor ends in its name, "Balance (available)", like its
+    # siblings: `…_wallet` alone would read as the whole wallet.
+    assert wallet_entity_id(VISION) == "sensor.bitpanda_vision_vsn_wallet_available"
     assert staking_entity_id(VISION) == "sensor.bitpanda_vision_vsn_wallet_staking"
     assert total_entity_id(VISION) == "sensor.bitpanda_vision_vsn_wallet_total"
-    assert wallet_entity_id(GOLD) == "sensor.bitpanda_gold_xau_wallet"
-    assert wallet_entity_id(BCI5) == "sensor.bitpanda_bci5_wallet"
-    assert price_entity_id(BTC, "EUR") == "sensor.bitpanda_bitcoin_btc_eur"
-    assert price_entity_id(BTC, "USD") == "sensor.bitpanda_bitcoin_btc_usd"
-    assert price_entity_id(GOLDMONEY, "EUR") == "sensor.bitpanda_goldmoney_inc_xau_eur"
+    assert wallet_entity_id(GOLD) == "sensor.bitpanda_gold_xau_wallet_available"
+    assert wallet_entity_id(BCI5) == "sensor.bitpanda_bci5_wallet_available"
+    assert price_entity_id(VISION, "EUR") == "sensor.bitpanda_vision_vsn_price_tracker_eur"
+    assert price_entity_id(BTC, "EUR") == "sensor.bitpanda_bitcoin_btc_price_tracker_eur"
+    assert price_entity_id(BTC, "USD") == "sensor.bitpanda_bitcoin_btc_price_tracker_usd"
+    assert price_entity_id(BNB, "CHF") == "sensor.bitpanda_bnb_price_tracker_chf"
+    assert (
+        price_entity_id(GOLDMONEY, "EUR")
+        == "sensor.bitpanda_goldmoney_inc_xau_price_tracker_eur"
+    )
 
 
 def test_unique_ids_and_device_identifiers():

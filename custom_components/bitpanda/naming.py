@@ -1,8 +1,10 @@
-"""Labels, entity IDs, unique_ids and device identifiers.
+"""Labels, device names, entity IDs, unique_ids and device identifiers.
 
-Every entity ID is set explicitly, in English, from the asset's label, so it
-does not depend on the language Home Assistant runs in. unique_ids are built
-from UUIDs and never change.
+Device names are English: "Vision (VSN) Wallet", "Bitcoin (BTC) Price
+Tracker". Every entity ID is set explicitly: `sensor.bitpanda_` + the slug of
+its device's name + the sensor's own ending -- "Portfolio" + `_total`,
+"Vision (VSN) Wallet" + `_available` -- so it does not depend on the language
+Home Assistant runs in. unique_ids are built from UUIDs and never change.
 """
 from __future__ import annotations
 
@@ -50,8 +52,9 @@ def asset_display_label(asset: dict) -> str:
     return f"{name} ({symbol})"
 
 
-def asset_slug(asset: dict) -> str:
-    return slugify(asset_display_label(asset))
+def _entity_id(device_name: str, ending: str) -> str:
+    """The entity ID of the sensor with `ending` on the device `device_name`."""
+    return f"{_ENTITY_ID_PREFIX}{slugify(device_name)}_{ending}"
 
 
 def return_key(timeframe: str) -> str:
@@ -91,6 +94,10 @@ def portfolio_entity_id(key: str) -> str:
 # --- Wallet devices -------------------------------------------------------------
 
 
+def wallet_device_name(asset: dict) -> str:
+    return f"{asset_display_label(asset)} Wallet"
+
+
 def wallet_device_identifier(entry_id: str, asset_id: str) -> str:
     return f"{entry_id}_wallet_{asset_id}"
 
@@ -108,15 +115,17 @@ def total_unique_id(entry_id: str, asset_id: str) -> str:
 
 
 def wallet_entity_id(asset: dict) -> str:
-    return f"{_ENTITY_ID_PREFIX}{asset_slug(asset)}_wallet"
+    """Ends in the sensor's name, "Balance (available)", like its siblings'
+    IDs: `…_wallet` alone would read as the whole wallet."""
+    return _entity_id(wallet_device_name(asset), "available")
 
 
 def staking_entity_id(asset: dict) -> str:
-    return f"{_ENTITY_ID_PREFIX}{asset_slug(asset)}_wallet_staking"
+    return _entity_id(wallet_device_name(asset), "staking")
 
 
 def total_entity_id(asset: dict) -> str:
-    return f"{_ENTITY_ID_PREFIX}{asset_slug(asset)}_wallet_total"
+    return _entity_id(wallet_device_name(asset), "total")
 
 
 def managed_asset_key(entry_id: str, unique_id: str) -> tuple[str, str] | None:
@@ -150,6 +159,13 @@ def wallet_device_asset_id(entry_id: str, identifier: str) -> str | None:
 # --- Price Tracker devices ------------------------------------------------------
 
 
+def price_device_name(asset: dict) -> str:
+    """Says what the device is, as "… Wallet" does: Home Assistant lists an
+    entity under its device's name, and the price sensors are named by
+    their currency alone -- "Bitcoin (BTC) Price Tracker EUR"."""
+    return f"{asset_display_label(asset)} Price Tracker"
+
+
 def price_device_identifier(entry_id: str, asset_id: str) -> str:
     return f"{entry_id}_price_{asset_id}"
 
@@ -159,7 +175,7 @@ def price_unique_id(entry_id: str, asset_id: str, currency: str) -> str:
 
 
 def price_entity_id(asset: dict, currency: str) -> str:
-    return f"{_ENTITY_ID_PREFIX}{asset_slug(asset)}_{currency.lower()}"
+    return _entity_id(price_device_name(asset), currency.lower())
 
 
 def price_key(entry_id: str, unique_id: str) -> tuple[str, str] | None:

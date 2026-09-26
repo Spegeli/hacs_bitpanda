@@ -32,7 +32,7 @@ from tests.conftest import load_fixture
 _CLIENT = "custom_components.bitpanda.api.BitpandaApiClient."
 _EUR_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
 _USD_ID = "b88b8879-efe3-11eb-b56f-0691764446a7"
-_WALLET = "sensor.bitpanda_vision_vsn_wallet"
+_WALLET = "sensor.bitpanda_vision_vsn_wallet_available"
 # A fiat wallet the version 1 migration left in place: Portfolio Cash covers
 # every fiat balance now.
 _LEFTOVER = "sensor.bitpanda_wallets_usd_wallet"

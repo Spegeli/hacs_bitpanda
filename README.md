@@ -36,7 +36,7 @@ The integration offers two services. Set up either or both — each one once.
 
 ### Bitpanda Price Tracker
 - Live prices for any of 14,051 assets — crypto, stocks, ETFs, ETCs, Bitpanda Crypto Indices and tokenized precious metals — **without an API key**
-- One device per tracked asset, such as **Bitcoin (BTC)**, in groups by asset type, with a price sensor in EUR (**Bitcoin (BTC) EUR**) and, optionally, one in each of the other 11 supported currencies
+- One device per tracked asset, such as **Bitcoin (BTC) Price Tracker**, in groups by asset type, with a price sensor in EUR (**Bitcoin (BTC) Price Tracker EUR**) and, optionally, one in each of the other 11 supported currencies
 - EUR prices come from Bitpanda every 60 seconds. Above 30 tracked assets the interval stretches automatically, so the integration never sends more than 1,800 price requests per hour. Should it grow past 30 minutes (above 900 tracked assets), **Settings → Repairs** says so until you track fewer
 - Other currencies are converted with the daily reference rates of the European Central Bank (ECB), fetched every 6 hours
 - 24h price change (`change_24h_pct`) as an attribute, from the Home Assistant recorder
@@ -69,7 +69,7 @@ The integration offers two services. Set up either or both — each one once.
 Cash Plus products are cash equivalents — one unit is one unit of their currency — so the Price Tracker leaves them out.
 
 ### Languages
-- English, German, French, Dutch, Italian, Spanish and Polish; any other language gets English. Entity IDs, device names (such as **Vision (VSN) Wallet**) and log messages stay English
+- English, German, French, Dutch, Italian, Spanish and Polish; any other language gets English. Entity IDs, device names (such as **Vision (VSN) Wallet** or **Bitcoin (BTC) Price Tracker**) and log messages stay English
 - Native speakers: corrections are welcome as an [issue](https://github.com/Spegeli/hacs_bitpanda/issues) or a pull request (see [CONTRIBUTING](CONTRIBUTING.md#translations))
 
 #### Three language settings
@@ -155,14 +155,14 @@ The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stock
 
 ### Entity IDs
 
-Entity IDs are English and fixed, whatever language Home Assistant runs in. Assets are labelled `Name (SYMBOL)`, or just the symbol when the name only repeats it (BNB, BCI5).
+Entity IDs are English and fixed, whatever language Home Assistant runs in: `sensor.bitpanda_`, then the device's name as an ID writes it (lower case, `_` for spaces and punctuation), then the sensor's own ending. Device names are English too — the asset's label followed by **Wallet** or **Price Tracker**. Assets are labelled `Name (SYMBOL)`, or just the symbol when the name only repeats it (BNB, BCI5).
 
 | Sensor | Entity ID |
 |---|---|
 | Portfolio Total value / Cash / Cash Plus | `sensor.bitpanda_portfolio_total`, `sensor.bitpanda_portfolio_cash`, `sensor.bitpanda_portfolio_cash_plus` |
 | Portfolio returns | `sensor.bitpanda_portfolio_return_day`, `_week`, `_month`, `_6_months`, `_year` |
-| Vision (VSN) Wallet: Balance (available) / (staking) / (total) | `sensor.bitpanda_vision_vsn_wallet`, `sensor.bitpanda_vision_vsn_wallet_staking`, `sensor.bitpanda_vision_vsn_wallet_total` |
-| Bitcoin (BTC) in EUR / USD | `sensor.bitpanda_bitcoin_btc_eur`, `sensor.bitpanda_bitcoin_btc_usd` |
+| Vision (VSN) Wallet: Balance (available) / (staking) / (total) | `sensor.bitpanda_vision_vsn_wallet_available`, `sensor.bitpanda_vision_vsn_wallet_staking`, `sensor.bitpanda_vision_vsn_wallet_total` |
+| Bitcoin (BTC) Price Tracker: EUR / USD | `sensor.bitpanda_bitcoin_btc_price_tracker_eur`, `sensor.bitpanda_bitcoin_btc_price_tracker_usd` |
 
 When two assets share a label, Home Assistant appends `_2` to the second one's ID.
 
@@ -191,7 +191,7 @@ Paste one into a new automation's YAML editor (in the automation editor: **⋮ �
 alias: Bitcoin above 100,000 EUR
 triggers:
   - trigger: numeric_state
-    entity_id: sensor.bitpanda_bitcoin_btc_eur
+    entity_id: sensor.bitpanda_bitcoin_btc_price_tracker_eur
     above: 100000
 conditions:
   # Only a real crossing: not the price coming back after an outage or a restart.
@@ -201,7 +201,7 @@ actions:
   - action: persistent_notification.create
     data:
       title: Bitcoin
-      message: "Bitcoin is at {{ states('sensor.bitpanda_bitcoin_btc_eur') }} EUR."
+      message: "Bitcoin is at {{ states('sensor.bitpanda_bitcoin_btc_price_tracker_eur') }} EUR."
 ```
 
 For a push message to your phone, use its `notify.mobile_app_…` action instead.
@@ -242,7 +242,7 @@ If a **Bitpanda Portfolio** was set up while the old entry still waited for its 
 **What changes:**
 
 - **Two services.** Your entry becomes **Bitpanda Portfolio**; your price trackers move to a new **Bitpanda Price Tracker** entry.
-- **Entity IDs follow the new scheme**, for example `sensor.bitpanda_wallets_vsn_wallet` → `sensor.bitpanda_vision_vsn_wallet` and `sensor.bitpanda_price_tracker_btc_eur` → `sensor.bitpanda_bitcoin_btc_eur`.
+- **Entity IDs follow the new scheme**, for example `sensor.bitpanda_wallets_vsn_wallet` → `sensor.bitpanda_vision_vsn_wallet_available` and `sensor.bitpanda_price_tracker_btc_eur` → `sensor.bitpanda_bitcoin_btc_price_tracker_eur`.
 - **Every holding is tracked**, not only the wallets you picked, and each gets its own device, in a group by asset type.
 - **Group titles and the integration's own messages are English by default**, whatever language Home Assistant runs in. Choose another language under **Configure** on each service (see [Languages](#languages)). A group already titled in another language becomes English at the first start with this version unless you choose that language; a title you gave a group yourself stays.
 - **Wallets of assets you no longer hold go away.** They are migrated like the others, then removed together with their history after three portfolio refreshes without them — about ten minutes after the Portfolio starts working with your new key.

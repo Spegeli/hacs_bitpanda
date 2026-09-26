@@ -171,14 +171,14 @@ async def test_portfolio_setup_creates_its_devices_and_sensors(hass, portfolio_a
     assert _value(hass, "sensor.bitpanda_portfolio_cash") == 10.0
     assert _value(hass, "sensor.bitpanda_portfolio_cash_plus") == 0.0
     assert _value(hass, "sensor.bitpanda_portfolio_return_day") == 1.5
-    assert _value(hass, "sensor.bitpanda_vision_vsn_wallet") == 50.0
+    assert _value(hass, "sensor.bitpanda_vision_vsn_wallet_available") == 50.0
     assert _value(hass, "sensor.bitpanda_vision_vsn_wallet_staking") == 150.0
     assert _value(hass, "sensor.bitpanda_vision_vsn_wallet_total") == 200.0
     assert {
         entity_id: hass.states.get(entity_id).attributes["friendly_name"]
         for entity_id in _VSN_ENTITIES
     } == {
-        "sensor.bitpanda_vision_vsn_wallet": "Vision (VSN) Wallet Balance (available)",
+        "sensor.bitpanda_vision_vsn_wallet_available": "Vision (VSN) Wallet Balance (available)",
         "sensor.bitpanda_vision_vsn_wallet_staking": "Vision (VSN) Wallet Balance (staking)",
         "sensor.bitpanda_vision_vsn_wallet_total": "Vision (VSN) Wallet Balance (total)",
     }
@@ -197,7 +197,7 @@ async def test_the_wallet_sensor_keeps_its_name_without_staking(hass, portfolio_
     await _setup(hass, entry)
     assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_staking") is None
     assert (
-        hass.states.get("sensor.bitpanda_vision_vsn_wallet").attributes["friendly_name"]
+        hass.states.get("sensor.bitpanda_vision_vsn_wallet_available").attributes["friendly_name"]
         == "Vision (VSN) Wallet Balance (available)"
     )
 
@@ -274,7 +274,7 @@ async def test_the_runtime_repr_never_prints_the_api_key(hass, portfolio_api):
 
 
 _VSN_ENTITIES = (
-    "sensor.bitpanda_vision_vsn_wallet",
+    "sensor.bitpanda_vision_vsn_wallet_available",
     "sensor.bitpanda_vision_vsn_wallet_staking",
     "sensor.bitpanda_vision_vsn_wallet_total",
 )
@@ -337,7 +337,7 @@ async def test_a_deleted_wallet_group_comes_back_on_the_next_refresh_without_a_r
     for entity_id in _VSN_ENTITIES:
         assert ent_reg.async_get(entity_id).config_subentry_id == regrouped.subentry_id
     assert _group_devices(hass, entry, regrouped) == {"Vision (VSN) Wallet"}
-    assert _value(hass, "sensor.bitpanda_vision_vsn_wallet") == 50.0
+    assert _value(hass, "sensor.bitpanda_vision_vsn_wallet_available") == 50.0
 
 
 async def test_wallet_groups_the_manager_adds_or_removes_never_reload_the_portfolio(
@@ -360,14 +360,14 @@ async def test_wallet_groups_the_manager_adds_or_removes_never_reload_the_portfo
     await _next_refresh(hass, freezer)
     assert portfolio_api.call_count == calls + 1
     assert [sub.unique_id for sub in entry.subentries.values()] == ["crypto", "metal"]
-    assert _value(hass, "sensor.bitpanda_gold_xau_wallet") == 3000.0
+    assert _value(hass, "sensor.bitpanda_gold_xau_wallet_available") == 3000.0
 
     portfolio_api.return_value = held
     for _ in range(3):
         await _next_refresh(hass, freezer)
     assert portfolio_api.call_count == calls + 4
     assert [sub.unique_id for sub in entry.subentries.values()] == ["crypto"]
-    assert er.async_get(hass).async_get("sensor.bitpanda_gold_xau_wallet") is None
+    assert er.async_get(hass).async_get("sensor.bitpanda_gold_xau_wallet_available") is None
 
 
 async def test_a_staking_sensor_added_later_brings_old_rewards_up_to_date(
@@ -434,17 +434,17 @@ async def test_a_sudden_empty_portfolio_changes_nothing_until_it_is_confirmed(
 
     for _ in range(2):
         await _next_refresh(hass, freezer)
-        for entity_id in ("sensor.bitpanda_portfolio_total", "sensor.bitpanda_vision_vsn_wallet"):
+        for entity_id in ("sensor.bitpanda_portfolio_total", "sensor.bitpanda_vision_vsn_wallet_available"):
             assert hass.states.get(entity_id).state == "unavailable"
-    assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet") is not None
+    assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is not None
 
     # Confirmed: the truth from here on, and the wallet's first miss.
     await _next_refresh(hass, freezer)
     assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
     await _next_refresh(hass, freezer)
-    assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet") is not None
+    assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is not None
     await _next_refresh(hass, freezer)
-    assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet") is None
+    assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is None
 
 
 async def test_a_figure_bitpanda_leaves_unreadable_is_unknown_not_unavailable(
@@ -530,7 +530,7 @@ def _registered_wallet(hass, entry) -> str:
     )
     return er.async_get(hass).async_get_or_create(
         "sensor", DOMAIN, f"{entry.entry_id}_wallet_{VSN['id']}", config_entry=entry,
-        device_id=device.id, suggested_object_id="bitpanda_vision_vsn_wallet",
+        device_id=device.id, suggested_object_id="bitpanda_vision_vsn_wallet_available",
     ).entity_id
 
 
@@ -591,7 +591,7 @@ async def test_refreshing_by_hand_never_confirms_an_empty_portfolio_sooner(
             with pytest.raises(HomeAssistantError):
                 await _refresh(hass)
         assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unavailable"
-        assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet") is not None
+        assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is not None
 
         freezer.tick(2 * PORTFOLIO_UPDATE_INTERVAL)
         await _refresh(hass)
@@ -613,11 +613,11 @@ async def test_refreshing_by_hand_never_removes_a_sold_wallet_sooner(
         for _ in range(4):
             freezer.tick(timedelta(seconds=20))
             await _refresh(hass)
-        assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet") is not None
+        assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is not None
 
         freezer.tick(2 * PORTFOLIO_UPDATE_INTERVAL)
         await _refresh(hass)
-    assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet") is None
+    assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is None
 
 
 async def test_a_new_empty_account_is_set_up_at_once(hass, portfolio_api):
@@ -836,7 +836,7 @@ async def test_an_earn_or_operations_401_keeps_the_portfolio_loaded_and_asks_for
     rejected.assert_awaited()
     assert entry.state is ConfigEntryState.LOADED
     assert len(_reauth_flows(hass)) == 1
-    assert _value(hass, "sensor.bitpanda_vision_vsn_wallet") == 50.0
+    assert _value(hass, "sensor.bitpanda_vision_vsn_wallet_available") == 50.0
 
 
 async def test_reauth_with_the_same_key_revives_a_portfolio_stopped_by_a_401(
@@ -853,7 +853,7 @@ async def test_reauth_with_the_same_key_revives_a_portfolio_stopped_by_a_401(
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=6))
     await hass.async_block_till_done()
     [flow] = _reauth_flows(hass)
-    assert hass.states.get("sensor.bitpanda_vision_vsn_wallet").state == "unavailable"
+    assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_available").state == "unavailable"
 
     portfolio_api.side_effect = None
     calls = portfolio_api.call_count
@@ -866,7 +866,7 @@ async def test_reauth_with_the_same_key_revives_a_portfolio_stopped_by_a_401(
     assert entry.state is ConfigEntryState.LOADED
     # The reload's first refresh asks for /portfolio again ...
     assert portfolio_api.call_count == calls + 1
-    assert _value(hass, "sensor.bitpanda_vision_vsn_wallet") == 50.0
+    assert _value(hass, "sensor.bitpanda_vision_vsn_wallet_available") == 50.0
     # ... and polling goes on from there.
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=6))
     await hass.async_block_till_done()
@@ -894,15 +894,65 @@ async def test_reauth_with_a_new_key_reloads_the_portfolio_once(hass, portfolio_
 async def test_price_tracker_setup_creates_one_sensor_per_asset_and_currency(hass, price_api):
     entry = _price_entry(hass, ["USD"], price_group("crypto", BTC))
     await _setup(hass, entry)
-    assert _value(hass, "sensor.bitpanda_bitcoin_btc_eur") == 100.0
-    assert _value(hass, "sensor.bitpanda_bitcoin_btc_usd") == 200.0
-    usd = hass.states.get("sensor.bitpanda_bitcoin_btc_usd")
-    assert usd.attributes["friendly_name"] == "Bitcoin (BTC) USD"
+    assert _value(hass, "sensor.bitpanda_bitcoin_btc_price_tracker_eur") == 100.0
+    assert _value(hass, "sensor.bitpanda_bitcoin_btc_price_tracker_usd") == 200.0
+    usd = hass.states.get("sensor.bitpanda_bitcoin_btc_price_tracker_usd")
+    assert usd.attributes["friendly_name"] == "Bitcoin (BTC) Price Tracker USD"
     assert usd.attributes["rate_source"] == "ECB"
-    registry_entry = er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_usd")
+    registry_entry = er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_price_tracker_usd")
     assert registry_entry.config_subentry_id == _group(entry, "crypto").subentry_id
     device = dr.async_get(hass).async_get(registry_entry.device_id)
-    assert device.name == "Bitcoin (BTC)"
+    assert device.name == "Bitcoin (BTC) Price Tracker"
+
+
+async def test_a_price_sensor_registered_before_keeps_its_id_and_takes_the_new_names(
+    hass, price_api
+):
+    """Registered under the scheme before this one: Home Assistant keeps
+    the registered entity ID, while the device name and with it the
+    sensor's name follow the new scheme at the next load."""
+    entry = _price_entry(hass, [], price_group("crypto", BTC))
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"{entry.entry_id}_price_{BTC['id']}")},
+        name="Bitcoin (BTC)",
+    )
+    er.async_get(hass).async_get_or_create(
+        "sensor", DOMAIN, f"{entry.entry_id}_{BTC['id']}_price_EUR", config_entry=entry,
+        device_id=device.id, suggested_object_id="bitpanda_bitcoin_btc_eur",
+    )
+    await _setup(hass, entry)
+    assert hass.states.get("sensor.bitpanda_bitcoin_btc_price_tracker_eur") is None
+    assert _value(hass, "sensor.bitpanda_bitcoin_btc_eur") == 100.0
+    assert (
+        hass.states.get("sensor.bitpanda_bitcoin_btc_eur").attributes["friendly_name"]
+        == "Bitcoin (BTC) Price Tracker EUR"
+    )
+    assert dr.async_get(hass).async_get(device.id).name == "Bitcoin (BTC) Price Tracker"
+
+
+async def test_a_wallet_sensor_registered_before_keeps_its_id_and_takes_its_new_name(
+    hass, portfolio_api
+):
+    """The same for a wallet: its sensor was `…_wallet`, and read as its
+    device's name."""
+    entry = _portfolio_entry(hass)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"{entry.entry_id}_wallet_{VSN['id']}")},
+        name="Vision (VSN) Wallet",
+    )
+    er.async_get(hass).async_get_or_create(
+        "sensor", DOMAIN, f"{entry.entry_id}_wallet_{VSN['id']}", config_entry=entry,
+        device_id=device.id, suggested_object_id="bitpanda_vision_vsn_wallet",
+    )
+    await _setup(hass, entry)
+    assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_available") is None
+    assert _value(hass, "sensor.bitpanda_vision_vsn_wallet") == 50.0
+    assert (
+        hass.states.get("sensor.bitpanda_vision_vsn_wallet").attributes["friendly_name"]
+        == "Vision (VSN) Wallet Balance (available)"
+    )
 
 
 async def test_the_price_tracker_polls_the_assets_of_every_group(hass, price_api):
@@ -912,7 +962,7 @@ async def test_the_price_tracker_polls_the_assets_of_every_group(hass, price_api
     assert sorted(call.args[0] for call in ticker.call_args_list) == sorted(
         a["id"] for a in (BTC, SOL, GOLD)
     )
-    assert _value(hass, "sensor.bitpanda_gold_xau_eur") == 100.0
+    assert _value(hass, "sensor.bitpanda_gold_xau_price_tracker_eur") == 100.0
 
 
 async def test_a_group_without_assets_is_dropped_at_setup(hass, price_api):
@@ -997,7 +1047,7 @@ async def test_a_new_group_gets_its_sensors_after_the_reload(hass, price_api):
         ),
     )
     await hass.async_block_till_done()
-    assert _value(hass, "sensor.bitpanda_gold_xau_eur") == 100.0
+    assert _value(hass, "sensor.bitpanda_gold_xau_price_tracker_eur") == 100.0
 
 
 async def test_an_asset_added_to_a_group_gets_its_sensors_after_the_reload(hass, price_api):
@@ -1005,8 +1055,8 @@ async def test_an_asset_added_to_a_group_gets_its_sensors_after_the_reload(hass,
     await _setup(hass, entry)
     _set_group_assets(hass, entry, "crypto", BTC, SOL)
     await hass.async_block_till_done()
-    assert _value(hass, "sensor.bitpanda_solana_sol_eur") == 100.0
-    registry_entry = er.async_get(hass).async_get("sensor.bitpanda_solana_sol_eur")
+    assert _value(hass, "sensor.bitpanda_solana_sol_price_tracker_eur") == 100.0
+    registry_entry = er.async_get(hass).async_get("sensor.bitpanda_solana_sol_price_tracker_eur")
     assert registry_entry.config_subentry_id == _group(entry, "crypto").subentry_id
 
 
@@ -1017,13 +1067,13 @@ async def test_an_asset_tracked_again_gets_its_entity_ids_back(hass, price_api):
     await _setup(hass, entry)
     _set_group_assets(hass, entry, "crypto", BTC)
     await hass.async_block_till_done()
-    assert er.async_get(hass).async_get("sensor.bitpanda_solana_sol_eur") is None
+    assert er.async_get(hass).async_get("sensor.bitpanda_solana_sol_price_tracker_eur") is None
     devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
-    assert [device.name for device in devices] == ["Bitcoin (BTC)"]
+    assert [device.name for device in devices] == ["Bitcoin (BTC) Price Tracker"]
 
     _set_group_assets(hass, entry, "crypto", BTC, SOL)
     await hass.async_block_till_done()
-    assert _value(hass, "sensor.bitpanda_solana_sol_eur") == 100.0
+    assert _value(hass, "sensor.bitpanda_solana_sol_price_tracker_eur") == 100.0
 
 
 async def test_dropping_a_currency_removes_its_sensors_on_reload(hass, price_api):
@@ -1031,8 +1081,8 @@ async def test_dropping_a_currency_removes_its_sensors_on_reload(hass, price_api
     await _setup(hass, entry)
     hass.config_entries.async_update_entry(entry, options={"extra_currencies": []})
     await hass.async_block_till_done()
-    assert er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_usd") is None
-    assert hass.states.get("sensor.bitpanda_bitcoin_btc_eur") is not None
+    assert er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_price_tracker_usd") is None
+    assert hass.states.get("sensor.bitpanda_bitcoin_btc_price_tracker_eur") is not None
 
 
 async def _refresh(hass) -> None:
@@ -1089,7 +1139,7 @@ async def test_a_failed_refresh_fails_the_action_and_names_the_service(
     )
     assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unavailable"
     assert ticker.call_count == ticker_calls + 1
-    assert _value(hass, "sensor.bitpanda_bitcoin_btc_eur") == 100.0
+    assert _value(hass, "sensor.bitpanda_bitcoin_btc_price_tracker_eur") == 100.0
 
 
 async def test_an_empty_portfolio_held_back_fails_the_refresh_action(hass, portfolio_api):
@@ -1372,7 +1422,7 @@ async def test_deleting_a_price_device_takes_its_asset_out_of_its_group(hass, pr
     await hass.async_block_till_done()
 
     assert list(_group(entry, "crypto").data["assets"]) == [BTC["id"]]
-    assert er.async_get(hass).async_get("sensor.bitpanda_solana_sol_eur") is None
+    assert er.async_get(hass).async_get("sensor.bitpanda_solana_sol_price_tracker_eur") is None
     assert dr.async_get(hass).async_get(device.id) is None
     # One reload, whose first refresh asks for the one asset left.
     assert ticker.call_count == 3
@@ -1388,7 +1438,7 @@ async def test_deleting_the_last_price_device_of_a_group_removes_the_group(hass,
     await hass.async_block_till_done()
 
     assert [sub.unique_id for sub in entry.subentries.values()] == ["crypto"]
-    assert er.async_get(hass).async_get("sensor.bitpanda_gold_xau_eur") is None
+    assert er.async_get(hass).async_get("sensor.bitpanda_gold_xau_price_tracker_eur") is None
     assert dr.async_get(hass).async_get(device.id) is None
     assert ticker.call_count == 3
 
@@ -1561,7 +1611,7 @@ async def test_a_price_device_carrying_other_identifiers_still_takes_its_asset_a
     await hass.async_block_till_done()
 
     assert list(_group(entry, "crypto").data["assets"]) == [BTC["id"]]
-    assert er.async_get(hass).async_get("sensor.bitpanda_solana_sol_eur") is None
+    assert er.async_get(hass).async_get("sensor.bitpanda_solana_sol_price_tracker_eur") is None
 
 
 async def test_the_device_page_deletes_the_last_price_device_of_a_group(
@@ -1581,7 +1631,7 @@ async def test_the_device_page_deletes_the_last_price_device_of_a_group(
     assert response["success"]
     assert [sub.unique_id for sub in entry.subentries.values()] == ["crypto"]
     assert dr.async_get(hass).async_get(device.id) is None
-    assert er.async_get(hass).async_get("sensor.bitpanda_gold_xau_eur") is None
+    assert er.async_get(hass).async_get("sensor.bitpanda_gold_xau_price_tracker_eur") is None
     assert ticker.call_count == 3
 
 
@@ -1597,7 +1647,7 @@ async def test_the_device_page_deletes_a_price_device(hass, price_api, hass_ws_c
     assert response["success"]
     assert list(_group(entry, "crypto").data["assets"]) == [BTC["id"]]
     assert dr.async_get(hass).async_get(device.id) is None
-    assert er.async_get(hass).async_get("sensor.bitpanda_solana_sol_eur") is None
+    assert er.async_get(hass).async_get("sensor.bitpanda_solana_sol_price_tracker_eur") is None
     assert ticker.call_count == 3
 
 

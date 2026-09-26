@@ -203,7 +203,15 @@ async def test_a_wallet_group_is_created_once_and_holds_just_its_category(hass):
     assert list(entry.subentries) == [group.subentry_id]
 
 
-# --- Retitling to Home Assistant's current language (Task 24) ------------------
+# --- Retitling to Home Assistant's current language -------------------------------
+
+
+async def _retitle(hass, entry) -> None:
+    """Retitle the Price Tracker's groups as setup does: to the titles of the
+    language Home Assistant runs in now."""
+    await async_retitle_groups_to_current_language(
+        hass, entry, "price_group", await async_group_titles(hass)
+    )
 
 
 async def test_known_group_titles_are_read_from_every_shipped_language(hass):
@@ -227,7 +235,7 @@ async def test_a_group_titled_a_default_in_another_language_is_retitled(hass):
     hass.config.language = "de"
     entry = _entry(hass, price_group("crypto", BTC, title="Cryptocurrencies"))
 
-    await async_retitle_groups_to_current_language(hass, entry, "price_group")
+    await _retitle(hass, entry)
 
     assert group_of_category(entry, "price_group", "crypto").title == "Kryptowährungen"
 
@@ -241,7 +249,7 @@ async def test_a_group_already_titled_for_the_current_language_is_left_alone(has
         hass.config_entries, "async_update_subentry",
         wraps=hass.config_entries.async_update_subentry,
     ) as spy:
-        await async_retitle_groups_to_current_language(hass, entry, "price_group")
+        await _retitle(hass, entry)
 
     spy.assert_not_called()
     assert group_of_category(entry, "price_group", "crypto") is group_before
@@ -254,7 +262,7 @@ async def test_a_user_renamed_group_is_left_alone(hass):
     hass.config.language = "de"
     entry = _entry(hass, price_group("crypto", BTC, title="Meine Coins"))
 
-    await async_retitle_groups_to_current_language(hass, entry, "price_group")
+    await _retitle(hass, entry)
 
     assert group_of_category(entry, "price_group", "crypto").title == "Meine Coins"
 
@@ -268,7 +276,7 @@ async def test_retitling_ignores_groups_of_another_subentry_type(hass):
     entry = _entry(hass, price_group("crypto", BTC, title="Cryptocurrencies"), wallets)
     hass.config.language = "de"
 
-    await async_retitle_groups_to_current_language(hass, entry, "price_group")
+    await _retitle(hass, entry)
 
     assert group_of_category(entry, "wallet_group", "crypto").title == "Cryptocurrencies"
     assert group_of_category(entry, "price_group", "crypto").title == "Kryptowährungen"

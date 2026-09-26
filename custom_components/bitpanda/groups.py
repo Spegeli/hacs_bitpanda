@@ -91,13 +91,14 @@ async def async_known_group_titles(hass: HomeAssistant) -> dict[str, set[str]]:
 
 
 async def async_retitle_groups_to_current_language(
-    hass: HomeAssistant, entry: ConfigEntry, subentry_type: str
+    hass: HomeAssistant, entry: ConfigEntry, subentry_type: str, current: dict[str, str]
 ) -> None:
     """Retitle every `subentry_type` group of `entry` that is still titled one
     of this integration's own default group titles for its category -- in any
-    language it ships -- to the title for Home Assistant's current language.
-    A title the user chose, one that is not a shipped default for the
-    group's category, is never touched.
+    language it ships -- to its title in `current`, the titles for Home
+    Assistant's current language (async_group_titles), which the caller
+    reads once and reuses. A title the user chose, one that is not a shipped
+    default for the group's category, is never touched.
 
     Call this once at every setup of the Price Tracker and the Portfolio,
     before the entry's update listener is registered: the Price Tracker
@@ -110,7 +111,6 @@ async def async_retitle_groups_to_current_language(
     retitled too -- from the group's own data there is no way to tell that
     apart from a default title that simply predates a later language change.
     """
-    current = await async_group_titles(hass)
     known = await async_known_group_titles(hass)
     for group in groups_of_type(entry, subentry_type):
         target = current.get(group.unique_id)

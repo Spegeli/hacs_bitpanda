@@ -69,6 +69,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up one of the two services."""
     is_price_tracker = entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER
+    group_titles = await async_group_titles(hass)
     # Before anything else, and before the update listener below: the Price
     # Tracker's listener reloads on any change to the entry, subentries
     # included, so retitling after it existed would reload the entry this
@@ -77,13 +78,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass,
         entry,
         SUBENTRY_TYPE_PRICE_GROUP if is_price_tracker else SUBENTRY_TYPE_WALLET_GROUP,
+        group_titles,
     )
     if is_price_tracker:
         entry.runtime_data = await _async_start_price_tracker(hass, entry)
         # Options, groups and data all change what it tracks: rebuild on any change.
         reload_listener = _async_reload
     else:
-        entry.runtime_data = await _async_start_portfolio(hass, entry)
+        entry.runtime_data = await _async_start_portfolio(hass, entry, group_titles)
         reload_listener = _async_reload_on_new_data_or_options
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(reload_listener))
@@ -91,7 +93,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def _async_start_portfolio(hass: HomeAssistant, entry: ConfigEntry) -> PortfolioRuntime:
+async def _async_start_portfolio(
+    hass: HomeAssistant, entry: ConfigEntry, group_titles: dict[str, str]
+) -> PortfolioRuntime:
     session = async_get_clientsession(hass)
     client = BitpandaApiClient(entry.data[CONF_API_KEY], session)
     # Asset lookups are public: keyless, and the records outlive reloads.
@@ -104,7 +108,7 @@ async def _async_start_portfolio(hass: HomeAssistant, entry: ConfigEntry) -> Por
         history=HistoryCoordinator(hass, entry, client, currency_id),
         earn=EarnCoordinator(hass, entry, client),
         rewards=RewardsCoordinator(hass, entry, client),
-        group_titles=await async_group_titles(hass),
+        group_titles=group_titles,
         data_at_setup=dict(entry.data),
         options_at_setup=dict(entry.options),
     )

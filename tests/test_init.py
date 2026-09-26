@@ -985,6 +985,27 @@ async def test_a_price_device_carrying_other_identifiers_still_takes_its_asset_a
     assert er.async_get(hass).async_get("sensor.bitpanda_solana_sol_eur") is None
 
 
+async def test_the_device_page_deletes_the_last_price_device_of_a_group(
+    hass, price_api, hass_ws_client
+):
+    """The hook removes the emptied group, and with it the device, before
+    Home Assistant's own handler goes on to remove that device: the command
+    still succeeds."""
+    ticker, _ = price_api
+    entry = _price_entry(hass, [], price_group("crypto", BTC), price_group("metal", GOLD))
+    await _setup(hass, entry)
+    device = _own_device(hass, entry, "price", GOLD)
+
+    response = await _remove_through_the_device_page(hass, hass_ws_client, entry, device)
+    await hass.async_block_till_done()
+
+    assert response["success"]
+    assert [sub.unique_id for sub in entry.subentries.values()] == ["crypto"]
+    assert dr.async_get(hass).async_get(device.id) is None
+    assert er.async_get(hass).async_get("sensor.bitpanda_gold_xau_eur") is None
+    assert ticker.call_count == 3
+
+
 async def test_the_device_page_deletes_a_price_device(hass, price_api, hass_ws_client):
     ticker, _ = price_api
     entry = _price_entry(hass, [], price_group("crypto", BTC, SOL))

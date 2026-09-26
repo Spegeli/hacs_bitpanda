@@ -443,6 +443,22 @@ async def test_staking_registered_before_a_restart_is_recreated_while_earn_is_un
     assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_staking") is not None
 
 
+async def test_staking_registered_before_a_restart_goes_once_it_no_longer_applies(hass):
+    """After a restart the Staking and Total sensors are only registered --
+    the manager has not added them itself. Nothing staked and a current Earn
+    catalogue that offers no product: they go all the same."""
+    harness = _Harness(hass)
+    ent_reg = er.async_get(hass)
+    for kind, suffix in (("staking", "_staking"), ("total", "_total")):
+        ent_reg.async_get_or_create(
+            "sensor", DOMAIN, f"{harness.entry.entry_id}_{kind}_{VSN['id']}",
+            config_entry=harness.entry, suggested_object_id=f"bitpanda_vision_vsn_wallet{suffix}",
+        )
+    await harness.refresh(_data(_holding(VSN)))
+    assert harness.entity_ids() == {VSN_WALLET}
+    assert not harness.manager.has_total(VSN["id"])
+
+
 async def test_the_earn_catalogue_keeps_refreshing_without_staking_sensors(hass):
     """DataUpdateCoordinator only reschedules itself while it has listeners.
 

@@ -115,6 +115,26 @@ def test_cash_plus_attributes_are_empty_when_cash_plus_itself_is_unknown():
     assert sensor.extra_state_attributes == {}
 
 
+def test_cash_plus_is_unavailable_while_it_is_unknown():
+    """An unclassified holding makes Cash Plus unknown: the sensor goes
+    unavailable rather than show 0."""
+    unknown_id = "unresolved-asset-id"
+    data = PortfolioData(
+        holdings={
+            unknown_id: Holding(asset_id=unknown_id, balance=10.0, available=10.0, value=10.0)
+        },
+        cash=10.0,
+    )
+    sensor = PortfolioCashPlusSensor(_Coordinator(data), "eid", "EUR")
+    assert sensor.native_value is None
+    assert sensor.available is False
+
+
+def test_cash_plus_attributes_are_empty_before_the_first_refresh():
+    sensor = PortfolioCashPlusSensor(_Coordinator(None), "eid", "EUR")
+    assert sensor.extra_state_attributes == {}
+
+
 def test_cash_is_unavailable_when_a_fiat_entry_could_not_be_read():
     """`PortfolioData.cash` is None, never 0, when a fiat balance failed to
     parse -- the Cash sensor must go unavailable, not show a quietly low
@@ -221,6 +241,16 @@ def test_staking_keeps_the_last_complete_reward_totals_after_a_failed_refresh():
     sensor = StakingSensor(_portfolio(**{VSN["id"]: _vsn()}), _Coordinator(None), rewards,
                            "eid", "EUR", VSN)
     assert sensor.extra_state_attributes["rewards_net"] == 0.8
+
+
+def test_a_performance_figure_bitpanda_did_not_send_is_left_out():
+    """Absent, never None or 0."""
+    holding = _vsn(invested=None, total_return_pct=None)
+    sensor = WalletTotalSensor(_portfolio(**{VSN["id"]: holding}), "eid", "EUR", VSN)
+    assert sensor.extra_state_attributes == {
+        "asset": "VSN", "asset_name": "Vision", "units": 100.0,
+        "average_buy_price": 1.5, "total_return": 50.0,
+    }
 
 
 def test_total_is_the_whole_position_with_its_performance():

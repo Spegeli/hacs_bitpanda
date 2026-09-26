@@ -135,6 +135,29 @@ async def test_collect_returns_drops_unparsable_or_non_finite_percentage_strings
     assert result == {"SIX_MONTH": 1.0, "YEAR": 1.0}
 
 
+class _Returns:
+    """Fake API client answering each timeframe with its own value."""
+
+    def __init__(self, values):
+        self._values = values
+
+    async def async_get_portfolio_history(self, *, timeframe, equivalent_currency_id=None):
+        return {"return_percentage": self._values[timeframe]}
+
+
+async def test_collect_returns_drops_non_finite_numbers():
+    """A JSON number goes through the same finite check as a numeric string:
+    Python's json module reads the literals Infinity and NaN as floats."""
+    values = {
+        "DAY": float("inf"),
+        "WEEK": float("-inf"),
+        "MONTH": float("nan"),
+        "SIX_MONTH": 1.0,
+        "YEAR": 2,
+    }
+    assert await collect_returns(_Returns(values), None) == {"SIX_MONTH": 1.0, "YEAR": 2.0}
+
+
 async def test_collect_returns_is_quiet_when_history_is_genuinely_empty():
     """All five answer, none carries a usable value. Not an outage."""
     with mock_aiohttp_client() as mocker:

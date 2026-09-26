@@ -205,6 +205,24 @@ async def test_v1_becomes_the_portfolio(hass, legacy_api, no_setup):
     assert dict(entry.options) == {}
 
 
+async def test_a_language_chosen_before_the_upgrade_is_kept(hass, legacy_api, no_setup):
+    """Home Assistant offers Configure on every entry -- a version 1 entry
+    still waiting for its migration too, which opens the Portfolio's form.
+    A language saved there survives the migration; the tracked lists of
+    version 1 do not."""
+    entry = _v1_entry(hass, wallets=["cryptocoin_BTC"])
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["step_id"] == "portfolio"
+    await hass.config_entries.options.async_configure(result["flow_id"], {"language": "de"})
+    assert dict(entry.options) == {
+        "tracked_assets": [], "tracked_wallets": ["cryptocoin_BTC"], "language": "de",
+    }
+
+    assert await async_migrate_entry(hass, entry)
+
+    assert dict(entry.options) == {"language": "de"}
+
+
 async def test_public_lookups_never_carry_the_legacy_key(hass, no_setup):
     entry = _v1_entry(hass, assets=["BTC"])
     with patch("custom_components.bitpanda.migration.BitpandaApiClient") as client_cls:

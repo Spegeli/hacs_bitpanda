@@ -44,6 +44,7 @@ from .const import (
     CONF_CURRENCY,
     CONF_CURRENCY_ID,
     CONF_EXTRA_CURRENCIES,
+    CONF_LANGUAGE,
     CONF_LEGACY_ADOPT,
     CONF_TRACKED_ASSETS,
     CONF_TRACKED_WALLETS,
@@ -727,7 +728,14 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             CONF_CURRENCY: plan.currency,
             CONF_CURRENCY_ID: plan.currency_id,
         },
-        options={},
+        # The tracked lists of version 1 are spent. A language chosen under
+        # Configure while the entry waited for this migration -- Home
+        # Assistant offers Configure on every entry -- stays.
+        options=(
+            {CONF_LANGUAGE: entry.options[CONF_LANGUAGE]}
+            if CONF_LANGUAGE in entry.options
+            else {}
+        ),
         version=3,
     )
     _async_report(hass, renames + price_renames, skipped + price_skipped, plan.notes)

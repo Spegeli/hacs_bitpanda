@@ -223,7 +223,7 @@ The same step works in a script, which you can start from anywhere — from a bu
 
 This release moves to Bitpanda's new Public API and splits the integration into two services. It needs Home Assistant **2025.5** or newer — on an older version the entry is left unmigrated, the integration does not load, and **Settings → Repairs** asks you to update Home Assistant.
 
-If you set up a **Bitpanda Portfolio** beside the old entry before upgrading, the old entry is not upgraded either — there can be only one Portfolio — and **Settings → Repairs** asks you to delete one of the two entries. If you keep the old one, restart Home Assistant afterwards to upgrade it.
+If a **Bitpanda Portfolio** was set up while the old entry still waited for its upgrade — say, after an upgrade that was refused or failed — the old entry is not upgraded either: there can be only one Portfolio, and **Settings → Repairs** asks you to delete one of the two entries. If you keep the old one, restart Home Assistant afterwards to upgrade it.
 
 ⚠️ **The upgrade is one-way.** The previous release cannot load the migrated entries, so going back to it afterwards does not work. Make a backup before you update if you may want to return.
 
@@ -247,6 +247,7 @@ If you set up a **Bitpanda Portfolio** beside the old entry before upgrading, th
 - **The fiat wallet in your currency becomes Portfolio Cash**, which sums all your fiat balances. Other fiat wallets are left as `unavailable` entities you can delete.
 - **Prices in other currencies are converted with ECB daily rates** instead of being quoted by Bitpanda.
 - **Long-term statistics.** Every value sensor now keeps them, from the upgrade on (see [Long-term statistics](#long-term-statistics)).
+- **`bitpanda.refresh` can fail now.** The old action never did. A refresh that fails, or a call while neither service is loaded, now stops a script or automation at that step unless the step sets `continue_on_error: true` (see [Manual Refresh](#manual-refresh)).
 - **Attributes:** units are now `units` on each sensor (the Wallet's `units` are the unstaked units its old `balance` showed); the APR is `apr_percent` on the Staking sensor; the position performance is on the Total sensor. `breakdown`, `wallet_count`, `all_prices` and the wallet `price` attribute are gone. The price sensor's `conversion` attribute now carries the status `no_rate` (not a sentence) while no exchange rate is loaded.
 
 ---

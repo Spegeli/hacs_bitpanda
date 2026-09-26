@@ -81,8 +81,10 @@ def _auth_failed() -> ConfigEntryAuthFailed:
     return ConfigEntryAuthFailed(translation_domain=DOMAIN, translation_key="api_key_rejected")
 
 
-# The text of each kind of failed request (const.API_ERROR_KINDS).
-_UPDATE_FAILED_KEYS = {
+# The text of each kind of failed request (const.API_ERROR_KINDS), looked up
+# by BitpandaApiError.kind, which is None for an error raised outside the
+# client.
+_UPDATE_FAILED_KEYS: dict[str | None, str] = {
     ERROR_TIMEOUT: "update_failed_timeout",
     ERROR_CONNECTION: "update_failed_connection",
     ERROR_HTTP_STATUS: "update_failed_http_status",
@@ -143,6 +145,8 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
     its misses the same way.
     """
 
+    config_entry: PortfolioConfigEntry
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -190,7 +194,9 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
         }
         return data
 
-    def _check_empty_answer(self, entries: list[dict], requested_at: datetime) -> None:
+    def _check_empty_answer(
+        self, entries: list[dict[str, Any]], requested_at: datetime
+    ) -> None:
         """Raise UpdateFailed for an empty answer not confirmed yet; count
         or clear the empty answers in a row (see the class docstring)."""
         streaks: dict[str, _EmptyStreak] = self.hass.data.setdefault(_EMPTY_ANSWERS, {})
@@ -220,6 +226,8 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
 class EarnCoordinator(DataUpdateCoordinator[EarnData]):
     """Polls the Earn product catalogue once a day."""
 
+    config_entry: PortfolioConfigEntry
+
     def __init__(
         self, hass: HomeAssistant, entry: ConfigEntry, client: BitpandaApiClient
     ) -> None:
@@ -241,7 +249,7 @@ class EarnCoordinator(DataUpdateCoordinator[EarnData]):
             raise _update_failed(err) from None
 
 
-class RewardsCoordinator(TimestampDataUpdateCoordinator[dict]):
+class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]):
     """Aggregates Earn rewards from the operation history.
 
     /operations needs the Transaktion (Transaction) scope. Setup already
@@ -258,6 +266,8 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict]):
     Like every DataUpdateCoordinator it polls only while something listens,
     and only Staking sensors do: see async_refresh_if_stale.
     """
+
+    config_entry: PortfolioConfigEntry
 
     def __init__(
         self, hass: HomeAssistant, entry: ConfigEntry, client: BitpandaApiClient
@@ -372,6 +382,8 @@ async def collect_returns(
 class HistoryCoordinator(DataUpdateCoordinator[PortfolioReturns]):
     """Portfolio return over each supported timeframe."""
 
+    config_entry: PortfolioConfigEntry
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -416,3 +428,7 @@ class PortfolioRuntime:
     # home-assistant.log.
     data_at_setup: dict[str, Any] = field(repr=False)
     options_at_setup: dict[str, Any] = field(repr=False)
+
+
+# A Portfolio config entry, its runtime data typed.
+type PortfolioConfigEntry = ConfigEntry[PortfolioRuntime]

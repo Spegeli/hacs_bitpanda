@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 import logging
 import math
+from typing import Any
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
@@ -47,7 +48,8 @@ _ECB_RETRY = timedelta(minutes=15)
 # The text of each kind of failed ECB fetch (const.API_ERROR_KINDS). The ECB
 # answers no listing and has no rate limit of its own -- a 429 from it is an
 # HTTP status -- so never ERROR_INCOMPLETE_LISTING or ERROR_RATE_LIMITED.
-_ECB_FAILED_KEYS = {
+# Looked up by EcbError.kind, which may be None.
+_ECB_FAILED_KEYS: dict[str | None, str] = {
     ERROR_TIMEOUT: "ecb_rates_failed_timeout",
     ERROR_CONNECTION: "ecb_rates_failed_connection",
     ERROR_HTTP_STATUS: "ecb_rates_failed_http_status",
@@ -128,7 +130,7 @@ def async_delete_price_interval_issue(hass: HomeAssistant) -> None:
     ir.async_delete_issue(hass, DOMAIN, ISSUE_SLOW_PRICE_INTERVAL)
 
 
-def convert_price(price, rate: float | None) -> float | None:
+def convert_price(price: Any, rate: float | None) -> float | None:
     """An EUR ticker price, times an ECB rate when given, rounded to 8 decimals.
 
     /tickers always answers in EUR. `rate` is units of the target currency
@@ -157,6 +159,8 @@ class TickerCoordinator(DataUpdateCoordinator[dict[str, float]]):
     succeeds again and ends it. The whole update's own failure and recovery
     DataUpdateCoordinator logs itself.
     """
+
+    config_entry: PriceTrackerConfigEntry
 
     def __init__(
         self,
@@ -250,6 +254,8 @@ class EcbCoordinator(DataUpdateCoordinator[EcbRates]):
     the 6 hours the rates themselves need.
     """
 
+    config_entry: PriceTrackerConfigEntry
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -282,3 +288,7 @@ class PriceTrackerRuntime:
 
     tickers: TickerCoordinator
     ecb: EcbCoordinator | None
+
+
+# A Price Tracker config entry, its runtime data typed.
+type PriceTrackerConfigEntry = ConfigEntry[PriceTrackerRuntime]

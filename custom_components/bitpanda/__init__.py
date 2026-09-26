@@ -4,6 +4,7 @@ from __future__ import annotations
 from contextlib import suppress
 import logging
 from time import monotonic
+from typing import Any, cast
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
@@ -53,6 +54,7 @@ from .naming import (
 from .portfolio_coordinator import (
     EarnCoordinator,
     HistoryCoordinator,
+    PortfolioConfigEntry,
     PortfolioCoordinator,
     PortfolioRuntime,
     RewardsCoordinator,
@@ -67,6 +69,12 @@ from .price_coordinator import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# A config entry of either service, its runtime data typed. The service
+# itself (const.entry_type) says which of the two it holds; each service's
+# own code takes its own entry type (PortfolioConfigEntry,
+# PriceTrackerConfigEntry).
+type BitpandaConfigEntry = ConfigEntry[PortfolioRuntime | PriceTrackerRuntime]
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
@@ -90,12 +98,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
-async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_migrate_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> bool:
     """Migrate an entry to version 3 (see migration.py)."""
     return await migration.async_migrate_entry(hass, entry)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> bool:
     """Set up one of the two services."""
     is_price_tracker = entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER
     # In the entry's own language (language.py), which changing under
@@ -200,7 +208,7 @@ async def _async_start_price_tracker(
     return PriceTrackerRuntime(tickers=tickers, ecb=ecb)
 
 
-async def _async_first_refresh(coordinator: DataUpdateCoordinator) -> None:
+async def _async_first_refresh(coordinator: DataUpdateCoordinator[Any]) -> None:
     """`async_config_entry_first_refresh`, its failure translated on every
     supported Home Assistant version.
 
@@ -235,7 +243,7 @@ async def _async_reload(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 async def _async_reload_on_new_data_or_options(
-    hass: HomeAssistant, entry: ConfigEntry
+    hass: HomeAssistant, entry: PortfolioConfigEntry
 ) -> None:
     """Reload the Portfolio once its data or options differ from setup's.
 
@@ -251,7 +259,7 @@ async def _async_reload_on_new_data_or_options(
         await hass.config_entries.async_reload(entry.entry_id)
 
 
-def _loaded_entries(hass: HomeAssistant) -> list[ConfigEntry]:
+def _loaded_entries(hass: HomeAssistant) -> list[BitpandaConfigEntry]:
     return [
         entry
         for entry in hass.config_entries.async_entries(DOMAIN)
@@ -259,7 +267,7 @@ def _loaded_entries(hass: HomeAssistant) -> list[ConfigEntry]:
     ]
 
 
-def _refresh_cooldown(runtimes: list) -> float:
+def _refresh_cooldown(runtimes: list[PortfolioRuntime | PriceTrackerRuntime]) -> float:
     """Seconds between two accepted `bitpanda.refresh` calls: the ticker
     interval, never below REFRESH_MIN_COOLDOWN. A shorter cooldown would let
     an automation drive ticker requests above the budgeted polling rate."""
@@ -344,13 +352,13 @@ def _async_register_refresh_service(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, "refresh", handle_refresh)
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> bool:
     """Unload an entry. `bitpanda.refresh` stays: it belongs to the
     integration (async_setup), not to an entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
-async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def async_remove_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> None:
     """Forget what outlived the entry's setups: its count of empty
     /portfolio answers, kept in hass.data across reloads; the Price
     Tracker's slow-interval repair issue with the Price Tracker; each repair
@@ -374,7 +382,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 async def async_remove_config_entry_device(
-    hass: HomeAssistant, config_entry: ConfigEntry, device_entry: dr.DeviceEntry
+    hass: HomeAssistant, config_entry: BitpandaConfigEntry, device_entry: dr.DeviceEntry
 ) -> bool:
     """Whether "Delete" on a device page may remove `device_entry`.
 
@@ -415,7 +423,8 @@ async def async_remove_config_entry_device(
     )
     if not wallets or config_entry.state is not ConfigEntryState.LOADED:
         return True
-    runtime: PortfolioRuntime = config_entry.runtime_data
+    # The Price Tracker's entry returned above: this is the Portfolio's.
+    runtime = cast(PortfolioRuntime, config_entry.runtime_data)
     data = runtime.portfolio.data
     if data is None:
         # No answer taken as the truth yet -- an empty one awaits
@@ -430,7 +439,8 @@ async def async_remove_config_entry_device(
         asset_label = (
             asset_display_label(record)
             if record is not None
-            else device_entry.name_by_user or device_entry.name
+            # A wallet device always has a name (naming.wallet_device_name).
+            else cast(str, device_entry.name_by_user or device_entry.name)
         )
         raise await _async_refusal(
             hass, config_entry, "held_wallet_not_removable", {"asset": asset_label}

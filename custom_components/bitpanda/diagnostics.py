@@ -5,11 +5,13 @@ cannot leak by default.
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState, ConfigSubentry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
+from . import BitpandaConfigEntry
 from .assets import slim_asset
 from .const import (
     CONF_ASSETS,
@@ -22,11 +24,13 @@ from .const import (
     entry_type,
 )
 from .groups import entities_by_group, groups_of_type
+from .portfolio_coordinator import PortfolioRuntime
+from .price_coordinator import PriceTrackerRuntime
 
 _REDACTED = "**REDACTED**"
 
 
-def _health(coordinator) -> dict[str, Any]:
+def _health(coordinator: DataUpdateCoordinator[Any]) -> dict[str, Any]:
     return {"last_update_success": coordinator.last_update_success}
 
 
@@ -56,7 +60,9 @@ def _wallet_groups(hass: HomeAssistant, entry: ConfigEntry) -> list[dict[str, An
     ]
 
 
-def _portfolio(hass: HomeAssistant, entry: ConfigEntry, runtime) -> dict[str, Any]:
+def _portfolio(
+    hass: HomeAssistant, entry: ConfigEntry, runtime: PortfolioRuntime | None
+) -> dict[str, Any]:
     out: dict[str, Any] = {
         "service": "portfolio",
         "config": {"api_key": _REDACTED, "currency": entry.data.get(CONF_CURRENCY)},
@@ -104,7 +110,9 @@ def _price_groups(entry: ConfigEntry) -> list[dict[str, Any]]:
     ]
 
 
-def _price_tracker(entry: ConfigEntry, runtime) -> dict[str, Any]:
+def _price_tracker(
+    entry: ConfigEntry, runtime: PriceTrackerRuntime | None
+) -> dict[str, Any]:
     out: dict[str, Any] = {
         "service": "price_tracker",
         "groups": _price_groups(entry),
@@ -130,12 +138,13 @@ def _price_tracker(entry: ConfigEntry, runtime) -> dict[str, Any]:
 
 
 async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry: ConfigEntry
+    hass: HomeAssistant, entry: BitpandaConfigEntry
 ) -> dict[str, Any]:
     """An entry that is not loaded -- setup failed, or reauth is pending,
     which is exactly when diagnostics are wanted -- has no runtime data and
     reports its configuration and groups only."""
     runtime = entry.runtime_data if entry.state is ConfigEntryState.LOADED else None
+    # The entry's type names its service, and so its runtime data.
     if entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER:
-        return _price_tracker(entry, runtime)
-    return _portfolio(hass, entry, runtime)
+        return _price_tracker(entry, cast(PriceTrackerRuntime | None, runtime))
+    return _portfolio(hass, entry, cast(PortfolioRuntime | None, runtime))

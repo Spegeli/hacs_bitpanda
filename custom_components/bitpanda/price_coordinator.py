@@ -150,9 +150,12 @@ class TickerCoordinator(DataUpdateCoordinator[dict[str, float]]):
     """EUR prices of the tracked assets, one keyless /tickers request each.
 
     A failing or delisted asset is left out of the data, so only its own
-    sensors go unavailable, and is warned about once until it recovers. The
-    update fails as a whole only when every request fails, or on a 429,
-    which also stops the round and backs off.
+    sensors go unavailable. It is warned about once, and its return is
+    logged once at INFO. The update fails as a whole only when every request
+    fails, or on a 429, which also stops the round and backs off -- warned
+    about once when the backoff starts, logged once at INFO when a round
+    succeeds again and ends it. The whole update's own failure and recovery
+    DataUpdateCoordinator logs itself.
     """
 
     def __init__(
@@ -215,11 +218,22 @@ class TickerCoordinator(DataUpdateCoordinator[dict[str, float]]):
         if self._backoff != 1:
             self._backoff = 1
             self.update_interval = self._base_interval
+            _LOGGER.info(
+                "Bitpanda answers the price requests again; back to polling every %s",
+                self._base_interval,
+            )
 
         for asset_id in failed - self._failing:
             _LOGGER.warning(
                 "No price for %s; its price sensors are unavailable until it "
                 "returns",
+                self._tracked[asset_id],
+            )
+        # Every tracked asset was asked for in this round: one that failed
+        # before and not now has its price back.
+        for asset_id in self._failing - failed:
+            _LOGGER.info(
+                "Price for %s is back; its price sensors are available again",
                 self._tracked[asset_id],
             )
         self._failing = failed

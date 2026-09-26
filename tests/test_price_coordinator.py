@@ -138,6 +138,89 @@ async def test_a_recovered_asset_is_warned_about_again_when_it_fails_again(caplo
     assert caplog.text.count("Bitcoin (BTC)") == 2
 
 
+def _lines(caplog, level: int, text: str) -> list[str]:
+    """The price coordinator's log lines at `level` that mention `text`."""
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "custom_components.bitpanda.price_coordinator"
+        and record.levelno == level
+        and text in record.getMessage()
+    ]
+
+
+async def test_a_price_that_returns_is_logged_once_at_info(caplog):
+    """The outage window is readable from the log: one WARNING when the
+    price fails, one INFO when it returns -- neither repeated while the
+    state lasts. An asset that never failed is never announced."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"}, failing={BTC})
+    coordinator = _coordinator(client)
+    with caplog.at_level(logging.INFO):
+        await coordinator._async_update_data()
+        await coordinator._async_update_data()
+        client.failing = set()
+        await coordinator._async_update_data()
+        await coordinator._async_update_data()
+    assert len(_lines(caplog, logging.WARNING, "Bitcoin (BTC)")) == 1
+    assert _lines(caplog, logging.INFO, "Bitcoin (BTC)") == [
+        "Price for Bitcoin (BTC) is back; its price sensors are available again"
+    ]
+    assert _lines(caplog, logging.INFO, "Solana (SOL)") == []
+
+
+async def test_each_return_of_a_price_is_logged(caplog):
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"}, failing={BTC})
+    coordinator = _coordinator(client)
+    with caplog.at_level(logging.INFO):
+        for failing in ({BTC}, set(), {BTC}, set()):
+            client.failing = failing
+            await coordinator._async_update_data()
+    assert len(_lines(caplog, logging.WARNING, "Bitcoin (BTC)")) == 2
+    assert len(_lines(caplog, logging.INFO, "Bitcoin (BTC)")) == 2
+
+
+async def test_a_price_back_after_a_failed_round_is_logged_once(caplog):
+    """A round in which every request failed fails the update and leaves
+    the failed asset as it was: its return is announced once, with the next
+    round that brings it back."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"}, failing={BTC})
+    coordinator = _coordinator(client)
+    with caplog.at_level(logging.INFO):
+        await coordinator._async_update_data()
+        client.failing = {BTC, SOL}
+        with pytest.raises(UpdateFailed):
+            await coordinator._async_update_data()
+        client.failing = set()
+        await coordinator._async_update_data()
+    assert len(_lines(caplog, logging.INFO, "Bitcoin (BTC)")) == 1
+    assert _lines(caplog, logging.INFO, "Solana (SOL)") == []
+
+
+async def test_the_end_of_a_rate_limit_backoff_is_logged_once_at_info(caplog):
+    """One WARNING when the backoff starts, one INFO when it ends, naming
+    the regular interval it returns to."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"}, rate_limited=True)
+    coordinator = _coordinator(client)
+    with caplog.at_level(logging.INFO):
+        for _ in range(2):
+            with pytest.raises(UpdateFailed):
+                await coordinator._async_update_data()
+        client.rate_limited = False
+        await coordinator._async_update_data()
+        await coordinator._async_update_data()
+    assert len(_lines(caplog, logging.WARNING, "rate-limited")) == 1
+    assert _lines(caplog, logging.INFO, "again") == [
+        "Bitpanda answers the price requests again; back to polling every 0:01:00"
+    ]
+
+
+async def test_a_round_without_a_backoff_logs_no_end_of_one(caplog):
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
+    with caplog.at_level(logging.INFO):
+        await _coordinator(client)._async_update_data()
+    assert caplog.records == []
+
+
 def _translation(err: Exception) -> tuple:
     return err.translation_domain, err.translation_key, err.translation_placeholders
 

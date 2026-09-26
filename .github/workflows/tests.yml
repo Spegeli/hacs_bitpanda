@@ -1,6 +1,7 @@
 name: Tests
 
-# The suite with its coverage, and strict typing, for every push to any
+# The suite with its coverage, strict typing, and a compile of the
+# integration with the Python of the 2025.5 floor, for every push to any
 # branch and every pull request. No schedule: GitHub disables a workflow
 # that has one after 60 days without repository activity, and it then runs
 # on no push either.
@@ -50,3 +51,19 @@ jobs:
         run: python -m pip install -r requirements_test.txt
       - name: Run mypy --strict
         run: python -m mypy --strict
+
+  # Home Assistant 2025.5, the floor (hacs.json), runs on Python 3.13, the
+  # jobs above on 3.14 only. Compiling needs no Home Assistant and fails on
+  # any syntax newer than 3.13; CONTRIBUTING.md names what else the floor's
+  # Python asks of the code.
+  python-floor:
+    name: Python 3.13 syntax
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Compile the integration with Python 3.13
+        run: python -m compileall -q custom_components/bitpanda

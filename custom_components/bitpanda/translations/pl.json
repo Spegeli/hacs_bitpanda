@@ -309,7 +309,7 @@
             "name": "Nagrody: wartość netto (bieżąca)"
           },
           "rewards_count": {
-            "name": "Nagrody: liczba wypłat"
+            "name": "Nagrody: liczba naliczeń"
           },
           "rewards_last_at": {
             "name": "Nagrody: ostatnia wypłata"

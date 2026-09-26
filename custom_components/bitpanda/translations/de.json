@@ -309,7 +309,7 @@
             "name": "Belohnungen: Wert netto (aktuell)"
           },
           "rewards_count": {
-            "name": "Belohnungen: Anzahl Auszahlungen"
+            "name": "Belohnungen: Anzahl Gutschriften"
           },
           "rewards_last_at": {
             "name": "Belohnungen: zuletzt"

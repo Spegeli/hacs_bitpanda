@@ -738,10 +738,11 @@ def test_the_isin_is_labelled_on_every_sensor_that_names_its_asset():
 
 
 # The lifetime reward attributes of the Staking sensor, by language (USER
-# DECISION 2026-09-26).
+# DECISION 2026-09-26). German and Polish count credits: their word for
+# payouts ("Auszahlungen", "wypłaty") also reads as money taken out.
 _REWARD_LABELS = {
     "de": {
-        "rewards_count": "Belohnungen: Anzahl Auszahlungen",
+        "rewards_count": "Belohnungen: Anzahl Gutschriften",
         "rewards_gross": "Belohnungen: brutto (Menge)",
         "rewards_fee": "Belohnungen: Gebühr (Menge)",
         "rewards_net": "Belohnungen: netto (Menge)",
@@ -783,7 +784,7 @@ _REWARD_LABELS = {
         "rewards_net_value": "Beloningen: nettowaarde (actueel)",
     },
     "pl": {
-        "rewards_count": "Nagrody: liczba wypłat",
+        "rewards_count": "Nagrody: liczba naliczeń",
         "rewards_gross": "Nagrody: brutto (ilość)",
         "rewards_fee": "Nagrody: opłata (ilość)",
         "rewards_net": "Nagrody: netto (ilość)",

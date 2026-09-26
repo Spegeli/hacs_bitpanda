@@ -46,7 +46,7 @@ The integration offers two services. Set up either or both — each one once.
 - A call within the cooldown of the last accepted one is ignored, without an error. With a Price Tracker set up, the cooldown is its price interval (60 seconds, longer with many tracked assets), so an automation cannot push price requests beyond the normal polling rate; with only the Portfolio, it is 10 seconds
 - When a refresh fails — Bitpanda cannot be reached or answers with an error — the call fails with an error naming the service, such as **Bitpanda Portfolio**; the other service is refreshed all the same
 - While neither service is loaded — for example while its setup is being retried — a call fails with an error saying there is nothing to refresh
-- ⚠️ A failed call stops a script or automation at that step, unless the step sets `continue_on_error: true`
+- ⚠️ A failed call stops a script or automation at that step, unless the step sets `continue_on_error: true` (see the [example](#-automation-examples))
 
 ### Long-term statistics
 - Every value sensor keeps long-term statistics: the Portfolio's figures, returns and wallets, and every price. They start with this version; the time before it has none
@@ -177,6 +177,44 @@ Home Assistant lists these in the entity's Details view (older versions: the Att
 | Portfolio Cash Plus | `eur`, `usd`, `gbp` — the amount of each held Cash Plus product in its own currency |
 | Price (EUR) | `asset`, `asset_name`, `trading_pair`, `change_24h_pct`, `price_24h_ago` |
 | Price (other currencies) | as EUR, plus `conversion` (status `no_rate` until the first ECB rate is loaded), `conversion_rate`, `rate_date`, `rate_source` (`ECB`) |
+
+---
+
+## 🤖 Automation examples
+
+Paste one into a new automation's YAML editor (in the automation editor: **⋮ → Edit in YAML**) and adjust the entity ID and the numbers.
+
+**Price alert** — a notification once Bitcoin rises above 100,000 EUR. It fires when the price crosses the threshold, not again while the price stays above it; use `below:` for a fall.
+
+```yaml
+alias: Bitcoin above 100,000 EUR
+triggers:
+  - trigger: numeric_state
+    entity_id: sensor.bitpanda_bitcoin_btc_eur
+    above: 100000
+actions:
+  - action: persistent_notification.create
+    data:
+      title: Bitcoin
+      message: "Bitcoin is at {{ states('sensor.bitpanda_bitcoin_btc_eur') }} EUR."
+```
+
+For a push message to your phone, use its `notify.mobile_app_…` action instead.
+
+**Refresh on a schedule** — ask Bitpanda at a set time instead of waiting for the next regular update. With `continue_on_error: true`, a failed refresh (see [Manual Refresh](#manual-refresh)) does not stop the automation: steps you add after it still run.
+
+```yaml
+alias: Refresh Bitpanda every morning
+triggers:
+  - trigger: time
+    at: "07:00:00"
+actions:
+  - action: bitpanda.refresh
+    continue_on_error: true
+  # Steps added here run even when the refresh failed.
+```
+
+The same step works in a script, which you can start from anywhere — from a button, for example.
 
 ---
 

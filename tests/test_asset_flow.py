@@ -9,7 +9,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
-from custom_components.bitpanda.assets import slim_asset
+from custom_components.bitpanda.assets import asset_label, slim_asset
 from custom_components.bitpanda.const import DOMAIN
 
 from tests.conftest import load_fixture, price_group
@@ -91,9 +91,11 @@ async def test_listing_is_one_searchable_single_pick_minus_tracked_assets(hass):
     with patch(_LIST, AsyncMock(return_value=_metals())):
         result = await _pick_category(hass, entry)
     assert result["step_id"] == "asset"
-    values = {option["value"] for option in _options(result)}
-    assert GOLD["id"] not in values
-    assert len(values) == 3
+    options = _options(result)
+    assert all(option["value"] == option["label"] for option in options)
+    labels = {option["label"] for option in options}
+    assert asset_label(GOLD) not in labels
+    assert len(labels) == 3
     for marker, validator in result["data_schema"].schema.items():
         if marker == "asset":
             assert validator.config["custom_value"] is True
@@ -106,7 +108,7 @@ async def test_an_asset_tracked_in_any_group_is_left_out_of_the_listing(hass):
     entry = _entry(hass, price_group("other", GOLD))
     with patch(_LIST, AsyncMock(return_value=_metals())):
         result = await _pick_category(hass, entry)
-    assert GOLD["id"] not in {option["value"] for option in _options(result)}
+    assert asset_label(GOLD) not in {option["label"] for option in _options(result)}
 
 
 async def test_a_fully_tracked_category_says_so(hass):
@@ -186,6 +188,24 @@ async def test_the_first_asset_of_a_type_starts_its_group(hass):
     assert group.unique_id == "metal"
     assert group.title == "Precious metals"
     assert dict(group.data) == {"category": "metal", "assets": {SILVER["id"]: slim_asset(SILVER)}}
+
+
+async def test_the_picked_label_is_submitted_and_resolves_to_the_asset(hass):
+    """The field's value is the label the user searched and picked, not the
+    id (issue: with no valueRenderer, ha-picker-field always echoed the raw
+    value back, so the field showed a UUID after picking)."""
+    entry = _entry(hass)
+    with patch(_LIST, AsyncMock(return_value=_metals())):
+        result = await _pick_category(hass, entry)
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {"asset": asset_label(SILVER)}
+        )
+    assert result["type"] == _FLOW.CREATE_ENTRY
+    [group] = entry.subentries.values()
+    assert dict(group.data) == {
+        "category": "metal",
+        "assets": {SILVER["id"]: slim_asset(SILVER)},
+    }
 
 
 async def test_a_new_group_is_titled_in_the_language_home_assistant_runs_in(hass):

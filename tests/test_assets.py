@@ -6,8 +6,10 @@ from custom_components.bitpanda.assets import (
     CATEGORY_OTHER,
     asset_category,
     asset_label,
+    asset_label_map,
     is_legacy_supported,
     pick_legacy,
+    resolve_asset,
 )
 
 from tests.conftest import load_fixture
@@ -151,6 +153,88 @@ def test_asset_label_without_isin():
 def test_asset_label_falls_back_to_symbol_when_name_is_empty():
     asset = {"name": "", "symbol": "XYZ"}
     assert asset_label(asset) == "XYZ / XYZ"
+
+
+# --- asset_label_map / resolve_asset --------------------------------------
+#
+# The asset picker is a SelectSelector with custom_value=True; the frontend's
+# ha-picker-field shows an option's raw VALUE with no way to render its label
+# instead (verified in the frontend source). Making the value the label, not
+# the id, fixes that -- but labels must stay unique within one listing first.
+# Apple listed under both stock families -- same name, symbol and ISIN, only
+# type and group differ -- is the real shape of that collision.
+
+
+def _stock_pair(isin="US0378331005"):
+    stock = {
+        "id": "11111111-2222-3333-4444-555555555555",
+        "symbol": "AAPL",
+        "name": "Apple",
+        "isin": isin,
+        "type": "security",
+        "group": "stock",
+    }
+    equity = {
+        "id": "66666666-7777-8888-9999-000000000000",
+        "symbol": "AAPL",
+        "name": "Apple",
+        "isin": isin,
+        "type": "equity_security",
+        "group": "equity_stock",
+    }
+    return stock, equity
+
+
+def test_asset_label_map_passes_unique_labels_through():
+    btc = {"id": "btc-id", "symbol": "BTC", "name": "Bitcoin", "type": "cryptocoin", "group": "coin"}
+    eth = {"id": "eth-id", "symbol": "ETH", "name": "Ethereum", "type": "cryptocoin", "group": "coin"}
+    assert asset_label_map([btc, eth]) == {"Bitcoin / BTC": btc, "Ethereum / ETH": eth}
+
+
+def test_asset_label_map_suffixes_a_duplicate_label_with_type_and_group():
+    stock, equity = _stock_pair()
+    assert asset_label_map([stock, equity]) == {
+        "Apple / AAPL / US0378331005 · security/stock": stock,
+        "Apple / AAPL / US0378331005 · equity_security/equity_stock": equity,
+    }
+
+
+def test_asset_label_map_appends_the_asset_id_when_the_suffix_still_collides():
+    """Same name, symbol, type and group too -- only the id still differs."""
+    first = {
+        "id": "11111111-0000-0000-0000-000000000000",
+        "symbol": "DUP", "name": "Duplicate", "type": "cryptocoin", "group": "coin",
+    }
+    second = {
+        "id": "22222222-0000-0000-0000-000000000000",
+        "symbol": "DUP", "name": "Duplicate", "type": "cryptocoin", "group": "coin",
+    }
+    assert asset_label_map([first, second]) == {
+        "Duplicate / DUP · cryptocoin/coin · 11111111": first,
+        "Duplicate / DUP · cryptocoin/coin · 22222222": second,
+    }
+
+
+def test_asset_label_map_is_empty_for_an_empty_listing():
+    assert asset_label_map([]) == {}
+
+
+def test_resolve_asset_finds_a_record_by_its_label():
+    stock, equity = _stock_pair()
+    label_map = asset_label_map([stock, equity])
+    assert resolve_asset("Apple / AAPL / US0378331005 · security/stock", label_map, [stock, equity]) is stock
+
+
+def test_resolve_asset_accepts_a_typed_or_pasted_id_too():
+    stock, equity = _stock_pair()
+    label_map = asset_label_map([stock, equity])
+    assert resolve_asset(equity["id"], label_map, [stock, equity]) is equity
+
+
+def test_resolve_asset_is_none_for_anything_else():
+    stock, equity = _stock_pair()
+    label_map = asset_label_map([stock, equity])
+    assert resolve_asset("nonsense", label_map, [stock, equity]) is None
 
 
 # --- asset_category ----------------------------------------------------------

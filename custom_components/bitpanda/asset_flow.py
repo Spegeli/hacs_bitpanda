@@ -21,7 +21,13 @@ from homeassistant.helpers.selector import (
 from homeassistant.util import dt as dt_util
 
 from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
-from .assets import ASSET_CATEGORY_FILTERS, asset_category, asset_label, slim_asset
+from .assets import (
+    ASSET_CATEGORY_FILTERS,
+    asset_category,
+    asset_label_map,
+    resolve_asset,
+    slim_asset,
+)
 from .const import DOMAIN, SUBENTRY_TYPE_PRICE_GROUP
 from .groups import (
     async_add_asset_to_group,
@@ -158,17 +164,23 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
         if error is not None:
             return self._show_assets([], error)
         tracked = self._tracked_ids()
+        # Built once per listing and used for both the options below and for
+        # resolving what gets submitted, so a picked option's value is always
+        # the label the user saw and searched, never a bare id (the picker's
+        # ha-picker-field has no way to render a label for a raw value it
+        # wasn't given).
+        label_map = asset_label_map(catalogue)
         options = sorted(
             (
-                {"value": asset["id"], "label": asset_label(asset)}
-                for asset in catalogue
+                {"value": label, "label": label}
+                for label, asset in label_map.items()
                 if asset["id"] not in tracked
             ),
             key=lambda option: option["label"].casefold(),
         )
 
         if user_input is not None:
-            chosen = next((a for a in catalogue if a["id"] == user_input["asset"]), None)
+            chosen = resolve_asset(user_input["asset"], label_map, catalogue)
             if chosen is None:
                 return self._show_assets(options, "unknown_asset")
             if chosen["id"] in tracked:

@@ -161,3 +161,51 @@ def asset_label(asset: dict) -> str:
     if asset.get("isin"):
         parts.append(asset["isin"])
     return " / ".join(parts)
+
+
+def asset_label_map(assets: Iterable[dict]) -> dict[str, dict]:
+    """`asset_label(asset)` -> asset, for one listing, with every label made
+    unique first.
+
+    The asset picker is a searchable `SelectSelector` with `custom_value=True`;
+    the frontend shows an option's raw value back with no way to render its
+    label instead, so the value must already be the label the user picked.
+    Two or more assets that share a label all get " · <type>/<group>"
+    appended -- the real shape of a stock listed under both catalogue
+    families, same name, symbol and ISIN. If that still collides -- the same
+    type and group too -- " · " plus the first 8 characters of the id is
+    appended as well, so every asset ends up with exactly one, unique entry.
+    """
+    by_label: dict[str, list[dict]] = {}
+    for asset in assets:
+        by_label.setdefault(asset_label(asset), []).append(asset)
+
+    result: dict[str, dict] = {}
+    for label, group in by_label.items():
+        if len(group) == 1:
+            result[label] = group[0]
+            continue
+        by_suffixed: dict[str, list[dict]] = {}
+        for asset in group:
+            suffixed = f"{label} · {asset.get('type')}/{asset.get('group')}"
+            by_suffixed.setdefault(suffixed, []).append(asset)
+        for suffixed_label, subgroup in by_suffixed.items():
+            if len(subgroup) == 1:
+                result[suffixed_label] = subgroup[0]
+                continue
+            for asset in subgroup:
+                result[f"{suffixed_label} · {asset['id'][:8]}"] = asset
+    return result
+
+
+def resolve_asset(
+    value: str, label_map: dict[str, dict], catalogue: Iterable[dict]
+) -> dict | None:
+    """What the picker's raw submitted `value` names: a label in `label_map`,
+    or -- typed or pasted -- the id of an asset in `catalogue`. None for
+    anything else.
+    """
+    chosen = label_map.get(value)
+    if chosen is not None:
+        return chosen
+    return next((asset for asset in catalogue if asset.get("id") == value), None)

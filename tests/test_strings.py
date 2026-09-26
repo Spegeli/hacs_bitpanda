@@ -153,7 +153,10 @@ _LABEL_REFERENCES = {
         ("options", "step", "portfolio", "description"),
         ("issues", "currency_dropped", "description"),
     ],
-    "configure": [("config", "abort", "no_reconfigure")],
+    "configure": [
+        ("config", "step", "price_tracker", "description"),
+        ("config", "abort", "no_reconfigure"),
+    ],
     "submit": [
         ("config", "step", "confirm_currency", "description"),
         ("config_subentries", "price_group", "step", "asset", "data_description", "asset"),

@@ -31,7 +31,7 @@
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "Wähle jetzt die Währungen; Assets fügst du danach mit „Preis-Tracker hinzufügen“ hinzu.",
+        "description": "Zusätzliche Währungen sind optional; du kannst sie auch später unter „Konfigurieren“ wählen. Assets fügst du danach mit „Preis-Tracker hinzufügen“ hinzu.",
         "data": {
           "extra_currencies": "Zusätzliche Währungen"
         },

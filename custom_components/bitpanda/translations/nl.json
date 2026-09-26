@@ -31,7 +31,7 @@
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "Kies nu de valuta en voeg daarna assets toe met \"Prijstracker toevoegen\".",
+        "description": "Extra valuta zijn optioneel; je kunt ze ook later kiezen via \"Configureren\". Voeg daarna assets toe met \"Prijstracker toevoegen\".",
         "data": {
           "extra_currencies": "Extra valuta"
         },

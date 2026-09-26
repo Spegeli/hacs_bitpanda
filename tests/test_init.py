@@ -9,6 +9,7 @@ import pytest
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentry, ConfigSubentryData
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.translation import async_translations_loaded
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
@@ -785,35 +786,64 @@ async def test_the_device_page_deletes_a_price_device(hass, price_api, hass_ws_c
     assert ticker.call_count == 3
 
 
+# What the device page's dialog shows for each refusal: the `message` of the
+# websocket error, in Home Assistant's language. The trailing "." of
+# strings.json is dropped, as Home Assistant drops it from a translated
+# exception message (translation.async_get_exception_message).
+_REFUSALS = {
+    "en": {
+        "portfolio": (
+            "The Portfolio device is part of the Bitpanda Portfolio service and "
+            "cannot be deleted on its own. To remove it, delete the Bitpanda "
+            "Portfolio entry"
+        ),
+        "wallet": (
+            "You still hold Vision (VSN), so this wallet would come straight "
+            "back. It is removed automatically once you no longer hold it"
+        ),
+    },
+    "de": {
+        "portfolio": (
+            "Das Gerät „Portfolio“ gehört zum Dienst Bitpanda Portfolio und lässt sich "
+            "nicht einzeln löschen. Um es zu entfernen, lösche den Eintrag „Bitpanda "
+            "Portfolio“"
+        ),
+        "wallet": (
+            "Du hältst Vision (VSN) noch, daher käme dieses Wallet sofort zurück. Es "
+            "wird automatisch entfernt, sobald du es nicht mehr hältst"
+        ),
+    },
+}
+
+
+@pytest.mark.parametrize("language", ["en", "de"])
 async def test_the_device_page_refuses_to_delete_the_portfolio_device(
-    hass, portfolio_api, hass_ws_client
+    hass, portfolio_api, hass_ws_client, language
 ):
+    """In Home Assistant's language: the dialog shows the message as it
+    arrives, and Home Assistant itself would render it in English only."""
+    hass.config.language = language
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
+    # Loaded at the integration's setup for Home Assistant's language.
+    assert async_translations_loaded(hass, {DOMAIN})
     device = _own_device(hass, entry, "portfolio")
 
     response = await _remove_through_the_device_page(hass, hass_ws_client, entry, device)
 
     assert not response["success"]
-    # HomeAssistantError.__str__ resolves translation_key against the cached
-    # "exceptions" strings and rstrip(".")s the result (homeassistant.helpers.
-    # translation.async_get_exception_message) -- verified identical at the
-    # 2025.5.0 floor and in the 2026.9.3 test image -- so the trailing "."
-    # from strings.json is not part of what the frontend shows.
-    assert response["error"]["message"] == (
-        "The Portfolio device is part of the Bitpanda Portfolio service and "
-        "cannot be deleted on its own. To remove it, delete the Bitpanda "
-        "Portfolio entry"
-    )
+    assert response["error"]["message"] == _REFUSALS[language]["portfolio"]
     assert response["error"]["translation_domain"] == DOMAIN
     assert response["error"]["translation_key"] == "portfolio_device_not_removable"
     assert response["error"]["translation_placeholders"] is None
     assert dr.async_get(hass).async_get(device.id) is not None
 
 
+@pytest.mark.parametrize("language", ["en", "de"])
 async def test_the_device_page_refuses_to_delete_a_held_wallet(
-    hass, portfolio_api, hass_ws_client
+    hass, portfolio_api, hass_ws_client, language
 ):
+    hass.config.language = language
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
     wallet = _own_device(hass, entry, "wallet", VSN)
@@ -821,11 +851,7 @@ async def test_the_device_page_refuses_to_delete_a_held_wallet(
     response = await _remove_through_the_device_page(hass, hass_ws_client, entry, wallet)
 
     assert not response["success"]
-    # Same rstrip(".") behaviour as above -- see that test's comment.
-    assert response["error"]["message"] == (
-        "You still hold Vision (VSN), so this wallet would come straight "
-        "back. It is removed automatically once you no longer hold it"
-    )
+    assert response["error"]["message"] == _REFUSALS[language]["wallet"]
     assert response["error"]["translation_domain"] == DOMAIN
     assert response["error"]["translation_key"] == "held_wallet_not_removable"
     assert response["error"]["translation_placeholders"] == {"asset": "Vision (VSN)"}

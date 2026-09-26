@@ -193,7 +193,7 @@ This release moves to Bitpanda's new Public API and splits the integration into 
 - **Portfolio Total value now covers your whole account** — every holding plus all fiat. It used to add up only the wallets you tracked, so its value steps up at the upgrade: check automations that compare it against a threshold.
 - **The fiat wallet in your currency becomes Portfolio Cash**, which sums all your fiat balances. Other fiat wallets are left as `unavailable` entities you can delete.
 - **Prices in other currencies are converted with ECB daily rates** instead of being quoted by Bitpanda.
-- **Attributes:** units are now `units` on each sensor (the Wallet's `units` are the unstaked units its old `balance` showed); the APR is `apr_percent` on the Staking sensor; the position performance is on the Total sensor. `breakdown`, `all_prices` and the wallet `price` attribute are gone.
+- **Attributes:** units are now `units` on each sensor (the Wallet's `units` are the unstaked units its old `balance` showed); the APR is `apr_percent` on the Staking sensor; the position performance is on the Total sensor. `breakdown`, `wallet_count`, `all_prices` and the wallet `price` attribute are gone. The price sensor's `conversion` attribute now carries the status `no_rate` (not a sentence) while no exchange rate is loaded.
 
 ---
 

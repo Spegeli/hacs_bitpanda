@@ -324,11 +324,16 @@ def _async_register_refresh_service(hass: HomeAssistant) -> None:
         # A refresh that fails has asked Bitpanda all the same: it starts the
         # cooldown like any other.
         last_accepted["time"] = now
-        failed = [
-            entry.title
-            for entry in entries
-            if not await _async_refresh_now(entry.runtime_data)
-        ]
+        failed: list[str] = []
+        for entry, runtime in zip(entries, runtimes, strict=True):
+            # An earlier refresh can take a while -- a long ticker round --
+            # and an entry unloaded meanwhile, by a reload or a currency
+            # change, has lost its runtime data and has nothing to refresh:
+            # hence the runtimes taken before the first await, and the check.
+            if entry.state is not ConfigEntryState.LOADED:
+                continue
+            if not await _async_refresh_now(runtime):
+                failed.append(entry.title)
         if failed:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,

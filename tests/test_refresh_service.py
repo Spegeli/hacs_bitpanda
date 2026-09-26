@@ -224,6 +224,28 @@ async def test_a_service_is_named_by_the_title_its_entry_carries(hass):
     assert excinfo.value.translation_placeholders == {"services": "My Bitpanda"}
 
 
+async def test_an_entry_unloaded_while_an_earlier_refresh_runs_is_skipped(hass):
+    """An earlier refresh can take a while -- a long ticker round -- and the
+    other entry can be unloaded meanwhile, by a reload or a currency change.
+    Home Assistant then drops its runtime data. The call goes on without
+    an error, and the entry that is no longer loaded is not refreshed."""
+    await _set_up_the_integration(hass)
+    portfolio = _Coordinator(timedelta(minutes=5))
+    tickers = _Coordinator(timedelta(seconds=60))
+    _loaded(hass, "portfolio", _portfolio_runtime(portfolio))
+    tracker = _loaded(hass, "price_tracker", PriceTrackerRuntime(tickers=tickers, ecb=None))
+
+    async def _refresh_while_the_tracker_unloads() -> None:
+        # What a successful unload does at Home Assistant 2025.5.
+        tracker.mock_state(hass, ConfigEntryState.NOT_LOADED)
+        object.__delattr__(tracker, "runtime_data")
+
+    portfolio.async_refresh.side_effect = _refresh_while_the_tracker_unloads
+    await _call(hass)
+    assert portfolio.async_refresh.await_count == 1
+    tickers.async_refresh.assert_not_awaited()
+
+
 async def test_a_call_within_the_cooldown_stays_silent_after_a_failed_one(hass):
     """The failed refresh still asked Bitpanda, so it starts the cooldown
     like any other; a call within it refreshes nothing and says nothing."""

@@ -159,8 +159,9 @@ async def _async_first_refresh(coordinator: DataUpdateCoordinator) -> None:
     Assistant 2026.9 on it carries the translation of the UpdateFailed that
     caused it; before -- the 2025.5 floor included -- it carries none, and
     the page shows that UpdateFailed's English text instead. So it is raised
-    again here with that translation. Its cause stays that UpdateFailed, as
-    Home Assistant links it too: raised from None, with no request data.
+    again here with that translation, from None like every exception this
+    integration raises: the message comes from the translation, so nothing
+    needs the chain behind it.
     """
     try:
         await coordinator.async_config_entry_first_refresh()
@@ -176,7 +177,7 @@ async def _async_first_refresh(coordinator: DataUpdateCoordinator) -> None:
             translation_domain=cause.translation_domain,
             translation_key=cause.translation_key,
             translation_placeholders=cause.translation_placeholders,
-        ) from cause
+        ) from None
 
 
 async def _async_reload(hass: HomeAssistant, entry: ConfigEntry) -> None:

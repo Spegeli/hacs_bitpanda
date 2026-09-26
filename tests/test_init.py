@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigEntryState, ConfigSubentry, Confi
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.translation import async_translations_loaded
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
@@ -18,7 +18,7 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
-from custom_components.bitpanda import async_remove_config_entry_device
+from custom_components.bitpanda import _async_first_refresh, async_remove_config_entry_device
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaAuthError
 from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.const import DOMAIN
@@ -334,6 +334,25 @@ async def test_a_failed_first_portfolio_refresh_retries_with_a_translated_reason
     assert entry.error_reason_translation_key == "update_failed"
     assert entry.error_reason_translation_placeholders == {"error": "HTTP 503 from /portfolio"}
     assert entry.reason == "Could not fetch data from Bitpanda: HTTP 503 from /portfolio"
+
+
+async def test_the_translated_not_ready_is_raised_from_none():
+    """Like every exception this integration raises into Home Assistant: no
+    exception chain behind it."""
+
+    class _Coordinator:
+        async def async_config_entry_first_refresh(self):
+            ex = ConfigEntryNotReady()
+            ex.__cause__ = UpdateFailed(translation_domain=DOMAIN, translation_key="no_prices")
+            raise ex
+
+    with pytest.raises(ConfigEntryNotReady) as excinfo:
+        await _async_first_refresh(_Coordinator())
+    assert (excinfo.value.translation_domain, excinfo.value.translation_key) == (
+        DOMAIN, "no_prices"
+    )
+    assert excinfo.value.__cause__ is None
+    assert excinfo.value.__suppress_context__
 
 
 @_FIRST_REFRESH

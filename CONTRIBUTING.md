@@ -34,14 +34,25 @@ logger:
     custom_components.bitpanda: debug
 ```
 
-Tests use `pytest-homeassistant-custom-component`, whose harness does not run on Windows. On Linux or macOS:
+### Tests and typing
+
+Tests use `pytest-homeassistant-custom-component`, whose harness does not run on Windows. `requirements_test.txt` pins it — and with it the Home Assistant release the suite runs against, which needs Python 3.14 — and mypy. On Linux or macOS, with Python 3.14:
 
 ```bash
 pip install -r requirements_test.txt
-pytest tests/ -q
+python -m pytest tests/ -q --cov=custom_components.bitpanda --cov-report=term-missing
+python -m mypy --strict
 ```
 
-To measure line coverage, add `--cov=custom_components.bitpanda --cov-report=term-missing`. `config_flow.py` and `asset_flow.py` stay at 100 %, and every test that shows an error in a dialog goes on to finish that dialog.
+`pytest` runs the suite and reports the line coverage of each file; `mypy` checks the types of the integration in strict mode, as `mypy.ini` configures it — the tests are not type-checked.
+
+The same in Docker, on any system, with the Python version and the pinned requirements CI uses; each run installs them afresh, which takes a few minutes. On Windows, run it from PowerShell: Git Bash rewrites the mount path.
+
+```bash
+docker run --rm -v "${PWD}:/workspace" -w /workspace python:3.14 sh -c "pip install -q -r requirements_test.txt && python -m pytest tests/ -q --cov=custom_components.bitpanda --cov-report=term-missing && python -m mypy --strict"
+```
+
+CI enforces both on every push and pull request (`.github/workflows/tests.yml`): the suite must pass with at least 95 % line coverage, and `mypy --strict` must report no error. `config_flow.py` and `asset_flow.py` stay at 100 %, and every test that shows an error in a dialog goes on to finish that dialog.
 
 ## Project layout
 
@@ -159,7 +170,7 @@ To add a language, copy `translations/en.json` to `translations/<code>.json` and
 
 Follow the [Home Assistant developer guidelines](https://developers.home-assistant.io/docs/development_guidelines). In short:
 
-- Type hints on function signatures.
+- Complete type hints: `mypy --strict` must pass (see [Tests and typing](#tests-and-typing)).
 - Docstrings on modules, classes and public functions.
 - `async`/`await` for anything touching the network.
 - Constants in `const.py`, not inline.
@@ -170,7 +181,7 @@ Follow the [Home Assistant developer guidelines](https://developers.home-assista
 2. Keep the change focused — one topic per PR.
 3. Use [Conventional Commits](https://www.conventionalcommits.org) for commit messages: `fix:`, `feat:`, `docs:`, `chore:`, `refactor:`, `ci:`.
 4. Open the PR against `main` and fill in the template.
-5. CI runs hassfest and HACS validation. Both must pass.
+5. CI runs hassfest and HACS validation, the tests with their coverage and `mypy --strict`. All must pass.
 
 **Do not bump the version in `manifest.json`.** The maintainer sets it when cutting a release.
 

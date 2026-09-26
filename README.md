@@ -66,9 +66,9 @@ Cash Plus products are cash equivalents — one unit is one unit of their curren
 
 #### Three language settings
 The integration's texts follow three different settings:
-- **Profile language** (your user profile → **Language**): per user, in the browser, at once — dialogs and forms, attribute names, the group subtitles ("Wallet group", "Price tracker group"), the reason shown while setup fails or is retried, and the upgrade details under **Settings → Repairs**
+- **Profile language** (your user profile → **Language**): per user, in the browser, at once — dialogs and forms, attribute names, the group subtitles ("Wallet group", "Price tracker group"), the reason shown while setup fails or is retried, the upgrade details under **Settings → Repairs**, and the error a `bitpanda.refresh` call shows in the UI while neither service is loaded (the log and automation traces keep it in English)
 - **System language** (**Settings → System → General → Language**): shared by all users — sensor names, from the next start of Home Assistant
-- **Language of group titles and messages** (**Configure**, the ⚙ on each service's entry): shared by all users, English unless you choose another, as soon as you save — the titles of that service's groups (e.g. "Cryptocurrencies" → "Kryptowährungen") and the integration's own messages, such as why a device cannot be deleted; a group you renamed yourself keeps its name (newer versions offer **⋮ → Rename**)
+- **Language of group titles and messages** (**Configure**, the ⚙ on each service's entry): shared by all users, English unless you choose another, as soon as you save — the titles of that service's groups (e.g. "Cryptocurrencies" → "Kryptowährungen") and the integration's own messages, such as why a device cannot be deleted — not the `bitpanda.refresh` error, which follows the profile language; a group you renamed yourself keeps its name (newer versions offer **⋮ → Rename**)
 - Tip: to see everything in one language, choose it in all three and restart Home Assistant
 
 ---

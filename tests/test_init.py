@@ -113,19 +113,8 @@ def _set_group_assets(hass, entry, category: str, *assets: dict) -> None:
 
 
 async def _setup(hass, entry) -> None:
-    """Set up `entry`, tolerating Home Assistant's own bootstrap cascade.
-
-    The first `hass.config_entries.async_setup()` call for a domain that has
-    not been loaded yet also sets up every other existing entry of that
-    domain in the same pass (`homeassistant/setup.py`: "Setting up the
-    component will set up all its config entries") -- so a second entry
-    added before the first `_setup()` call can already be LOADED by the time
-    its own turn comes. Calling `async_setup()` again on an already-loaded
-    entry raises `OperationNotAllowed`, so that case only waits and confirms
-    the outcome instead of repeating the call.
-    """
-    if entry.state is ConfigEntryState.NOT_LOADED:
-        assert await hass.config_entries.async_setup(entry.entry_id)
+    """Set up `entry` and wait until it is loaded."""
+    assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     assert entry.state is ConfigEntryState.LOADED
 
@@ -632,8 +621,11 @@ async def test_dropping_a_currency_removes_its_sensors_on_reload(hass, price_api
 
 async def test_the_refresh_service_lives_while_any_entry_is_loaded(hass, portfolio_api, price_api):
     portfolio, tracker = _portfolio_entry(hass), _price_entry(hass, [], price_group("crypto", BTC))
+    # The first setup of a domain sets up every entry it has (Home
+    # Assistant's setup.py: "Setting up the component will set up all its
+    # config entries"), the Price Tracker included.
     await _setup(hass, portfolio)
-    await _setup(hass, tracker)
+    assert tracker.state is ConfigEntryState.LOADED
     assert hass.services.has_service(DOMAIN, "refresh")
     assert await hass.config_entries.async_unload(portfolio.entry_id)
     assert hass.services.has_service(DOMAIN, "refresh")
@@ -641,7 +633,7 @@ async def test_the_refresh_service_lives_while_any_entry_is_loaded(hass, portfol
     assert not hass.services.has_service(DOMAIN, "refresh")
 
 
-# --- Task 24: groups follow Home Assistant's language at setup -----------------
+# --- Groups follow Home Assistant's language at setup ------------------------------
 
 
 async def test_a_price_tracker_group_is_retitled_to_the_new_language_at_setup(

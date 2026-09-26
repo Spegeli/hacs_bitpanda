@@ -36,23 +36,23 @@ logger:
 
 ### Tests and typing
 
-Tests use `pytest-homeassistant-custom-component`, whose harness does not run on Windows. `requirements_test.txt` pins it — and with it the Home Assistant release the suite runs against, which needs Python 3.14 — and mypy. On Linux or macOS, with Python 3.14:
+Tests use `pytest-homeassistant-custom-component`, whose harness does not run on Windows. `requirements_test.txt` pins it — and with it the Home Assistant release the suite runs against, which needs Python 3.14 — and mypy. Install mypy from that file too, never with a bare `pip install mypy`: another mypy release can report errors CI does not, or miss ones it does. The tests and mypy need Python 3.14; the integration itself must still run on 3.13 (see [Things that are easy to get wrong](#things-that-are-easy-to-get-wrong)). On Linux or macOS, with Python 3.14:
 
 ```bash
 pip install -r requirements_test.txt
-python -m pytest tests/ -q --cov=custom_components.bitpanda --cov-report=term-missing
+python -m pytest tests/ -q --cov=custom_components.bitpanda --cov-report=term-missing --cov-fail-under=95
 python -m mypy --strict
 ```
 
-`pytest` runs the suite and reports the line coverage of each file; `mypy` checks the types of the integration in strict mode, as `mypy.ini` configures it — the tests are not type-checked.
+`pytest` runs the suite and reports the line coverage of each file, and fails under 95 % overall, as CI does; `mypy` checks the types of the integration in strict mode, as `mypy.ini` configures it — the tests are not type-checked.
 
 The same in Docker, on any system, with the Python version and the pinned requirements CI uses; each run installs them afresh, which takes a few minutes. On Windows, run it from PowerShell: Git Bash rewrites the mount path.
 
 ```bash
-docker run --rm -v "${PWD}:/workspace" -w /workspace python:3.14 sh -c "pip install -q -r requirements_test.txt && python -m pytest tests/ -q --cov=custom_components.bitpanda --cov-report=term-missing && python -m mypy --strict"
+docker run --rm -v "${PWD}:/workspace" -w /workspace python:3.14 sh -c "pip install -q -r requirements_test.txt && python -m pytest tests/ -q --cov=custom_components.bitpanda --cov-report=term-missing --cov-fail-under=95 && python -m mypy --strict"
 ```
 
-CI enforces both on every push and pull request (`.github/workflows/tests.yml`): the suite must pass with at least 95 % line coverage, and `mypy --strict` must report no error. `config_flow.py` and `asset_flow.py` stay at 100 %, and every test that shows an error in a dialog goes on to finish that dialog.
+CI enforces both on every push and pull request (`.github/workflows/tests.yml`): the suite must pass with at least 95 % line coverage, and `mypy --strict` must report no error. It also compiles the integration with Python 3.13. `config_flow.py` and `asset_flow.py` stay at 100 %, and every test that shows an error in a dialog goes on to finish that dialog.
 
 ## Project layout
 
@@ -97,7 +97,7 @@ The wallet lifecycle manager (`PortfolioEntityManager`) runs after every portfol
 
 **Every value sensor keeps long-term statistics.** Money values set `state_class` `total` — the only state class Home Assistant allows for the monetary device class — and the returns `measurement`; a new sensor needs one too. Statistics are recorded in the sensor's unit, so a sensor whose currency can change must have its statistics cleared with its history: the currency purge (`purge.py`) does that for every Portfolio sensor, and `tests/test_currency_change.py` checks it with a real recorder.
 
-**Home Assistant 2025.5 is the floor** (`hacs.json`), and only APIs that exist there may be used. It is set by the recorder: only from 2025.5 on does it move an entity's history along with an entity-ID rename made while Home Assistant starts, which is when the version 1 migration renames. The device registry's per-entry lookups (`async_get_device_by_identifier` and its siblings) do not exist at the floor, and `async_get_device` is deprecated — find a device through `devices.find_entry_device`.
+**Home Assistant 2025.5 is the floor** (`hacs.json`), and only APIs that exist there may be used. It is set by the recorder: only from 2025.5 on does it move an entity's history along with an entity-ID rename made while Home Assistant starts, which is when the version 1 migration renames. The device registry's per-entry lookups (`async_get_device_by_identifier` and its siblings) do not exist at the floor, and `async_get_device` is deprecated — find a device through `devices.find_entry_device`. Home Assistant 2025.5 runs on Python 3.13, so the integration must run on 3.13 too, although the tests and mypy need 3.14: use no syntax and no standard-library API newer than 3.13 (such as `except A, B:` without parentheses), and keep `from __future__ import annotations` at the top of every module. 3.13 evaluates annotations as it defines a class or function, so without that line a name defined further down the module — the `PortfolioConfigEntry` a coordinator's `config_entry` is annotated with — fails the import there, while 3.14 evaluates them only when asked. CI compiles the integration with Python 3.13, which catches syntax only; the rest is for review.
 
 **A device never moves between groups.** A wallet stays in the wallet group it sits in, even when Bitpanda files its asset under another type later: moving a device to another config subentry lists it in both on Home Assistant 2025.5, 2026.9 warns about it and 2027.8 will refuse it. What a group holds is read from the entity registry (`groups.entities_by_group`), never from the device registry's `config_entries_subentries`, a deprecated compatibility property from 2026.9 on.
 
@@ -181,7 +181,7 @@ Follow the [Home Assistant developer guidelines](https://developers.home-assista
 2. Keep the change focused — one topic per PR.
 3. Use [Conventional Commits](https://www.conventionalcommits.org) for commit messages: `fix:`, `feat:`, `docs:`, `chore:`, `refactor:`, `ci:`.
 4. Open the PR against `main` and fill in the template.
-5. CI runs hassfest and HACS validation, the tests with their coverage and `mypy --strict`. All must pass.
+5. CI runs hassfest and HACS validation, the tests with their coverage, `mypy --strict`, and a compile of the integration with Python 3.13. All must pass.
 
 **Do not bump the version in `manifest.json`.** The maintainer sets it when cutting a release.
 

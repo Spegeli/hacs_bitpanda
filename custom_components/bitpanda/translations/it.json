@@ -1,0 +1,392 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bitpanda",
+        "description": "Quale servizio vuoi configurare? Ognuno può essere aggiunto una sola volta.",
+        "menu_options": {
+          "portfolio": "Bitpanda Portfolio: i tuoi asset (richiede una chiave API)",
+          "price_tracker": "Bitpanda Price Tracker: prezzi di qualsiasi asset (senza chiave API)"
+        }
+      },
+      "portfolio": {
+        "title": "Bitpanda Portfolio",
+        "description": "Inserisci la tua chiave API di Bitpanda. Creane una su [{api_key_url}]({api_key_url}) con queste autorizzazioni: Guthaben (Balance), Transaktion (Transaction) e Earn (Read). L'autorizzazione Trading non è necessaria. Non è possibile aggiungere autorizzazioni a una chiave esistente in un secondo momento.",
+        "data": {
+          "api_key": "Chiave API"
+        }
+      },
+      "currency": {
+        "title": "Valuta del Portfolio",
+        "description": "Bitpanda esprime ogni valore del tuo portafoglio in questa valuta. Potrai cambiarla in seguito con Riconfigura.",
+        "data": {
+          "currency": "Valuta"
+        }
+      },
+      "price_tracker": {
+        "title": "Bitpanda Price Tracker",
+        "description": "Ogni asset monitorato ha sempre un sensore di prezzo in EUR. Seleziona valute aggiuntive per avere un sensore in più per ogni asset e valuta, convertito con i tassi di cambio di riferimento giornalieri della Banca centrale europea. Aggiungi poi gli asset con \"Aggiungi monitoraggio prezzo\".",
+        "data": {
+          "extra_currencies": "Valute aggiuntive"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Serve una nuova chiave API di Bitpanda",
+        "description": "Bitpanda ha rifiutato la chiave API salvata. Potrebbe essere scaduta oppure risalire a prima delle autorizzazioni richieste da questa versione. Crea una nuova chiave su [{api_key_url}]({api_key_url}) con Guthaben (Balance), Transaktion (Transaction) e Earn (Read) e incollala qui. I tuoi sensori vengono mantenuti.",
+        "data": {
+          "api_key": "Chiave API"
+        }
+      },
+      "reconfigure": {
+        "title": "Riconfigura Bitpanda Portfolio",
+        "description": "Per sostituire la chiave API salvata, incollane una nuova da [{api_key_url}]({api_key_url}); deve avere Guthaben (Balance), Transaktion (Transaction) e Earn (Read). Lascia il campo vuoto per mantenere la chiave attuale. Cambiare la valuta elimina tutti i sensori del Portfolio, cronologia inclusa; lo confermerai nel passaggio successivo.",
+        "data": {
+          "api_key": "Nuova chiave API",
+          "currency": "Valuta"
+        }
+      },
+      "confirm_currency": {
+        "title": "Cambiare la valuta?",
+        "description": "Passare da {old} a {new} elimina tutti i sensori del Portfolio, cronologia inclusa, e li ricrea nella nuova valuta. L'operazione non può essere annullata. Seleziona Invia per continuare oppure chiudi questa finestra per mantenere {old}."
+      }
+    },
+    "error": {
+      "invalid_auth": "Bitpanda ha rifiutato questa chiave API. Verifica che sia stata copiata per intero e che abbia almeno una delle autorizzazioni richieste.",
+      "missing_scopes": "A questa chiave API mancano delle autorizzazioni: {missing_scopes}. Non è possibile aggiungere autorizzazioni a una chiave esistente. Creane una nuova con Guthaben (Balance), Transaktion (Transaction) e Earn (Read).",
+      "rate_limited": "Troppe richieste. Attendi un momento e riprova.",
+      "cannot_connect": "Impossibile raggiungere Bitpanda. Riprova più tardi.",
+      "unknown": "Errore imprevisto"
+    },
+    "abort": {
+      "all_configured": "Entrambi i servizi sono già configurati.",
+      "already_configured": "Questo servizio è già configurato.",
+      "already_in_progress": "Questo servizio è già in fase di configurazione in un'altra finestra.",
+      "reauth_successful": "La chiave API è stata aggiornata.",
+      "reconfigure_successful": "La chiave API è stata sostituita.",
+      "currency_changed": "La valuta è stata cambiata. I sensori del Portfolio vengono ricreati.",
+      "no_changes": "Non è stato modificato nulla.",
+      "no_reconfigure": "Il Price Tracker non ha nulla da riconfigurare. Usa Configura per scegliere le sue valute."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Valute del Price Tracker",
+        "description": "Ogni asset monitorato mantiene sempre il suo sensore in EUR. Ogni valuta selezionata aggiunge un sensore per asset; togliere una valuta elimina quei sensori.",
+        "data": {
+          "extra_currencies": "Valute aggiuntive"
+        }
+      }
+    }
+  },
+  "config_subentries": {
+    "price_group": {
+      "initiate_flow": {
+        "user": "Aggiungi monitoraggio prezzo"
+      },
+      "entry_type": "Gruppo di monitoraggio prezzi",
+      "step": {
+        "user": {
+          "title": "Aggiungi monitoraggio prezzo",
+          "description": "Che tipo di asset vuoi monitorare?",
+          "data": {
+            "category": "Tipo di asset"
+          }
+        },
+        "asset": {
+          "title": "Aggiungi monitoraggio prezzo",
+          "description": "Digita per cercare per nome, simbolo o ISIN, poi scegli un asset. Invia senza scegliere per tornare ai tipi di asset.",
+          "data": {
+            "asset": "Asset"
+          }
+        }
+      },
+      "error": {
+        "no_assets_available": "Tutti gli asset di questo tipo sono già monitorati.",
+        "unknown_asset": "Scegli un asset dall'elenco.",
+        "rate_limited": "Troppe richieste. Attendi un momento e riprova.",
+        "cannot_connect": "Impossibile raggiungere Bitpanda. Riprova più tardi."
+      },
+      "abort": {
+        "already_configured": "Questo asset è già monitorato.",
+        "asset_added": "{asset} è ora monitorato nel gruppo {group}."
+      }
+    },
+    "wallet_group": {
+      "initiate_flow": {
+        "user": "Aggiungi gruppo di wallet"
+      },
+      "entry_type": "Gruppo di wallet",
+      "step": {}
+    }
+  },
+  "selector": {
+    "asset_category": {
+      "options": {
+        "crypto": "Cripto",
+        "stock": "Azioni",
+        "etf": "ETF",
+        "etc": "ETC (materie prime negoziate in borsa)",
+        "index": "Indici cripto",
+        "metal": "Metalli preziosi"
+      }
+    },
+    "asset_group": {
+      "options": {
+        "crypto": "Criptovalute",
+        "stock": "Azioni",
+        "etf": "ETF",
+        "etc": "ETC",
+        "index": "Indici cripto",
+        "metal": "Metalli preziosi",
+        "other": "Altro"
+      }
+    },
+    "currency": {
+      "options": {
+        "chf": "Franco svizzero (CHF)",
+        "czk": "Corona ceca (CZK)",
+        "dkk": "Corona danese (DKK)",
+        "eur": "Euro (EUR)",
+        "gbp": "Sterlina britannica (GBP)",
+        "huf": "Fiorino ungherese (HUF)",
+        "nok": "Corona norvegese (NOK)",
+        "pln": "Zloty polacco (PLN)",
+        "ron": "Leu rumeno (RON)",
+        "sek": "Corona svedese (SEK)",
+        "try": "Lira turca (TRY)",
+        "usd": "Dollaro statunitense (USD)"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "total_value": {
+        "name": "Valore totale"
+      },
+      "cash": {
+        "name": "Liquidità"
+      },
+      "cash_plus": {
+        "name": "Cash Plus",
+        "state_attributes": {
+          "eur": {
+            "name": "EUR"
+          },
+          "usd": {
+            "name": "USD"
+          },
+          "gbp": {
+            "name": "GBP"
+          }
+        }
+      },
+      "return_day": {
+        "name": "Rendimento 1 giorno"
+      },
+      "return_week": {
+        "name": "Rendimento 1 settimana"
+      },
+      "return_month": {
+        "name": "Rendimento 1 mese"
+      },
+      "return_six_month": {
+        "name": "Rendimento 6 mesi"
+      },
+      "return_year": {
+        "name": "Rendimento 1 anno"
+      },
+      "wallet": {
+        "state_attributes": {
+          "asset": {
+            "name": "Asset: simbolo"
+          },
+          "asset_name": {
+            "name": "Asset: nome"
+          },
+          "units": {
+            "name": "Asset: quantità"
+          },
+          "average_buy_price": {
+            "name": "Posizione: prezzo medio di acquisto"
+          },
+          "invested_amount": {
+            "name": "Posizione: importo investito"
+          },
+          "total_return": {
+            "name": "Posizione: profitto/perdita"
+          },
+          "total_return_percent": {
+            "name": "Posizione: profitto/perdita %"
+          }
+        }
+      },
+      "staking": {
+        "name": "Staking",
+        "state_attributes": {
+          "asset": {
+            "name": "Asset: simbolo"
+          },
+          "asset_name": {
+            "name": "Asset: nome"
+          },
+          "units": {
+            "name": "Asset: quantità"
+          },
+          "apr_percent": {
+            "name": "Ricompense: tasso annuo (APR %)"
+          },
+          "rewards_gross": {
+            "name": "Ricompense: lordo"
+          },
+          "rewards_fee": {
+            "name": "Ricompense: commissione"
+          },
+          "rewards_net": {
+            "name": "Ricompense: netto"
+          },
+          "rewards_count": {
+            "name": "Ricompense: numero"
+          },
+          "rewards_last_at": {
+            "name": "Ricompense: ultimo accredito"
+          }
+        }
+      },
+      "wallet_total": {
+        "name": "Totale",
+        "state_attributes": {
+          "asset": {
+            "name": "Asset: simbolo"
+          },
+          "asset_name": {
+            "name": "Asset: nome"
+          },
+          "units": {
+            "name": "Asset: quantità"
+          },
+          "average_buy_price": {
+            "name": "Posizione: prezzo medio di acquisto"
+          },
+          "invested_amount": {
+            "name": "Posizione: importo investito"
+          },
+          "total_return": {
+            "name": "Posizione: profitto/perdita"
+          },
+          "total_return_percent": {
+            "name": "Posizione: profitto/perdita %"
+          }
+        }
+      },
+      "price": {
+        "state_attributes": {
+          "asset": {
+            "name": "Asset: simbolo"
+          },
+          "asset_name": {
+            "name": "Asset: nome"
+          },
+          "trading_pair": {
+            "name": "Asset: coppia di trading"
+          },
+          "change_24h_pct": {
+            "name": "24 h: variazione %"
+          },
+          "price_24h_ago": {
+            "name": "24 h: prezzo precedente"
+          },
+          "conversion": {
+            "name": "Conversione: stato",
+            "state": {
+              "no_rate": "Nessun tasso di cambio ancora caricato"
+            }
+          },
+          "conversion_rate": {
+            "name": "Conversione: tasso"
+          },
+          "rate_date": {
+            "name": "Conversione: data"
+          },
+          "rate_source": {
+            "name": "Conversione: fonte"
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "portfolio_device_not_removable": {
+      "message": "Il dispositivo \"Portfolio\" fa parte del servizio Bitpanda Portfolio e non può essere eliminato da solo. Per rimuoverlo, elimina la voce \"Bitpanda Portfolio\"."
+    },
+    "held_wallet_not_removable": {
+      "message": "Possiedi ancora {asset}, quindi questo wallet ricomparirebbe subito. Verrà rimosso automaticamente quando non lo possiederai più."
+    },
+    "api_key_rejected": {
+      "message": "Bitpanda ha rifiutato la chiave API."
+    },
+    "update_failed": {
+      "message": "Impossibile recuperare i dati da Bitpanda: {error}"
+    },
+    "history_unavailable": {
+      "message": "Impossibile recuperare la cronologia del Portfolio."
+    },
+    "prices_rate_limited": {
+      "message": "Bitpanda ha ricevuto troppe richieste di prezzi. Nuovo tentativo più tardi."
+    },
+    "no_prices": {
+      "message": "Impossibile recuperare i prezzi da Bitpanda."
+    },
+    "ecb_rates_failed": {
+      "message": "Impossibile recuperare i tassi di cambio della BCE: {error}"
+    },
+    "migration_title": {
+      "message": "Bitpanda aggiornato"
+    },
+    "migration_intro": {
+      "message": "Bitpanda ora è composto da due servizi: Bitpanda Portfolio e Bitpanda Price Tracker."
+    },
+    "migration_renamed": {
+      "message": "**ID entità rinominati.** Controlla dashboard, automazioni e script che li usano:\n{renames}"
+    },
+    "migration_not_migrated": {
+      "message": "**Non migrate** (lasciate invariate; eliminale quando non ti servono più):\n{entities}"
+    },
+    "migration_new_key": {
+      "message": "Bitpanda richiede una nuova chiave API con le autorizzazioni Guthaben (Balance), Transaktion (Transaction) e Earn (Read). Creala su {api_key_url} e inseriscila quando Home Assistant la richiede. Se una finestra di Bitpanda mostra testo grezzo, ricarica la scheda del browser."
+    },
+    "migration_currency_dropped": {
+      "message": "Bitpanda non offre più {currency}; il Portfolio ora esprime i suoi valori in EUR."
+    },
+    "migration_asset_ambiguous": {
+      "message": "{symbol} corrisponde a {count} asset, non è chiaro quale"
+    },
+    "migration_asset_gone": {
+      "message": "{symbol} non esiste più su Bitpanda"
+    },
+    "migration_fiat_in_cash": {
+      "message": "Portfolio Liquidità ora comprende tutti i saldi fiat"
+    },
+    "migration_currency_gone": {
+      "message": "Bitpanda non offre più {currency}"
+    },
+    "migration_duplicate": {
+      "message": "un'altra entità rappresenta già lo stesso asset"
+    },
+    "migration_price_tracker_exists": {
+      "message": "era già configurato un Price Tracker; aggiungi lì l'asset"
+    },
+    "migration_unknown_asset": {
+      "message": "asset sconosciuto"
+    },
+    "migration_unknown_wallet": {
+      "message": "wallet sconosciuto"
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Aggiorna",
+      "description": "Avvia subito un aggiornamento di tutti i dati di prezzi e wallet di Bitpanda."
+    }
+  }
+}

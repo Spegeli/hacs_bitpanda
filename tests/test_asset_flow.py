@@ -135,21 +135,50 @@ async def test_an_asset_tracked_in_any_group_is_left_out_of_the_listing(hass):
     assert asset_label(GOLD) not in {option["label"] for option in _options(result)}
 
 
+async def _finish_by_starting_a_group(hass, entry, result, category: str, asset: dict) -> None:
+    """Go on from the asset step `result` -- shown with an error -- back to
+    the asset types (an empty submit), then through `category`, whose
+    listing now works, to `asset`: the first of its type, it starts its
+    group."""
+    assert (result["type"], result["step_id"]) == (_FLOW.FORM, "asset")
+    listing = [a for a in load_fixture("assets-sample.json") if a["id"] == asset["id"]]
+    with patch(_LIST, AsyncMock(return_value=listing)):
+        result = await hass.config_entries.subentries.async_configure(result["flow_id"], {})
+        assert result["step_id"] == "user"
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {"category": category}
+        )
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {"asset": asset_label(asset)}
+        )
+    assert result["type"] == _FLOW.CREATE_ENTRY
+    group = next(sub for sub in entry.subentries.values() if sub.unique_id == category)
+    assert list(group.data["assets"]) == [asset["id"]]
+
+
 async def test_a_fully_tracked_category_says_so(hass):
     entry = _entry(hass, price_group("metal", *_metals()))
     with patch(_LIST, AsyncMock(return_value=_metals())):
         result = await _pick_category(hass, entry)
     assert result["errors"]["base"] == "no_assets_available"
+    await _finish_by_starting_a_group(hass, entry, result, "crypto", _fixture("BTC"))
 
 
-async def test_listing_errors_map_to_form_errors(hass):
+@pytest.mark.parametrize(
+    ("failure", "error"),
+    [
+        (BitpandaRateLimitError("Rate limited on /assets"), "rate_limited"),
+        (BitpandaApiError("Timeout for /assets"), "cannot_connect"),
+    ],
+    ids=["rate_limited", "cannot_connect"],
+)
+async def test_listing_errors_map_to_form_errors(hass, failure, error):
     entry = _entry(hass)
-    with patch(_LIST, AsyncMock(side_effect=BitpandaRateLimitError("x"))):
+    with patch(_LIST, AsyncMock(side_effect=failure)):
         result = await _pick_category(hass, entry)
-    assert result["errors"]["base"] == "rate_limited"
-    with patch(_LIST, AsyncMock(side_effect=BitpandaApiError("x"))):
-        result = await _pick_category(hass, entry)
-    assert result["errors"]["base"] == "cannot_connect"
+    assert result["errors"]["base"] == error
+    assert _options(result) == []
+    await _finish_by_starting_a_group(hass, entry, result, "metal", SILVER)
 
 
 async def test_the_catalogue_is_fetched_without_a_key(hass):
@@ -302,14 +331,23 @@ async def test_going_back_keeps_the_category_picked_before(hass):
 
 
 async def test_a_typed_value_that_is_no_asset_is_rejected(hass):
-    entry = _entry(hass)
+    """The same step then takes a picked asset: here it joins the group of
+    its type, which exists already."""
+    entry = _entry(hass, price_group("metal", GOLD, title="Metals"))
     with patch(_LIST, AsyncMock(return_value=_metals())):
         result = await _pick_category(hass, entry)
         result = await hass.config_entries.subentries.async_configure(
             result["flow_id"], {"asset": "gold please"}
         )
-    assert result["step_id"] == "asset"
-    assert result["errors"]["base"] == "unknown_asset"
+        assert result["step_id"] == "asset"
+        assert result["errors"]["base"] == "unknown_asset"
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {"asset": asset_label(SILVER)}
+        )
+    assert (result["type"], result["reason"]) == (_FLOW.ABORT, "asset_added")
+    assert result["description_placeholders"] == {"asset": "Silver (XAG)", "group": "Metals"}
+    [group] = entry.subentries.values()
+    assert list(group.data["assets"]) == [GOLD["id"], SILVER["id"]]
 
 
 async def test_a_price_tracker_removed_while_the_dialog_is_open(hass):

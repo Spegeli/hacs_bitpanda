@@ -41,6 +41,8 @@ pip install -r requirements_test.txt
 pytest tests/ -q
 ```
 
+To measure line coverage, add `--cov=custom_components.bitpanda --cov-report=term-missing`. `config_flow.py` and `asset_flow.py` stay at 100 %, and every test that shows an error in a dialog goes on to finish that dialog.
+
 ## Project layout
 
 Everything lives in `custom_components/bitpanda/`:

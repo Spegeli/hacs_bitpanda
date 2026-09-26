@@ -134,6 +134,20 @@ async def test_a_second_portfolio_aborts_even_from_an_open_dialog(hass):
 # --- Portfolio setup --------------------------------------------------------------
 
 
+async def _finish_portfolio_setup(hass, result) -> None:
+    """Go on from the key form `result` -- shown again with an error --
+    with a valid key and a currency, to the new entry: every error of the
+    dialog leaves a way to finish it."""
+    assert (result["type"], result["step_id"]) == (_FLOW.FORM, "portfolio")
+    result = await _submit_key(hass, result, "good")
+    assert result["step_id"] == "currency"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"currency": "eur"})
+    assert result["type"] == _FLOW.CREATE_ENTRY
+    assert (result["result"].data["api_key"], result["result"].data["currency"]) == (
+        "good", "EUR"
+    )
+
+
 async def test_portfolio_form_links_the_key_page(hass):
     result = await _portfolio_form(hass)
     assert result["step_id"] == "portfolio"
@@ -146,6 +160,7 @@ async def test_portfolio_rejects_a_key_with_no_scope(hass):
     )
     assert result["errors"]["base"] == "invalid_auth"
     assert result["description_placeholders"]["api_key_url"] == API_KEY_URL
+    await _finish_portfolio_setup(hass, result)
 
 
 async def test_portfolio_names_missing_scopes(hass):
@@ -157,22 +172,41 @@ async def test_portfolio_names_missing_scopes(hass):
         result["description_placeholders"]["missing_scopes"]
         == "Transaktion (Transaction), Earn (Read)"
     )
+    await _finish_portfolio_setup(hass, result)
 
 
-async def test_portfolio_maps_a_rate_limit(hass):
+@pytest.mark.parametrize(
+    ("failure", "error"),
+    [
+        (BitpandaRateLimitError("Rate limited on /portfolio"), "rate_limited"),
+        (BitpandaApiError("Timeout for /portfolio"), "cannot_connect"),
+    ],
+    ids=["rate_limited", "cannot_connect"],
+)
+async def test_portfolio_maps_a_failed_key_check(hass, failure, error):
     result = await _portfolio_form(hass)
-    with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(side_effect=BitpandaRateLimitError("x"))):
+    with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(side_effect=failure)):
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {"api_key": "k"})
-    assert result["errors"]["base"] == "rate_limited"
+    assert result["errors"]["base"] == error
+    await _finish_portfolio_setup(hass, result)
 
 
-async def test_portfolio_maps_a_currency_listing_failure(hass):
+@pytest.mark.parametrize(
+    ("failure", "error"),
+    [
+        (BitpandaRateLimitError("Rate limited on /currencies"), "rate_limited"),
+        (BitpandaApiError("Timeout for /currencies"), "cannot_connect"),
+    ],
+    ids=["rate_limited", "cannot_connect"],
+)
+async def test_portfolio_maps_a_currency_listing_failure(hass, failure, error):
     result = await _portfolio_form(hass)
     with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=[])), patch(
-        f"{_CLIENT}async_get_currencies", AsyncMock(side_effect=BitpandaApiError("Timeout"))
+        f"{_CLIENT}async_get_currencies", AsyncMock(side_effect=failure)
     ):
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {"api_key": "k"})
-    assert result["errors"]["base"] == "cannot_connect"
+    assert result["errors"]["base"] == error
+    await _finish_portfolio_setup(hass, result)
 
 
 @pytest.mark.parametrize(
@@ -183,6 +217,7 @@ async def test_portfolio_without_a_supported_currency_cannot_connect(hass, curre
     result = await _submit_key(hass, await _portfolio_form(hass), "good", currencies=currencies)
     assert result["step_id"] == "portfolio"
     assert result["errors"]["base"] == "cannot_connect"
+    await _finish_portfolio_setup(hass, result)
 
 
 async def test_portfolio_unexpected_error_is_logged_by_type_only(hass, caplog):
@@ -199,6 +234,7 @@ async def test_portfolio_unexpected_error_is_logged_by_type_only(hass, caplog):
     assert any("RuntimeError" in r.getMessage() for r in records)
     assert all(r.exc_info is None for r in records)
     assert "totally-secret-key" not in caplog.text
+    await _finish_portfolio_setup(hass, result)
 
 
 async def test_portfolio_currency_step_offers_the_supported_currencies(hass):
@@ -363,6 +399,20 @@ async def test_import_aborts_when_a_price_tracker_exists(hass):
 # own explicit reload is the only one. Both paths are observed, not run.
 
 
+async def _finish_reauth(hass, entry, result) -> None:
+    """Go on from the reauth form `result` -- shown again with an error --
+    with a valid key, to the end: the key is replaced."""
+    assert (result["type"], result["step_id"]) == (_FLOW.FORM, "reauth_confirm")
+    with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=[])), patch(
+        "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": "fresh"}
+        )
+    assert (result["type"], result["reason"]) == (_FLOW.ABORT, "reauth_successful")
+    assert entry.data["api_key"] == "fresh"
+
+
 async def test_reauth_form_links_the_key_page(hass):
     entry = _portfolio_entry()
     entry.add_to_hass(hass)
@@ -383,6 +433,28 @@ async def test_reauth_missing_scopes_keeps_the_stored_key_and_leaks_nothing(hass
     assert entry.data["api_key"] == "key"
     assert secret not in repr(result["description_placeholders"])
     assert secret not in caplog.text
+    await _finish_reauth(hass, entry, result)
+
+
+@pytest.mark.parametrize(
+    ("check", "error"),
+    [
+        (AsyncMock(return_value=["balance", "transaction", "earn"]), "invalid_auth"),
+        (AsyncMock(side_effect=BitpandaRateLimitError("Rate limited on /portfolio")), "rate_limited"),
+        (AsyncMock(side_effect=BitpandaApiError("Timeout for /portfolio")), "cannot_connect"),
+    ],
+    ids=["invalid_auth", "rate_limited", "cannot_connect"],
+)
+async def test_reauth_shows_a_failed_key_check_and_keeps_the_stored_key(hass, check, error):
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    result = await entry.start_reauth_flow(hass)
+    with patch(f"{_CLIENT}async_missing_scopes", check):
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"api_key": "k"})
+    assert result["errors"]["base"] == error
+    assert result["description_placeholders"]["api_key_url"] == API_KEY_URL
+    assert entry.data["api_key"] == "key"
+    await _finish_reauth(hass, entry, result)
 
 
 async def test_reauth_with_a_listener_lets_the_listener_reload(hass):
@@ -444,6 +516,7 @@ async def test_reauth_unexpected_error_shows_unknown(hass, caplog):
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {"api_key": "secret-x"})
     assert result["errors"]["base"] == "unknown"
     assert "secret-x" not in caplog.text
+    await _finish_reauth(hass, entry, result)
 
 
 # --- Reconfigure: key and currency ----------------------------------------------------
@@ -462,6 +535,39 @@ async def _reconfigure(hass, entry, user_input, *, missing=()):
         f"{_CLIENT}async_get_currencies", AsyncMock(return_value=load_fixture("currencies.json"))
     ):
         return await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
+
+
+async def _finish_reconfigure_with_a_new_key(hass, entry, result) -> None:
+    """Go on from the Reconfigure form `result` -- shown again with an
+    error -- with a valid key and the stored currency, to the end: the key
+    is replaced."""
+    assert (result["type"], result["step_id"]) == (_FLOW.FORM, "reconfigure")
+    with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=[])), patch(
+        "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": "fresh", "currency": "eur"}
+        )
+    assert (result["type"], result["reason"]) == (_FLOW.ABORT, "reconfigure_successful")
+    assert (entry.data["api_key"], entry.data["currency"]) == ("fresh", "EUR")
+
+
+async def _finish_currency_change(hass, entry, result, user_input) -> None:
+    """Go on from the Reconfigure form `result` -- shown again with an
+    error -- with `user_input`, which changes the currency to USD and now
+    works, through the confirmation to the end."""
+    assert (result["type"], result["step_id"]) == (_FLOW.FORM, "reconfigure")
+    with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=[])), patch(
+        f"{_CLIENT}async_get_currencies", AsyncMock(return_value=load_fixture("currencies.json"))
+    ):
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
+    assert result["step_id"] == "confirm_currency"
+    with patch(_PURGE, AsyncMock(return_value=True)), patch(
+        "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
+    ):
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert (result["type"], result["reason"]) == (_FLOW.ABORT, "currency_changed")
+    assert (entry.data["currency"], entry.data["currency_id"]) == ("USD", _USD_ID)
 
 
 async def test_reconfigure_form_prefills_the_currency_but_never_the_key(hass):
@@ -488,6 +594,29 @@ async def test_reconfigure_missing_scopes_reshows_form_without_leaking_key(hass,
     assert entry.data["api_key"] == "key"
     assert secret not in repr(result["description_placeholders"])
     assert secret not in caplog.text
+    await _finish_reconfigure_with_a_new_key(hass, entry, result)
+
+
+@pytest.mark.parametrize(
+    ("check", "error"),
+    [
+        (AsyncMock(return_value=["balance", "transaction", "earn"]), "invalid_auth"),
+        (AsyncMock(side_effect=BitpandaRateLimitError("Rate limited on /portfolio")), "rate_limited"),
+        (AsyncMock(side_effect=BitpandaApiError("Timeout for /portfolio")), "cannot_connect"),
+    ],
+    ids=["invalid_auth", "rate_limited", "cannot_connect"],
+)
+async def test_reconfigure_shows_a_failed_key_check_and_keeps_the_stored_key(hass, check, error):
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    result = await entry.start_reconfigure_flow(hass)
+    with patch(f"{_CLIENT}async_missing_scopes", check):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": "k", "currency": "eur"}
+        )
+    assert result["errors"]["base"] == error
+    assert entry.data["api_key"] == "key"
+    await _finish_reconfigure_with_a_new_key(hass, entry, result)
 
 
 async def test_reconfigure_unexpected_error_shows_unknown(hass, caplog):
@@ -508,6 +637,7 @@ async def test_reconfigure_unexpected_error_shows_unknown(hass, caplog):
     assert all(r.exc_info is None for r in records)
     assert secret not in caplog.text
     assert entry.data["api_key"] == "key"
+    await _finish_reconfigure_with_a_new_key(hass, entry, result)
 
 
 async def test_reconfigure_with_nothing_changed_aborts(hass):
@@ -567,6 +697,8 @@ async def test_reconfigure_bad_key_stays_on_the_form_with_the_currency_kept(hass
     assert result["errors"]["base"] == "missing_scopes"
     assert result["data_schema"]({})["currency"] == "usd"
     assert result["description_placeholders"]["api_key_url"] == API_KEY_URL
+    await _finish_currency_change(hass, entry, result, {"api_key": "good", "currency": "usd"})
+    assert entry.data["api_key"] == "good"
 
 
 async def test_currency_change_asks_for_confirmation_first(hass):
@@ -626,26 +758,29 @@ async def test_a_currency_change_whose_unload_fails_changes_nothing(hass):
     assert dict(entry.data) == before
 
 
-async def test_currency_listing_failure_maps_to_cannot_connect(hass):
+@pytest.mark.parametrize(
+    ("listing", "error"),
+    [
+        (AsyncMock(side_effect=BitpandaApiError("Timeout for /currencies")), "cannot_connect"),
+        (AsyncMock(side_effect=BitpandaRateLimitError("Rate limited on /currencies")), "rate_limited"),
+        (AsyncMock(return_value=[{"symbol": "EUR", "id": _EUR_ID}]), "cannot_connect"),
+    ],
+    ids=["cannot_connect", "rate_limited", "currency_not_listed"],
+)
+async def test_a_currency_change_without_the_currencys_id_changes_nothing(hass, listing, error):
+    """The new currency's Bitpanda id comes from /currencies: without it --
+    the listing failed, or does not name the currency -- the form says why,
+    keeps the chosen currency, and nothing is stored."""
     entry = _portfolio_entry()
     entry.add_to_hass(hass)
     result = await entry.start_reconfigure_flow(hass)
-    with patch(f"{_CLIENT}async_get_currencies", AsyncMock(side_effect=BitpandaApiError("x"))):
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"currency": "usd"})
-    assert result["errors"]["base"] == "cannot_connect"
-
-
-async def test_a_rate_limited_currency_listing_on_reconfigure_says_so(hass):
-    entry = _portfolio_entry()
-    entry.add_to_hass(hass)
-    result = await entry.start_reconfigure_flow(hass)
-    with patch(
-        f"{_CLIENT}async_get_currencies", AsyncMock(side_effect=BitpandaRateLimitError("x"))
-    ):
+    with patch(f"{_CLIENT}async_get_currencies", listing):
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {"currency": "usd"})
     assert result["step_id"] == "reconfigure"
-    assert result["errors"]["base"] == "rate_limited"
+    assert result["errors"]["base"] == error
+    assert result["data_schema"]({})["currency"] == "usd"
     assert entry.data["currency"] == "EUR"
+    await _finish_currency_change(hass, entry, result, {"currency": "usd"})
 
 
 async def test_the_price_tracker_has_nothing_to_reconfigure(hass):
@@ -776,12 +911,21 @@ async def test_a_stored_language_no_longer_shipped_shows_english(hass):
     assert result["data_schema"]({}) == {"language": "en"}
 
 
-async def test_a_language_the_integration_does_not_ship_is_refused(hass):
-    entry = _portfolio_entry()
+@pytest.mark.parametrize("service", ["price_tracker", "portfolio"])
+async def test_a_language_the_integration_does_not_ship_is_refused(hass, service):
+    """Refused by the form itself; the same dialog then saves a shipped
+    language."""
+    entry = _price_tracker_entry() if service == "price_tracker" else _portfolio_entry()
     result = await _options_form(hass, entry)
+    before = dict(entry.options)
     with pytest.raises(data_entry_flow.InvalidData):
         await hass.config_entries.options.async_configure(result["flow_id"], {"language": "xx"})
-    assert dict(entry.options) == {}
+    assert dict(entry.options) == before
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"language": "nl"}
+    )
+    assert result["type"] == _FLOW.CREATE_ENTRY
+    assert dict(entry.options) == {**before, "language": "nl"}
 
 
 # --- Every field has a label and a help text ------------------------------------------

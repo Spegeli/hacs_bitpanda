@@ -10,3 +10,8 @@ pytest-homeassistant-custom-component>=0.13.316
 # marker into a silent no-op — the test would hang the suite instead of
 # failing. tests/conftest.py refuses to run without the plugin.
 pytest-timeout>=2.4.0
+# Line coverage, measured with
+#   pytest tests/ --cov=custom_components.bitpanda --cov-report=term-missing
+# config_flow.py and asset_flow.py stay at 100 % (quality scale rules
+# config-flow-test-coverage and test-coverage).
+pytest-cov>=6.0.0

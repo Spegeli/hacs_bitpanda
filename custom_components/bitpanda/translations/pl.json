@@ -47,7 +47,7 @@
       },
       "confirm_currency": {
         "title": "Zmienić walutę?",
-        "description": "Zmiana waluty z {old} na {new} usuwa wszystkie sensory Portfolio wraz z ich historią i tworzy je od nowa w nowej walucie. Tej operacji nie można cofnąć. Kliknij Zatwierdź, aby kontynuować, lub zamknij to okno, aby zachować {old}."
+        "description": "Zmiana waluty z {old} na {new} usuwa wszystkie sensory Portfolio wraz z ich historią i tworzy je od nowa w nowej walucie. Tej operacji nie można cofnąć. Kliknij „Zatwierdź”, aby kontynuować, lub zamknij to okno, aby zachować {old}."
       }
     },
     "error": {
@@ -95,7 +95,7 @@
         },
         "asset": {
           "title": "Dodaj śledzenie ceny",
-          "description": "Zacznij pisać, aby wyszukać po nazwie, symbolu lub numerze ISIN, a potem wybierz jedno aktywo. Zatwierdź bez wyboru, aby wrócić do rodzajów aktywów.",
+          "description": "Zacznij pisać, aby wyszukać po nazwie, symbolu lub numerze ISIN, a potem wybierz jedno aktywo. Kliknij „Zatwierdź” bez wyboru, aby wrócić do rodzajów aktywów.",
           "data": {
             "asset": "Aktywo"
           }

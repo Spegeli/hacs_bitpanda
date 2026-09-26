@@ -124,18 +124,32 @@ def test_no_language_is_an_untranslated_copy_of_english():
         assert len(same) * 5 <= len(texts), (language, same)
 
 
-# Home Assistant's own labels for the menu items of an integration entry, per
-# language: (Reconfigure, Configure) -- the frontend's translations of
-# ui.panel.config.integrations.config_entry.reconfigure / .configure, as
-# bundled with Home Assistant 2026.9.
+# Home Assistant's own labels, per language, from its frontend translations as
+# bundled with 2026.9: an integration entry's menu items "Reconfigure" and
+# "Configure" (ui.panel.config.integrations.config_entry.reconfigure /
+# .configure) and a dialog's button (ui.panel.config.integrations.config_flow
+# .submit, which is ui.common.submit). The button reads "Next" instead
+# (config_flow.next: en "Next", de "Weiter", fr "Suivant", nl "Volgende",
+# it "Prossimo", es "Siguiente", pl "Dalej") only on a step shown with
+# last_step=False, and no step of this integration is.
 _MENU_LABELS = {
-    "de": ("Neu konfigurieren", "Konfigurieren"),
-    "en": ("Reconfigure", "Configure"),
-    "es": ("Reconfigurar", "Configurar"),
-    "fr": ("Reconfigurer", "Configurer"),
-    "it": ("Riconfigura", "Configura"),
-    "nl": ("Herconfigureer", "Configureren"),
-    "pl": ("Rekonfiguracja", "Konfiguruj"),
+    "de": {"reconfigure": "Neu konfigurieren", "configure": "Konfigurieren", "submit": "OK"},
+    "en": {"reconfigure": "Reconfigure", "configure": "Configure", "submit": "Submit"},
+    "es": {"reconfigure": "Reconfigurar", "configure": "Configurar", "submit": "Enviar"},
+    "fr": {"reconfigure": "Reconfigurer", "configure": "Configurer", "submit": "Valider"},
+    "it": {"reconfigure": "Riconfigura", "configure": "Configura", "submit": "Invia"},
+    "nl": {"reconfigure": "Herconfigureer", "configure": "Configureren", "submit": "Verzenden"},
+    "pl": {"reconfigure": "Rekonfiguracja", "configure": "Konfiguruj", "submit": "Zatwierdź"},
+}
+
+# The texts that send the user to one of those controls, by the control.
+_LABEL_REFERENCES = {
+    "reconfigure": [("config", "step", "currency", "description")],
+    "configure": [("config", "abort", "no_reconfigure")],
+    "submit": [
+        ("config", "step", "confirm_currency", "description"),
+        ("config_subentries", "price_group", "step", "asset", "description"),
+    ],
 }
 
 
@@ -146,13 +160,18 @@ def _quoted(label: str) -> re.Pattern:
 
 
 def test_menu_items_are_named_with_home_assistants_own_labels():
-    """Where a text sends the user to a menu item of the integration entry,
-    it names the item exactly as the frontend labels it in that language."""
+    """Where a text sends the user to a menu item of the integration entry or
+    to a dialog's button, it names it in quotation marks exactly as the
+    frontend labels it in that language."""
     assert sorted(_MENU_LABELS) == _LANGUAGES
-    for language, (reconfigure, configure) in _MENU_LABELS.items():
-        config = _load(f"translations/{language}.json")["config"]
-        assert _quoted(reconfigure).search(config["step"]["currency"]["description"]), language
-        assert _quoted(configure).search(config["abort"]["no_reconfigure"]), language
+    for language, labels in _MENU_LABELS.items():
+        strings = _load(f"translations/{language}.json")
+        for control, keys in _LABEL_REFERENCES.items():
+            for key in keys:
+                text = strings
+                for part in key:
+                    text = text[part]
+                assert _quoted(labels[control]).search(text), (language, ".".join(key))
 
 
 def test_every_language_titles_each_group_differently():

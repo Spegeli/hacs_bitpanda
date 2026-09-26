@@ -47,7 +47,7 @@
       },
       "confirm_currency": {
         "title": "Valuta wijzigen?",
-        "description": "Als je de valuta wijzigt van {old} naar {new}, worden alle Portfolio-sensoren met hun geschiedenis verwijderd en in de nieuwe valuta opnieuw aangemaakt. Dit kan niet ongedaan worden gemaakt. Kies Verzenden om door te gaan, of sluit dit venster om {old} te behouden."
+        "description": "Als je de valuta wijzigt van {old} naar {new}, worden alle Portfolio-sensoren met hun geschiedenis verwijderd en in de nieuwe valuta opnieuw aangemaakt. Dit kan niet ongedaan worden gemaakt. Kies \"Verzenden\" om door te gaan, of sluit dit venster om {old} te behouden."
       }
     },
     "error": {
@@ -95,7 +95,7 @@
         },
         "asset": {
           "title": "Prijstracker toevoegen",
-          "description": "Typ om te zoeken op naam, symbool of ISIN en kies dan een asset. Verzend zonder keuze om terug te gaan naar de assettypes.",
+          "description": "Typ om te zoeken op naam, symbool of ISIN en kies dan een asset. Klik zonder keuze op \"Verzenden\" om terug te gaan naar de assettypes.",
           "data": {
             "asset": "Asset"
           }

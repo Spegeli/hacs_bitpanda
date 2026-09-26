@@ -47,7 +47,7 @@
       },
       "confirm_currency": {
         "title": "Währung ändern?",
-        "description": "Wenn du die Währung von {old} auf {new} änderst, werden alle Portfolio-Sensoren samt Verlauf gelöscht und in der neuen Währung neu angelegt. Das lässt sich nicht rückgängig machen. Sende das Formular ab, um fortzufahren, oder schließe diesen Dialog, um {old} zu behalten."
+        "description": "Wenn du die Währung von {old} auf {new} änderst, werden alle Portfolio-Sensoren samt Verlauf gelöscht und in der neuen Währung neu angelegt. Das lässt sich nicht rückgängig machen. Klicke auf „OK“, um fortzufahren, oder schließe diesen Dialog, um {old} zu behalten."
       }
     },
     "error": {
@@ -95,7 +95,7 @@
         },
         "asset": {
           "title": "Preis-Tracker hinzufügen",
-          "description": "Tippe, um nach Name, Symbol oder ISIN zu suchen, und wähle ein Asset. Sende ohne Auswahl ab, um zu den Asset-Typen zurückzukehren.",
+          "description": "Tippe, um nach Name, Symbol oder ISIN zu suchen, und wähle ein Asset. Klicke ohne Auswahl auf „OK“, um zu den Asset-Typen zurückzukehren.",
           "data": {
             "asset": "Asset"
           }

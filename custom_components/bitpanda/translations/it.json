@@ -47,7 +47,7 @@
       },
       "confirm_currency": {
         "title": "Cambiare la valuta?",
-        "description": "Passare da {old} a {new} elimina tutti i sensori del Portfolio, cronologia inclusa, e li ricrea nella nuova valuta. L'operazione non può essere annullata. Seleziona Invia per continuare oppure chiudi questa finestra per mantenere {old}."
+        "description": "Passare da {old} a {new} elimina tutti i sensori del Portfolio, cronologia inclusa, e li ricrea nella nuova valuta. L'operazione non può essere annullata. Seleziona \"Invia\" per continuare oppure chiudi questa finestra per mantenere {old}."
       }
     },
     "error": {
@@ -95,7 +95,7 @@
         },
         "asset": {
           "title": "Aggiungi monitoraggio prezzo",
-          "description": "Digita per cercare per nome, simbolo o ISIN, poi scegli un asset. Invia senza scegliere per tornare ai tipi di asset.",
+          "description": "Digita per cercare per nome, simbolo o ISIN, poi scegli un asset. Seleziona \"Invia\" senza scegliere nulla per tornare ai tipi di asset.",
           "data": {
             "asset": "Asset"
           }

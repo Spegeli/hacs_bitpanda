@@ -47,7 +47,7 @@
       },
       "confirm_currency": {
         "title": "Change the currency?",
-        "description": "Changing the currency from {old} to {new} deletes all Portfolio sensors including their history and recreates them in the new currency. This cannot be undone. Submit to continue, or close this dialog to keep {old}."
+        "description": "Changing the currency from {old} to {new} deletes all Portfolio sensors including their history and recreates them in the new currency. This cannot be undone. Select \"Submit\" to continue, or close this dialog to keep {old}."
       }
     },
     "error": {
@@ -95,7 +95,7 @@
         },
         "asset": {
           "title": "Add price tracker",
-          "description": "Type to search by name, symbol or ISIN, then pick one asset. Submit without a choice to go back to the asset types.",
+          "description": "Type to search by name, symbol or ISIN, then pick one asset. To go back to the asset types, select \"Submit\" without picking one.",
           "data": {
             "asset": "Asset"
           }

@@ -47,7 +47,7 @@
       },
       "confirm_currency": {
         "title": "¿Cambiar la moneda?",
-        "description": "Cambiar la moneda de {old} a {new} elimina todos los sensores del Portfolio, incluido su historial, y los vuelve a crear en la nueva moneda. Esto no se puede deshacer. Pulsa Enviar para continuar o cierra este cuadro de diálogo para conservar {old}."
+        "description": "Cambiar la moneda de {old} a {new} elimina todos los sensores del Portfolio, incluido su historial, y los vuelve a crear en la nueva moneda. Esto no se puede deshacer. Pulsa \"Enviar\" para continuar o cierra este cuadro de diálogo para conservar {old}."
       }
     },
     "error": {
@@ -95,7 +95,7 @@
         },
         "asset": {
           "title": "Añadir seguimiento de precio",
-          "description": "Escribe para buscar por nombre, símbolo o ISIN y elige un activo. Envía sin elegir nada para volver a los tipos de activo.",
+          "description": "Escribe para buscar por nombre, símbolo o ISIN y elige un activo. Pulsa \"Enviar\" sin elegir nada para volver a los tipos de activo.",
           "data": {
             "asset": "Activo"
           }

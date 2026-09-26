@@ -47,7 +47,7 @@
       },
       "confirm_currency": {
         "title": "Changer de devise ?",
-        "description": "Passer de {old} à {new} supprime tous les capteurs du Portfolio, y compris leur historique, puis les recrée dans la nouvelle devise. Cette action est irréversible. Validez pour continuer, ou fermez cette boîte de dialogue pour conserver {old}."
+        "description": "Passer de {old} à {new} supprime tous les capteurs du Portfolio, y compris leur historique, puis les recrée dans la nouvelle devise. Cette action est irréversible. Cliquez sur « Valider » pour continuer, ou fermez cette boîte de dialogue pour conserver {old}."
       }
     },
     "error": {
@@ -95,7 +95,7 @@
         },
         "asset": {
           "title": "Ajouter un suivi de prix",
-          "description": "Tapez pour rechercher par nom, symbole ou ISIN, puis choisissez un actif. Validez sans rien choisir pour revenir aux types d'actifs.",
+          "description": "Tapez pour rechercher par nom, symbole ou ISIN, puis choisissez un actif. Cliquez sur « Valider » sans rien choisir pour revenir aux types d'actifs.",
           "data": {
             "asset": "Actif"
           }

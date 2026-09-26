@@ -106,7 +106,7 @@ What every language keeps exactly as English has it:
 - Markdown link targets (`[{api_key_url}]({api_key_url})`), product names (Bitpanda, Bitpanda Portfolio, Bitpanda Price Tracker, Cash Plus, Earn) and currency codes.
 - Bitpanda's permission names, `Guthaben (Balance)`, `Transaktion (Transaction)` and `Earn (Read)`, as Bitpanda's key page shows them (German uses the German names alone).
 
-A text that sends the user to one of Home Assistant's menu items names it in quotation marks, exactly as Home Assistant's frontend labels it in that language (`ui.panel.config.integrations.config_entry.*`) — for example "Reconfigure" / „Neu konfigurieren“ / « Reconfigurer » / "Herconfigureer" / "Riconfigura" / "Reconfigurar" / „Rekonfiguracja”, and "Configure" / „Konfigurieren“ / « Configurer » / "Configureren" / "Configura" / "Configurar" / „Konfiguruj”.
+A text that sends the user to one of Home Assistant's menu items or buttons names it in quotation marks, exactly as Home Assistant's frontend labels it in that language — for example "Reconfigure" / „Neu konfigurieren“ / « Reconfigurer » / "Herconfigureer" / "Riconfigura" / "Reconfigurar" / „Rekonfiguracja” and "Configure" / „Konfigurieren“ / « Configurer » / "Configureren" / "Configura" / "Configurar" / „Konfiguruj” (`ui.panel.config.integrations.config_entry.*`), and a dialog's "Submit" / „OK“ / « Valider » / "Verzenden" / "Invia" / "Enviar" / „Zatwierdź” (`ui.panel.config.integrations.config_flow.submit`).
 
 Group titles (`selector.asset_group`) must differ from one another within a language. A group still titled a shipped default is retitled to Home Assistant's language at every start; a group whose title is no longer any language's default counts as renamed by the user, so changing a title leaves groups created under the old one alone. Attribute labels (`entity.sensor.*.state_attributes`) carry a group prefix — `Asset:`, `Balance:`, `Rewards:`, `24 h:`, `Conversion:` in English — because Home Assistant sorts them alphabetically: keep the prefix identical within a group so related labels stay together.
 
@@ -124,7 +124,7 @@ These tests guard the files (`tests/test_strings.py` unless noted):
 | `test_every_link_keeps_its_english_target` | unchanged Markdown link targets |
 | `test_no_language_is_an_untranslated_copy_of_english` | no sentence left in English, and most strings translated |
 | `test_every_language_titles_each_group_differently` | distinct group titles |
-| `test_menu_items_are_named_with_home_assistants_own_labels` | "Reconfigure" and "Configure" named by Home Assistant's own label, quoted (`_MENU_LABELS`) |
+| `test_menu_items_are_named_with_home_assistants_own_labels` | "Reconfigure", "Configure" and the dialog's "Submit" named by Home Assistant's own label, quoted (`_MENU_LABELS`) |
 | `test_every_published_attribute_has_a_translated_label` | every attribute a sensor publishes has a label |
 | `tests/test_migration.py::test_every_text_of_the_migration_has_a_template` | every text of the upgrade notification has a template |
 | `tests/test_migration.py::test_every_text_of_the_migration_renders_in_every_language` | each of those templates has exactly the placeholders the code fills, in every language |

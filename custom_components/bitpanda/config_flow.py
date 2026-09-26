@@ -368,7 +368,10 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         entry = self._get_reconfigure_entry()
         if entry_type(entry) != ENTRY_TYPE_PORTFOLIO:
             return self.async_abort(reason="no_reconfigure")
-        current = entry.data.get(CONF_CURRENCY, DEFAULT_CURRENCY)
+        stored = entry.data[CONF_CURRENCY]
+        # The currency the form shows: the stored one at first, the one just
+        # submitted when the form comes back with an error.
+        shown = stored
         errors: dict[str, str] = {}
         placeholders: dict[str, str] = {"api_key_url": API_KEY_URL}
         if user_input is not None:
@@ -380,7 +383,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if api_key:
                     errors, extra = await self._async_validate_key(api_key)
                     placeholders.update(extra)
-                if not errors and currency != current:
+                if not errors and currency != stored:
                     self._currency_ids = await self._async_currency_ids()
                     if currency not in self._currency_ids:
                         errors = {"base": "cannot_connect"}
@@ -392,17 +395,17 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _log_unexpected("reconfigure", err)
                 errors = {"base": "unknown"}
             if not errors:
-                if currency != current:
+                if currency != stored:
                     self._api_key = api_key or None
                     self._pending_currency = currency
                     return await self.async_step_confirm_currency()
                 if api_key:
                     return self._async_replace_key(entry, api_key, "reconfigure_successful")
                 return self.async_abort(reason="no_changes")
-            current = currency
+            shown = currency
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=self._reconfigure_schema(current),
+            data_schema=self._reconfigure_schema(shown),
             errors=errors,
             description_placeholders=placeholders,
         )
@@ -422,7 +425,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 step_id="confirm_currency",
                 data_schema=vol.Schema({}),
                 description_placeholders={
-                    "old": entry.data.get(CONF_CURRENCY, DEFAULT_CURRENCY),
+                    "old": entry.data[CONF_CURRENCY],
                     "new": self._pending_currency,
                 },
             )

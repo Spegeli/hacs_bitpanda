@@ -212,6 +212,9 @@ async def async_plan(hass: HomeAssistant, entry: ConfigEntry) -> MigrationPlan:
     timeout or a 5xx says nothing about a symbol, so it aborts instead.
     """
     client = BitpandaApiClient(None, async_get_clientsession(hass))
+    # Every released version 1 stored a currency. Only here, reading what
+    # another release wrote, does a missing one fall back to EUR rather
+    # than block the upgrade.
     currency = entry.data.get(CONF_CURRENCY, DEFAULT_CURRENCY)
     currencies = await client.async_get_currencies()
     if not any(c.get("symbol") == "EUR" and c.get("id") for c in currencies):

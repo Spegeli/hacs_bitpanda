@@ -19,7 +19,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .assets import asset_category
 from .const import (
     CONF_CURRENCY,
-    DEFAULT_CURRENCY,
     DOMAIN,
     PORTFOLIO_TIMEFRAMES,
     SUBENTRY_TYPE_WALLET_GROUP,
@@ -577,7 +576,7 @@ async def async_setup_portfolio_entities(
     """The Portfolio device's sensors, outside every group, then the wallets
     the manager keeps current in their groups."""
     runtime: PortfolioRuntime = entry.runtime_data
-    currency = entry.data.get(CONF_CURRENCY, DEFAULT_CURRENCY)
+    currency = entry.data[CONF_CURRENCY]
     add_entities(
         [
             PortfolioTotalSensor(runtime.portfolio, entry.entry_id, currency),

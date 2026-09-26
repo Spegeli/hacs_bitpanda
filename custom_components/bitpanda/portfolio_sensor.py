@@ -11,6 +11,7 @@ currency change clears them with the sensors' history (purge.py).
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -24,6 +25,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .assets import asset_category
 from .const import (
@@ -31,7 +33,6 @@ from .const import (
     DOMAIN,
     PORTFOLIO_TIMEFRAMES,
     SUBENTRY_TYPE_WALLET_GROUP,
-    WALLET_REMOVAL_MISSES,
 )
 from .devices import find_entry_device
 from .groups import (
@@ -62,6 +63,7 @@ from .portfolio_model import (
     Holding,
     PortfolioData,
     PortfolioReturns,
+    confirmed,
     staking_applies,
 )
 
@@ -401,10 +403,13 @@ class PortfolioEntityManager:
 
     Runs after every portfolio refresh; a failed refresh changes nothing.
     A holding absent from WALLET_REMOVAL_MISSES consecutive successful
-    refreshes loses its sensors and device -- a wallet migrated from version
-    1 whose asset is no longer held included. Only unique_ids that name an
-    asset UUID are ever removed (naming.managed_asset_key): a legacy wallet
-    the migration could not resolve is left for the user.
+    refreshes, WALLET_REMOVAL_TIME after the first of them was asked for
+    (portfolio_model.confirmed), loses its sensors and device -- a wallet
+    migrated from version 1 whose asset is no longer held included. At the
+    regular pace the third miss removes it; refreshes by hand count, but
+    never remove it sooner. Only unique_ids that name an asset UUID are ever
+    removed (naming.managed_asset_key): a legacy wallet the migration could
+    not resolve is left for the user.
 
     Each wallet goes, with its Staking and Total sensors, into the wallet
     group (a config subentry) of its asset's category: created when the
@@ -433,7 +438,8 @@ class PortfolioEntityManager:
         # Asset id -> the category of the wallet group its sensors sit in.
         self._wallets: dict[str, str] = {}
         self._staking: set[str] = set()
-        self._misses: dict[str, int] = {}
+        # Asset id -> its misses in a row, and when the first was asked for.
+        self._misses: dict[str, tuple[int, datetime]] = {}
 
     def has_total(self, asset_id: str) -> bool:
         return asset_id in self._staking
@@ -534,12 +540,14 @@ class PortfolioEntityManager:
         # in `data.holdings`, yet counts as held (PortfolioData.held), never
         # as a miss.
         held = data.held
+        asked_at = data.requested_at or dt_util.utcnow()
         for asset_id in held:
             self._misses.pop(asset_id, None)
         for asset_id in (set(registered) | set(self._wallets)) - held:
-            misses = self._misses.get(asset_id, 0) + 1
-            if misses < WALLET_REMOVAL_MISSES:
-                self._misses[asset_id] = misses
+            misses, since = self._misses.get(asset_id, (0, asked_at))
+            misses += 1
+            if not confirmed(misses, since, asked_at):
+                self._misses[asset_id] = (misses, since)
                 continue
             self._misses.pop(asset_id, None)
             self._wallets.pop(asset_id, None)

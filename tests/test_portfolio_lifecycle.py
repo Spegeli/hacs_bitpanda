@@ -16,7 +16,7 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
-from custom_components.bitpanda.const import DOMAIN
+from custom_components.bitpanda.const import DOMAIN, PORTFOLIO_UPDATE_INTERVAL
 from custom_components.bitpanda.groups import async_get_or_create_wallet_group
 from custom_components.bitpanda.naming import asset_display_label, wallet_entity_id
 from custom_components.bitpanda.portfolio_coordinator import PortfolioRuntime, RewardsCoordinator
@@ -102,6 +102,8 @@ class _Harness:
             options_at_setup={},
         )
         self.runtime.earn.data = EarnData(apr={}, offered=frozenset())
+        # When the last answer was asked for (PortfolioData.requested_at).
+        self.clock = dt_util.utcnow()
         self.manager = PortfolioEntityManager(
             hass, self.entry, self.runtime, "EUR",
             lambda entities, **kwargs: hass.async_create_task(
@@ -109,7 +111,12 @@ class _Harness:
             ),
         )
 
-    async def refresh(self, data=None, success=True):
+    async def refresh(self, data=None, success=True, *, after=PORTFOLIO_UPDATE_INTERVAL):
+        """A portfolio refresh, its answer asked for `after` the last one --
+        an update interval, the regular pace, unless given."""
+        self.clock += after
+        if data is not None:
+            data.requested_at = self.clock
         self.runtime.portfolio.data = data
         self.runtime.portfolio.last_update_success = success
         self.manager.async_reconcile()
@@ -237,6 +244,61 @@ async def test_a_sold_asset_leaves_after_three_successful_refreshes_only(hass):
     await harness.refresh(_data(_holding(BTC)))
     assert harness.entity_ids() == {"sensor.bitpanda_bitcoin_btc_wallet"}
     assert harness.devices() == {"Bitcoin (BTC) Wallet"}
+
+
+_BY_HAND = timedelta(seconds=20)
+
+
+async def test_misses_in_quick_succession_remove_nothing(hass):
+    """Refreshes by hand (bitpanda.refresh, a cooldown apart) bring answers
+    without a sold asset far faster than the regular pace. However many,
+    its wallet stays until two update intervals have passed since the first
+    of them (ruling R40); the first miss after that removes it."""
+    harness = _Harness(hass)
+    await harness.refresh(_data(_holding(VSN), _holding(BTC)))
+    misses = 5
+    for _ in range(misses):
+        await harness.refresh(_data(_holding(BTC)), after=_BY_HAND)
+    first_miss_to_last = (misses - 1) * _BY_HAND
+    await harness.refresh(
+        _data(_holding(BTC)),
+        after=2 * PORTFOLIO_UPDATE_INTERVAL - first_miss_to_last - timedelta(seconds=30),
+    )
+    assert VSN_WALLET in harness.entity_ids()
+    await harness.refresh(_data(_holding(BTC)), after=timedelta(seconds=30))
+    assert harness.entity_ids() == {"sensor.bitpanda_bitcoin_btc_wallet"}
+
+
+async def test_the_regular_pace_removes_with_the_third_miss_even_a_hair_early(hass):
+    """Answers asked for a hair less than an update interval apart -- the
+    wall clock may read so between two regular refreshes -- still remove
+    the wallet with the third miss."""
+    harness = _Harness(hass)
+    await harness.refresh(_data(_holding(VSN), _holding(BTC)))
+    for _ in range(3):
+        await harness.refresh(
+            _data(_holding(BTC)), after=PORTFOLIO_UPDATE_INTERVAL - timedelta(seconds=1)
+        )
+    assert harness.entity_ids() == {"sensor.bitpanda_bitcoin_btc_wallet"}
+
+
+async def test_answers_without_a_time_of_their_own_count_by_the_clock(hass, freezer):
+    """An answer that carries no request time is timed by Home Assistant's
+    clock when the manager sees it: three misses four minutes apart span
+    eight, too few; the fourth, twelve minutes after the first, removes."""
+    harness = _Harness(hass)
+    harness.runtime.portfolio.data = _data(_holding(VSN), _holding(BTC))
+    harness.manager.async_reconcile()
+    for _ in range(3):
+        harness.runtime.portfolio.data = _data(_holding(BTC))
+        harness.manager.async_reconcile()
+        await hass.async_block_till_done()
+        freezer.tick(timedelta(minutes=4))
+    assert VSN_WALLET in harness.entity_ids()
+    harness.runtime.portfolio.data = _data(_holding(BTC))
+    harness.manager.async_reconcile()
+    await hass.async_block_till_done()
+    assert VSN_WALLET not in harness.entity_ids()
 
 
 async def test_a_returning_holding_resets_the_count(hass):

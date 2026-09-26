@@ -2,16 +2,35 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
-from .const import CASH_PLUS_GROUP
+from .const import CASH_PLUS_GROUP, WALLET_REMOVAL_MISSES, WALLET_REMOVAL_TIME
 
 _LOGGER = logging.getLogger(__name__)
 
 # The API quotes amounts as 8-decimal strings. Anything computed from them is
 # rounded to match rather than publishing float noise.
 DECIMALS = 8
+
+# Two regular refreshes are asked for an update interval apart at the least,
+# yet the wall clock can read a hair less between them. A few seconds of
+# grace keep the answer that completes the regular pace confirming -- fewer
+# than the cooldown between two refreshes by hand (const.REFRESH_MIN_COOLDOWN).
+_CLOCK_GRACE = timedelta(seconds=5)
+
+
+def confirmed(count: int, since: datetime, now: datetime) -> bool:
+    """Whether `count` answers in a row that say the same -- no such holding,
+    or no holding at all -- confirm it, the first asked for at `since`, the
+    last at `now`.
+
+    WALLET_REMOVAL_MISSES of them, spread over WALLET_REMOVAL_TIME: at the
+    regular pace the one that completes the count confirms, while answers
+    brought in by hand, however many, never confirm sooner than that pace
+    would.
+    """
+    return count >= WALLET_REMOVAL_MISSES and now - since >= WALLET_REMOVAL_TIME - _CLOCK_GRACE
 
 
 def to_float(container: dict | None, key: str = "value") -> float | None:
@@ -100,6 +119,10 @@ class PortfolioData:
     cash: float | None = 0.0
     assets: dict[str, dict] = field(default_factory=dict)
     unparsed_assets: set[str] = field(default_factory=set)
+    # When /portfolio was asked for this answer (Home Assistant's clock): the
+    # times `confirmed` measures between answers. None where no request
+    # made it.
+    requested_at: datetime | None = None
 
     def is_cash_plus(self, asset_id: str) -> bool | None:
         asset = self.assets.get(asset_id)

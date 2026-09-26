@@ -7,6 +7,7 @@ Home Assistant turns into the reauth dialog.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 import logging
 import math
 from typing import Any
@@ -36,7 +37,6 @@ from .const import (
     PORTFOLIO_TIMEFRAMES,
     PORTFOLIO_UPDATE_INTERVAL,
     REWARDS_UPDATE_INTERVAL,
-    WALLET_REMOVAL_MISSES,
 )
 from .naming import managed_asset_id
 from .portfolio_model import (
@@ -44,6 +44,7 @@ from .portfolio_model import (
     PortfolioData,
     PortfolioReturns,
     RewardTotals,
+    confirmed,
     lists_nothing,
     parse_earn_configs,
     parse_portfolio,
@@ -53,10 +54,18 @@ from .portfolio_model import (
 _LOGGER = logging.getLogger(__name__)
 
 # Empty /portfolio answers in a row, per Portfolio entry, since the last one
-# taken as the truth (see PortfolioCoordinator). In hass.data rather than on
-# the coordinator, so the count outlives a reload or a failed setup -- but
-# not the entry itself (async_forget_empty_answers).
+# taken as the truth (see PortfolioCoordinator): an _EmptyStreak. In
+# hass.data rather than on the coordinator, so the streak outlives a reload
+# or a failed setup -- but not the entry itself (async_forget_empty_answers).
 _EMPTY_ANSWERS = f"{DOMAIN}_empty_portfolio_answers"
+
+
+@dataclass
+class _EmptyStreak:
+    """Empty answers in a row, and when the first of them was asked for."""
+
+    count: int
+    since: datetime
 
 
 @callback
@@ -116,14 +125,22 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
     -- after a restart or a reload -- wallets of this entry are registered.
     Such an answer fails the update instead: the sensors go unavailable,
     and the wallet manager, which acts only on successful refreshes, counts
-    no miss and removes nothing. Only the answer that makes
-    WALLET_REMOVAL_MISSES empty ones in a row is taken as the truth: Total
-    0, and from then on every empty answer is too, and the wallets count as
-    missing as usual. The count lives in hass.data, so a reload -- or a
-    setup that is retried -- goes on counting where the last coordinator
-    stopped. A failed request neither counts nor resets it; any answer taken
-    as the truth clears it. An empty first answer with no wallet registered
-    -- a new, empty account -- is the truth at once, so its setup works.
+    no miss and removes nothing. Only an empty answer that makes
+    WALLET_REMOVAL_MISSES of them in a row, WALLET_REMOVAL_TIME after the
+    first was asked for (portfolio_model.confirmed), is taken as the truth:
+    Total 0, and from then on every empty answer is too, and the wallets
+    count as missing as usual. At the regular pace the third answer
+    confirms; refreshes by hand or a reload bring answers sooner, and they
+    count, but never confirm sooner. The streak lives in hass.data, so a
+    reload -- or a setup that is retried -- goes on where the last
+    coordinator stopped. A failed request neither counts nor resets it; any
+    answer taken as the truth clears it. An empty first answer with no
+    wallet registered -- a new, empty account -- is the truth at once, so
+    its setup works.
+
+    Every answer carries the time it was asked for (PortfolioData.
+    requested_at, Home Assistant's clock), by which the wallet manager times
+    its misses the same way.
     """
 
     def __init__(
@@ -149,6 +166,9 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
         self._listed: bool | None = None
 
     async def _async_update_data(self) -> PortfolioData:
+        # When the answer was asked for -- not when it arrived, which a slow
+        # request would put later than the regular pace.
+        requested_at = dt_util.utcnow()
         try:
             entries = await self._client.async_get_portfolio(
                 equivalent_currency_id=self._currency_id
@@ -157,8 +177,9 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
             raise _auth_failed() from None
         except BitpandaApiError as err:
             raise _update_failed(err) from None
-        self._check_empty_answer(entries)
+        self._check_empty_answer(entries, requested_at)
         data = parse_portfolio(entries)
+        data.requested_at = requested_at
         # Never raises: a failed lookup leaves the holdings not named yet
         # unnamed until the next refresh instead of failing the portfolio.
         await self._directory.async_resolve(data.holdings)
@@ -169,20 +190,21 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
         }
         return data
 
-    def _check_empty_answer(self, entries: list[dict]) -> None:
+    def _check_empty_answer(self, entries: list[dict], requested_at: datetime) -> None:
         """Raise UpdateFailed for an empty answer not confirmed yet; count
         or clear the empty answers in a row (see the class docstring)."""
-        counts: dict[str, int] = self.hass.data.setdefault(_EMPTY_ANSWERS, {})
+        streaks: dict[str, _EmptyStreak] = self.hass.data.setdefault(_EMPTY_ANSWERS, {})
         entry_id = self.config_entry.entry_id
         empty = lists_nothing(entries)
         if empty and (self._listed if self._listed is not None else self._has_wallets()):
-            count = counts.get(entry_id, 0) + 1
-            if count < WALLET_REMOVAL_MISSES:
-                counts[entry_id] = count
+            streak = streaks.get(entry_id) or _EmptyStreak(count=0, since=requested_at)
+            streak.count += 1
+            if not confirmed(streak.count, streak.since, requested_at):
+                streaks[entry_id] = streak
                 raise UpdateFailed(
                     translation_domain=DOMAIN, translation_key="portfolio_empty"
                 )
-        counts.pop(entry_id, None)
+        streaks.pop(entry_id, None)
         self._listed = not empty
 
     def _has_wallets(self) -> bool:

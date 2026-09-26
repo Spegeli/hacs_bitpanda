@@ -118,8 +118,12 @@ ECB_UPDATE_INTERVAL = timedelta(hours=6)
 TICKER_HOURLY_BUDGET = 1800
 
 # A holding is removed only after this many consecutive successful portfolio
-# refreshes without it.
+# refreshes without it, spread over WALLET_REMOVAL_TIME at the least: the
+# time they take at the regular pace, which refreshes by hand
+# (bitpanda.refresh) can therefore never shorten. A completely empty
+# /portfolio answer is confirmed the same way (portfolio_coordinator.py).
 WALLET_REMOVAL_MISSES = 3
+WALLET_REMOVAL_TIME = (WALLET_REMOVAL_MISSES - 1) * PORTFOLIO_UPDATE_INTERVAL
 
 # The asset group of Bitpanda's Cash Plus products. They count towards the
 # Portfolio's Cash Plus sensor and never get a wallet device.

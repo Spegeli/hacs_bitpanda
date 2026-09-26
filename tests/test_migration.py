@@ -1,9 +1,7 @@
 """Tests for v1 to v3 config entry migration."""
 from contextlib import contextmanager
-import json
 import logging
 from pathlib import Path
-import string
 from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
@@ -29,7 +27,13 @@ from custom_components.bitpanda.migration import (
     legacy_symbol,
 )
 
-from tests.conftest import device_names_in_subentry, load_fixture, price_group
+from tests.conftest import (
+    assert_issue_texts_render,
+    device_names_in_subentry,
+    load_fixture,
+    price_group,
+    raised_issues,
+)
 
 _API = "custom_components.bitpanda.migration.BitpandaApiClient."
 _EUR_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
@@ -1274,59 +1278,14 @@ def test_learn_more_leads_to_the_readmes_upgrade_section():
     )
 
 
-_INTEGRATION = Path(migration.__file__).parent
-
-
-def _placeholders(template: str) -> frozenset[str]:
-    """The {placeholders} of a text, parsed as Home Assistant parses them."""
-    return frozenset(
-        field for _, field, _, _ in string.Formatter().parse(template) if field is not None
-    )
-
-
-def _raised(hass) -> dict[str, dict[str, str]]:
-    """This integration's repair issues, read back from the issue registry:
-    translation key -> the placeholders the code supplied."""
-    return {
-        issue.translation_key: issue.translation_placeholders
-        for issue in _issues(hass).values()
-    }
-
-
-def _assert_every_language_renders(raised: dict[str, dict[str, str]]) -> None:
-    """Every issue in `raised` has a title and a description in every
-    shipped language that use exactly the placeholders the code supplied and
-    render with them. A list opens a paragraph of its own, so the frontend
-    renders it as a Markdown list. Read from the files themselves: Home
-    Assistant would replace a mismatched translation with English, hiding
-    it."""
-    languages = sorted(path.stem for path in (_INTEGRATION / "translations").glob("*.json"))
-    assert len(languages) == 7
-    for language in languages:
-        texts = json.loads(
-            (_INTEGRATION / "translations" / f"{language}.json").read_text(encoding="utf-8")
-        )["issues"]
-        for key, placeholders in raised.items():
-            placeholders = placeholders or {}
-            title, description = texts[key]["title"], texts[key]["description"]
-            assert _placeholders(title) | _placeholders(description) == set(placeholders), (
-                language, key,
-            )
-            rendered = title.format(**placeholders) + description.format(**placeholders)
-            assert all(value in rendered for value in placeholders.values()), (language, key)
-            for name, value in placeholders.items():
-                if value.startswith("- "):
-                    assert f"\n\n{{{name}}}" in description, (language, key, name)
-
-
 async def test_every_issue_text_renders_in_every_language(hass, legacy_api, no_setup):
     """Every repair issue the upgrade raises -- all of them, from one
     migration -- renders in every shipped language."""
     entry, _, _ = _upgrade_with_every_issue(hass)
     assert await async_migrate_entry(hass, entry)
-    raised = _raised(hass)
+    raised = raised_issues(hass)
     assert set(raised) == set(migration.UPGRADE_ISSUES)
-    _assert_every_language_renders(raised)
+    assert_issue_texts_render(raised)
 
 
 async def test_every_blocker_text_renders_in_every_language(hass, legacy_api, no_setup):
@@ -1335,19 +1294,12 @@ async def test_every_blocker_text_renders_in_every_language(hass, legacy_api, no
     entry = _v1_entry(hass)
     with _home_assistant(2025, 4, "2025.4.2"):
         assert not await async_migrate_entry(hass, entry)
-    raised = _raised(hass)
+    raised = raised_issues(hass)
     _portfolio_set_up_before(hass)
     assert not await async_migrate_entry(hass, entry)
-    raised |= _raised(hass)
+    raised |= raised_issues(hass)
     assert set(raised) == set(migration.BLOCKER_ISSUES)
-    _assert_every_language_renders(raised)
-
-
-def test_every_issue_text_is_one_the_code_raises():
-    """strings.json has no issue text the code never raises: the upgrade's
-    reports and what blocks the upgrade."""
-    strings = json.loads((_INTEGRATION / "strings.json").read_text(encoding="utf-8"))
-    assert set(strings["issues"]) == {*migration.UPGRADE_ISSUES, *migration.BLOCKER_ISSUES}
+    assert_issue_texts_render(raised)
 
 
 async def test_the_upgrade_issues_go_with_the_last_bitpanda_entry(hass, legacy_api, no_setup):

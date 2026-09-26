@@ -4,6 +4,7 @@ import logging
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
@@ -11,9 +12,13 @@ from custom_components.bitpanda.ecb import EcbError, EcbRates
 from custom_components.bitpanda.price_coordinator import (
     EcbCoordinator,
     TickerCoordinator,
+    async_delete_price_interval_issue,
+    async_report_price_interval,
     convert_price,
     price_interval,
 )
+
+from tests.conftest import assert_issue_texts_render, raised_issues
 
 BTC = "b86c034b-efe3-11eb-b56f-0691764446a7"
 SOL = "b86da33d-efe3-11eb-b56f-0691764446a7"
@@ -180,6 +185,61 @@ def test_a_slow_interval_is_announced_at_construction(caplog):
         coordinator = TickerCoordinator(None, None, _Client(), tracked)
     assert coordinator.update_interval == price_interval(1000)
     assert "1000 price trackers" in caplog.text
+
+
+# --- The slow interval as a repair issue ------------------------------------------------
+
+
+def _interval_issue(hass) -> ir.IssueEntry | None:
+    return ir.async_get(hass).async_get_issue("bitpanda", "slow_price_interval")
+
+
+async def test_an_interval_above_thirty_minutes_is_a_repair_issue(hass):
+    """A warning -- prices still come, only slowly -- naming the number of
+    tracked assets and the interval, in whole minutes rounded up, so it
+    never reads as 30. Raised again at every setup while it lasts, so not
+    kept across restarts; nothing to fix in a dialog."""
+    async_report_price_interval(hass, 1000)
+    issue = _interval_issue(hass)
+    assert (issue.translation_key, issue.translation_placeholders) == (
+        "slow_price_interval", {"count": "1000", "minutes": "34"}
+    )
+    assert (
+        issue.severity, issue.is_fixable, issue.is_persistent, issue.learn_more_url,
+        issue.issue_domain,
+    ) == (ir.IssueSeverity.WARNING, False, False, None, None)
+
+
+async def test_just_above_thirty_minutes_reads_as_thirty_one(hass):
+    async_report_price_interval(hass, 901)
+    assert _interval_issue(hass).translation_placeholders == {"count": "901", "minutes": "31"}
+
+
+@pytest.mark.parametrize("count", [0, 30, 900])
+async def test_thirty_minutes_or_less_raise_no_issue(hass, count):
+    async_report_price_interval(hass, count)
+    assert _interval_issue(hass) is None
+
+
+async def test_the_issue_goes_once_the_interval_is_thirty_minutes_or_less(hass):
+    async_report_price_interval(hass, 950)
+    assert _interval_issue(hass) is not None
+    async_report_price_interval(hass, 900)
+    assert _interval_issue(hass) is None
+
+
+async def test_the_issue_can_be_deleted_outright(hass):
+    """For when the Price Tracker itself goes."""
+    async_report_price_interval(hass, 950)
+    async_delete_price_interval_issue(hass)
+    assert _interval_issue(hass) is None
+
+
+async def test_the_issue_text_renders_in_every_language(hass):
+    async_report_price_interval(hass, 1000)
+    raised = raised_issues(hass)
+    assert set(raised) == {"slow_price_interval"}
+    assert_issue_texts_render(raised)
 
 
 # --- EcbCoordinator ------------------------------------------------------------------

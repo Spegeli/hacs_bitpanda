@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 import string
 
+from custom_components.bitpanda import migration
 from custom_components.bitpanda.api import BitpandaApiError
 from custom_components.bitpanda.assets import ASSET_CATEGORY_FILTERS, CATEGORY_OTHER
 from custom_components.bitpanda.const import API_ERROR_KINDS
@@ -22,7 +23,7 @@ from custom_components.bitpanda.portfolio_sensor import (
     WalletSensor,
     WalletTotalSensor,
 )
-from custom_components.bitpanda.price_coordinator import _ecb_failed
+from custom_components.bitpanda.price_coordinator import ISSUE_SLOW_PRICE_INTERVAL, _ecb_failed
 from custom_components.bitpanda.price_sensor import PriceSensor
 
 _DIR = Path(__file__).parent.parent / "custom_components" / "bitpanda"
@@ -321,6 +322,17 @@ def test_no_exception_text_takes_an_english_message():
     for name in _FILES:
         for key, text in _texts(_load(name)["exceptions"]).items():
             assert "error" not in _placeholders(text), (name, key)
+
+
+def test_every_issue_text_is_one_the_code_raises():
+    """strings.json holds no repair-issue text the code never raises: the
+    upgrade's reports, what blocks the upgrade, and the Price Tracker's slow
+    interval. Each module's own tests render its issues in every language."""
+    assert set(_load("strings.json")["issues"]) == {
+        *migration.UPGRADE_ISSUES,
+        *migration.BLOCKER_ISSUES,
+        ISSUE_SLOW_PRICE_INTERVAL,
+    }
 
 
 def test_every_language_titles_each_group_differently():

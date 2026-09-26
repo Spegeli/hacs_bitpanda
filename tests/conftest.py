@@ -1,9 +1,10 @@
 """Shared fixtures for Bitpanda integration tests."""
 import json
 from pathlib import Path
+import string
 
 from homeassistant.config_entries import ConfigSubentryData
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, issue_registry as ir
 import pytest
 
 from custom_components.bitpanda.assets import slim_asset
@@ -73,6 +74,52 @@ def wallet_group(category: str, title: str | None = None) -> ConfigSubentryData:
         title=title or category,
         unique_id=category,
     )
+
+
+_INTEGRATION = Path(__file__).parent.parent / "custom_components" / "bitpanda"
+
+
+def raised_issues(hass) -> dict[str, dict[str, str] | None]:
+    """This integration's repair issues, read back from the issue registry:
+    translation key -> the placeholders the code supplied."""
+    return {
+        issue.translation_key: issue.translation_placeholders
+        for (domain, _), issue in ir.async_get(hass).issues.items()
+        if domain == "bitpanda"
+    }
+
+
+def _placeholders(template: str) -> frozenset[str]:
+    """The {placeholders} of a text, parsed as Home Assistant parses them."""
+    return frozenset(
+        field for _, field, _, _ in string.Formatter().parse(template) if field is not None
+    )
+
+
+def assert_issue_texts_render(raised: dict[str, dict[str, str] | None]) -> None:
+    """Every issue in `raised` -- translation key -> the placeholders the
+    code supplied -- has a title and a description in every shipped
+    language that use exactly those placeholders and render with them. A
+    list opens a paragraph of its own, so the frontend renders it as a
+    Markdown list. Read from the files themselves: Home Assistant would
+    replace a mismatched translation with English, hiding it."""
+    languages = sorted(path.stem for path in (_INTEGRATION / "translations").glob("*.json"))
+    assert len(languages) == 7
+    for language in languages:
+        texts = json.loads(
+            (_INTEGRATION / "translations" / f"{language}.json").read_text(encoding="utf-8")
+        )["issues"]
+        for key, placeholders in raised.items():
+            placeholders = placeholders or {}
+            title, description = texts[key]["title"], texts[key]["description"]
+            assert _placeholders(title) | _placeholders(description) == set(placeholders), (
+                language, key,
+            )
+            rendered = title.format(**placeholders) + description.format(**placeholders)
+            assert all(value in rendered for value in placeholders.values()), (language, key)
+            for name, value in placeholders.items():
+                if value.startswith("- "):
+                    assert f"\n\n{{{name}}}" in description, (language, key, name)
 
 
 def device_names_in_subentry(hass, entry_id: str, subentry_id: str | None) -> set[str]:

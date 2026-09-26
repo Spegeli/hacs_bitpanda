@@ -37,7 +37,7 @@ The integration offers two services. Set up either or both — each one once.
 ### Bitpanda Price Tracker
 - Live prices for any of 14,051 assets — crypto, stocks, ETFs, ETCs, Bitpanda Crypto Indices and tokenized precious metals — **without an API key**
 - One device per tracked asset, such as **Bitcoin (BTC)**, in groups by asset type, with a price sensor in EUR (**Bitcoin (BTC) EUR**) and, optionally, one in each of the other 11 supported currencies
-- EUR prices come from Bitpanda every 60 seconds. Above 30 tracked assets the interval stretches automatically, so the integration never sends more than 1,800 price requests per hour
+- EUR prices come from Bitpanda every 60 seconds. Above 30 tracked assets the interval stretches automatically, so the integration never sends more than 1,800 price requests per hour. Should it grow past 30 minutes (above 900 tracked assets), **Settings → Repairs** says so until you track fewer
 - Other currencies are converted with the daily reference rates of the European Central Bank (ECB), fetched every 6 hours
 - 24h price change (`change_24h_pct`) as an attribute, from the Home Assistant recorder
 

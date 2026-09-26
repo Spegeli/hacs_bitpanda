@@ -453,6 +453,10 @@
     "portfolio_exists": {
       "title": "Bitpanda-update geblokkeerd: er is al een Bitpanda Portfolio ingesteld",
       "description": "De Bitpanda-invoer \"{entry}\" van vóór de update kan niet worden bijgewerkt: die zou naast \"{portfolio}\" een tweede Bitpanda Portfolio worden, en er kan er maar één worden ingesteld. Er is niets aan gewijzigd. Verwijder een van beide: \"{entry}\" of \"{portfolio}\". Houd je \"{entry}\", herstart Home Assistant daarna om die bij te werken."
+    },
+    "slow_price_interval": {
+      "title": "Bitpanda Price Tracker: prijzen slechts elke {minutes} minuten vernieuwd",
+      "description": "De Bitpanda Price Tracker volgt {count} assets en heeft per vernieuwing één verzoek per asset nodig. Om binnen zijn verzoekbudget te blijven, vernieuwt hij hun prijzen slechts elke {minutes} minuten. Volg minder assets voor snellere updates: verwijder de apparaten van assets die je niet meer nodig hebt, of een hele groep."
     }
   },
   "services": {

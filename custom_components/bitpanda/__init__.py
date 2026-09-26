@@ -58,7 +58,13 @@ from .portfolio_coordinator import (
     RewardsCoordinator,
     async_forget_empty_answers,
 )
-from .price_coordinator import EcbCoordinator, PriceTrackerRuntime, TickerCoordinator
+from .price_coordinator import (
+    EcbCoordinator,
+    PriceTrackerRuntime,
+    TickerCoordinator,
+    async_delete_price_interval_issue,
+    async_report_price_interval,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -178,6 +184,9 @@ async def _async_start_price_tracker(
         for asset_id, record in tracked_assets(entry).items()
     }
     tickers = TickerCoordinator(hass, entry, BitpandaApiClient(None, session), tracked)
+    # Before the first refresh: the interval follows from what is tracked,
+    # whether Bitpanda answers or not.
+    async_report_price_interval(hass, len(tracked))
     ecb = (
         EcbCoordinator(hass, entry, session)
         if entry.options.get(CONF_EXTRA_CURRENCIES)
@@ -338,9 +347,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Forget what outlived the entry's setups: its count of empty
-    /portfolio answers, kept in hass.data across reloads; each repair issue
-    about what blocks the upgrade of a version 1 entry, once its cause went
-    with this entry -- and, with the last Bitpanda entry, the upgrade's
+    /portfolio answers, kept in hass.data across reloads; the Price
+    Tracker's slow-interval repair issue with the Price Tracker; each repair
+    issue about what blocks the upgrade of a version 1 entry, once its cause
+    went with this entry -- and, with the last Bitpanda entry, the upgrade's
     repair issues (migration.py).
 
     The entry itself is left out when looking for another one: Home
@@ -348,6 +358,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     runs, and nothing here depends on that order.
     """
     async_forget_empty_answers(hass, entry.entry_id)
+    if entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER:
+        async_delete_price_interval_issue(hass)
     migration.async_update_blocker_issues(hass, entry.entry_id)
     if not any(
         other.entry_id != entry.entry_id

@@ -8,7 +8,8 @@ import math
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
@@ -30,6 +31,10 @@ _LOGGER = logging.getLogger(__name__)
 # Past this the prices are stale enough to tell the user about. A warning
 # threshold, never a cap -- see price_interval.
 _SLOW_INTERVAL = timedelta(minutes=30)
+
+# The repair issue while the interval is past _SLOW_INTERVAL; its id is also
+# its translation key (`issues` in strings.json).
+ISSUE_SLOW_PRICE_INTERVAL = "slow_price_interval"
 
 # Each 429 in a row doubles the interval, up to this factor; the first
 # success returns to the budgeted interval.
@@ -82,6 +87,45 @@ def price_interval(ticker_count: int) -> timedelta:
         return PRICE_UPDATE_INTERVAL_BASE
     seconds = ticker_count * 3600 / TICKER_HOURLY_BUDGET
     return timedelta(seconds=max(PRICE_UPDATE_INTERVAL_BASE.total_seconds(), seconds))
+
+
+@callback
+def async_report_price_interval(hass: HomeAssistant, ticker_count: int) -> None:
+    """Raise the slow-interval repair issue while the interval `ticker_count`
+    tracked assets need is past _SLOW_INTERVAL; delete it once it is not.
+
+    Called at every setup of the Price Tracker, which follows every change
+    to what it tracks. A warning: the prices still come, only slowly. It
+    names the number of assets and the interval in whole minutes, rounded
+    up so that it never reads as the 30 it is past. Not kept across
+    restarts -- every start raises it again while it lasts -- and not
+    deleted when the Price Tracker is merely unloaded: deleting would also
+    forget that the user chose to ignore it.
+    """
+    interval = price_interval(ticker_count)
+    if interval <= _SLOW_INTERVAL:
+        async_delete_price_interval_issue(hass)
+        return
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        ISSUE_SLOW_PRICE_INTERVAL,
+        is_fixable=False,
+        is_persistent=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key=ISSUE_SLOW_PRICE_INTERVAL,
+        translation_placeholders={
+            "count": str(ticker_count),
+            "minutes": str(math.ceil(interval.total_seconds() / 60)),
+        },
+    )
+
+
+@callback
+def async_delete_price_interval_issue(hass: HomeAssistant) -> None:
+    """Delete the slow-interval repair issue -- for when the Price Tracker
+    goes, or tracks few enough assets."""
+    ir.async_delete_issue(hass, DOMAIN, ISSUE_SLOW_PRICE_INTERVAL)
 
 
 def convert_price(price, rate: float | None) -> float | None:

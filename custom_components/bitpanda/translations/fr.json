@@ -453,6 +453,10 @@
     "portfolio_exists": {
       "title": "Mise à jour de Bitpanda bloquée : un Bitpanda Portfolio est déjà configuré",
       "description": "L'entrée Bitpanda « {entry} » d'avant la mise à jour ne peut pas être mise à jour : elle deviendrait un second Bitpanda Portfolio à côté de « {portfolio} », et un seul peut être configuré. Elle n'a pas été modifiée. Supprimez l'une des deux entrées. Si vous conservez « {entry} », redémarrez ensuite Home Assistant pour la mettre à jour."
+    },
+    "slow_price_interval": {
+      "title": "Bitpanda Price Tracker : prix actualisés seulement toutes les {minutes} minutes",
+      "description": "Le Bitpanda Price Tracker suit {count} actifs et a besoin d'une requête par actif à chaque actualisation. Pour respecter son budget de requêtes, il n'actualise leurs prix que toutes les {minutes} minutes. Suivez moins d'actifs pour des mises à jour plus rapides : supprimez les appareils des actifs dont vous n'avez plus besoin, ou tout un groupe."
     }
   },
   "services": {

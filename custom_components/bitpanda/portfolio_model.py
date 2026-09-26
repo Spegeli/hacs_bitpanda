@@ -122,18 +122,17 @@ class PortfolioData:
             return None
         return round(sum(values) + self.cash, DECIMALS)
 
-    @property
-    def cash_plus(self) -> float | None:
-        """Cash Plus holdings only.
+    def _cash_plus_holdings(self) -> dict[str, Holding] | None:
+        """The Cash Plus holdings by asset id, in one pass over the holdings.
 
-        None when that cannot be said with confidence: a holding is
-        unclassified, its value is unknown, or an entry failed to parse at
-        all and so was never classified (`unparsed_assets`) -- it might
-        itself be Cash Plus.
+        None when they cannot be told with confidence: a holding is
+        unclassified, a Cash Plus holding's value is unknown, or an entry
+        failed to parse at all and so was never classified
+        (`unparsed_assets`) -- it might itself be Cash Plus.
         """
         if self.unparsed_assets:
             return None
-        amount = 0.0
+        found: dict[str, Holding] = {}
         for asset_id, holding in self.holdings.items():
             kind = self.is_cash_plus(asset_id)
             if kind is None:
@@ -141,8 +140,17 @@ class PortfolioData:
             if kind:
                 if holding.value is None:
                     return None
-                amount += holding.value
-        return round(amount, DECIMALS)
+                found[asset_id] = holding
+        return found
+
+    @property
+    def cash_plus(self) -> float | None:
+        """Cash Plus holdings only; None when they cannot be told with
+        confidence (see _cash_plus_holdings)."""
+        holdings = self._cash_plus_holdings()
+        if holdings is None:
+            return None
+        return round(sum((holding.value for holding in holdings.values()), 0.0), DECIMALS)
 
     @property
     def cash_plus_amounts(self) -> dict[str, float] | None:
@@ -151,19 +159,18 @@ class PortfolioData:
         A Cash Plus balance is 1:1 with its product's currency no matter
         which currency the Portfolio displays -- a EUR account shown in USD
         still holds EUR Cash Plus. None under exactly the conditions that
-        make `cash_plus` None -- an unclassified holding, an unparsed entry,
-        or a Cash Plus holding with an unknown value -- so the attributes
-        never carry a partial mapping alongside an unknown state.
+        make `cash_plus` None, so the attributes never carry a partial
+        mapping alongside an unknown state.
         """
-        if self.cash_plus is None:
+        holdings = self._cash_plus_holdings()
+        if holdings is None:
             return None
-        amounts: dict[str, float] = {}
-        for asset_id, holding in self.holdings.items():
-            if not self.is_cash_plus(asset_id):
-                continue
-            symbol = self.assets[asset_id].get("symbol", "")
-            amounts[_cash_plus_currency_code(symbol)] = round(holding.balance, 2)
-        return amounts
+        return {
+            _cash_plus_currency_code(self.assets[asset_id].get("symbol", "")): round(
+                holding.balance, 2
+            )
+            for asset_id, holding in holdings.items()
+        }
 
     @property
     def wallet_ids(self) -> list[str]:

@@ -195,6 +195,8 @@ def test_cash_plus_is_zero_without_cash_plus_holdings():
     data = parse_portfolio([_asset_entry(VSN, "1.0", "1.0", "5.00")])
     data.assets = {VSN: {"id": VSN, "group": "token"}}
     assert data.cash_plus == 0.0
+    # A float, as every other figure: the sensor's state reads "0.0", not "0".
+    assert isinstance(data.cash_plus, float)
 
 
 def test_unresolved_holding_is_no_wallet():

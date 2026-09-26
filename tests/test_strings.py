@@ -309,20 +309,30 @@ def test_every_shipped_language_is_offered_by_its_own_name():
 
 def test_each_service_has_options_texts_of_its_own():
     """Configure shows one form per service, each under its own step id
-    (config_flow.BitpandaOptionsFlow). The Price Tracker's comes in two
-    sections, each with a name; every field has a label and a help text --
-    in its section, where it sits in one."""
+    (config_flow.BitpandaOptionsFlow), every field in a named section: the
+    Price Tracker's in two, the Portfolio's language in one of its own,
+    worded like the Price Tracker's in every language. Every field has a
+    label and a help text, in its section. The Portfolio keeps its step
+    text (where to find Reconfigure); the Price Tracker has none."""
     steps = _load("strings.json")["options"]["step"]
     assert set(steps) == {"price_tracker", "portfolio"}
     price_tracker, portfolio = steps["price_tracker"], steps["portfolio"]
-    assert "data" not in price_tracker and "data_description" not in price_tracker
+    for step in (price_tracker, portfolio):
+        assert "data" not in step and "data_description" not in step
+    assert "description" not in price_tracker and portfolio["description"]
     assert list(price_tracker["sections"]) == ["currencies", "language"]
+    assert list(portfolio["sections"]) == ["language"]
     assert set(price_tracker["sections"]["currencies"]["data"]) == {"extra_currencies"}
     assert set(price_tracker["sections"]["language"]["data"]) == {"language"}
-    assert all(section["name"] for section in price_tracker["sections"].values())
-    assert set(portfolio["data"]) == {"language"} and "sections" not in portfolio
-    for texts in (*price_tracker["sections"].values(), portfolio):
+    for texts in (*price_tracker["sections"].values(), *portfolio["sections"].values()):
+        assert texts["name"]
         assert set(texts["data_description"]) == set(texts["data"])
+    for name in _FILES:
+        steps = _load(name)["options"]["step"]
+        assert (
+            steps["portfolio"]["sections"]["language"]
+            == steps["price_tracker"]["sections"]["language"]
+        ), name
 
 
 # The label of the Price Tracker's currencies field under Configure: the

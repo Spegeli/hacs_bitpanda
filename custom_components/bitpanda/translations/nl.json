@@ -113,11 +113,16 @@
       "portfolio": {
         "title": "Opties van het Portfolio",
         "description": "Om de API-sleutel te vervangen of de valuta te wijzigen, open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies je \"Herconfigureer\".",
-        "data": {
-          "language": "Taal van groepstitels en meldingen"
-        },
-        "data_description": {
-          "language": "Groepstitels en de eigen meldingen van de integratie gebruiken deze taal. Sensornamen volgen de systeemtaal van Home Assistant."
+        "sections": {
+          "language": {
+            "name": "Taal",
+            "data": {
+              "language": "Taal van groepstitels en meldingen"
+            },
+            "data_description": {
+              "language": "Groepstitels en de eigen meldingen van de integratie gebruiken deze taal. Sensornamen volgen de systeemtaal van Home Assistant."
+            }
+          }
         }
       }
     }

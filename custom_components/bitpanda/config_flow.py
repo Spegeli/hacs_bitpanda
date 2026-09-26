@@ -492,8 +492,10 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return {SUBENTRY_TYPE_PRICE_GROUP: PriceTrackerSubentryFlow}
 
 
-# The two sections of the Price Tracker's Configure form, in their order;
-# their names and their fields' texts are `options.step.price_tracker.sections`.
+# The sections of the Configure forms: the Price Tracker's two, in their
+# order, and the Portfolio's language, one of its own so that any later
+# option gets a section of its own too. Their names and their fields' texts
+# are `options.step.<step id>.sections`.
 _SECTION_CURRENCIES = "currencies"
 _SECTION_LANGUAGE = "language"
 # Both open: a section is the only way a Home Assistant form sets fields
@@ -508,9 +510,10 @@ class BitpandaOptionsFlow(config_entries.OptionsFlow):
     has texts of its own (`options.step.price_tracker`, `.portfolio`): the
     Price Tracker's extra currencies -- EUR is always there -- and the
     language of its own texts, each in a section of its own; the Portfolio's
-    language alone, as its key and currency change through Reconfigure.
-    Saving changes the entry's options -- flat, whatever sections the form
-    shows -- and its update listener reloads it (__init__.py).
+    language alone, in a section too, as its key and currency change through
+    Reconfigure. Saving changes the entry's options -- flat, whatever
+    sections the form shows -- and its update listener reloads it
+    (__init__.py).
     """
 
     async def async_step_init(
@@ -520,10 +523,12 @@ class BitpandaOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_price_tracker()
         return await self.async_step_portfolio()
 
-    async def _async_language_field(self) -> dict:
-        return _language_field(
+    async def _async_language_section(self) -> dict:
+        """The language of the entry's own texts, in its open section."""
+        field = _language_field(
             await async_shipped_languages(self.hass), entry_language(self.config_entry)
         )
+        return {vol.Required(_SECTION_LANGUAGE): section(vol.Schema(field), _OPEN)}
 
     async def async_step_price_tracker(
         self, user_input: dict[str, Any] | None = None
@@ -550,9 +555,7 @@ class BitpandaOptionsFlow(config_entries.OptionsFlow):
                         ),
                         _OPEN,
                     ),
-                    vol.Required(_SECTION_LANGUAGE): section(
-                        vol.Schema(await self._async_language_field()), _OPEN
-                    ),
+                    **await self._async_language_section(),
                 }
             ),
         )
@@ -560,10 +563,15 @@ class BitpandaOptionsFlow(config_entries.OptionsFlow):
     async def async_step_portfolio(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """The language in its section; the input arrives nested and is
+        stored flat, as ever."""
         if user_input is not None:
             return self.async_create_entry(
-                data={**self.config_entry.options, CONF_LANGUAGE: user_input[CONF_LANGUAGE]}
+                data={
+                    **self.config_entry.options,
+                    CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE],
+                }
             )
         return self.async_show_form(
-            step_id="portfolio", data_schema=vol.Schema(await self._async_language_field())
+            step_id="portfolio", data_schema=vol.Schema(await self._async_language_section())
         )

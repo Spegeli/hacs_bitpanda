@@ -826,8 +826,8 @@ async def _options_form(hass, entry: MockConfigEntry):
     return await hass.config_entries.options.async_init(entry.entry_id)
 
 
-# The Price Tracker's Configure form groups its fields in two sections, and
-# its input arrives nested by section; the Portfolio's single field has none.
+# Both Configure forms group their fields in sections, and their input
+# arrives nested by section: the Price Tracker's in two, the Portfolio's in one.
 def _section_schema(schema, key: str):
     """The fields of the section `key` of a form."""
     validator = dict(schema.schema)[key]
@@ -840,10 +840,15 @@ def _price_tracker_input(extra: list[str], language: str) -> dict:
     return {"currencies": {"extra_currencies": extra}, "language": {"language": language}}
 
 
-def _price_tracker_defaults(result) -> dict:
-    """What the Price Tracker's Configure form shows before anything is
-    touched: each section's defaults."""
-    return result["data_schema"]({"currencies": {}, "language": {}})
+def _portfolio_input(language: str) -> dict:
+    """What the Portfolio's Configure form sends: its one section."""
+    return {"language": {"language": language}}
+
+
+def _form_defaults(result) -> dict:
+    """What a Configure form shows before anything is touched: each
+    section's defaults."""
+    return result["data_schema"]({str(key): {} for key in result["data_schema"].schema})
 
 
 async def test_both_services_have_options(hass):
@@ -870,7 +875,7 @@ async def test_the_price_tracker_options_come_in_two_open_sections(hass):
     assert config["translation_key"] == "language"
     assert config.get("multiple", False) is False
     # The stored currencies, and English until the user picks another language.
-    assert _price_tracker_defaults(result) == {
+    assert _form_defaults(result) == {
         "currencies": {"extra_currencies": ["usd"]}, "language": {"language": "en"},
     }
 
@@ -910,7 +915,7 @@ async def test_options_change_the_extra_currencies(hass):
     entry = _price_tracker_entry(extra=["USD"])
     result = await _options_form(hass, entry)
     # The default travels lowercase (hassfest); the stored option stays USD.
-    assert _price_tracker_defaults(result)["currencies"]["extra_currencies"] == ["usd"]
+    assert _form_defaults(result)["currencies"]["extra_currencies"] == ["usd"]
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], _price_tracker_input(["gbp", "chf"], "en")
     )
@@ -942,43 +947,68 @@ async def test_the_price_tracker_options_store_the_language_and_reload(hass):
     listener.assert_called_once()
 
 
-async def test_the_portfolio_options_offer_only_the_language(hass):
-    """Its key and currency change through Reconfigure."""
+async def test_the_portfolio_options_offer_the_language_in_an_open_section(hass):
+    """Its only option, in a section like the Price Tracker's, so that any
+    later option gets a section of its own; its key and currency change
+    through Reconfigure."""
     result = await _options_form(hass, _portfolio_entry())
     assert result["step_id"] == "portfolio"
-    assert list(result["data_schema"].schema) == ["language"]
-    config = _selector_config(result["data_schema"], "language")
+    schema = result["data_schema"]
+    assert list(schema.schema) == ["language"]
+    assert dict(schema.schema)["language"].options == {"collapsed": False}
+    assert list(_section_schema(schema, "language").schema) == ["language"]
+    config = _selector_config(_section_schema(schema, "language"), "language")
     assert config["options"] == _LANGUAGES
     assert config["translation_key"] == "language"
-    assert result["data_schema"]({}) == {"language": "en"}
+    assert config.get("multiple", False) is False
+    assert _form_defaults(result) == {"language": {"language": "en"}}
 
 
-async def test_the_portfolio_options_store_the_language_and_reload(hass):
-    entry = _portfolio_entry()
+async def test_the_frontend_gets_the_portfolio_language_open_and_filled_in(hass, hass_client):
+    """Through Home Assistant's own options-flow API: one expandable
+    section, expanded, with the stored language as its default."""
+    entry = _with_options(_portfolio_entry(), language="de")
+    entry.add_to_hass(hass)
+    assert await async_setup_component(hass, "config", {})
+    client = await hass_client()
+    response = await client.post(
+        "/api/config/config_entries/options/flow", json={"handler": entry.entry_id}
+    )
+    shown = await response.json()
+    assert shown["step_id"] == "portfolio"
+    [field] = shown["data_schema"]
+    assert (field["name"], field["type"], field["expanded"]) == ("language", "expandable", True)
+    assert [(inner["name"], inner["default"]) for inner in field["schema"]] == [("language", "de")]
+
+
+async def test_the_portfolio_options_store_the_language_flat_and_reload(hass):
+    """The input arrives nested in its section and is stored flat, exactly
+    as before the section: an entry that chose a language keeps working,
+    and whatever else its options hold stays."""
+    entry = _with_options(_portfolio_entry(), language="de", other="kept")
     result = await _options_form(hass, entry)
+    assert _form_defaults(result) == {"language": {"language": "de"}}
     listener = AsyncMock()
     entry.add_update_listener(listener)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"language": "fr"}
+        result["flow_id"], _portfolio_input("fr")
     )
     await hass.async_block_till_done()
     assert result["type"] == _FLOW.CREATE_ENTRY
-    assert dict(entry.options) == {"language": "fr"}
+    assert dict(entry.options) == {"language": "fr", "other": "kept"}
     # The key and the currency stay where they are.
     assert dict(entry.data) == dict(_portfolio_entry().data)
     listener.assert_called_once()
 
 
 def _shown_language(result) -> str:
-    if result["step_id"] == "price_tracker":
-        return _price_tracker_defaults(result)["language"]["language"]
-    return result["data_schema"]({})["language"]
+    return _form_defaults(result)["language"]["language"]
 
 
 def _language_input(service: str, language: str) -> dict:
     if service == "price_tracker":
         return _price_tracker_input([], language)
-    return {"language": language}
+    return _portfolio_input(language)
 
 
 @pytest.mark.parametrize("service", ["price_tracker", "portfolio"])
@@ -992,7 +1022,7 @@ async def test_a_stored_language_no_longer_shipped_shows_english(hass):
     """So the form can still be saved unchanged: a default outside the
     options would be refused."""
     result = await _options_form(hass, _with_options(_portfolio_entry(), language="xx"))
-    assert result["data_schema"]({}) == {"language": "en"}
+    assert _form_defaults(result) == {"language": {"language": "en"}}
 
 
 @pytest.mark.parametrize("service", ["price_tracker", "portfolio"])
@@ -1102,4 +1132,4 @@ async def test_stored_currency_round_trips_through_the_options_form(hass):
     assert dict(entry.options) == {"extra_currencies": ["USD"]}
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert _price_tracker_defaults(result)["currencies"]["extra_currencies"] == ["usd"]
+    assert _form_defaults(result)["currencies"]["extra_currencies"] == ["usd"]

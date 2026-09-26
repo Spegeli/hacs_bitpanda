@@ -229,7 +229,9 @@ async def test_a_language_chosen_before_the_upgrade_is_kept(hass, legacy_api, no
     entry = _v1_entry(hass, wallets=["cryptocoin_BTC"])
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["step_id"] == "portfolio"
-    await hass.config_entries.options.async_configure(result["flow_id"], {"language": "de"})
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], {"language": {"language": "de"}}
+    )
     assert dict(entry.options) == {
         "tracked_assets": [], "tracked_wallets": ["cryptocoin_BTC"], "language": "de",
     }

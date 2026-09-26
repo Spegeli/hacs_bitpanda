@@ -113,11 +113,16 @@
       "portfolio": {
         "title": "Opcje Portfolio",
         "description": "Aby zastąpić klucz API lub zmienić walutę, otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio” i wybierz „Rekonfiguracja”.",
-        "data": {
-          "language": "Język tytułów grup i komunikatów"
-        },
-        "data_description": {
-          "language": "Tytuły grup i własne komunikaty integracji używają tego języka. Nazwy sensorów są w języku systemu Home Assistant."
+        "sections": {
+          "language": {
+            "name": "Język",
+            "data": {
+              "language": "Język tytułów grup i komunikatów"
+            },
+            "data_description": {
+              "language": "Tytuły grup i własne komunikaty integracji używają tego języka. Nazwy sensorów są w języku systemu Home Assistant."
+            }
+          }
         }
       }
     }

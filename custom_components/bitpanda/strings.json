@@ -113,11 +113,16 @@
       "portfolio": {
         "title": "Portfolio options",
         "description": "To replace the API key or change the currency, open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page and choose \"Reconfigure\".",
-        "data": {
-          "language": "Language of group titles and messages"
-        },
-        "data_description": {
-          "language": "Group titles and the integration's own messages use this language. Sensor names follow Home Assistant's system language."
+        "sections": {
+          "language": {
+            "name": "Language",
+            "data": {
+              "language": "Language of group titles and messages"
+            },
+            "data_description": {
+              "language": "Group titles and the integration's own messages use this language. Sensor names follow Home Assistant's system language."
+            }
+          }
         }
       }
     }

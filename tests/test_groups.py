@@ -210,9 +210,13 @@ async def test_known_group_titles_are_read_from_every_shipped_language(hass):
     """Reads the real translation files, not mocked: a category's known set
     holds this integration's own default title in every language it ships."""
     known = await async_known_group_titles(hass)
-    assert known["crypto"] == {"Cryptocurrencies", "Kryptowährungen", "Cryptomonnaies"}
-    assert known["metal"] == {"Precious metals", "Edelmetalle", "Métaux précieux"}
-    assert known["other"] == {"Other", "Sonstige", "Autres"}
+    assert known["crypto"] == {
+        "Cryptocurrencies", "Kryptowährungen", "Cryptomonnaies", "Cryptovaluta",
+    }
+    assert known["metal"] == {
+        "Precious metals", "Edelmetalle", "Métaux précieux", "Edelmetalen",
+    }
+    assert known["other"] == {"Other", "Sonstige", "Autres", "Overige"}
 
 
 async def test_a_group_titled_a_default_in_another_language_is_retitled(hass):

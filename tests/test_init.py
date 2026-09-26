@@ -9,7 +9,6 @@ import pytest
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentry, ConfigSubentryData
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
-from homeassistant.helpers.translation import async_translations_loaded
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
@@ -1182,9 +1181,10 @@ async def test_the_device_page_deletes_a_price_device(hass, price_api, hass_ws_c
 
 
 # What the device page's dialog shows for each refusal: the `message` of the
-# websocket error, in Home Assistant's language. The trailing "." of
-# strings.json is dropped, as Home Assistant drops it from a translated
-# exception message (translation.async_get_exception_message).
+# websocket error, in the entry's language (language.py) -- English unless
+# chosen otherwise under Configure, whatever language Home Assistant runs
+# in. The trailing "." of strings.json is dropped, as Home Assistant drops it
+# from a translated exception message (translation.async_get_exception_message).
 _REFUSALS = {
     "en": {
         "portfolio": (
@@ -1215,13 +1215,11 @@ _REFUSALS = {
 async def test_the_device_page_refuses_to_delete_the_portfolio_device(
     hass, portfolio_api, hass_ws_client, language
 ):
-    """In Home Assistant's language: the dialog shows the message as it
-    arrives, and Home Assistant itself would render it in English only."""
-    hass.config.language = language
-    entry = _portfolio_entry(hass)
+    """In the entry's language: the dialog shows the message as it arrives,
+    and Home Assistant itself would render it in English only. Home
+    Assistant runs in English here, so German is loaded only when asked for."""
+    entry = _portfolio_entry(hass, language=language)
     await _setup(hass, entry)
-    # Loaded at the integration's setup for Home Assistant's language.
-    assert async_translations_loaded(hass, {DOMAIN})
     device = _own_device(hass, entry, "portfolio")
 
     response = await _remove_through_the_device_page(hass, hass_ws_client, entry, device)
@@ -1238,8 +1236,7 @@ async def test_the_device_page_refuses_to_delete_the_portfolio_device(
 async def test_the_device_page_refuses_to_delete_a_held_wallet(
     hass, portfolio_api, hass_ws_client, language
 ):
-    hass.config.language = language
-    entry = _portfolio_entry(hass)
+    entry = _portfolio_entry(hass, language=language)
     await _setup(hass, entry)
     wallet = _own_device(hass, entry, "wallet", VSN)
 
@@ -1253,16 +1250,29 @@ async def test_the_device_page_refuses_to_delete_a_held_wallet(
     assert dr.async_get(hass).async_get(wallet.id) is not None
 
 
-async def test_a_refusal_after_a_runtime_language_switch_uses_the_new_language(
+async def test_a_refusal_is_english_by_default_whatever_language_home_assistant_runs_in(
     hass, portfolio_api, hass_ws_client
 ):
-    """The _async_refusal docstring promises the exceptions translations are
-    "loaded now if the language changed since" -- covering a language switch
-    with no restart (and so no re-setup), distinct from the parametrized
-    tests above, which set the language before setup."""
+    hass.config.language = "de"
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
-    hass.config.language = "de"
+    device = _own_device(hass, entry, "portfolio")
+
+    response = await _remove_through_the_device_page(hass, hass_ws_client, entry, device)
+
+    assert not response["success"]
+    assert response["error"]["message"] == _REFUSALS["en"]["portfolio"]
+    assert response["error"]["translation_key"] == "portfolio_device_not_removable"
+
+
+async def test_a_refusal_follows_a_language_switched_under_configure(
+    hass, portfolio_api, hass_ws_client
+):
+    """The language is read when the refusal is written, so the one chosen
+    last applies -- here after the reload that saving it causes."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    await _configure(hass, entry, {"language": "de"})
     device = _own_device(hass, entry, "portfolio")
 
     response = await _remove_through_the_device_page(hass, hass_ws_client, entry, device)

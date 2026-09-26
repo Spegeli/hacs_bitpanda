@@ -320,7 +320,7 @@ async def async_remove_config_entry_device(
     and its translation_domain/translation_key/translation_placeholders to
     the frontend, and the device page shows the message -- identical at
     this integration's 2025.5.0 floor and in a 2026.9.3 test image. The
-    message is in Home Assistant's language (see _async_refusal).
+    message is in the entry's language (see _async_refusal).
     """
     identifiers = device_identifiers(device_entry)
     entry_id = config_entry.entry_id
@@ -331,7 +331,7 @@ async def async_remove_config_entry_device(
                 async_remove_asset_from_group(hass, config_entry, asset_id)
         return True
     if portfolio_device_identifier(entry_id) in identifiers:
-        raise await _async_refusal(hass, "portfolio_device_not_removable")
+        raise await _async_refusal(hass, config_entry, "portfolio_device_not_removable")
     wallets = sorted(
         asset_id
         for identifier in identifiers
@@ -356,7 +356,9 @@ async def async_remove_config_entry_device(
             if record is not None
             else device_entry.name_by_user or device_entry.name
         )
-        raise await _async_refusal(hass, "held_wallet_not_removable", {"asset": asset_label})
+        raise await _async_refusal(
+            hass, config_entry, "held_wallet_not_removable", {"asset": asset_label}
+        )
     # The wallet manager keeps a wallet until its asset has been missing from
     # several refreshes, and would not create it again if the asset were
     # bought back in that time. A reload starts it afresh, and its emptied
@@ -367,23 +369,28 @@ async def async_remove_config_entry_device(
 
 
 async def _async_refusal(
-    hass: HomeAssistant, key: str, placeholders: dict[str, str] | None = None
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    key: str,
+    placeholders: dict[str, str] | None = None,
 ) -> HomeAssistantError:
-    """A refusal to delete a device, its message in Home Assistant's language.
+    """A refusal to delete a device of `entry`, its message in the entry's
+    language.
 
     The device page shows the error's message as it arrives, and Home
     Assistant renders a translated exception's message in English only
     (translation.async_get_exception_message, at 2025.5 as at 2026.9). So
-    the message is written here in Home Assistant's own language, from the
-    `exceptions` translations -- cached for that language since the
-    integration was set up, loaded now if the language changed since;
-    English stands in for a missing text -- the way Home Assistant renders
-    one: trailing full stop dropped, placeholders filled. The translation
-    fields stay, for a frontend that translates them itself. Without any
-    text, Home Assistant renders its English message as before.
+    the message is written here, from the `exceptions` translations, in the
+    entry's own language (language.py: English unless chosen otherwise under
+    Configure) -- read when the refusal is written, its translations loaded
+    now if not cached yet; English stands in for a missing text -- the way
+    Home Assistant renders one: trailing full stop dropped, placeholders
+    filled. The translation fields stay, for a frontend that translates
+    them itself. Without any text, Home Assistant renders its English
+    message as before.
     """
     translations = await async_get_translations(
-        hass, hass.config.language, "exceptions", {DOMAIN}
+        hass, entry_language(entry), "exceptions", {DOMAIN}
     )
     message = translations.get(f"component.{DOMAIN}.exceptions.{key}.message")
     if message:

@@ -325,8 +325,41 @@ def test_staking_is_the_staked_value_with_earn_attributes():
     assert sensor.extra_state_attributes == {
         "asset": "VSN", "asset_name": "Vision", "units": 75.0, "apr_percent": 5.44,
         "rewards_gross": 12.0, "rewards_fee": 2.4, "rewards_net": 9.6,
+        "rewards_net_value": 19.2,
         "rewards_count": 3, "rewards_last_at": "2026-09-22T17:16:35Z",
     }
+
+
+def test_the_net_rewards_are_valued_at_todays_price():
+    """As the Bitpanda app shows them: the net reward units at the price the
+    same /portfolio answer implies, value over units, in the Portfolio
+    currency and to the cent. Today's value of the coins -- no endpoint
+    prices the day they were paid out."""
+    rewards = _Coordinator({VSN["id"]: RewardTotals(
+        gross=2136.65, fee=371.12, net=1765.53, count=62, last_at="2026-09-22T17:16:35Z")})
+    holding = _vsn(balance=21466.95, available=0.0, value=826.72)
+    sensor = StakingSensor(_portfolio(**{VSN["id"]: holding}), _Coordinator(None), rewards,
+                           "eid", "EUR", VSN)
+    # 1,765.53 VSN at 826.72 / 21,466.95 EUR each: 67.9928... EUR.
+    assert sensor.extra_state_attributes["rewards_net_value"] == 67.99
+
+
+def test_the_net_rewards_have_no_value_while_the_price_is_unknown():
+    """Bitpanda sent no value, there are no units to divide it by, or the
+    asset's entry could not be read: the key is absent -- never None or 0 --
+    while the rewards themselves are shown."""
+    rewards = _Coordinator({VSN["id"]: RewardTotals(gross=12.0, fee=2.4, net=9.6, count=3)})
+    unreadable = _data()
+    unreadable.unparsed_assets = {VSN["id"]}
+    for data in (
+        _data(**{VSN["id"]: _vsn(value=None)}),
+        _data(**{VSN["id"]: _vsn(balance=0.0, available=0.0, value=0.0)}),
+        unreadable,
+    ):
+        sensor = StakingSensor(_Coordinator(data), _Coordinator(None), rewards, "eid", "EUR", VSN)
+        attributes = sensor.extra_state_attributes
+        assert "rewards_net_value" not in attributes
+        assert attributes["rewards_net"] == 9.6
 
 
 def test_apr_percent_keeps_every_decimal_the_api_sends():

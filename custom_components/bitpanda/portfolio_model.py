@@ -81,6 +81,20 @@ class Holding:
     def staked(self) -> float:
         return round(max(self.balance - self.available, 0.0), DECIMALS)
 
+    @property
+    def price(self) -> float | None:
+        """What one unit is worth in this answer: `value` over `balance`, the
+        proportion `_share` splits the value by. None while it cannot be
+        told -- the value is unknown, or there are no units to divide it by.
+
+        Unrounded: it is multiplied by a number of units, and rounded to
+        DECIMALS the price of a token worth a fraction of a cent would keep
+        only a few significant digits.
+        """
+        if self.value is None or self.balance <= 0:
+            return None
+        return self.value / self.balance
+
     def _share(self, units: float) -> float | None:
         if self.value is None:
             return None

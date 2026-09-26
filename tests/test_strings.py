@@ -745,42 +745,49 @@ _REWARD_LABELS = {
         "rewards_gross": "Belohnungen: brutto (Menge)",
         "rewards_fee": "Belohnungen: Gebühr (Menge)",
         "rewards_net": "Belohnungen: netto (Menge)",
+        "rewards_net_value": "Belohnungen: Wert netto (aktuell)",
     },
     "en": {
         "rewards_count": "Rewards: number of payouts",
         "rewards_gross": "Rewards: gross (quantity)",
         "rewards_fee": "Rewards: fee (quantity)",
         "rewards_net": "Rewards: net (quantity)",
+        "rewards_net_value": "Rewards: net value (current)",
     },
     "es": {
         "rewards_count": "Recompensas: número de pagos",
         "rewards_gross": "Recompensas: bruto (cantidad)",
         "rewards_fee": "Recompensas: comisión (cantidad)",
         "rewards_net": "Recompensas: neto (cantidad)",
+        "rewards_net_value": "Recompensas: valor neto (actual)",
     },
     "fr": {
         "rewards_count": "Récompenses\u00a0: nombre de versements",
         "rewards_gross": "Récompenses\u00a0: brut (quantité)",
         "rewards_fee": "Récompenses\u00a0: frais (quantité)",
         "rewards_net": "Récompenses\u00a0: net (quantité)",
+        "rewards_net_value": "Récompenses\u00a0: valeur nette (actuelle)",
     },
     "it": {
         "rewards_count": "Ricompense: numero di accrediti",
         "rewards_gross": "Ricompense: lordo (quantità)",
         "rewards_fee": "Ricompense: commissione (quantità)",
         "rewards_net": "Ricompense: netto (quantità)",
+        "rewards_net_value": "Ricompense: valore netto (attuale)",
     },
     "nl": {
         "rewards_count": "Beloningen: aantal uitbetalingen",
         "rewards_gross": "Beloningen: bruto (hoeveelheid)",
         "rewards_fee": "Beloningen: kosten (hoeveelheid)",
         "rewards_net": "Beloningen: netto (hoeveelheid)",
+        "rewards_net_value": "Beloningen: nettowaarde (actueel)",
     },
     "pl": {
         "rewards_count": "Nagrody: liczba wypłat",
         "rewards_gross": "Nagrody: brutto (ilość)",
         "rewards_fee": "Nagrody: opłata (ilość)",
         "rewards_net": "Nagrody: netto (ilość)",
+        "rewards_net_value": "Nagrody: wartość netto (bieżąca)",
     },
 }
 
@@ -788,8 +795,8 @@ _REWARD_LABELS = {
 def test_the_reward_attributes_say_what_they_count():
     """ "Rewards: count" passed for a sum of money. The count is the number
     of payouts; gross, fee and net are quantities of the asset, named with
-    the word the language uses for `units` ("Asset: Menge"). Only the labels
-    change: the keys, which templates use, stay."""
+    the word the language uses for `units` ("Asset: Menge"); the net value is
+    today's. Only the labels change: the keys, which templates use, stay."""
     assert sorted(_REWARD_LABELS) == _LANGUAGES
     for language, labels in _REWARD_LABELS.items():
         attributes = _load(f"translations/{language}.json")["entity"]["sensor"]["staking"][

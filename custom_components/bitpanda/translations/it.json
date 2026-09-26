@@ -317,6 +317,9 @@
           "rewards_net": {
             "name": "Ricompense: netto (quantità)"
           },
+          "rewards_net_value": {
+            "name": "Ricompense: valore netto (attuale)"
+          },
           "rewards_count": {
             "name": "Ricompense: numero di accrediti"
           },

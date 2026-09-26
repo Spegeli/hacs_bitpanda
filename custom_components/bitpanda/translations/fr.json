@@ -317,6 +317,9 @@
           "rewards_net": {
             "name": "Récompenses : net (quantité)"
           },
+          "rewards_net_value": {
+            "name": "Récompenses : valeur nette (actuelle)"
+          },
           "rewards_count": {
             "name": "Récompenses : nombre de versements"
           },

@@ -317,6 +317,9 @@
           "rewards_net": {
             "name": "Nagrody: netto (ilość)"
           },
+          "rewards_net_value": {
+            "name": "Nagrody: wartość netto (bieżąca)"
+          },
           "rewards_count": {
             "name": "Nagrody: liczba wypłat"
           },

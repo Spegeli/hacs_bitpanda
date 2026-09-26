@@ -83,6 +83,18 @@ def test_available_above_balance_is_clamped():
     assert holding.staking_value == 0.0
 
 
+def test_the_price_is_what_one_unit_is_worth_in_the_same_answer():
+    """The value over the units -- the proportion the value is split by --
+    unrounded: a cent-sized value of millions of units must not lose it."""
+    holding = Holding(asset_id=VSN, balance=21466.95, available=0.0, value=826.72)
+    assert holding.price == 826.72 / 21466.95
+
+
+def test_the_price_is_unknown_without_a_value_or_without_units():
+    assert Holding(asset_id=VSN, balance=10.0, available=10.0, value=None).price is None
+    assert Holding(asset_id=VSN, balance=0.0, available=0.0, value=0.0).price is None
+
+
 # --- parse_portfolio ------------------------------------------------------------
 
 

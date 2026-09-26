@@ -175,13 +175,15 @@ Home Assistant lists these in the entity's Details view (older versions: the Att
 | Sensor | Attributes |
 |---|---|
 | Balance (available) | `asset`, `asset_name`, `asset_isin`, `units` (tradable units). Without a Balance (total) sensor also `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
-| Balance (staking) | `asset`, `asset_name`, `asset_isin`, `units` (staked), `apr_percent`, `rewards_gross`, `rewards_fee`, `rewards_net`, `rewards_count`, `rewards_last_at` |
+| Balance (staking) | `asset`, `asset_name`, `asset_isin`, `units` (staked), `apr_percent`, `rewards_gross`, `rewards_fee`, `rewards_net`, `rewards_net_value`, `rewards_count`, `rewards_last_at` |
 | Balance (total) | `asset`, `asset_name`, `asset_isin`, `units` (whole position), `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
 | Portfolio Cash Plus | `eur`, `usd`, `gbp` — the amount of each held Cash Plus product in its own currency |
 | Price (EUR) | `asset`, `asset_name`, `asset_isin`, `trading_pair`, `change_24h_pct`, `price_24h_ago` |
 | Price (other currencies) | as EUR, plus `conversion` (status `no_rate` until the first ECB rate is loaded), `conversion_rate`, `rate_date`, `rate_source` (`ECB`) |
 
 `asset_isin`, the ISIN, is there for stocks, ETFs and ETCs only.
+
+The lifetime reward amounts `rewards_gross`, `rewards_fee` and `rewards_net` are in units of the asset, and `rewards_count` is the number of payouts; `rewards_net_value` is what the net rewards are worth at today's price, as the Bitpanda app shows it — not their value when they were paid out.
 
 ---
 

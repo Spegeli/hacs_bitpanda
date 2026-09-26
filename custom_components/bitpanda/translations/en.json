@@ -317,6 +317,9 @@
           "rewards_net": {
             "name": "Rewards: net (quantity)"
           },
+          "rewards_net_value": {
+            "name": "Rewards: net value (current)"
+          },
           "rewards_count": {
             "name": "Rewards: number of payouts"
           },

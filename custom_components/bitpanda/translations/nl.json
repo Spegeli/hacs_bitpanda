@@ -317,6 +317,9 @@
           "rewards_net": {
             "name": "Beloningen: netto (hoeveelheid)"
           },
+          "rewards_net_value": {
+            "name": "Beloningen: nettowaarde (actueel)"
+          },
           "rewards_count": {
             "name": "Beloningen: aantal uitbetalingen"
           },

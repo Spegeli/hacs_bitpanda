@@ -351,11 +351,20 @@ class StakingSensor(_WalletPart):
             attrs["apr_percent"] = round(apr * 100, DECIMALS)
         # After a failed refresh `data` still holds the last complete totals;
         # a listing that could not be paged completely never replaces them.
+        # Gross, fee and net are units of the asset; `count` counts payouts.
         rewards = (self._rewards.data or {}).get(self._asset_id)
         if rewards is not None and rewards.count:
             attrs["rewards_gross"] = rewards.gross
             attrs["rewards_fee"] = rewards.fee
             attrs["rewards_net"] = rewards.net
+            # What the net units are worth today, in the Portfolio currency,
+            # at the price this /portfolio answer implies -- as the Bitpanda
+            # app shows it. Never their value when paid out: no endpoint
+            # prices a past date.
+            holding = self._holding
+            price = None if holding is None else holding.price
+            if price is not None:
+                attrs["rewards_net_value"] = round(rewards.net * price, 2)
             attrs["rewards_count"] = rewards.count
             attrs["rewards_last_at"] = rewards.last_at
         return attrs

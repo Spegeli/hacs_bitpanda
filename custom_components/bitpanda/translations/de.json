@@ -317,6 +317,9 @@
           "rewards_net": {
             "name": "Belohnungen: netto (Menge)"
           },
+          "rewards_net_value": {
+            "name": "Belohnungen: Wert netto (aktuell)"
+          },
           "rewards_count": {
             "name": "Belohnungen: Anzahl Auszahlungen"
           },

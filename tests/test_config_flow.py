@@ -173,6 +173,16 @@ async def test_portfolio_maps_a_currency_listing_failure(hass):
     assert result["errors"]["base"] == "cannot_connect"
 
 
+@pytest.mark.parametrize(
+    "currencies", [[], [{"symbol": "JPY", "id": "jpy-id"}]], ids=["empty", "unsupported"]
+)
+async def test_portfolio_without_a_supported_currency_cannot_connect(hass, currencies):
+    """Nothing to choose from: Bitpanda's answer is broken."""
+    result = await _submit_key(hass, await _portfolio_form(hass), "good", currencies=currencies)
+    assert result["step_id"] == "portfolio"
+    assert result["errors"]["base"] == "cannot_connect"
+
+
 async def test_portfolio_unexpected_error_is_logged_by_type_only(hass, caplog):
     result = await _portfolio_form(hass)
     with patch(
@@ -252,6 +262,22 @@ async def test_price_tracker_creates_a_keyless_entry(hass):
     assert dict(entry.options) == {"extra_currencies": ["CHF", "USD"]}
 
 
+async def test_a_second_price_tracker_aborts_even_from_an_open_dialog(hass):
+    """As for the Portfolio: the fixed unique_id is checked again when the
+    form is submitted."""
+    result = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "price_tracker"}
+    )
+    assert result["step_id"] == "price_tracker"
+    _price_tracker_entry().add_to_hass(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"extra_currencies": []}
+    )
+    assert result["type"] == _FLOW.ABORT
+    assert result["reason"] == "already_configured"
+
+
 # --- Import (used by the version 1 migration) --------------------------------------
 
 
@@ -292,6 +318,28 @@ async def test_imported_groups_are_titled_in_the_language_home_assistant_runs_in
     )
     titles = {s.unique_id: s.title for s in result["result"].subentries.values()}
     assert titles == {"crypto": "Kryptowährungen", "index": "Krypto-Indizes"}
+
+
+@pytest.mark.parametrize("extra", [{}, {"legacy_adopt": {}}], ids=["absent", "empty"])
+async def test_an_import_without_legacy_entities_stores_no_adoption_list(hass, extra):
+    """Nothing for the new entry to adopt, so nothing is stored."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_IMPORT},
+        data={"assets": [_asset("BTC")], **extra},
+    )
+    assert dict(result["result"].data) == {"entry_type": "price_tracker"}
+
+
+async def test_an_import_keeps_only_the_supported_extra_currencies(hass):
+    """EUR is always there, not an extra; an unknown code is dropped; the
+    rest is stored upper case in the fixed order."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_IMPORT},
+        data={"assets": [_asset("BTC")], "extra_currencies": ["USD", "EUR", "JPY", "chf"]},
+    )
+    assert dict(result["result"].options) == {"extra_currencies": ["CHF", "USD"]}
 
 
 async def test_import_aborts_when_a_price_tracker_exists(hass):
@@ -580,6 +628,19 @@ async def test_currency_listing_failure_maps_to_cannot_connect(hass):
     with patch(f"{_CLIENT}async_get_currencies", AsyncMock(side_effect=BitpandaApiError("x"))):
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {"currency": "usd"})
     assert result["errors"]["base"] == "cannot_connect"
+
+
+async def test_a_rate_limited_currency_listing_on_reconfigure_says_so(hass):
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    result = await entry.start_reconfigure_flow(hass)
+    with patch(
+        f"{_CLIENT}async_get_currencies", AsyncMock(side_effect=BitpandaRateLimitError("x"))
+    ):
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"currency": "usd"})
+    assert result["step_id"] == "reconfigure"
+    assert result["errors"]["base"] == "rate_limited"
+    assert entry.data["currency"] == "EUR"
 
 
 async def test_the_price_tracker_has_nothing_to_reconfigure(hass):

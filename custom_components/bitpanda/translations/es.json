@@ -386,6 +386,9 @@
     "update_failed_http_status": {
       "message": "No se han podido obtener los datos de Bitpanda: {path} ha respondido con el estado HTTP {status}."
     },
+    "update_failed_rate_limited": {
+      "message": "No se han podido obtener los datos de Bitpanda: demasiadas solicitudes para {path}."
+    },
     "update_failed_unreadable": {
       "message": "No se han podido obtener los datos de Bitpanda: la respuesta de {path} no se puede leer."
     },

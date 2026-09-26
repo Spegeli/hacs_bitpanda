@@ -386,6 +386,9 @@
     "update_failed_http_status": {
       "message": "Daten von Bitpanda konnten nicht abgerufen werden: {path} hat mit HTTP-Status {status} geantwortet."
     },
+    "update_failed_rate_limited": {
+      "message": "Daten von Bitpanda konnten nicht abgerufen werden: zu viele Anfragen für {path}."
+    },
     "update_failed_unreadable": {
       "message": "Daten von Bitpanda konnten nicht abgerufen werden: Die Antwort von {path} war nicht lesbar."
     },

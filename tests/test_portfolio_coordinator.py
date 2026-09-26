@@ -140,6 +140,7 @@ async def test_portfolio_error_fails_the_update_before_any_lookup(hass):
         ("timeout", None, "update_failed_timeout", {"path": "/portfolio"}),
         ("connection", None, "update_failed_connection", {"path": "/portfolio"}),
         ("http_status", 503, "update_failed_http_status", {"path": "/portfolio", "status": "503"}),
+        ("rate_limited", 429, "update_failed_rate_limited", {"path": "/portfolio"}),
         ("unreadable", None, "update_failed_unreadable", {"path": "/portfolio"}),
         ("incomplete_listing", None, "update_failed_incomplete_listing", {"path": "/portfolio"}),
     ],

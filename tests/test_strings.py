@@ -281,12 +281,22 @@ def _failure_texts() -> dict[str, list[tuple[str, dict[str, str] | None]]]:
 
 
 def test_each_kind_of_failed_request_has_a_text_of_its_own():
+    """Every kind has a text of its own for Bitpanda's requests. The ECB
+    fetch answers no listing and has no rate limit of its own -- a 429 from
+    it is an HTTP status -- so those two kinds, like a failure without a
+    kind, get its plain text."""
     texts = _failure_texts()
-    portfolio_keys = [key for key, _ in texts["portfolio_coordinator"]]
-    assert len(set(portfolio_keys)) == len(API_ERROR_KINDS) + 1
-    # The ECB answers no listing: every other kind has a text of its own.
-    ecb_keys = [key for key, _ in texts["price_coordinator"]]
-    assert len(set(ecb_keys)) == len(API_ERROR_KINDS)
+    kinds = [*API_ERROR_KINDS, None]
+    bitpanda = dict(zip(kinds, (key for key, _ in texts["portfolio_coordinator"])))
+    assert len(set(bitpanda.values())) == len(kinds)
+    assert bitpanda[None] == "update_failed"
+    assert bitpanda["rate_limited"] == "update_failed_rate_limited"
+    ecb = dict(zip(kinds, (key for key, _ in texts["price_coordinator"])))
+    plain = {"incomplete_listing", "rate_limited", None}
+    assert {ecb[kind] for kind in plain} == {"ecb_rates_failed"}
+    own = [ecb[kind] for kind in kinds if kind not in plain]
+    assert len(set(own)) == len(own) == 4
+    assert "ecb_rates_failed" not in own
 
 
 def test_every_failure_text_has_exactly_the_placeholders_the_code_fills_in():

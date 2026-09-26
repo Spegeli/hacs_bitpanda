@@ -26,7 +26,11 @@ from custom_components.bitpanda import (
     async_remove_config_entry_device,
     sensor,
 )
-from custom_components.bitpanda.api import BitpandaApiError, BitpandaAuthError
+from custom_components.bitpanda.api import (
+    BitpandaApiError,
+    BitpandaAuthError,
+    BitpandaRateLimitError,
+)
 from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.const import DOMAIN, REWARDS_UPDATE_INTERVAL
 from custom_components.bitpanda.devices import find_entry_device
@@ -563,6 +567,22 @@ async def test_a_failed_first_portfolio_refresh_retries_with_a_translated_reason
     assert entry.reason == (
         "Could not fetch data from Bitpanda: /portfolio answered with HTTP status 503"
     )
+
+
+@_FIRST_REFRESH
+async def test_a_rate_limited_first_portfolio_refresh_says_so(hass, portfolio_api, first_refresh):
+    """A 429 has a text of its own, the request path its only placeholder --
+    not "answered with HTTP status 429"."""
+    portfolio_api.side_effect = BitpandaRateLimitError(
+        "Rate limited on /portfolio", kind="rate_limited", path="/portfolio", status=429
+    )
+    entry = _portfolio_entry(hass)
+    with _home_assistant_first_refresh(first_refresh):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    assert entry.error_reason_translation_key == "update_failed_rate_limited"
+    assert entry.error_reason_translation_placeholders == {"path": "/portfolio"}
+    assert entry.reason == "Could not fetch data from Bitpanda: too many requests for /portfolio"
 
 
 async def test_the_translated_not_ready_is_raised_from_none():

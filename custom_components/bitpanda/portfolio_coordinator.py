@@ -30,6 +30,7 @@ from .const import (
     ERROR_CONNECTION,
     ERROR_HTTP_STATUS,
     ERROR_INCOMPLETE_LISTING,
+    ERROR_RATE_LIMITED,
     ERROR_TIMEOUT,
     ERROR_UNREADABLE,
     PORTFOLIO_TIMEFRAMES,
@@ -75,6 +76,7 @@ _UPDATE_FAILED_KEYS = {
     ERROR_TIMEOUT: "update_failed_timeout",
     ERROR_CONNECTION: "update_failed_connection",
     ERROR_HTTP_STATUS: "update_failed_http_status",
+    ERROR_RATE_LIMITED: "update_failed_rate_limited",
     ERROR_UNREADABLE: "update_failed_unreadable",
     ERROR_INCOMPLETE_LISTING: "update_failed_incomplete_listing",
 }
@@ -82,10 +84,11 @@ _UPDATE_FAILED_KEYS = {
 
 def _update_failed(err: BitpandaApiError) -> UpdateFailed:
     """A failed request, translated by what failed: its placeholders carry
-    no words -- the request path and an HTTP status -- so the whole message
-    is in the reader's language; the client's English message is for the
-    log alone. A failure that does not say enough to fill its text in (no
-    kind, path or status) gets the plain `update_failed`."""
+    no words -- the request path, and the HTTP status of a failed status --
+    so the whole message is in the reader's language; the client's English
+    message is for the log alone. A rate limit (429) has a text of its own,
+    with the path alone. A failure that does not say enough to fill its text
+    in (no kind, path or status) gets the plain `update_failed`."""
     key = _UPDATE_FAILED_KEYS.get(err.kind)
     placeholders: dict[str, str | int | None] = {"path": err.path}
     if err.kind == ERROR_HTTP_STATUS:

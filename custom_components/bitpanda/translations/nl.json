@@ -386,6 +386,9 @@
     "update_failed_http_status": {
       "message": "Kan geen gegevens ophalen bij Bitpanda: {path} antwoordde met HTTP-status {status}."
     },
+    "update_failed_rate_limited": {
+      "message": "Kan geen gegevens ophalen bij Bitpanda: te veel verzoeken voor {path}."
+    },
     "update_failed_unreadable": {
       "message": "Kan geen gegevens ophalen bij Bitpanda: het antwoord van {path} was onleesbaar."
     },

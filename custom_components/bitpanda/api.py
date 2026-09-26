@@ -17,6 +17,7 @@ from .const import (
     ERROR_CONNECTION,
     ERROR_HTTP_STATUS,
     ERROR_INCOMPLETE_LISTING,
+    ERROR_RATE_LIMITED,
     ERROR_TIMEOUT,
     ERROR_UNREADABLE,
     MAX_PAGE_SIZE,
@@ -76,7 +77,8 @@ class BitpandaApiError(Exception):
     words too, for a translated text (portfolio_coordinator._update_failed):
     `kind`, one of const.API_ERROR_KINDS -- None when raised outside the
     client --, `path`, the request path, and `status`, the HTTP status of an
-    ERROR_HTTP_STATUS. None of them ever holds request data.
+    ERROR_HTTP_STATUS or ERROR_RATE_LIMITED (429). None of them ever holds
+    request data.
     """
 
     def __init__(
@@ -174,7 +176,7 @@ class BitpandaApiClient:
                 if status == 429:
                     raise BitpandaRateLimitError(
                         f"Rate limited on {path}",
-                        kind=ERROR_HTTP_STATUS, path=path, status=status,
+                        kind=ERROR_RATE_LIMITED, path=path, status=status,
                     )
                 response.raise_for_status()
                 return await response.json()

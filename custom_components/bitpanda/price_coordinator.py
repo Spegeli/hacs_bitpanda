@@ -39,8 +39,9 @@ _MAX_BACKOFF = 16
 # currencies have no value at all.
 _ECB_RETRY = timedelta(minutes=15)
 
-# The text of each kind of failed ECB fetch (const.API_ERROR_KINDS; the ECB
-# answers no listing, so never ERROR_INCOMPLETE_LISTING).
+# The text of each kind of failed ECB fetch (const.API_ERROR_KINDS). The ECB
+# answers no listing and has no rate limit of its own -- a 429 from it is an
+# HTTP status -- so never ERROR_INCOMPLETE_LISTING or ERROR_RATE_LIMITED.
 _ECB_FAILED_KEYS = {
     ERROR_TIMEOUT: "ecb_rates_failed_timeout",
     ERROR_CONNECTION: "ecb_rates_failed_connection",

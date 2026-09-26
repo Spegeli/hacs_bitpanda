@@ -386,6 +386,9 @@
     "update_failed_http_status": {
       "message": "Nie można pobrać danych z platformy Bitpanda: odpowiedź z {path} ma status HTTP {status}."
     },
+    "update_failed_rate_limited": {
+      "message": "Nie można pobrać danych z platformy Bitpanda: zbyt wiele żądań do {path}."
+    },
     "update_failed_unreadable": {
       "message": "Nie można pobrać danych z platformy Bitpanda: nie udało się odczytać odpowiedzi z {path}."
     },

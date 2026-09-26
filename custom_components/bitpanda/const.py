@@ -15,17 +15,21 @@ MAX_PAGE_SIZE = 100
 
 # What made a request fail, as api.py and ecb.py report it beside their
 # English message for the log. Each kind has a translated text of its own
-# (exceptions.update_failed_<kind>, exceptions.ecb_rates_failed_<kind>),
-# whose only placeholders carry no words: the request path, an HTTP status.
+# (exceptions.update_failed_<kind>, exceptions.ecb_rates_failed_<kind> for
+# the kinds an ECB fetch can have), whose only placeholders carry no words:
+# the request path, an HTTP status. A 429 from Bitpanda is ERROR_RATE_LIMITED,
+# not an HTTP status.
 ERROR_TIMEOUT = "timeout"
 ERROR_CONNECTION = "connection"
 ERROR_HTTP_STATUS = "http_status"
+ERROR_RATE_LIMITED = "rate_limited"
 ERROR_UNREADABLE = "unreadable"
 ERROR_INCOMPLETE_LISTING = "incomplete_listing"
 API_ERROR_KINDS: tuple[str, ...] = (
     ERROR_TIMEOUT,
     ERROR_CONNECTION,
     ERROR_HTTP_STATUS,
+    ERROR_RATE_LIMITED,
     ERROR_UNREADABLE,
     ERROR_INCOMPLETE_LISTING,
 )

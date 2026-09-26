@@ -386,6 +386,9 @@
     "update_failed_http_status": {
       "message": "Could not fetch data from Bitpanda: {path} answered with HTTP status {status}."
     },
+    "update_failed_rate_limited": {
+      "message": "Could not fetch data from Bitpanda: too many requests for {path}."
+    },
     "update_failed_unreadable": {
       "message": "Could not fetch data from Bitpanda: the answer from {path} could not be read."
     },

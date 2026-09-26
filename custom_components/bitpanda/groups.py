@@ -40,8 +40,10 @@ from .const import (
 
 _TITLE_KEY = f"component.{DOMAIN}.selector.asset_group.options."
 
-# Read once per process: the file names under here are this integration's own
-# shipped languages, and do not change at runtime.
+# The file names under here are this integration's own shipped languages and
+# do not change at runtime, but the path being fixed does not make the read
+# itself a one-time cost: _shipped_languages() globs this directory in the
+# executor at every setup of either service, not once per process.
 _TRANSLATIONS_DIR = Path(__file__).parent / "translations"
 
 

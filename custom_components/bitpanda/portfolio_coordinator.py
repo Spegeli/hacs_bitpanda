@@ -53,11 +53,16 @@ from .portfolio_model import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Empty /portfolio answers in a row, per Portfolio entry, since the last one
-# taken as the truth (see PortfolioCoordinator): an _EmptyStreak. In
-# hass.data rather than on the coordinator, so the streak outlives a reload
-# or a failed setup -- but not the entry itself (async_forget_empty_answers).
+# What the check of empty /portfolio answers (see PortfolioCoordinator)
+# keeps per Portfolio entry: the empty answers in a row since the last one
+# taken as the truth, an _EmptyStreak, and whether the last answer taken as
+# the truth listed anything. In hass.data rather than on the coordinator, so
+# both outlive a reload -- a currency change's included -- or a failed setup,
+# but not the entry itself (async_forget_empty_answers). Nor a restart:
+# hass.data starts empty, and until the first answer taken as the truth the
+# registered wallets alone tell whether the account listed something.
 _EMPTY_ANSWERS = f"{DOMAIN}_empty_portfolio_answers"
+_LISTED = f"{DOMAIN}_portfolio_listed"
 
 
 @dataclass
@@ -70,8 +75,11 @@ class _EmptyStreak:
 
 @callback
 def async_forget_empty_answers(hass: HomeAssistant, entry_id: str) -> None:
-    """Drop the count of empty answers of an entry that is being removed."""
+    """Drop what the check of empty answers keeps of an entry that is being
+    removed: its count of empty answers, and whether its account listed
+    anything."""
     hass.data.get(_EMPTY_ANSWERS, {}).pop(entry_id, None)
+    hass.data.get(_LISTED, {}).pop(entry_id, None)
 
 
 def _auth_failed() -> ConfigEntryAuthFailed:
@@ -122,23 +130,27 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
 
     A completely empty answer -- no asset and no fiat entry at all -- from
     an account that listed something before is far more likely a glitch at
-    Bitpanda than a sale of everything. Listed something before: the last
-    answer this coordinator took as the truth did, or, for its first answer
-    -- after a restart or a reload -- wallets of this entry are registered.
-    Such an answer fails the update instead: the sensors go unavailable,
-    and the wallet manager, which acts only on successful refreshes, counts
-    no miss and removes nothing. Only an empty answer that makes
-    WALLET_REMOVAL_MISSES of them in a row, WALLET_REMOVAL_TIME after the
-    first was asked for (portfolio_model.confirmed), is taken as the truth:
-    Total 0, and from then on every empty answer is too, and the wallets
-    count as missing as usual. At the regular pace the third answer
-    confirms; refreshes by hand or a reload bring answers sooner, and they
-    count, but never confirm sooner. The streak lives in hass.data, so a
-    reload -- or a setup that is retried -- goes on where the last
-    coordinator stopped. A failed request neither counts nor resets it; any
-    answer taken as the truth clears it. An empty first answer with no
-    wallet registered -- a new, empty account -- is the truth at once, so
-    its setup works.
+    Bitpanda than a sale of everything. Such an answer fails the update
+    instead: the sensors go unavailable, and the wallet manager, which acts
+    only on successful refreshes, counts no miss and removes nothing. Only
+    an empty answer that makes WALLET_REMOVAL_MISSES of them in a row,
+    WALLET_REMOVAL_TIME after the first was asked for
+    (portfolio_model.confirmed), is taken as the truth: Total 0, and from
+    then on every empty answer is too, and the wallets count as missing as
+    usual. At the regular pace the third answer confirms; refreshes by hand
+    or a reload bring answers sooner, and they count, but never confirm
+    sooner. A failed request neither counts nor resets the streak; any
+    answer taken as the truth clears it.
+
+    Listed something before: the last answer taken as the truth for this
+    entry listed holdings or fiat. That and the streak are kept in
+    hass.data, so a reload -- a currency change's too, whose purge has just
+    removed the wallets -- or a setup that is retried goes on where the last
+    coordinator stopped. hass.data does not survive a restart, though: until
+    the first answer taken as the truth after one, the registered wallets of
+    this entry stand in, and an account that listed fiat alone has none. An
+    empty answer from an account that never listed anything -- a new, empty
+    account -- is the truth at once, so its setup works.
 
     Every answer carries the time it was asked for (PortfolioData.
     requested_at, Home Assistant's clock), by which the wallet manager times
@@ -165,9 +177,6 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
         self._client = client
         self._currency_id = currency_id
         self._directory = directory
-        # Whether the last answer this coordinator took as the truth listed
-        # anything; None before its first (see the class docstring).
-        self._listed: bool | None = None
 
     async def _async_update_data(self) -> PortfolioData:
         # When the answer was asked for -- not when it arrived, which a slow
@@ -198,11 +207,17 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
         self, entries: list[dict[str, Any]], requested_at: datetime
     ) -> None:
         """Raise UpdateFailed for an empty answer not confirmed yet; count
-        or clear the empty answers in a row (see the class docstring)."""
+        or clear the empty answers in a row, and remember whether the answer
+        taken as the truth listed anything (see the class docstring)."""
         streaks: dict[str, _EmptyStreak] = self.hass.data.setdefault(_EMPTY_ANSWERS, {})
+        listed: dict[str, bool] = self.hass.data.setdefault(_LISTED, {})
         entry_id = self.config_entry.entry_id
         empty = lists_nothing(entries)
-        if empty and (self._listed if self._listed is not None else self._has_wallets()):
+        # None before the first answer taken as the truth since Home
+        # Assistant started -- hass.data does not survive a restart -- when
+        # the registered wallets stand in.
+        remembered = listed.get(entry_id)
+        if empty and (remembered if remembered is not None else self._has_wallets()):
             streak = streaks.get(entry_id) or _EmptyStreak(count=0, since=requested_at)
             streak.count += 1
             if not confirmed(streak.count, streak.since, requested_at):
@@ -211,7 +226,7 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
                     translation_domain=DOMAIN, translation_key="portfolio_empty"
                 )
         streaks.pop(entry_id, None)
-        self._listed = not empty
+        listed[entry_id] = not empty
 
     def _has_wallets(self) -> bool:
         """Whether wallets of this entry are registered -- wallet, staking

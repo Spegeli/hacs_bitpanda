@@ -366,11 +366,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) ->
 
 async def async_remove_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> None:
     """Forget what outlived the entry's setups: its count of empty
-    /portfolio answers, kept in hass.data across reloads; the Price
-    Tracker's slow-interval repair issue with the Price Tracker; each repair
-    issue about what blocks the upgrade of a version 1 entry, once its cause
-    went with this entry -- and, with the last Bitpanda entry, the upgrade's
-    repair issues (migration.py).
+    /portfolio answers and whether its account listed anything, kept in
+    hass.data across reloads; the Price Tracker's slow-interval repair issue
+    with the Price Tracker; each repair issue about what blocks the upgrade
+    of a version 1 entry, once its cause went with this entry -- and, with
+    the last Bitpanda entry, the upgrade's repair issues (migration.py).
 
     The entry itself is left out when looking for another one: Home
     Assistant 2025.5 has already dropped it from its entries when this

@@ -684,18 +684,61 @@ async def test_the_count_of_empty_answers_survives_a_reload(hass, portfolio_api,
     assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
 
 
-async def test_removing_the_portfolio_leaves_no_count_of_empty_answers(hass, portfolio_api, freezer):
-    """The count outlives reloads and retried setups, not the entry."""
+_BCPEUR = _fixture("BCPEUR")
+# Answers of accounts that have no wallet registered although they list
+# something: holdings of Cash Plus alone, which gets no wallet, or fiat alone.
+_WALLETLESS_ANSWERS = {
+    "cash_plus_holdings": [
+        {
+            "asset_id": _BCPEUR["id"],
+            "balance": {"value": "250.75000000"},
+            "available_balance": {"value": "250.75000000"},
+            "currency_balance": {"value": "250.75"},
+        },
+    ],
+    "fiat_only": [{"currency_id": _EUR_ID, "balance": {"value": "10.00"}}],
+}
+
+
+@pytest.mark.parametrize("listed", list(_WALLETLESS_ANSWERS))
+async def test_an_empty_answer_after_a_reload_waits_although_no_wallet_is_registered(
+    hass, portfolio_api, freezer, listed
+):
+    """What the account listed before the reload is remembered, wallets or
+    none: an empty answer after it leaves the Portfolio unavailable until
+    three answers in a row, at the usual pace, confirm it."""
+    portfolio_api.return_value = _WALLETLESS_ANSWERS[listed]
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    assert _value(hass, "sensor.bitpanda_portfolio_total") > 0
+    devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    assert [device.name for device in devices] == ["Portfolio"]
+    portfolio_api.return_value = []
+
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    for _ in range(2):
+        assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unavailable"
+        await _next_refresh(hass, freezer)
+    assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
+
+
+async def test_removing_the_portfolio_forgets_its_empty_answers_and_what_it_listed(
+    hass, portfolio_api, freezer
+):
+    """Both outlive reloads and retried setups, not the entry."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
     portfolio_api.return_value = []
     await _next_refresh(hass, freezer)
     assert hass.data["bitpanda_empty_portfolio_answers"][entry.entry_id].count == 1
+    assert hass.data["bitpanda_portfolio_listed"][entry.entry_id] is True
 
     await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
 
     assert entry.entry_id not in hass.data["bitpanda_empty_portfolio_answers"]
+    assert entry.entry_id not in hass.data["bitpanda_portfolio_listed"]
 
 
 async def test_a_wallet_may_be_deleted_while_an_empty_answer_awaits_confirmation(

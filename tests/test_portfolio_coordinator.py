@@ -71,9 +71,9 @@ class _EarnClient:
 
 # The coordinators run here with their update method only: no refresh is
 # scheduled and nothing listens. The Portfolio coordinator needs a Home
-# Assistant instance and its entry (it keeps the count of empty answers in
-# hass.data and looks for registered wallets); the Earn coordinator needs
-# neither.
+# Assistant instance and its entry (it keeps the count of empty answers, and
+# whether the account listed anything, in hass.data and looks for registered
+# wallets); the Earn coordinator needs neither.
 
 
 def _entry(hass) -> MockConfigEntry:
@@ -190,8 +190,8 @@ def _portfolio(hass, entries=_ENTRIES, entry=None) -> tuple[_Client, PortfolioCo
 
 def _register_wallet(hass, entry) -> None:
     """A wallet of `entry` in the entity registry: the account listed
-    something before this coordinator's time -- before a restart or a
-    reload."""
+    something before Home Assistant started -- the only sign of it that a
+    restart leaves."""
     er.async_get(hass).async_get_or_create(
         "sensor", DOMAIN, f"{entry.entry_id}_wallet_{VSN}", config_entry=entry
     )
@@ -219,8 +219,9 @@ async def test_an_empty_first_answer_of_a_new_account_is_the_truth(hass):
 
 
 async def test_an_empty_first_answer_waits_while_wallets_are_registered(hass, freezer):
-    """After a restart or a reload of an account that listed something, an
-    empty first answer counts like any sudden empty answer."""
+    """After a restart of an account that listed something -- nothing kept
+    of it but its registered wallets -- an empty first answer counts like any
+    sudden empty answer."""
     entry = _entry(hass)
     _register_wallet(hass, entry)
     _, coordinator = _portfolio(hass, [], entry)
@@ -375,6 +376,37 @@ async def test_only_entries_of_no_known_shape_are_an_empty_answer(hass):
     await coordinator._async_update_data()
     client.entries = [{"something": "else"}]
     await _refused(coordinator)
+
+
+# --- What the account listed outlives a reload -----------------------------------
+#
+# A reload starts a new coordinator for the same entry. No wallet is
+# registered in these tests, as for an account that listed fiat alone, or
+# right after a currency change has purged the wallets.
+
+
+@pytest.mark.parametrize(
+    "listed", [[_ENTRIES[0]], [_ENTRIES[1]]], ids=["holdings", "fiat_only"]
+)
+async def test_an_empty_answer_after_a_reload_waits_like_any_other(hass, freezer, listed):
+    """That the last answer taken as the truth listed something -- holdings,
+    or fiat alone -- is remembered across the reload: its empty answers count
+    and wait for their time as usual."""
+    entry = _entry(hass)
+    await _portfolio(hass, listed, entry)[1]._async_update_data()
+    _, reloaded = _portfolio(hass, [], entry)
+    for _ in range(WALLET_REMOVAL_MISSES - 1):
+        await _refused(reloaded)
+        freezer.tick(_REGULAR)
+    assert (await reloaded._async_update_data()).total == 0.0
+
+
+async def test_an_account_that_listed_nothing_is_believed_after_a_reload_too(hass):
+    """A new, empty account: its empty answers are the truth at once, before
+    a reload and after it."""
+    entry = _entry(hass)
+    for _ in range(2):
+        assert (await _portfolio(hass, [], entry)[1]._async_update_data()).total == 0.0
 
 
 async def test_earn_update_returns_the_catalogue():

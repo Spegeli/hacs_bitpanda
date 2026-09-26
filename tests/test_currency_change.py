@@ -17,7 +17,10 @@ from homeassistant.components.recorder.statistics import get_metadata
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_purge_done,
     async_wait_recording_done,
@@ -25,13 +28,14 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
     get_start_time,
 )
 
-from custom_components.bitpanda.const import DOMAIN
+from custom_components.bitpanda.const import DOMAIN, PORTFOLIO_UPDATE_INTERVAL
 
 from tests.conftest import load_fixture
 
 _CLIENT = "custom_components.bitpanda.api.BitpandaApiClient."
 _EUR_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
 _USD_ID = "b88b8879-efe3-11eb-b56f-0691764446a7"
+_TOTAL = "sensor.bitpanda_portfolio_total"
 _WALLET = "sensor.bitpanda_vision_vsn_wallet_available"
 # A fiat wallet the version 1 migration left in place: Portfolio Cash covers
 # every fiat balance now.
@@ -186,3 +190,34 @@ async def test_a_currency_change_recreates_the_sensors_without_the_old_history(
     # stays until the user deletes it, and so does its history.
     assert await _history(hass, _LEFTOVER) == [("5.0", "USD")]
     assert "update listener" not in caplog.text
+
+
+async def _next_refresh(hass, freezer) -> None:
+    """The Portfolio's next regular refresh: Home Assistant's clock moves on
+    past its update interval, and the refresh it scheduled runs."""
+    freezer.tick(PORTFOLIO_UPDATE_INTERVAL + timedelta(minutes=1))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+
+async def test_an_empty_answer_right_after_a_currency_change_waits_for_confirmation(
+    hass, portfolio_api, freezer
+):
+    """The purge has just removed the wallets when the reload asks, so none
+    is registered; that the account listed something is remembered all the
+    same. An empty answer then -- as likely a glitch at Bitpanda as ever --
+    leaves the Portfolio unavailable until three answers in a row, at the
+    usual pace, confirm it, rather than start the new currency's history
+    with a 0."""
+    entry = _portfolio(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await async_wait_recording_done(hass)
+    portfolio_api.return_value = []
+
+    await _change_currency_to_usd(hass, entry)
+
+    assert er.async_get(hass).async_get(_WALLET) is None
+    for _ in range(2):
+        assert hass.states.get(_TOTAL).state == "unavailable"
+        await _next_refresh(hass, freezer)
+    assert float(hass.states.get(_TOTAL).state) == 0.0

@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant import config_entries, data_entry_flow
 from homeassistant.data_entry_flow import section
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -783,6 +784,62 @@ async def test_a_currency_change_without_the_currencys_id_changes_nothing(hass, 
     assert result["data_schema"]({})["currency"] == "usd"
     assert entry.data["currency"] == "EUR"
     await _finish_currency_change(hass, entry, result, {"currency": "usd"})
+
+
+# The repair issue of the version 1 upgrade saying that the old currency is
+# not available and the Portfolio reports in EUR; it sends the user to
+# Reconfigure to choose another currency.
+_SWITCH_TO_EUR = "currency_dropped"
+
+
+def _raise_switch_to_eur_issue(hass) -> None:
+    """The issue as the upgrade raises it (migration.py)."""
+    ir.async_create_issue(
+        hass, DOMAIN, _SWITCH_TO_EUR, is_fixable=False, is_persistent=True,
+        severity=ir.IssueSeverity.WARNING, translation_key=_SWITCH_TO_EUR,
+        translation_placeholders={"currency": "JPY"},
+    )
+
+
+def _switch_to_eur_issue(hass) -> ir.IssueEntry | None:
+    return ir.async_get(hass).async_get_issue(DOMAIN, _SWITCH_TO_EUR)
+
+
+async def test_a_currency_change_resolves_the_switch_to_eur_issue(hass):
+    """Choosing another currency is what the issue asks for: once the
+    change is made, the issue goes."""
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    _raise_switch_to_eur_issue(hass)
+    with patch(_PURGE, AsyncMock(return_value=True)), patch(
+        "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
+    ):
+        result = await _reconfigure(hass, entry, {"currency": "usd"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["reason"] == "currency_changed"
+    assert _switch_to_eur_issue(hass) is None
+
+
+async def test_replacing_the_key_alone_leaves_the_switch_to_eur_issue(hass):
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    _raise_switch_to_eur_issue(hass)
+    with patch("homeassistant.config_entries.ConfigEntries.async_schedule_reload"):
+        result = await _reconfigure(hass, entry, {"api_key": "new", "currency": "eur"})
+    assert result["reason"] == "reconfigure_successful"
+    assert _switch_to_eur_issue(hass) is not None
+
+
+async def test_a_currency_change_that_could_not_be_made_leaves_the_issue(hass):
+    """The Portfolio could not be unloaded, so the currency stayed EUR."""
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    _raise_switch_to_eur_issue(hass)
+    with patch(_PURGE, AsyncMock(return_value=False)):
+        result = await _reconfigure(hass, entry, {"currency": "usd"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["reason"] == "unload_failed"
+    assert _switch_to_eur_issue(hass) is not None
 
 
 async def test_the_price_tracker_has_nothing_to_reconfigure(hass):

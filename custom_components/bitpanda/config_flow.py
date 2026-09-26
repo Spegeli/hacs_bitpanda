@@ -20,6 +20,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import SectionConfig, section
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     SelectSelector,
@@ -58,6 +59,7 @@ from .const import (
 )
 from .groups import async_group_titles, price_group_subentries
 from .language import async_shipped_languages, entry_language
+from .migration import ISSUE_CURRENCY_DROPPED
 from .purge import async_purge_portfolio
 
 _LOGGER = logging.getLogger(__name__)
@@ -442,7 +444,9 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         Closing the dialog is the way back: nothing has changed until this
         step is submitted -- nor after it, when the Portfolio cannot be
-        unloaded first (see async_purge_portfolio).
+        unloaded first (see async_purge_portfolio). A change made resolves
+        the upgrade's repair issue about the switch to EUR, if there is one:
+        it asked for exactly this, so it goes.
         """
         entry = self._get_reconfigure_entry()
         # Set by async_step_reconfigure, the only step that leads here.
@@ -464,6 +468,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             updates[CONF_API_KEY] = self._api_key
         if not await async_purge_portfolio(self.hass, entry):
             return self.async_abort(reason="unload_failed")
+        ir.async_delete_issue(self.hass, DOMAIN, ISSUE_CURRENCY_DROPPED)
         # The purge unloaded the entry, which removed its update listener:
         # this reload is the only one.
         return self.async_update_reload_and_abort(

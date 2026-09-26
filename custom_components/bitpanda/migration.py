@@ -266,7 +266,7 @@ async def async_plan(hass: HomeAssistant, entry: ConfigEntry) -> MigrationPlan:
         )
         plan.notes.append(
             Note(
-                "currency_dropped",
+                ISSUE_CURRENCY_DROPPED,
                 {"currency": currency},
                 f"{currency} is not available for the Bitpanda Portfolio; "
                 "it now reports in EUR.",
@@ -630,13 +630,19 @@ def _log_text(
     return "\n\n".join(paragraphs)
 
 
+# The upgrade's repair issue saying that the old currency is not available
+# and the Portfolio reports in EUR. It sends the user to Reconfigure to
+# choose another currency, and a change made there deletes it
+# (config_flow.py).
+ISSUE_CURRENCY_DROPPED = "currency_dropped"
+
 # Every repair issue the upgrade can raise, by id -- each id is also its
 # translation key. tests/test_migration.py ties this to what the migration
 # raises and to the `issues` in strings.json.
 UPGRADE_ISSUES = (
     "renamed_entities",
     "entities_not_migrated",
-    "currency_dropped",
+    ISSUE_CURRENCY_DROPPED,
     "price_tracker_exists",
 )
 

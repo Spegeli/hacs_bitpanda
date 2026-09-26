@@ -8,10 +8,15 @@ from time import monotonic
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
-from homeassistant.helpers import device_registry as dr
+from homeassistant.exceptions import (
+    ConfigEntryNotReady,
+    HomeAssistantError,
+    ServiceValidationError,
+)
+from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.translation import async_get_translations
+from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from . import migration
@@ -59,8 +64,24 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
+# Set up through the UI only: a `bitpanda:` block in configuration.yaml is
+# reported, never read. Required beside async_setup (hassfest).
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
 # Records of held assets, shared across reloads of the Portfolio entry.
 _ASSET_DIRECTORY_KEY = f"{DOMAIN}_asset_directory"
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register `bitpanda.refresh`, once, for both services.
+
+    Registered with the integration rather than with an entry, the action
+    exists while no entry is loaded -- setup failed or is being retried --
+    so automations that use it still validate, and a call then says why it
+    does nothing.
+    """
+    _async_register_refresh_service(hass)
+    return True
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -93,7 +114,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         reload_listener = _async_reload_on_new_data_or_options
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(reload_listener))
-    _async_register_refresh_service(hass)
     return True
 
 
@@ -245,16 +265,26 @@ def _refresh_cooldown(runtimes: list) -> float:
 
 @callback
 def _async_register_refresh_service(hass: HomeAssistant) -> None:
-    """Register `bitpanda.refresh` once, shared by both services."""
-    if hass.services.has_service(DOMAIN, "refresh"):
-        return
+    """Register `bitpanda.refresh`, shared by both services (async_setup).
 
+    It refreshes every loaded entry: the Portfolio's portfolio, the Price
+    Tracker's prices. A call within the cooldown of the last accepted one
+    is ignored. With no entry loaded there is nothing to refresh, and the
+    call fails with a translated ServiceValidationError: the frontend shows
+    it in the user's language, the log in English.
+    """
     # Empty until the first accepted call: the monotonic clock can start near
     # zero after a boot.
     last_accepted: dict[str, float] = {}
 
     async def handle_refresh(call: ServiceCall) -> None:
         runtimes = _loaded_runtimes(hass)
+        if not runtimes:
+            # Before the cooldown: a refused call refreshed nothing, so it
+            # starts no cooldown either.
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="nothing_to_refresh"
+            )
         now = monotonic()
         previous = last_accepted.get("time")
         if previous is not None and now - previous < _refresh_cooldown(runtimes):
@@ -271,24 +301,9 @@ def _async_register_refresh_service(hass: HomeAssistant) -> None:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload an entry; the refresh service goes with the last one.
-
-    Some tests mark an entry LOADED (or patch its setup) without going
-    through _async_register_refresh_service, so the service was never
-    registered; has_service avoids Home Assistant's own "Unable to remove
-    unknown service" warning for those.
-    """
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if (
-        unload_ok
-        and hass.services.has_service(DOMAIN, "refresh")
-        and not any(
-            other.entry_id != entry.entry_id and other.state is ConfigEntryState.LOADED
-            for other in hass.config_entries.async_entries(DOMAIN)
-        )
-    ):
-        hass.services.async_remove(DOMAIN, "refresh")
-    return unload_ok
+    """Unload an entry. `bitpanda.refresh` stays: it belongs to the
+    integration (async_setup), not to an entry."""
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:

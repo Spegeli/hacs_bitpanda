@@ -368,6 +368,9 @@
     },
     "ecb_rates_failed": {
       "message": "Impossibile recuperare i tassi di cambio della BCE: {error}"
+    },
+    "nothing_to_refresh": {
+      "message": "Non c'è nulla da aggiornare: né Bitpanda Portfolio né Bitpanda Price Tracker è caricato."
     }
   },
   "issues": {

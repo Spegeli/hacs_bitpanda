@@ -368,6 +368,9 @@
     },
     "ecb_rates_failed": {
       "message": "Kan de wisselkoersen van de ECB niet ophalen: {error}"
+    },
+    "nothing_to_refresh": {
+      "message": "Er valt niets te vernieuwen: noch Bitpanda Portfolio, noch Bitpanda Price Tracker is geladen."
     }
   },
   "issues": {

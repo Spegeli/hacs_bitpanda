@@ -1,4 +1,5 @@
-"""The bitpanda.refresh service is throttled to the ticker interval.
+"""The bitpanda.refresh action: registered once with the integration, and
+throttled to the ticker interval.
 
 Every accepted call costs a portfolio request plus one ticker request per
 tracked asset; the ticker interval is what keeps the latter inside the
@@ -11,12 +12,14 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.service import async_get_all_descriptions
 from homeassistant.helpers.translation import async_get_translations
+from homeassistant.setup import async_setup_component
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 import yaml
 
-from custom_components.bitpanda import _async_register_refresh_service
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.portfolio_coordinator import PortfolioRuntime
 from custom_components.bitpanda.price_coordinator import PriceTrackerRuntime
@@ -36,24 +39,37 @@ class _Clock:
         return self.now
 
 
-def _register(hass, ticker_interval: timedelta):
+def _loaded(hass, entry_type: str, runtime) -> MockConfigEntry:
+    """An entry of `entry_type` as a finished setup leaves it: loaded, with
+    `runtime` as its runtime data."""
+    entry = MockConfigEntry(domain=DOMAIN, version=3, data={"entry_type": entry_type})
+    entry.add_to_hass(hass)
+    entry.runtime_data = runtime
+    entry.mock_state(hass, ConfigEntryState.LOADED)
+    return entry
+
+
+def _portfolio_runtime(portfolio: _Coordinator) -> PortfolioRuntime:
+    return PortfolioRuntime(
+        portfolio=portfolio, history=None, earn=None, rewards=None,
+        group_titles={}, data_at_setup={}, options_at_setup={},
+    )
+
+
+async def _set_up_the_integration(hass) -> None:
+    """What Home Assistant does before it sets up the first entry: the
+    integration's own async_setup. Entries are added after it, so none of
+    them is set up for real."""
+    assert await async_setup_component(hass, DOMAIN, {})
+    await hass.async_block_till_done()
+
+
+async def _register(hass, ticker_interval: timedelta):
+    await _set_up_the_integration(hass)
     portfolio = _Coordinator(timedelta(minutes=5))
     tickers = _Coordinator(ticker_interval)
-    for entry_type, runtime in (
-        (
-            "portfolio",
-            PortfolioRuntime(
-                portfolio=portfolio, history=None, earn=None, rewards=None,
-                group_titles={}, data_at_setup={}, options_at_setup={},
-            ),
-        ),
-        ("price_tracker", PriceTrackerRuntime(tickers=tickers, ecb=None)),
-    ):
-        entry = MockConfigEntry(domain=DOMAIN, version=3, data={"entry_type": entry_type})
-        entry.add_to_hass(hass)
-        entry.runtime_data = runtime
-        entry.mock_state(hass, ConfigEntryState.LOADED)
-    _async_register_refresh_service(hass)
+    _loaded(hass, "portfolio", _portfolio_runtime(portfolio))
+    _loaded(hass, "price_tracker", PriceTrackerRuntime(tickers=tickers, ecb=None))
     return portfolio, tickers
 
 
@@ -62,7 +78,7 @@ async def _call(hass) -> None:
 
 
 async def test_refresh_reaches_both_services_and_is_throttled(hass):
-    portfolio, tickers = _register(hass, timedelta(seconds=60))
+    portfolio, tickers = await _register(hass, timedelta(seconds=60))
     clock = _Clock(1000.0)
     with patch("custom_components.bitpanda.monotonic", clock):
         await _call(hass)
@@ -75,7 +91,7 @@ async def test_refresh_reaches_both_services_and_is_throttled(hass):
 
 
 async def test_cooldown_follows_a_stretched_ticker_interval(hass):
-    _, tickers = _register(hass, timedelta(seconds=120))
+    _, tickers = await _register(hass, timedelta(seconds=120))
     clock = _Clock(1000.0)
     with patch("custom_components.bitpanda.monotonic", clock):
         await _call(hass)
@@ -87,7 +103,7 @@ async def test_cooldown_follows_a_stretched_ticker_interval(hass):
 
 
 async def test_cooldown_never_drops_below_ten_seconds(hass):
-    _, tickers = _register(hass, timedelta(seconds=5))
+    _, tickers = await _register(hass, timedelta(seconds=5))
     clock = _Clock(1000.0)
     with patch("custom_components.bitpanda.monotonic", clock):
         await _call(hass)
@@ -99,8 +115,67 @@ async def test_cooldown_never_drops_below_ten_seconds(hass):
 
 
 async def test_first_refresh_is_accepted_right_after_boot(hass):
-    _, tickers = _register(hass, timedelta(seconds=60))
+    _, tickers = await _register(hass, timedelta(seconds=60))
     with patch("custom_components.bitpanda.monotonic", _Clock(5.0)):
+        await _call(hass)
+    assert tickers.async_request_refresh.await_count == 1
+
+
+async def test_only_the_loaded_services_are_refreshed(hass):
+    """An entry that is not loaded -- setup failed or is being retried --
+    has nothing to refresh; the loaded one is refreshed as usual."""
+    await _set_up_the_integration(hass)
+    portfolio = _Coordinator(timedelta(minutes=5))
+    _loaded(hass, "portfolio", _portfolio_runtime(portfolio))
+    MockConfigEntry(
+        domain=DOMAIN, version=3, data={"entry_type": "price_tracker"},
+        state=ConfigEntryState.SETUP_RETRY,
+    ).add_to_hass(hass)
+    await _call(hass)
+    assert portfolio.async_request_refresh.await_count == 1
+
+
+# --- Registered with the integration, not with an entry ----------------------------
+
+
+async def test_the_action_exists_before_any_entry_is_loaded(hass):
+    """So an automation that uses it validates while setup fails or is
+    retried."""
+    await _set_up_the_integration(hass)
+    assert hass.services.has_service(DOMAIN, "refresh")
+
+
+_NOTHING_TO_REFRESH = (
+    "There is nothing to refresh: neither Bitpanda Portfolio nor Bitpanda Price "
+    "Tracker is loaded"
+)
+
+
+async def test_a_call_with_nothing_loaded_says_so(hass):
+    """Translated: the frontend shows a validation error in the user's
+    language; its English text -- the trailing "." dropped, as Home
+    Assistant renders it -- goes to the log."""
+    await _set_up_the_integration(hass)
+    with pytest.raises(ServiceValidationError) as excinfo:
+        await _call(hass)
+    assert (excinfo.value.translation_domain, excinfo.value.translation_key) == (
+        DOMAIN, "nothing_to_refresh"
+    )
+    assert excinfo.value.translation_placeholders is None
+    assert str(excinfo.value) == _NOTHING_TO_REFRESH
+
+
+async def test_a_refused_call_starts_no_cooldown(hass):
+    """Nothing was refreshed, so the next call -- once an entry has loaded --
+    goes through at once."""
+    await _set_up_the_integration(hass)
+    clock = _Clock(1000.0)
+    with patch("custom_components.bitpanda.monotonic", clock):
+        with pytest.raises(ServiceValidationError):
+            await _call(hass)
+        tickers = _Coordinator(timedelta(seconds=60))
+        _loaded(hass, "price_tracker", PriceTrackerRuntime(tickers=tickers, ecb=None))
+        clock.now += 1
         await _call(hass)
     assert tickers.async_request_refresh.await_count == 1
 
@@ -122,7 +197,7 @@ async def test_the_refresh_service_is_named_and_described_in_every_language(hass
     Looped over every shipped language rather than a couple hardcoded ones,
     each checked against its own translations file -- the source of truth
     for what it should say, guarded for content by tests/test_strings.py."""
-    _register(hass, timedelta(seconds=60))
+    await _register(hass, timedelta(seconds=60))
     assert (await async_get_all_descriptions(hass))[DOMAIN]["refresh"]["fields"] == {}
     name_key, description_key = (
         f"component.{DOMAIN}.services.refresh.name",

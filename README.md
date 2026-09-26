@@ -42,6 +42,7 @@ The integration offers two services. Set up either or both — each one once.
 ### Manual Refresh
 - The `bitpanda.refresh` service updates the portfolio and the prices immediately
 - A call within the cooldown of the last accepted one is ignored. With a Price Tracker set up, the cooldown is its price interval (60 seconds, longer with many tracked assets), so an automation cannot push price requests beyond the normal polling rate; with only the Portfolio, it is 10 seconds
+- While neither service is loaded — for example while its setup is being retried — a call fails with an error saying there is nothing to refresh
 
 ### Supported Assets
 | Type | Examples | Assets | Price Tracker | Portfolio |

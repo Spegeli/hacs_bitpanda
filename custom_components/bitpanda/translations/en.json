@@ -368,6 +368,9 @@
     },
     "ecb_rates_failed": {
       "message": "Could not fetch the ECB exchange rates: {error}"
+    },
+    "nothing_to_refresh": {
+      "message": "There is nothing to refresh: neither Bitpanda Portfolio nor Bitpanda Price Tracker is loaded."
     }
   },
   "issues": {

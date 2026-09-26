@@ -7,7 +7,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentry, ConfigSubentryData
-from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
+from homeassistant.exceptions import (
+    ConfigEntryNotReady,
+    HomeAssistantError,
+    ServiceValidationError,
+)
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.setup import async_setup_component
@@ -735,18 +739,46 @@ async def test_dropping_a_currency_removes_its_sensors_on_reload(hass, price_api
     assert hass.states.get("sensor.bitpanda_bitcoin_btc_eur") is not None
 
 
-async def test_the_refresh_service_lives_while_any_entry_is_loaded(hass, portfolio_api, price_api):
+async def _refresh(hass) -> None:
+    await hass.services.async_call(DOMAIN, "refresh", blocking=True)
+    await hass.async_block_till_done()
+
+
+async def test_the_refresh_action_refreshes_a_loaded_portfolio(hass, portfolio_api):
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    calls = portfolio_api.call_count
+    await _refresh(hass)
+    assert portfolio_api.call_count == calls + 1
+
+
+async def test_the_refresh_action_outlives_every_entry(hass, portfolio_api, price_api):
+    """Registered with the integration, not with an entry: unloading both
+    entries leaves it in place, and a call then says why it does nothing."""
     portfolio, tracker = _portfolio_entry(hass), _price_entry(hass, [], price_group("crypto", BTC))
     # The first setup of a domain sets up every entry it has (Home
     # Assistant's setup.py: "Setting up the component will set up all its
     # config entries"), the Price Tracker included.
     await _setup(hass, portfolio)
     assert tracker.state is ConfigEntryState.LOADED
-    assert hass.services.has_service(DOMAIN, "refresh")
     assert await hass.config_entries.async_unload(portfolio.entry_id)
-    assert hass.services.has_service(DOMAIN, "refresh")
     assert await hass.config_entries.async_unload(tracker.entry_id)
-    assert not hass.services.has_service(DOMAIN, "refresh")
+    assert hass.services.has_service(DOMAIN, "refresh")
+    with pytest.raises(ServiceValidationError) as excinfo:
+        await _refresh(hass)
+    assert excinfo.value.translation_key == "nothing_to_refresh"
+
+
+async def test_the_refresh_action_exists_while_setup_is_retried(hass, portfolio_api):
+    """So an automation that uses it validates even then."""
+    portfolio_api.side_effect = BitpandaApiError("HTTP 503 from /portfolio")
+    entry = _portfolio_entry(hass)
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    assert hass.services.has_service(DOMAIN, "refresh")
+    with pytest.raises(ServiceValidationError) as excinfo:
+        await _refresh(hass)
+    assert excinfo.value.translation_key == "nothing_to_refresh"
 
 
 # --- Groups follow the entry's language at setup ------------------------------------

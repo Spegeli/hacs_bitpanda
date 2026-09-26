@@ -47,7 +47,7 @@ Everything lives in `custom_components/bitpanda/`:
 
 | File | Responsibility |
 |---|---|
-| `__init__.py` | Setup and unload per service, deleting devices from their device page, the `bitpanda.refresh` service |
+| `__init__.py` | Setup and unload per service, deleting devices from their device page, the `bitpanda.refresh` service (registered once, in `async_setup`) |
 | `api.py` | `BitpandaApiClient` — all HTTP calls; keyless for public endpoints |
 | `assets.py` | Asset categories (`asset_category`), legacy symbol resolution (`pick_legacy`), `AssetDirectory` for holding metadata, list labels |
 | `asset_flow.py` | The "Add price tracker" subentry flow and the cached catalogue listings |

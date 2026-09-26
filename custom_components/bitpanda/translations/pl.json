@@ -368,6 +368,9 @@
     },
     "ecb_rates_failed": {
       "message": "Nie można pobrać kursów walut EBC: {error}"
+    },
+    "nothing_to_refresh": {
+      "message": "Nie ma nic do odświeżenia: nie załadowano ani usługi Bitpanda Portfolio, ani usługi Bitpanda Price Tracker."
     }
   },
   "issues": {

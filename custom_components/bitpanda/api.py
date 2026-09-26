@@ -218,7 +218,7 @@ class BitpandaApiClient:
         params: dict[str, Any],
         *,
         cursor_fix: Callable[[str], str] | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Collect every page of a cursor-paginated endpoint, or raise.
 
         Deduplicates by id: pages can overlap by one record. `cursor_fix`
@@ -235,7 +235,7 @@ class BitpandaApiClient:
         """
         params = dict(params)
         params.setdefault("page_size", MAX_PAGE_SIZE)
-        out: list[dict] = []
+        out: list[dict[str, Any]] = []
         seen: set[str] = set()
         sent_cursors: set[str] = set()
 
@@ -273,7 +273,7 @@ class BitpandaApiClient:
             kind=ERROR_INCOMPLETE_LISTING, path=path,
         )
 
-    async def async_get_currencies(self) -> list[dict]:
+    async def async_get_currencies(self) -> list[dict[str, Any]]:
         """List all fiat currencies. Not paginated."""
         body = await self._request("/currencies")
         return body.get("data") or []
@@ -284,7 +284,7 @@ class BitpandaApiClient:
         symbol: str | None = None,
         asset_id: str | None = None,
         page_size: int = MAX_PAGE_SIZE,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """List assets, optionally filtered.
 
         `asset_id` takes a single UUID only. A comma-separated list returns 500,
@@ -299,7 +299,7 @@ class BitpandaApiClient:
 
     async def async_list_assets(
         self, type_: str, group: str | None = None
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """List every asset of one catalogue type (and, optionally, group).
 
         Builds the "Add price tracker" subentry flow's category pickers (see
@@ -313,7 +313,7 @@ class BitpandaApiClient:
             params["group"] = group
         return await self._paginate("/assets", params)
 
-    async def async_get_ticker(self, asset_id: str) -> dict:
+    async def async_get_ticker(self, asset_id: str) -> dict[str, Any]:
         """Current price for one asset.
 
         Always returns EUR. Every currency parameter that could plausibly exist
@@ -324,7 +324,7 @@ class BitpandaApiClient:
 
     async def async_get_portfolio(
         self, *, equivalent_currency_id: str | None = None
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """All non-zero holdings.
 
         The list mixes two shapes. Asset entries carry `asset_id` and
@@ -342,7 +342,7 @@ class BitpandaApiClient:
         *,
         timeframe: str = "DAY",
         equivalent_currency_id: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Portfolio value series and the return over the selected window.
 
         `timeframe` is one of DAY, WEEK, MONTH, SIX_MONTH, YEAR. It is absent
@@ -355,7 +355,7 @@ class BitpandaApiClient:
         body = await self._request("/portfolio-history", params)
         return body.get("data") or {}
 
-    async def async_get_earn_configs(self) -> list[dict]:
+    async def async_get_earn_configs(self) -> list[dict[str, Any]]:
         """Available Earn products and their rates.
 
         This is a catalog, not user positions. `annual_percentage_rate` is a
@@ -365,7 +365,7 @@ class BitpandaApiClient:
 
     async def async_get_operations(
         self, *, from_ts: str | None = None, to_ts: str | None = None
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Operation history, optionally windowed by date.
 
         `from` and `to` are undocumented on the hosted docs but work. Every

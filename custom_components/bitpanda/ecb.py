@@ -66,10 +66,11 @@ def parse_ecb_rates(document: str | bytes) -> EcbRates:
         except ValueError:
             continue
         if math.isfinite(rate) and rate > 0:
-            rates[cube.get("currency")] = rate
+            # Present on every cube found: the paths above ask for it.
+            rates[cube.attrib["currency"]] = rate
     if not rates:
         raise EcbError("The ECB response carries no rates", kind=ERROR_UNREADABLE)
-    return EcbRates(date=day.get("time"), rates=rates)
+    return EcbRates(date=day.attrib["time"], rates=rates)
 
 
 async def async_fetch_ecb_rates(session: aiohttp.ClientSession) -> EcbRates:

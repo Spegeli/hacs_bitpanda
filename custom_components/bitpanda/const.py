@@ -1,5 +1,11 @@
 """Constants for the Bitpanda integration."""
+from __future__ import annotations
+
 from datetime import timedelta
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
 
 DOMAIN = "bitpanda"
 
@@ -134,10 +140,11 @@ CASH_PLUS_GROUP = "fiat_earn"
 IMPORT_ASSETS = "assets"
 
 
-def entry_type(entry) -> str:
+def entry_type(entry: ConfigEntry) -> str:
     """The service a config entry belongs to.
 
     A version 1 entry predates the field; it is the one that becomes the
     Portfolio, so it counts as one.
     """
-    return entry.data.get(ENTRY_TYPE, ENTRY_TYPE_PORTFOLIO)
+    service: str = entry.data.get(ENTRY_TYPE, ENTRY_TYPE_PORTFOLIO)
+    return service

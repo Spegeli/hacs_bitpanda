@@ -29,7 +29,8 @@ _TRANSLATIONS_DIR = Path(__file__).parent / "translations"
 def entry_language(entry: ConfigEntry) -> str:
     """The language of `entry`'s own texts: its CONF_LANGUAGE option,
     English until the user picks another."""
-    return entry.options.get(CONF_LANGUAGE, DEFAULT_LANGUAGE)
+    language: str = entry.options.get(CONF_LANGUAGE, DEFAULT_LANGUAGE)
+    return language
 
 
 def _shipped_languages() -> list[str]:

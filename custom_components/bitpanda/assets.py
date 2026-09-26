@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
+from typing import Any
 
 from .api import BitpandaApiClient, BitpandaApiError
 
@@ -48,12 +49,12 @@ CATEGORY_OTHER = "other"
 _ISIN_CATEGORIES = frozenset({"stock", "etf", "etc"})
 
 
-def slim_asset(asset: dict) -> dict:
+def slim_asset(asset: dict[str, Any]) -> dict[str, Any]:
     """A catalogue record reduced to CATALOGUE_FIELDS."""
     return {key: asset[key] for key in CATALOGUE_FIELDS if key in asset}
 
 
-def asset_category(asset: dict) -> str:
+def asset_category(asset: dict[str, Any]) -> str:
     """The first category of ASSET_CATEGORY_FILTERS with a filter the record
     matches (its type, and its group where the filter names one);
     CATEGORY_OTHER when no filter does."""
@@ -64,7 +65,7 @@ def asset_category(asset: dict) -> str:
     return CATEGORY_OTHER
 
 
-def asset_isin(asset: dict) -> str | None:
+def asset_isin(asset: dict[str, Any]) -> str | None:
     """The ISIN a stock, ETF or ETC shows in its label
     (naming.asset_display_label) and attributes; None for any other asset,
     and for one whose record carries none."""
@@ -73,7 +74,7 @@ def asset_isin(asset: dict) -> str | None:
     return asset.get("isin") or None
 
 
-def asset_attributes(asset: dict) -> dict[str, str | None]:
+def asset_attributes(asset: dict[str, Any]) -> dict[str, str | None]:
     """What every sensor of `asset` shows about it: `asset` (the symbol),
     `asset_name`, and `asset_isin` where asset_isin gives one -- no such
     key at all for any other asset."""
@@ -102,7 +103,7 @@ class AssetDirectory:
     for once per run, and the pass goes on.
     """
 
-    def __init__(self, client: BitpandaApiClient, cache: dict[str, dict]) -> None:
+    def __init__(self, client: BitpandaApiClient, cache: dict[str, dict[str, Any]]) -> None:
         self._client = client
         self._cache = cache
         self._unknown: set[str] = set()
@@ -111,7 +112,7 @@ class AssetDirectory:
         self._failed: dict[str, int] = {}
         self._failures = 0
 
-    def get(self, asset_id: str) -> dict | None:
+    def get(self, asset_id: str) -> dict[str, Any] | None:
         return self._cache.get(asset_id)
 
     async def async_resolve(self, asset_ids: Iterable[str]) -> None:
@@ -155,12 +156,14 @@ class AssetDirectory:
 LEGACY_TYPES = ("cryptocoin", "index")
 
 
-def is_legacy_supported(asset: dict) -> bool:
+def is_legacy_supported(asset: dict[str, Any]) -> bool:
     """What the legacy API could track: crypto, indices and metals — never securities."""
     return asset.get("type") in LEGACY_TYPES or asset.get("group") == "metal"
 
 
-def legacy_candidates(candidates: list[dict], prefix: str | None) -> list[dict]:
+def legacy_candidates(
+    candidates: list[dict[str, Any]], prefix: str | None
+) -> list[dict[str, Any]]:
     """Candidates narrowed to what a v1 identifier bearing `prefix` could mean.
 
     Shared by `pick_legacy` (which wants exactly one survivor) and
@@ -191,7 +194,7 @@ def legacy_candidates(candidates: list[dict], prefix: str | None) -> list[dict]:
     return survivors
 
 
-def pick_legacy(candidates: list[dict], prefix: str | None) -> dict | None:
+def pick_legacy(candidates: list[dict[str, Any]], prefix: str | None) -> dict[str, Any] | None:
     """Choose the asset a version 1 identifier meant, or None if that is unclear.
 
     Filters to legacy-supported types first — the legacy API never offered a
@@ -205,7 +208,7 @@ def pick_legacy(candidates: list[dict], prefix: str | None) -> dict | None:
     return survivors[0] if len(survivors) == 1 else None
 
 
-def asset_label(asset: dict) -> str:
+def asset_label(asset: dict[str, Any]) -> str:
     """'Name / SYMBOL / ISIN', or 'Name / SYMBOL' when the asset has no ISIN."""
     parts = [asset.get("name") or asset["symbol"], asset["symbol"]]
     if asset.get("isin"):
@@ -213,7 +216,7 @@ def asset_label(asset: dict) -> str:
     return " / ".join(parts)
 
 
-def _label_rungs(asset: dict, label: str) -> list[str]:
+def _label_rungs(asset: dict[str, Any], label: str) -> list[str]:
     """`asset`'s escalation ladder from `label`, most preferred first: the
     plain label, then with its type/group, then with the first 8 characters
     of its id, then with the whole id. A caller starting partway down this
@@ -224,7 +227,9 @@ def _label_rungs(asset: dict, label: str) -> list[str]:
     return [label, suffixed, f"{suffixed} · {asset_id[:8]}", f"{suffixed} · {asset_id}"]
 
 
-def _place_asset(result: dict[str, dict], asset: dict, rungs: list[str]) -> None:
+def _place_asset(
+    result: dict[str, dict[str, Any]], asset: dict[str, Any], rungs: list[str]
+) -> None:
     """Write `asset` into `result` at the first rung not already taken by a
     *different* asset. `rungs` only encodes what `asset`'s own raw-label
     duplicates require; this also guards against a rung colliding with an
@@ -245,7 +250,7 @@ def _place_asset(result: dict[str, dict], asset: dict, rungs: list[str]) -> None
     result[candidate] = asset
 
 
-def asset_label_map(assets: Iterable[dict]) -> dict[str, dict]:
+def asset_label_map(assets: Iterable[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """`asset_label(asset)` -> asset, for one listing, with exactly one
     globally-unique entry per input asset -- no asset is ever dropped or
     silently overwritten by another one's computed label.
@@ -263,16 +268,16 @@ def asset_label_map(assets: Iterable[dict]) -> dict[str, dict]:
     `group` (never true for any catalogue entry filtered in today) renders
     as "type/None" in the suffix -- still unique, just not pretty.
     """
-    by_label: dict[str, list[dict]] = {}
+    by_label: dict[str, list[dict[str, Any]]] = {}
     for asset in assets:
         by_label.setdefault(asset_label(asset), []).append(asset)
 
-    result: dict[str, dict] = {}
+    result: dict[str, dict[str, Any]] = {}
     for label, siblings in by_label.items():
         if len(siblings) == 1:
             _place_asset(result, siblings[0], _label_rungs(siblings[0], label))
             continue
-        by_suffixed: dict[str, list[tuple[dict, list[str]]]] = {}
+        by_suffixed: dict[str, list[tuple[dict[str, Any], list[str]]]] = {}
         for asset in siblings:
             rungs = _label_rungs(asset, label)
             by_suffixed.setdefault(rungs[1], []).append((asset, rungs))
@@ -284,8 +289,8 @@ def asset_label_map(assets: Iterable[dict]) -> dict[str, dict]:
 
 
 def resolve_asset(
-    value: str, label_map: dict[str, dict], catalogue: Iterable[dict]
-) -> dict | None:
+    value: str, label_map: dict[str, dict[str, Any]], catalogue: Iterable[dict[str, Any]]
+) -> dict[str, Any] | None:
     """What the picker's raw submitted `value` names: a label in `label_map`,
     or -- typed or pasted -- the id of an asset in `catalogue`. None for
     anything else.

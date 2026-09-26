@@ -9,6 +9,7 @@ Home Assistant runs in. unique_ids are built from UUIDs and never change.
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from homeassistant.util import slugify
 
@@ -42,7 +43,7 @@ def _uuid_after(prefix: str, text: str) -> str | None:
     return candidate if _UUID.fullmatch(candidate) else None
 
 
-def asset_display_label(asset: dict) -> str:
+def asset_display_label(asset: dict[str, Any]) -> str:
     """ "Name (SYMBOL)", or just SYMBOL when the name only repeats it; a
     stock, ETF or ETC adds its ISIN (assets.asset_isin): "Name (SYMBOL /
     ISIN)", or "SYMBOL (ISIN)".
@@ -104,7 +105,7 @@ def portfolio_entity_id(key: str) -> str:
 # --- Wallet devices -------------------------------------------------------------
 
 
-def wallet_device_name(asset: dict) -> str:
+def wallet_device_name(asset: dict[str, Any]) -> str:
     return f"{asset_display_label(asset)} Wallet"
 
 
@@ -124,17 +125,17 @@ def total_unique_id(entry_id: str, asset_id: str) -> str:
     return f"{entry_id}_total_{asset_id}"
 
 
-def wallet_entity_id(asset: dict) -> str:
+def wallet_entity_id(asset: dict[str, Any]) -> str:
     """Ends in the sensor's name, "Balance (available)", like its siblings'
     IDs: `…_wallet` alone would read as the whole wallet."""
     return _entity_id(wallet_device_name(asset), "available")
 
 
-def staking_entity_id(asset: dict) -> str:
+def staking_entity_id(asset: dict[str, Any]) -> str:
     return _entity_id(wallet_device_name(asset), "staking")
 
 
-def total_entity_id(asset: dict) -> str:
+def total_entity_id(asset: dict[str, Any]) -> str:
     return _entity_id(wallet_device_name(asset), "total")
 
 
@@ -169,7 +170,7 @@ def wallet_device_asset_id(entry_id: str, identifier: str) -> str | None:
 # --- Price Tracker devices ------------------------------------------------------
 
 
-def price_device_name(asset: dict) -> str:
+def price_device_name(asset: dict[str, Any]) -> str:
     """Says what the device is, as "… Wallet" does: Home Assistant lists an
     entity under its device's name, and the price sensors are named by
     their currency alone -- "Bitcoin (BTC) Price Tracker EUR"."""
@@ -184,7 +185,7 @@ def price_unique_id(entry_id: str, asset_id: str, currency: str) -> str:
     return f"{entry_id}_{asset_id}_price_{currency}"
 
 
-def price_entity_id(asset: dict, currency: str) -> str:
+def price_entity_id(asset: dict[str, Any], currency: str) -> str:
     return _entity_id(price_device_name(asset), currency.lower())
 
 

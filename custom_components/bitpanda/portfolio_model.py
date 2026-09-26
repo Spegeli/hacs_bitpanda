@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import logging
+from typing import Any, cast
 
 from .const import CASH_PLUS_GROUP, WALLET_REMOVAL_MISSES, WALLET_REMOVAL_TIME
 
@@ -33,7 +34,7 @@ def confirmed(count: int, since: datetime, now: datetime) -> bool:
     return count >= WALLET_REMOVAL_MISSES and now - since >= WALLET_REMOVAL_TIME - _CLOCK_GRACE
 
 
-def to_float(container: dict | None, key: str = "value") -> float | None:
+def to_float(container: dict[str, Any] | None, key: str = "value") -> float | None:
     """Read a numeric string out of an API value object."""
     if not isinstance(container, dict):
         return None
@@ -131,7 +132,7 @@ class PortfolioData:
 
     holdings: dict[str, Holding] = field(default_factory=dict)
     cash: float | None = 0.0
-    assets: dict[str, dict] = field(default_factory=dict)
+    assets: dict[str, dict[str, Any]] = field(default_factory=dict)
     unparsed_assets: set[str] = field(default_factory=set)
     # When /portfolio was asked for this answer (Home Assistant's clock): the
     # times `confirmed` measures between answers. None where no request
@@ -155,9 +156,10 @@ class PortfolioData:
         if self.unparsed_assets or self.cash is None:
             return None
         values = [holding.value for holding in self.holdings.values()]
-        if any(value is None for value in values):
+        known = [value for value in values if value is not None]
+        if len(known) < len(values):
             return None
-        return round(sum(values) + self.cash, DECIMALS)
+        return round(sum(known) + self.cash, DECIMALS)
 
     def _cash_plus_holdings(self) -> dict[str, Holding] | None:
         """The Cash Plus holdings by asset id, in one pass over the holdings.
@@ -187,7 +189,10 @@ class PortfolioData:
         holdings = self._cash_plus_holdings()
         if holdings is None:
             return None
-        return round(sum((holding.value for holding in holdings.values()), 0.0), DECIMALS)
+        # Every value is known: _cash_plus_holdings returns None otherwise.
+        return round(
+            sum((cast(float, holding.value) for holding in holdings.values()), 0.0), DECIMALS
+        )
 
     @property
     def cash_plus_amounts(self) -> dict[str, float] | None:
@@ -236,7 +241,7 @@ class PortfolioReturns:
     failed: frozenset[str] = frozenset()
 
 
-def lists_nothing(entries: list[dict]) -> bool:
+def lists_nothing(entries: list[dict[str, Any]]) -> bool:
     """Whether a /portfolio answer lists no asset and no fiat entry at all.
 
     An entry with neither `asset_id` nor `currency_id` does not count:
@@ -245,7 +250,7 @@ def lists_nothing(entries: list[dict]) -> bool:
     return not any(entry.get("asset_id") or entry.get("currency_id") for entry in entries)
 
 
-def parse_portfolio(entries: list[dict]) -> PortfolioData:
+def parse_portfolio(entries: list[dict[str, Any]]) -> PortfolioData:
     """Normalise a /portfolio response.
 
     The list mixes asset entries (`asset_id`, `currency_balance`, ...) and
@@ -338,7 +343,7 @@ class RewardTotals:
     last_at: str | None = None
 
 
-def sum_rewards(operations: list[dict]) -> dict[str, RewardTotals]:
+def sum_rewards(operations: list[dict[str, Any]]) -> dict[str, RewardTotals]:
     """Aggregate staking rewards per asset.
 
     Only `operation_type == "reward"` with `wallet_owner == "staking-service"`
@@ -392,7 +397,7 @@ class EarnData:
     offered: frozenset[str]
 
 
-def parse_earn_configs(configs: list[dict]) -> EarnData:
+def parse_earn_configs(configs: list[dict[str, Any]]) -> EarnData:
     """An asset is offered while it has an enabled product -- sold out or not:
     `soldout` and `enabled` are separate flags, and a sold-out product still
     pays the users already in it. The APR is a JSON number and a fraction:

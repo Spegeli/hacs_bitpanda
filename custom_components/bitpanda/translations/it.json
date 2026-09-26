@@ -90,13 +90,25 @@
       "price_tracker": {
         "title": "Opzioni del Price Tracker",
         "description": "Le modifiche si applicano non appena salvi.",
-        "data": {
-          "extra_currencies": "Valute aggiuntive",
-          "language": "Lingua dei titoli dei gruppi e dei messaggi"
-        },
-        "data_description": {
-          "extra_currencies": "Ogni asset monitorato mantiene sempre il suo sensore in EUR. Ogni valuta selezionata aggiunge un sensore per asset; togliere una valuta elimina quei sensori.",
-          "language": "I titoli dei gruppi e i messaggi propri dell'integrazione usano questa lingua. I nomi dei sensori seguono la lingua di sistema di Home Assistant."
+        "sections": {
+          "currencies": {
+            "name": "Valute",
+            "data": {
+              "extra_currencies": "Valute aggiuntive"
+            },
+            "data_description": {
+              "extra_currencies": "Ogni asset monitorato mantiene sempre il suo sensore in EUR. Ogni valuta selezionata aggiunge un sensore per asset; togliere una valuta elimina quei sensori."
+            }
+          },
+          "language": {
+            "name": "Lingua",
+            "data": {
+              "language": "Lingua dei titoli dei gruppi e dei messaggi"
+            },
+            "data_description": {
+              "language": "I titoli dei gruppi e i messaggi propri dell'integrazione usano questa lingua. I nomi dei sensori seguono la lingua di sistema di Home Assistant."
+            }
+          }
         }
       },
       "portfolio": {

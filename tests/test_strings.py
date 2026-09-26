@@ -309,14 +309,20 @@ def test_every_shipped_language_is_offered_by_its_own_name():
 
 def test_each_service_has_options_texts_of_its_own():
     """Configure shows one form per service, each under its own step id
-    (config_flow.BitpandaOptionsFlow): each field has a label and a help
-    text."""
+    (config_flow.BitpandaOptionsFlow). The Price Tracker's comes in two
+    sections, each with a name; every field has a label and a help text --
+    in its section, where it sits in one."""
     steps = _load("strings.json")["options"]["step"]
     assert set(steps) == {"price_tracker", "portfolio"}
-    assert set(steps["price_tracker"]["data"]) == {"extra_currencies", "language"}
-    assert set(steps["portfolio"]["data"]) == {"language"}
-    for step in steps.values():
-        assert set(step["data_description"]) == set(step["data"])
+    price_tracker, portfolio = steps["price_tracker"], steps["portfolio"]
+    assert "data" not in price_tracker and "data_description" not in price_tracker
+    assert list(price_tracker["sections"]) == ["currencies", "language"]
+    assert set(price_tracker["sections"]["currencies"]["data"]) == {"extra_currencies"}
+    assert set(price_tracker["sections"]["language"]["data"]) == {"language"}
+    assert all(section["name"] for section in price_tracker["sections"].values())
+    assert set(portfolio["data"]) == {"language"} and "sections" not in portfolio
+    for texts in (*price_tracker["sections"].values(), portfolio):
+        assert set(texts["data_description"]) == set(texts["data"])
 
 
 def test_every_field_has_a_help_text():
@@ -335,7 +341,12 @@ def test_every_field_has_a_help_text():
         },
     }
     labelled = {name: step for name, step in steps.items() if step.get("data")}
-    assert len(labelled) == 9
+    labelled |= {
+        f"{name}.sections.{key}": texts
+        for name, step in steps.items()
+        for key, texts in step.get("sections", {}).items()
+    }
+    assert len(labelled) == 10
     for name, step in labelled.items():
         assert set(step.get("data_description", {})) == set(step["data"]), name
 

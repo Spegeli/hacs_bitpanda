@@ -19,6 +19,7 @@ from homeassistant.config_entries import (
     ConfigSubentryFlow,
 )
 from homeassistant.core import callback
+from homeassistant.data_entry_flow import section
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     SelectSelector,
@@ -491,15 +492,25 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return {SUBENTRY_TYPE_PRICE_GROUP: PriceTrackerSubentryFlow}
 
 
+# The two sections of the Price Tracker's Configure form, in their order;
+# their names and their fields' texts are `options.step.price_tracker.sections`.
+_SECTION_CURRENCIES = "currencies"
+_SECTION_LANGUAGE = "language"
+# Both open: a section is the only way a Home Assistant form sets fields
+# apart, not a place to hide them.
+_OPEN = {"collapsed": False}
+
+
 class BitpandaOptionsFlow(config_entries.OptionsFlow):
     """Configure, for both services.
 
     Each service shows its own form under a step id of its own, so each form
     has texts of its own (`options.step.price_tracker`, `.portfolio`): the
     Price Tracker's extra currencies -- EUR is always there -- and the
-    language of its own texts; the Portfolio's language alone, as its key
-    and currency change through Reconfigure. Saving changes the entry's
-    options, and its update listener reloads it (__init__.py).
+    language of its own texts, each in a section of its own; the Portfolio's
+    language alone, as its key and currency change through Reconfigure.
+    Saving changes the entry's options -- flat, whatever sections the form
+    shows -- and its update listener reloads it (__init__.py).
     """
 
     async def async_step_init(
@@ -517,21 +528,33 @@ class BitpandaOptionsFlow(config_entries.OptionsFlow):
     async def async_step_price_tracker(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """The extra currencies and the language, in two sections; their
+        input arrives nested by section and is stored flat, as ever."""
         if user_input is not None:
             return self.async_create_entry(
                 data={
                     **self.config_entry.options,
                     CONF_EXTRA_CURRENCIES: extra_currencies(
-                        user_input.get(CONF_EXTRA_CURRENCIES)
+                        user_input[_SECTION_CURRENCIES].get(CONF_EXTRA_CURRENCIES)
                     ),
-                    CONF_LANGUAGE: user_input[CONF_LANGUAGE],
+                    CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE],
                 }
             )
         return self.async_show_form(
             step_id="price_tracker",
-            data_schema=extra_currencies_schema(
-                self.config_entry.options.get(CONF_EXTRA_CURRENCIES, [])
-            ).extend(await self._async_language_field()),
+            data_schema=vol.Schema(
+                {
+                    vol.Required(_SECTION_CURRENCIES): section(
+                        extra_currencies_schema(
+                            self.config_entry.options.get(CONF_EXTRA_CURRENCIES, [])
+                        ),
+                        _OPEN,
+                    ),
+                    vol.Required(_SECTION_LANGUAGE): section(
+                        vol.Schema(await self._async_language_field()), _OPEN
+                    ),
+                }
+            ),
         )
 
     async def async_step_portfolio(

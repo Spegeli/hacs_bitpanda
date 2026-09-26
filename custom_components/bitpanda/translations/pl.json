@@ -90,13 +90,25 @@
       "price_tracker": {
         "title": "Opcje usługi Price Tracker",
         "description": "Zmiany obowiązują od razu po zapisaniu.",
-        "data": {
-          "extra_currencies": "Dodatkowe waluty",
-          "language": "Język tytułów grup i komunikatów"
-        },
-        "data_description": {
-          "extra_currencies": "Każde śledzone aktywo zawsze zachowuje swój sensor w EUR. Każda wybrana waluta dodaje jeden sensor na aktywo; usunięcie waluty usuwa te sensory.",
-          "language": "Tytuły grup i własne komunikaty integracji używają tego języka. Nazwy sensorów są w języku systemu Home Assistant."
+        "sections": {
+          "currencies": {
+            "name": "Waluty",
+            "data": {
+              "extra_currencies": "Dodatkowe waluty"
+            },
+            "data_description": {
+              "extra_currencies": "Każde śledzone aktywo zawsze zachowuje swój sensor w EUR. Każda wybrana waluta dodaje jeden sensor na aktywo; usunięcie waluty usuwa te sensory."
+            }
+          },
+          "language": {
+            "name": "Język",
+            "data": {
+              "language": "Język tytułów grup i komunikatów"
+            },
+            "data_description": {
+              "language": "Tytuły grup i własne komunikaty integracji używają tego języka. Nazwy sensorów są w języku systemu Home Assistant."
+            }
+          }
         }
       },
       "portfolio": {

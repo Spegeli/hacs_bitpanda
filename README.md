@@ -145,7 +145,7 @@ The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stock
 3. The asset joins the group of its type; the first asset of a type creates that group
 4. The first time you open the Stocks list it takes about ten seconds; it is then cached for 24 hours
 5. To stop tracking one asset, open its device and use **⋮ → Delete**. **⋮ → Delete** on a group stops tracking all of its assets. Tracking an asset again later brings its sensors back under the entity IDs the integration gives them, with their history; IDs you renamed yourself, and other customisations, survive only on newer Home Assistant versions
-6. To change the extra currencies, use **Configure**: removing a currency deletes its sensors; adding it back brings them back under the entity IDs the integration gives them, with their history; IDs you renamed yourself, and other customisations, survive only on newer Home Assistant versions. The same dialog sets the language of the group titles (see [Languages](#languages))
+6. To change the extra currencies, use **Configure**: removing a currency deletes its sensors; adding it back brings them back under the entity IDs the integration gives them, with their history; IDs you renamed yourself, and other customisations, survive only on newer Home Assistant versions. The same dialog sets, in a section of its own, the language of the group titles (see [Languages](#languages))
 
 ### Changing the key or the currency
 

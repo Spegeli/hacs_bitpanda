@@ -1272,7 +1272,9 @@ async def test_switching_the_price_trackers_language_retitles_its_groups(hass, p
     assert _group(entry, "crypto").title == "Kryptowährungen"
     calls = ticker.call_count
 
-    await _configure(hass, entry, {"extra_currencies": [], "language": "en"})
+    await _configure(
+        hass, entry, {"currencies": {"extra_currencies": []}, "language": {"language": "en"}}
+    )
 
     assert entry.state is ConfigEntryState.LOADED
     assert entry.options["language"] == "en"

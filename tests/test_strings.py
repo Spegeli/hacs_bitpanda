@@ -54,7 +54,7 @@ def _texts(node, prefix: str = "") -> dict[str, str]:
 
 
 def test_the_shipped_languages():
-    assert _LANGUAGES == ["de", "en"]
+    assert _LANGUAGES == ["de", "en", "fr"]
 
 
 def test_string_files_have_no_bom():

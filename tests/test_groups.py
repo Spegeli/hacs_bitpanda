@@ -208,12 +208,11 @@ async def test_a_wallet_group_is_created_once_and_holds_just_its_category(hass):
 
 async def test_known_group_titles_are_read_from_every_shipped_language(hass):
     """Reads the real translation files, not mocked: a category's known set
-    always has this integration's own EN and DE default title (its only
-    shipped languages so far)."""
+    holds this integration's own default title in every language it ships."""
     known = await async_known_group_titles(hass)
-    assert known["crypto"] == {"Cryptocurrencies", "Kryptowährungen"}
-    assert known["metal"] == {"Precious metals", "Edelmetalle"}
-    assert known["other"] == {"Other", "Sonstige"}
+    assert known["crypto"] == {"Cryptocurrencies", "Kryptowährungen", "Cryptomonnaies"}
+    assert known["metal"] == {"Precious metals", "Edelmetalle", "Métaux précieux"}
+    assert known["other"] == {"Other", "Sonstige", "Autres"}
 
 
 async def test_a_group_titled_a_default_in_another_language_is_retitled(hass):

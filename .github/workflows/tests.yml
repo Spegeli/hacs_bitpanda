@@ -67,3 +67,14 @@ jobs:
           python-version: "3.13"
       - name: Compile the integration with Python 3.13
         run: python -m compileall -q custom_components/bitpanda
+      # 3.13 evaluates annotations as it defines a class or function, so a
+      # name defined further down fails the import there -- which compiling
+      # cannot catch. This import defers them, in every module.
+      - name: Check that every module imports annotations from __future__
+        run: |
+          missing=$(grep -L '^from __future__ import annotations' custom_components/bitpanda/*.py || true)
+          if [ -n "$missing" ]; then
+            echo "Missing 'from __future__ import annotations':"
+            echo "$missing"
+            exit 1
+          fi

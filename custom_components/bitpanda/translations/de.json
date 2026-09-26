@@ -365,7 +365,7 @@
       "message": "{symbol} gibt es bei Bitpanda nicht mehr"
     },
     "migration_fiat_in_cash": {
-      "message": "Portfolio Bargeld umfasst jetzt alle Fiat-Guthaben"
+      "message": "„Bargeld“ im Portfolio umfasst jetzt alle Fiat-Guthaben"
     },
     "migration_currency_gone": {
       "message": "Bitpanda bietet {currency} nicht mehr an"

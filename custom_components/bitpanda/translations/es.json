@@ -25,7 +25,7 @@
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "Cada activo seguido tiene siempre un sensor de precio en EUR. Selecciona monedas adicionales para obtener un sensor más por activo y moneda, convertido con los tipos de cambio de referencia diarios del Banco Central Europeo. Después, añade activos con \"Añadir seguimiento de precio\".",
+        "description": "Cada activo con seguimiento tiene siempre un sensor de precio en EUR. Selecciona monedas adicionales para obtener un sensor más por activo y moneda, convertido con los tipos de cambio de referencia diarios del Banco Central Europeo. Después, añade activos con \"Añadir seguimiento de precio\".",
         "data": {
           "extra_currencies": "Monedas adicionales"
         }
@@ -72,7 +72,7 @@
     "step": {
       "init": {
         "title": "Monedas del Price Tracker",
-        "description": "Cada activo seguido conserva siempre su sensor en EUR. Cada moneda seleccionada añade un sensor por activo; al quitar una moneda se eliminan esos sensores.",
+        "description": "Cada activo con seguimiento conserva siempre su sensor en EUR. Cada moneda seleccionada añade un sensor por activo; al quitar una moneda se eliminan esos sensores.",
         "data": {
           "extra_currencies": "Monedas adicionales"
         }
@@ -109,7 +109,7 @@
       },
       "abort": {
         "already_configured": "Este activo ya se está siguiendo.",
-        "asset_added": "{asset} ahora se sigue en el grupo {group}."
+        "asset_added": "Ahora se hace seguimiento de {asset} en el grupo {group}."
       }
     },
     "wallet_group": {
@@ -246,7 +246,7 @@
             "name": "Recompensas: importe neto"
           },
           "rewards_count": {
-            "name": "Recompensas: número"
+            "name": "Recompensas: número de pagos"
           },
           "rewards_last_at": {
             "name": "Recompensas: último pago"
@@ -350,7 +350,7 @@
       "message": "**ID de entidad renombrados.** Revisa los paneles, automatizaciones y scripts que los usan:\n{renames}"
     },
     "migration_not_migrated": {
-      "message": "**Sin migrar** (se han dejado sin cambios; elimínalas cuando ya no las necesites):\n{entities}"
+      "message": "**Entidades sin migrar** (se han dejado sin cambios; elimínalas cuando ya no las necesites):\n{entities}"
     },
     "migration_new_key": {
       "message": "Bitpanda necesita una nueva clave API con los permisos Guthaben (Balance), Transaktion (Transaction) y Earn (Read). Créala en {api_key_url} e introdúcela cuando Home Assistant te la pida. Si un cuadro de diálogo de Bitpanda muestra texto sin formato, recarga la pestaña del navegador."
@@ -365,7 +365,7 @@
       "message": "{symbol} ya no existe en Bitpanda"
     },
     "migration_fiat_in_cash": {
-      "message": "Portfolio Efectivo abarca ahora todos los saldos fiat"
+      "message": "el sensor \"Efectivo\" del Portfolio incluye ahora todos los saldos fiat"
     },
     "migration_currency_gone": {
       "message": "Bitpanda ya no ofrece {currency}"

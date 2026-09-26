@@ -38,7 +38,7 @@
         }
       },
       "reconfigure": {
-        "title": "Rekonfiguracja Bitpanda Portfolio",
+        "title": "Rekonfiguracja usługi Bitpanda Portfolio",
         "description": "Aby zastąpić zapisany klucz API, wklej nowy ze strony [{api_key_url}]({api_key_url}); potrzebuje on uprawnień Guthaben (Balance), Transaktion (Transaction) i Earn (Read). Pozostaw pole puste, aby zachować obecny klucz. Zmiana waluty usuwa wszystkie sensory Portfolio wraz z ich historią; potwierdzisz to w następnym kroku.",
         "data": {
           "api_key": "Nowy klucz API",
@@ -211,7 +211,7 @@
             "name": "Pozycja: średnia cena zakupu"
           },
           "invested_amount": {
-            "name": "Pozycja: kwota zainwestowana"
+            "name": "Pozycja: zainwestowana kwota"
           },
           "total_return": {
             "name": "Pozycja: zysk/strata"
@@ -234,7 +234,7 @@
             "name": "Aktywo: ilość"
           },
           "apr_percent": {
-            "name": "Nagrody: roczna stopa (APR %)"
+            "name": "Nagrody: roczne oprocentowanie (APR %)"
           },
           "rewards_gross": {
             "name": "Nagrody: brutto"
@@ -269,7 +269,7 @@
             "name": "Pozycja: średnia cena zakupu"
           },
           "invested_amount": {
-            "name": "Pozycja: kwota zainwestowana"
+            "name": "Pozycja: zainwestowana kwota"
           },
           "total_return": {
             "name": "Pozycja: zysk/strata"
@@ -317,7 +317,7 @@
   },
   "exceptions": {
     "portfolio_device_not_removable": {
-      "message": "Urządzenie „Portfolio” należy do usługi Bitpanda Portfolio i nie można go usunąć osobno. Aby je usunąć, usuń wpis „Bitpanda Portfolio”."
+      "message": "Urządzenie „Portfolio” należy do usługi Bitpanda Portfolio i nie można go usunąć osobno. Aby się go pozbyć, usuń wpis „Bitpanda Portfolio”."
     },
     "held_wallet_not_removable": {
       "message": "Nadal posiadasz {asset}, więc ten portfel od razu by wrócił. Zostanie usunięty automatycznie, gdy przestaniesz posiadać to aktywo."
@@ -350,7 +350,7 @@
       "message": "**Zmienione identyfikatory encji.** Sprawdź dashboardy, automatyzacje i skrypty, które ich używają:\n{renames}"
     },
     "migration_not_migrated": {
-      "message": "**Niezmigrowane** (pozostawione bez zmian; usuń je, gdy nie będą już potrzebne):\n{entities}"
+      "message": "**Niezmigrowane encje** (pozostawione bez zmian; usuń je, gdy nie będą już potrzebne):\n{entities}"
     },
     "migration_new_key": {
       "message": "Bitpanda wymaga nowego klucza API z uprawnieniami Guthaben (Balance), Transaktion (Transaction) i Earn (Read). Utwórz go na stronie {api_key_url} i wprowadź, gdy Home Assistant o niego poprosi. Jeśli okno integracji Bitpanda wyświetla surowy tekst, odśwież kartę przeglądarki."
@@ -365,7 +365,7 @@
       "message": "{symbol} nie istnieje już na platformie Bitpanda"
     },
     "migration_fiat_in_cash": {
-      "message": "Portfolio Gotówka obejmuje teraz wszystkie salda fiat"
+      "message": "sensor „Gotówka” w Portfolio obejmuje teraz wszystkie salda fiat"
     },
     "migration_currency_gone": {
       "message": "Bitpanda nie oferuje już {currency}"

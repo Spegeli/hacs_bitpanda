@@ -317,7 +317,7 @@
   },
   "exceptions": {
     "portfolio_device_not_removable": {
-      "message": "Het apparaat \"Portfolio\" hoort bij de dienst Bitpanda Portfolio en kan niet apart worden verwijderd. Verwijder de invoer \"Bitpanda Portfolio\" om het te verwijderen."
+      "message": "Het apparaat \"Portfolio\" hoort bij de dienst Bitpanda Portfolio en kan niet apart worden verwijderd. Wil je het kwijt, verwijder dan de invoer \"Bitpanda Portfolio\"."
     },
     "held_wallet_not_removable": {
       "message": "Je bezit nog {asset}, dus deze wallet zou meteen terugkomen. Hij wordt automatisch verwijderd zodra je het niet meer bezit."
@@ -365,13 +365,13 @@
       "message": "{symbol} bestaat niet meer bij Bitpanda"
     },
     "migration_fiat_in_cash": {
-      "message": "Portfolio Contanten omvat nu alle fiatsaldi"
+      "message": "de sensor \"Contanten\" van het Portfolio omvat nu alle fiatsaldi"
     },
     "migration_currency_gone": {
       "message": "Bitpanda biedt {currency} niet meer aan"
     },
     "migration_duplicate": {
-      "message": "een andere entiteit staat al voor dezelfde asset"
+      "message": "een andere entiteit vertegenwoordigt al dezelfde asset"
     },
     "migration_price_tracker_exists": {
       "message": "er was al een Price Tracker ingesteld; voeg de asset daar toe"

@@ -350,7 +350,7 @@
       "message": "**ID d'entité renommés.** Vérifiez les tableaux de bord, automatisations et scripts qui les utilisent :\n{renames}"
     },
     "migration_not_migrated": {
-      "message": "**Non migrées** (laissées telles quelles ; supprimez-les quand vous n'en avez plus besoin) :\n{entities}"
+      "message": "**Entités non migrées** (laissées telles quelles ; supprimez-les quand vous n'en avez plus besoin) :\n{entities}"
     },
     "migration_new_key": {
       "message": "Bitpanda a besoin d'une nouvelle clé API avec les autorisations Guthaben (Balance), Transaktion (Transaction) et Earn (Read). Créez-la sur {api_key_url} et saisissez-la quand Home Assistant vous la demande. Si une boîte de dialogue Bitpanda affiche du texte brut, rechargez l'onglet du navigateur."
@@ -365,7 +365,7 @@
       "message": "{symbol} n'existe plus chez Bitpanda"
     },
     "migration_fiat_in_cash": {
-      "message": "Portfolio Liquidités regroupe désormais tous les soldes fiat"
+      "message": "le capteur « Liquidités » du Portfolio regroupe désormais tous les soldes fiat"
     },
     "migration_currency_gone": {
       "message": "Bitpanda ne propose plus {currency}"

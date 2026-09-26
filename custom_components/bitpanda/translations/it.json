@@ -246,7 +246,7 @@
             "name": "Ricompense: netto"
           },
           "rewards_count": {
-            "name": "Ricompense: numero"
+            "name": "Ricompense: numero di accrediti"
           },
           "rewards_last_at": {
             "name": "Ricompense: ultimo accredito"
@@ -335,7 +335,7 @@
       "message": "Bitpanda ha ricevuto troppe richieste di prezzi. Nuovo tentativo più tardi."
     },
     "no_prices": {
-      "message": "Impossibile recuperare i prezzi da Bitpanda."
+      "message": "Non è stato possibile recuperare alcun prezzo da Bitpanda."
     },
     "ecb_rates_failed": {
       "message": "Impossibile recuperare i tassi di cambio della BCE: {error}"
@@ -350,7 +350,7 @@
       "message": "**ID entità rinominati.** Controlla dashboard, automazioni e script che li usano:\n{renames}"
     },
     "migration_not_migrated": {
-      "message": "**Non migrate** (lasciate invariate; eliminale quando non ti servono più):\n{entities}"
+      "message": "**Entità non migrate** (lasciate invariate; eliminale quando non ti servono più):\n{entities}"
     },
     "migration_new_key": {
       "message": "Bitpanda richiede una nuova chiave API con le autorizzazioni Guthaben (Balance), Transaktion (Transaction) e Earn (Read). Creala su {api_key_url} e inseriscila quando Home Assistant la richiede. Se una finestra di Bitpanda mostra testo grezzo, ricarica la scheda del browser."
@@ -365,7 +365,7 @@
       "message": "{symbol} non esiste più su Bitpanda"
     },
     "migration_fiat_in_cash": {
-      "message": "Portfolio Liquidità ora comprende tutti i saldi fiat"
+      "message": "il sensore \"Liquidità\" del Portfolio ora comprende tutti i saldi fiat"
     },
     "migration_currency_gone": {
       "message": "Bitpanda non offre più {currency}"

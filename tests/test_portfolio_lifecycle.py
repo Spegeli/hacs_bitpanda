@@ -273,7 +273,8 @@ async def test_misses_in_quick_succession_remove_nothing(hass):
     """Refreshes by hand (bitpanda.refresh, a cooldown apart) bring answers
     without a sold asset far faster than the regular pace. However many,
     its wallet stays until two update intervals have passed since the first
-    of them (ruling R40); the first miss after that removes it."""
+    of them, the time the regular pace takes for three; the first miss after
+    that removes it."""
     harness = _Harness(hass)
     await harness.refresh(_data(_holding(VSN), _holding(BTC)))
     misses = 5

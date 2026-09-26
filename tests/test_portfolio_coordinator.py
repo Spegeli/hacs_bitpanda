@@ -293,7 +293,10 @@ async def test_a_failed_request_neither_counts_nor_resets_the_empty_answers(hass
     assert (await coordinator._async_update_data()).total == 0.0
 
 
-# --- Refreshes by hand never confirm an empty answer sooner (ruling R40) --------
+# --- Refreshes by hand never confirm an empty answer sooner ---------------------
+#
+# However many empty answers they bring, none is the truth before two update
+# intervals have passed since the first: the time the regular pace takes.
 
 
 _BY_HAND = timedelta(seconds=20)

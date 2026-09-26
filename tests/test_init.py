@@ -967,7 +967,7 @@ async def test_a_price_sensor_registered_before_keeps_its_id_and_takes_the_new_n
     assert dr.async_get(hass).async_get(device.id).name == "Bitcoin (BTC) Price Tracker"
 
 
-# An ETF missing from assets-sample.json: the one the brief names.
+# An ETF missing from assets-sample.json: the one the README's entity ID table shows.
 _AMUNDI = {
     "id": "1f0ed6c9-ee10-68c6-8a0e-55a29b7757fe",
     "symbol": "LYY1",

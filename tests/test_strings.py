@@ -506,7 +506,8 @@ def test_every_currency_and_entity_name_is_translated():
 
 
 # The three sensors of a wallet device, by translation key, named by the part
-# of the balance each shows, in sentence case (USER DECISION 2026-09-26).
+# of the balance each shows, in sentence case: "Balance (available)", never
+# "Balance (Available)".
 _WALLET_PART_NAMES = {
     "de": ("Guthaben (verfügbar)", "Guthaben (Staking)", "Guthaben (gesamt)"),
     "en": ("Balance (available)", "Balance (staking)", "Balance (total)"),
@@ -737,10 +738,9 @@ def test_the_isin_is_labelled_on_every_sensor_that_names_its_asset():
             )
 
 
-# The lifetime reward attributes of the Staking sensor, by language (USER
-# DECISION 2026-09-26, ruling R46). German and Polish avoid their word for
-# payouts ("Auszahlungen", "wypłaty"), which also reads as money taken out,
-# and speak of credits instead.
+# The lifetime reward attributes of the Staking sensor, by language. German
+# and Polish avoid their word for payouts ("Auszahlungen", "wypłaty"), which
+# also reads as money taken out, and speak of credits instead.
 _REWARD_LABELS = {
     "de": {
         "rewards_count": "Belohnungen: Anzahl Gutschriften",

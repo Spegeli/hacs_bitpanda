@@ -903,8 +903,8 @@ async def test_the_frontend_gets_the_two_sections_open_and_filled_in(hass, hass_
 
 
 async def test_the_price_tracker_options_step_has_no_text_above_its_sections(hass):
-    """Its two headed sections say it all (maintainer decision): no step
-    description renders above them."""
+    """Its two headed sections say it all: no step description renders
+    above them."""
     result = await _options_form(hass, _price_tracker_entry())
     assert "description" not in _STRINGS["options"]["step"][result["step_id"]]
     assert result["description_placeholders"] is None

@@ -238,6 +238,33 @@ async def test_the_key_never_follows_a_redirect_to_another_host(socket_enabled):
     assert error == "Unexpected redirect from /portfolio"
 
 
+async def test_a_page_that_is_no_json_is_an_unreadable_answer(socket_enabled):
+    """A 200 answer that is no JSON -- a maintenance or captive-portal page
+    served as text/html -- is an answer that could not be read, not a failed
+    HTTP status: aiohttp refuses its content type with ContentTypeError, an
+    HTTP-status error class that carries the 200. A real server, because
+    the test mocker's json() never checks the content type."""
+    secret = "totally-secret-key"
+
+    async def maintenance(request: web.Request) -> web.Response:
+        return web.Response(text="<html>Down for maintenance</html>", content_type="text/html")
+
+    bitpanda = web.Application()
+    bitpanda.router.add_get("/v1/portfolio", maintenance)
+    async with TestServer(bitpanda) as server, aiohttp.ClientSession() as session:
+        client = BitpandaApiClient(secret, session)
+        with patch("custom_components.bitpanda.api.API_BASE_URL", str(server.make_url("/v1"))):
+            with pytest.raises(BitpandaApiError) as excinfo:
+                await client.async_get_portfolio()
+
+    assert (excinfo.value.kind, excinfo.value.path, excinfo.value.status) == (
+        "unreadable", "/portfolio", None
+    )
+    assert str(excinfo.value) == "Could not decode response from /portfolio"
+    assert excinfo.value.__cause__ is None
+    assert secret not in repr(vars(excinfo.value))
+
+
 async def test_null_data_becomes_an_empty_result():
     """dict.get's default does not apply to a present-but-null key."""
     with mock_aiohttp_client() as mocker:

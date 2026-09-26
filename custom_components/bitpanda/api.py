@@ -101,6 +101,14 @@ class BitpandaRateLimitError(BitpandaApiError):
     """The read rate limit was exceeded."""
 
 
+def _unreadable(path: str) -> BitpandaApiError:
+    """An answer from `path` that could not be read, logged at DEBUG."""
+    _LOGGER.debug("Could not decode response from %s", path)
+    return BitpandaApiError(
+        f"Could not decode response from {path}", kind=ERROR_UNREADABLE, path=path
+    )
+
+
 # One cheap, read-only endpoint per required scope, used only to probe which
 # scopes a key carries during setup. `/portfolio` needs no params; the other
 # two accept `page_size` and 1 is the smallest page the API allows.
@@ -170,6 +178,12 @@ class BitpandaApiClient:
                     )
                 response.raise_for_status()
                 return await response.json()
+        except aiohttp.ContentTypeError:
+            # A 200 answer that is no JSON -- a maintenance or captive-portal
+            # page served as text/html: json() refuses its content type
+            # before parsing, with a ClientResponseError subclass carrying
+            # the 200. The answer could not be read; no status failed.
+            raise _unreadable(path) from None
         except aiohttp.ClientResponseError as err:
             _LOGGER.debug("HTTP %s from %s", err.status, path)
             raise BitpandaApiError(
@@ -194,10 +208,7 @@ class BitpandaApiClient:
             # coordinator, whose final handler calls logger.exception() —
             # exc_info=True through this integration's own logger, which is
             # exactly what the API-key rule forbids.
-            _LOGGER.debug("Could not decode response from %s", path)
-            raise BitpandaApiError(
-                f"Could not decode response from {path}", kind=ERROR_UNREADABLE, path=path
-            ) from None
+            raise _unreadable(path) from None
 
     async def _paginate(
         self,

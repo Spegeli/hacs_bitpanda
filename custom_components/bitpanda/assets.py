@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable
 
-from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
+from .api import BitpandaApiClient, BitpandaApiError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,9 +64,13 @@ class AssetDirectory:
     /portfolio names holdings by UUID only. Wallet devices need a name and a
     symbol, and only a record's group tells Cash Plus apart, so each held
     asset is looked up once with a keyless /assets?id= request and kept in
-    `cache` -- a dict the caller keeps across reloads. A failed lookup is
-    retried on the next refresh; an asset the catalogue does not know is
-    asked for once per run.
+    `cache` -- a dict the caller keeps across reloads. A failed lookup --
+    a rate limit, a timeout, a connection or server error -- ends the pass:
+    the next lookup would most likely fail the same way, and with /assets
+    hanging, each would hold the refresh (the first one runs inside setup)
+    for the whole request timeout. The next refresh asks again. An asset
+    the catalogue does not know -- an empty answer, not a failure -- is
+    asked for once per run, and the pass goes on.
     """
 
     def __init__(self, client: BitpandaApiClient, cache: dict[str, dict]) -> None:
@@ -83,12 +87,13 @@ class AssetDirectory:
                 continue
             try:
                 found = await self._client.async_get_assets(asset_id=asset_id)
-            except BitpandaRateLimitError:
-                _LOGGER.debug("Rate limited looking up assets; retrying next refresh")
-                return
             except BitpandaApiError as err:
-                _LOGGER.debug("Could not look up asset %s: %s", asset_id, err)
-                continue
+                # The rate limit (BitpandaRateLimitError) included. The
+                # message names a path and a cause, never request data.
+                _LOGGER.debug(
+                    "Could not look up asset %s: %s; retrying next refresh", asset_id, err
+                )
+                return
             record = next((a for a in found if a.get("id") == asset_id), None)
             if record is None:
                 self._unknown.add(asset_id)

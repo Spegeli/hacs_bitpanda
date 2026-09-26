@@ -90,8 +90,8 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
         except BitpandaApiError as err:
             raise _update_failed(err) from None
         data = parse_portfolio(entries)
-        # Never raises: a lookup that fails leaves that one holding unnamed
-        # until the next refresh instead of failing the portfolio.
+        # Never raises: a failed lookup leaves the holdings not named yet
+        # unnamed until the next refresh instead of failing the portfolio.
         await self._directory.async_resolve(data.holdings)
         data.assets = {
             asset_id: record

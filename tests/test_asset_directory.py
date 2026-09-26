@@ -57,11 +57,32 @@ async def test_resolve_skips_cached_ids():
     assert client.calls == []
 
 
-async def test_one_failed_lookup_does_not_stop_the_others():
-    client = _Client({BTC["id"]: BTC}, fail={VSN["id"]})
+async def test_a_failed_lookup_ends_the_pass_and_the_next_one_retries():
+    """A timeout or a connection error makes the next lookup likely to fail
+    the same way: with /assets hanging, going on would hold the first
+    refresh -- inside setup -- for up to 15 s per held asset. The pass ends
+    there, and the next refresh asks again, starting with the one that
+    failed."""
+    client = _Client({VSN["id"]: VSN, BTC["id"]: BTC}, fail={VSN["id"]})
     directory = AssetDirectory(client, {})
     await directory.async_resolve([VSN["id"], BTC["id"]])
-    assert directory.get(VSN["id"]) is None
+    assert client.calls == [VSN["id"]]
+    assert directory.get(BTC["id"]) is None
+
+    client.fail = set()
+    await directory.async_resolve([VSN["id"], BTC["id"]])
+    assert client.calls == [VSN["id"], VSN["id"], BTC["id"]]
+    assert directory.get(VSN["id"]) == slim_asset(VSN)
+    assert directory.get(BTC["id"]) == slim_asset(BTC)
+
+
+async def test_an_asset_missing_from_the_catalogue_does_not_end_the_pass():
+    """An empty answer is a real answer, not a failure: that asset is marked
+    unknown and the next one is asked for."""
+    client = _Client({BTC["id"]: BTC})
+    directory = AssetDirectory(client, {})
+    await directory.async_resolve([VSN["id"], BTC["id"]])
+    assert client.calls == [VSN["id"], BTC["id"]]
     assert directory.get(BTC["id"]) == slim_asset(BTC)
 
 

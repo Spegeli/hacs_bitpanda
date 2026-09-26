@@ -452,7 +452,7 @@
     },
     "portfolio_exists": {
       "title": "Bitpanda upgrade blocked: a Bitpanda Portfolio is already set up",
-      "description": "The Bitpanda entry \"{entry}\" from before the upgrade cannot be upgraded: it would become a second Bitpanda Portfolio beside \"{portfolio}\", and only one can be set up. Nothing of it has been changed. Delete one of the two entries. If you keep \"{entry}\", restart Home Assistant afterwards to upgrade it."
+      "description": "The Bitpanda entry \"{entry}\" from before the upgrade cannot be upgraded: it would become a second Bitpanda Portfolio beside \"{portfolio}\", and only one can be set up. It has been left unchanged. Delete one of the two entries. If you keep \"{entry}\", restart Home Assistant afterwards to upgrade it."
     },
     "slow_price_interval": {
       "title": "Bitpanda Price Tracker: prices refresh only every {minutes} minutes",

@@ -242,9 +242,9 @@ async def _async_reload_on_new_data_or_options(
         await hass.config_entries.async_reload(entry.entry_id)
 
 
-def _loaded_runtimes(hass: HomeAssistant) -> list:
+def _loaded_entries(hass: HomeAssistant) -> list[ConfigEntry]:
     return [
-        entry.runtime_data
+        entry
         for entry in hass.config_entries.async_entries(DOMAIN)
         if entry.state is ConfigEntryState.LOADED
     ]
@@ -263,23 +263,44 @@ def _refresh_cooldown(runtimes: list) -> float:
     return seconds
 
 
+async def _async_refresh_now(runtime: PortfolioRuntime | PriceTrackerRuntime) -> bool:
+    """Refresh what `bitpanda.refresh` refreshes of one loaded entry -- the
+    Portfolio's portfolio, the Price Tracker's prices -- and say whether it
+    worked.
+
+    async_refresh, not the debounced async_request_refresh, whose outcome
+    never reaches the caller. It raises nothing either: DataUpdateCoordinator
+    catches every failure, logs it, and records it in last_update_success --
+    and a rejected key starts the reauth dialog as on any other refresh.
+    """
+    coordinator = (
+        runtime.portfolio if isinstance(runtime, PortfolioRuntime) else runtime.tickers
+    )
+    await coordinator.async_refresh()
+    return coordinator.last_update_success
+
+
 @callback
 def _async_register_refresh_service(hass: HomeAssistant) -> None:
     """Register `bitpanda.refresh`, shared by both services (async_setup).
 
-    It refreshes every loaded entry: the Portfolio's portfolio, the Price
-    Tracker's prices. A call within the cooldown of the last accepted one
-    is ignored. With no entry loaded there is nothing to refresh, and the
-    call fails with a translated ServiceValidationError: the frontend shows
-    it in the user's language, the log in English.
+    It refreshes every loaded entry, one after the other, and returns once
+    they are done. A call within the cooldown of the last accepted one is
+    ignored. The call fails with a translated error -- the frontend shows it
+    in the user's language, the log and automation traces in English -- when
+    no entry is loaded (a ServiceValidationError: there is nothing to
+    refresh), and when a refresh failed (a HomeAssistantError naming each
+    service whose refresh failed by its entry's title; the others are
+    refreshed all the same). A script or automation stops at a failed call
+    unless that step continues on error.
     """
     # Empty until the first accepted call: the monotonic clock can start near
     # zero after a boot.
     last_accepted: dict[str, float] = {}
 
     async def handle_refresh(call: ServiceCall) -> None:
-        runtimes = _loaded_runtimes(hass)
-        if not runtimes:
+        entries = _loaded_entries(hass)
+        if not entries:
             # Before the cooldown: a refused call refreshed nothing, so it
             # starts no cooldown either.
             raise ServiceValidationError(
@@ -287,15 +308,24 @@ def _async_register_refresh_service(hass: HomeAssistant) -> None:
             )
         now = monotonic()
         previous = last_accepted.get("time")
+        runtimes = [entry.runtime_data for entry in entries]
         if previous is not None and now - previous < _refresh_cooldown(runtimes):
             _LOGGER.debug("Refresh cooldown active, ignoring call")
             return
+        # A refresh that fails has asked Bitpanda all the same: it starts the
+        # cooldown like any other.
         last_accepted["time"] = now
-        for runtime in runtimes:
-            if isinstance(runtime, PortfolioRuntime):
-                await runtime.portfolio.async_request_refresh()
-            else:
-                await runtime.tickers.async_request_refresh()
+        failed = [
+            entry.title
+            for entry in entries
+            if not await _async_refresh_now(entry.runtime_data)
+        ]
+        if failed:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="refresh_failed",
+                translation_placeholders={"services": ", ".join(failed)},
+            )
 
     hass.services.async_register(DOMAIN, "refresh", handle_refresh)
 

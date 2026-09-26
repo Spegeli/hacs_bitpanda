@@ -424,6 +424,9 @@
     },
     "nothing_to_refresh": {
       "message": "Es gibt nichts zu aktualisieren: Weder Bitpanda Portfolio noch Bitpanda Price Tracker ist geladen."
+    },
+    "refresh_failed": {
+      "message": "Aktualisierung fehlgeschlagen: {services}."
     }
   },
   "issues": {

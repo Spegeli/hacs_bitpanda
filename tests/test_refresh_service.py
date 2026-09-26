@@ -1,5 +1,5 @@
-"""The bitpanda.refresh action: registered once with the integration, and
-throttled to the ticker interval.
+"""The bitpanda.refresh action: registered once with the integration,
+throttled to the ticker interval, and failing when a refresh fails.
 
 Every accepted call costs a portfolio request plus one ticker request per
 tracked asset; the ticker interval is what keeps the latter inside the
@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.service import async_get_all_descriptions
 from homeassistant.helpers.translation import async_get_translations
 from homeassistant.setup import async_setup_component
@@ -26,9 +26,20 @@ from custom_components.bitpanda.price_coordinator import PriceTrackerRuntime
 
 
 class _Coordinator:
-    def __init__(self, interval: timedelta) -> None:
+    """What the action touches: the update interval, which sets the
+    cooldown, and the refresh, whose outcome `last_update_success` tells --
+    as DataUpdateCoordinator.async_refresh leaves it, which never raises."""
+
+    def __init__(self, interval: timedelta, *, fails: bool = False) -> None:
         self.update_interval = interval
+        self.fails = fails
+        self.last_update_success = True
+        self.async_refresh = AsyncMock(side_effect=self._refresh)
+        # The debounced request, which swallows the outcome: never the one used.
         self.async_request_refresh = AsyncMock()
+
+    async def _refresh(self) -> None:
+        self.last_update_success = not self.fails
 
 
 class _Clock:
@@ -39,10 +50,15 @@ class _Clock:
         return self.now
 
 
+_TITLES = {"portfolio": "Bitpanda Portfolio", "price_tracker": "Bitpanda Price Tracker"}
+
+
 def _loaded(hass, entry_type: str, runtime) -> MockConfigEntry:
     """An entry of `entry_type` as a finished setup leaves it: loaded, with
-    `runtime` as its runtime data."""
-    entry = MockConfigEntry(domain=DOMAIN, version=3, data={"entry_type": entry_type})
+    `runtime` as its runtime data, under the service's own title."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=3, title=_TITLES[entry_type], data={"entry_type": entry_type}
+    )
     entry.add_to_hass(hass)
     entry.runtime_data = runtime
     entry.mock_state(hass, ConfigEntryState.LOADED)
@@ -64,10 +80,16 @@ async def _set_up_the_integration(hass) -> None:
     await hass.async_block_till_done()
 
 
-async def _register(hass, ticker_interval: timedelta):
+async def _register(
+    hass,
+    ticker_interval: timedelta,
+    *,
+    portfolio_fails: bool = False,
+    tickers_fail: bool = False,
+):
     await _set_up_the_integration(hass)
-    portfolio = _Coordinator(timedelta(minutes=5))
-    tickers = _Coordinator(ticker_interval)
+    portfolio = _Coordinator(timedelta(minutes=5), fails=portfolio_fails)
+    tickers = _Coordinator(ticker_interval, fails=tickers_fail)
     _loaded(hass, "portfolio", _portfolio_runtime(portfolio))
     _loaded(hass, "price_tracker", PriceTrackerRuntime(tickers=tickers, ecb=None))
     return portfolio, tickers
@@ -86,8 +108,8 @@ async def test_refresh_reaches_both_services_and_is_throttled(hass):
         await _call(hass)
         clock.now += 46
         await _call(hass)
-    assert tickers.async_request_refresh.await_count == 2
-    assert portfolio.async_request_refresh.await_count == 2
+    assert tickers.async_refresh.await_count == 2
+    assert portfolio.async_refresh.await_count == 2
 
 
 async def test_cooldown_follows_a_stretched_ticker_interval(hass):
@@ -99,7 +121,7 @@ async def test_cooldown_follows_a_stretched_ticker_interval(hass):
         await _call(hass)
         clock.now += 60
         await _call(hass)
-    assert tickers.async_request_refresh.await_count == 2
+    assert tickers.async_refresh.await_count == 2
 
 
 async def test_cooldown_never_drops_below_ten_seconds(hass):
@@ -111,14 +133,14 @@ async def test_cooldown_never_drops_below_ten_seconds(hass):
         await _call(hass)
         clock.now += 5
         await _call(hass)
-    assert tickers.async_request_refresh.await_count == 2
+    assert tickers.async_refresh.await_count == 2
 
 
 async def test_first_refresh_is_accepted_right_after_boot(hass):
     _, tickers = await _register(hass, timedelta(seconds=60))
     with patch("custom_components.bitpanda.monotonic", _Clock(5.0)):
         await _call(hass)
-    assert tickers.async_request_refresh.await_count == 1
+    assert tickers.async_refresh.await_count == 1
 
 
 async def test_only_the_loaded_services_are_refreshed(hass):
@@ -132,7 +154,87 @@ async def test_only_the_loaded_services_are_refreshed(hass):
         state=ConfigEntryState.SETUP_RETRY,
     ).add_to_hass(hass)
     await _call(hass)
-    assert portfolio.async_request_refresh.await_count == 1
+    assert portfolio.async_refresh.await_count == 1
+
+
+# --- A refresh that fails fails the call ---------------------------------------------
+
+
+async def test_the_call_waits_for_the_refresh_itself(hass):
+    """Not the debounced request, which swallows the outcome: the refresh,
+    awaited, so the call knows whether it worked."""
+    portfolio, tickers = await _register(hass, timedelta(seconds=60))
+    await _call(hass)
+    for coordinator in (portfolio, tickers):
+        assert coordinator.async_refresh.await_count == 1
+        coordinator.async_request_refresh.assert_not_awaited()
+
+
+def _refresh_failed(services: str) -> str:
+    """The English text of the error, its trailing "." dropped, as Home
+    Assistant renders a translated exception."""
+    return f"Refresh failed for {services}"
+
+
+async def test_a_failed_refresh_fails_the_call_and_names_the_service(hass):
+    """A HomeAssistantError -- the call was right, the refresh failed --
+    translated, with the service's title as the placeholder: the frontend
+    shows it in the user's language, the log and automation traces in
+    English. The other service is refreshed all the same."""
+    portfolio, tickers = await _register(hass, timedelta(seconds=60), portfolio_fails=True)
+    with pytest.raises(HomeAssistantError) as excinfo:
+        await _call(hass)
+    assert not isinstance(excinfo.value, ServiceValidationError)
+    assert (
+        excinfo.value.translation_domain,
+        excinfo.value.translation_key,
+        excinfo.value.translation_placeholders,
+    ) == (DOMAIN, "refresh_failed", {"services": "Bitpanda Portfolio"})
+    assert str(excinfo.value) == _refresh_failed("Bitpanda Portfolio")
+    assert excinfo.value.__cause__ is None
+    assert tickers.async_refresh.await_count == 1
+
+
+async def test_a_failed_price_refresh_is_named_too(hass):
+    _, tickers = await _register(hass, timedelta(seconds=60), tickers_fail=True)
+    with pytest.raises(HomeAssistantError) as excinfo:
+        await _call(hass)
+    assert excinfo.value.translation_placeholders == {"services": "Bitpanda Price Tracker"}
+
+
+async def test_two_failed_refreshes_are_named_together(hass):
+    await _register(hass, timedelta(seconds=60), portfolio_fails=True, tickers_fail=True)
+    with pytest.raises(HomeAssistantError) as excinfo:
+        await _call(hass)
+    assert excinfo.value.translation_placeholders == {
+        "services": "Bitpanda Portfolio, Bitpanda Price Tracker"
+    }
+    assert str(excinfo.value) == _refresh_failed("Bitpanda Portfolio, Bitpanda Price Tracker")
+
+
+async def test_a_service_is_named_by_the_title_its_entry_carries(hass):
+    """The title the integration page shows, renamed by the user or not."""
+    await _set_up_the_integration(hass)
+    entry = _loaded(hass, "portfolio", _portfolio_runtime(
+        _Coordinator(timedelta(minutes=5), fails=True)
+    ))
+    hass.config_entries.async_update_entry(entry, title="My Bitpanda")
+    with pytest.raises(HomeAssistantError) as excinfo:
+        await _call(hass)
+    assert excinfo.value.translation_placeholders == {"services": "My Bitpanda"}
+
+
+async def test_a_call_within_the_cooldown_stays_silent_after_a_failed_one(hass):
+    """The failed refresh still asked Bitpanda, so it starts the cooldown
+    like any other; a call within it refreshes nothing and says nothing."""
+    portfolio, _ = await _register(hass, timedelta(seconds=60), portfolio_fails=True)
+    clock = _Clock(1000.0)
+    with patch("custom_components.bitpanda.monotonic", clock):
+        with pytest.raises(HomeAssistantError):
+            await _call(hass)
+        clock.now += 30
+        await _call(hass)
+    assert portfolio.async_refresh.await_count == 1
 
 
 # --- Registered with the integration, not with an entry ----------------------------
@@ -177,7 +279,7 @@ async def test_a_refused_call_starts_no_cooldown(hass):
         _loaded(hass, "price_tracker", PriceTrackerRuntime(tickers=tickers, ecb=None))
         clock.now += 1
         await _call(hass)
-    assert tickers.async_request_refresh.await_count == 1
+    assert tickers.async_refresh.await_count == 1
 
 
 _BITPANDA_DIR = Path(__file__).parent.parent / "custom_components" / "bitpanda"

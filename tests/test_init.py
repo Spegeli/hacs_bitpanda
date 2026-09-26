@@ -18,6 +18,7 @@ from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
+    async_capture_events,
     async_fire_time_changed,
 )
 
@@ -798,6 +799,97 @@ async def test_the_refresh_action_refreshes_a_loaded_portfolio(hass, portfolio_a
     calls = portfolio_api.call_count
     await _refresh(hass)
     assert portfolio_api.call_count == calls + 1
+
+
+async def test_the_refresh_action_returns_with_the_new_figures_in_place(hass, portfolio_api):
+    """It waits for the refresh itself: once the call returns, the sensors
+    show what Bitpanda just answered."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    portfolio_api.return_value = [
+        {**portfolio_api.return_value[0], "currency_balance": {"value": "300.00"}},
+        portfolio_api.return_value[1],
+    ]
+    await hass.services.async_call(DOMAIN, "refresh", blocking=True)
+    assert _value(hass, "sensor.bitpanda_portfolio_total") == 310.0
+
+
+_PORTFOLIO_DOWN = BitpandaApiError(
+    "HTTP 503 from /portfolio", kind="http_status", path="/portfolio", status=503
+)
+
+
+async def test_a_failed_refresh_fails_the_action_and_names_the_service(
+    hass, portfolio_api, price_api
+):
+    """The Portfolio's refresh fails, the Price Tracker's works: the call
+    fails with a translated error naming the Portfolio, whose sensors are
+    unavailable; the prices were refreshed all the same."""
+    ticker, _ = price_api
+    portfolio = _portfolio_entry(hass)
+    _price_entry(hass, [], price_group("crypto", BTC))
+    # The first setup of the domain sets up both entries.
+    await _setup(hass, portfolio)
+    ticker_calls = ticker.call_count
+    portfolio_api.side_effect = _PORTFOLIO_DOWN
+
+    with pytest.raises(HomeAssistantError) as excinfo:
+        await _refresh(hass)
+
+    assert not isinstance(excinfo.value, ServiceValidationError)
+    assert (excinfo.value.translation_key, excinfo.value.translation_placeholders) == (
+        "refresh_failed", {"services": "Bitpanda Portfolio"}
+    )
+    assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unavailable"
+    assert ticker.call_count == ticker_calls + 1
+    assert _value(hass, "sensor.bitpanda_bitcoin_btc_eur") == 100.0
+
+
+async def test_an_empty_portfolio_held_back_fails_the_refresh_action(hass, portfolio_api):
+    """An empty answer awaiting confirmation is a failed update (the
+    Portfolio's sensors go unavailable), so the call fails too."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    portfolio_api.return_value = []
+    with pytest.raises(HomeAssistantError) as excinfo:
+        await _refresh(hass)
+    assert excinfo.value.translation_key == "refresh_failed"
+
+
+async def test_continue_on_error_carries_a_script_past_a_failed_refresh(hass, portfolio_api):
+    """What the README tells automation authors: a failed refresh stops the
+    script at that step, unless the step says `continue_on_error: true`."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    portfolio_api.side_effect = _PORTFOLIO_DOWN
+    after = async_capture_events(hass, "bitpanda_test_after_refresh")
+    step_after = {"event": "bitpanda_test_after_refresh"}
+    assert await async_setup_component(
+        hass,
+        "script",
+        {
+            "script": {
+                "stops": {"sequence": [{"action": "bitpanda.refresh"}, step_after]},
+                "goes_on": {
+                    "sequence": [
+                        {"action": "bitpanda.refresh", "continue_on_error": True},
+                        step_after,
+                    ]
+                },
+            }
+        },
+    )
+    # Each run a cooldown apart, so that both really refresh -- and fail.
+    clock = iter((1000.0, 2000.0))
+    with patch("custom_components.bitpanda.monotonic", lambda: next(clock)):
+        with pytest.raises(HomeAssistantError):
+            await hass.services.async_call("script", "stops", blocking=True)
+        await hass.async_block_till_done()
+        assert after == []
+
+        await hass.services.async_call("script", "goes_on", blocking=True)
+        await hass.async_block_till_done()
+    assert len(after) == 1
 
 
 async def test_the_refresh_action_outlives_every_entry(hass, portfolio_api, price_api):

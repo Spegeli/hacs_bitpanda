@@ -424,6 +424,9 @@
     },
     "nothing_to_refresh": {
       "message": "Nie ma nic do odświeżenia: nie załadowano ani usługi Bitpanda Portfolio, ani usługi Bitpanda Price Tracker."
+    },
+    "refresh_failed": {
+      "message": "Nie udało się odświeżyć: {services}."
     }
   },
   "issues": {

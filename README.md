@@ -42,9 +42,11 @@ The integration offers two services. Set up either or both — each one once.
 - 24h price change (`change_24h_pct`) as an attribute, from the Home Assistant recorder
 
 ### Manual Refresh
-- The `bitpanda.refresh` service updates the portfolio and the prices immediately
-- A call within the cooldown of the last accepted one is ignored. With a Price Tracker set up, the cooldown is its price interval (60 seconds, longer with many tracked assets), so an automation cannot push price requests beyond the normal polling rate; with only the Portfolio, it is 10 seconds
+- The `bitpanda.refresh` service updates the portfolio and the prices immediately, and returns once both are done
+- A call within the cooldown of the last accepted one is ignored, without an error. With a Price Tracker set up, the cooldown is its price interval (60 seconds, longer with many tracked assets), so an automation cannot push price requests beyond the normal polling rate; with only the Portfolio, it is 10 seconds
+- When a refresh fails — Bitpanda cannot be reached or answers with an error — the call fails with an error naming the service, such as **Bitpanda Portfolio**; the other service is refreshed all the same
 - While neither service is loaded — for example while its setup is being retried — a call fails with an error saying there is nothing to refresh
+- ⚠️ A failed call stops a script or automation at that step, unless the step sets `continue_on_error: true`
 
 ### Supported Assets
 | Type | Examples | Assets | Price Tracker | Portfolio |
@@ -66,9 +68,9 @@ Cash Plus products are cash equivalents — one unit is one unit of their curren
 
 #### Three language settings
 The integration's texts follow three different settings:
-- **Profile language** (your user profile → **Language**): per user, in the browser, at once — dialogs and forms, attribute names, the group subtitles ("Wallet group", "Price tracker group"), the reason shown while setup fails or is retried, the upgrade details under **Settings → Repairs**, and the error a `bitpanda.refresh` call shows in the UI while neither service is loaded (the log and automation traces keep it in English)
+- **Profile language** (your user profile → **Language**): per user, in the browser, at once — dialogs and forms, attribute names, the group subtitles ("Wallet group", "Price tracker group"), the reason shown while setup fails or is retried, the upgrade details under **Settings → Repairs**, and the errors a `bitpanda.refresh` call shows in the UI — a failed refresh, or nothing to refresh while neither service is loaded (the log and automation traces keep them in English)
 - **System language** (**Settings → System → General → Language**): shared by all users — sensor names, from the next start of Home Assistant
-- **Language of group titles and messages** (**Configure**, the ⚙ on each service's entry): shared by all users, English unless you choose another, as soon as you save — the titles of that service's groups (e.g. "Cryptocurrencies" → "Kryptowährungen") and the integration's own messages, such as why a device cannot be deleted — not the `bitpanda.refresh` error, which follows the profile language; a group you renamed yourself keeps its name (newer versions offer **⋮ → Rename**)
+- **Language of group titles and messages** (**Configure**, the ⚙ on each service's entry): shared by all users, English unless you choose another, as soon as you save — the titles of that service's groups (e.g. "Cryptocurrencies" → "Kryptowährungen") and the integration's own messages, such as why a device cannot be deleted — not the `bitpanda.refresh` errors, which follow the profile language; a group you renamed yourself keeps its name (newer versions offer **⋮ → Rename**)
 - Tip: to see everything in one language, choose it in all three and restart Home Assistant
 
 ---

@@ -382,6 +382,10 @@
     "currency_dropped": {
       "title": "Mise à jour de Bitpanda : devise du Portfolio passée en EUR",
       "description": "{currency}, la devise de votre entrée Bitpanda avant la mise à jour, n'est pas disponible pour Bitpanda Portfolio : il exprime donc désormais toutes ses valeurs en EUR. Pour choisir une autre devise, utilisez « Reconfigurer » sur l'entrée « Bitpanda Portfolio »."
+    },
+    "price_tracker_exists": {
+      "title": "Mise à jour de Bitpanda : prix à ajouter au Price Tracker",
+      "description": "Un Bitpanda Price Tracker était déjà configuré lors de la mise à jour : les prix que suivait votre ancienne entrée Bitpanda n'y ont donc pas été transférés. Pour continuer à les suivre, ajoutez ces actifs avec « Ajouter un suivi de prix » sur l'entrée « Bitpanda Price Tracker » :\n\n{assets}"
     }
   },
   "services": {

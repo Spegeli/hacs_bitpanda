@@ -178,6 +178,23 @@ def test_menu_items_are_named_with_home_assistants_own_labels():
                 assert _quoted(labels[control]).search(text), (language, ".".join(key))
 
 
+def test_texts_name_the_add_price_tracker_button_by_its_own_label():
+    """The Price Tracker's "Add price tracker" is this integration's own text
+    (`config_subentries.price_group.initiate_flow.user`): a text that sends
+    the user to it quotes it exactly as the same file labels it."""
+    for name in _FILES:
+        strings = _load(name)
+        label = strings["config_subentries"]["price_group"]["initiate_flow"]["user"]
+        for key in (
+            ("config", "step", "price_tracker", "description"),
+            ("issues", "price_tracker_exists", "description"),
+        ):
+            text = strings
+            for part in key:
+                text = text[part]
+            assert _quoted(label).search(text), (name, ".".join(key))
+
+
 # Each shipped language by its own name.
 _ENDONYMS = {
     "de": "Deutsch",

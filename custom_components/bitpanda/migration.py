@@ -13,11 +13,13 @@ certainty is changed or deleted: it is listed instead.
 
 What changed reaches the user as repair issues (Settings -> Repairs), only
 the ones that apply: the renamed entity IDs, the entities left alone, and
-one issue per note (the currency fallback). The frontend shows their texts,
+one issue per note (the currency fallback; the assets to add to a Price
+Tracker set up before the upgrade). The frontend shows their texts,
 `issues` in strings.json and translations/, in each user's own language;
-their placeholders carry nothing but entity IDs and codes. One WARNING in
-the log, in English like every log line, keeps the whole mapping with the
-reason for every entity left alone -- also once the issues are dismissed.
+their placeholders carry nothing but entity IDs, codes and asset labels.
+One WARNING in the log, in English like every log line, keeps the whole
+mapping with the reason for every entity left alone -- also once the
+issues are dismissed.
 """
 from __future__ import annotations
 
@@ -59,9 +61,10 @@ from .const import (
     SUPPORTED_CURRENCIES,
 )
 from .devices import find_entry_device
-from .groups import price_group_of_asset
+from .groups import price_group_of_asset, tracked_assets
 from .naming import (
     LEGACY_PORTFOLIO_OBJECT_ID,
+    asset_display_label,
     is_default_entity_id,
     legacy_price_object_id,
     legacy_wallet_object_id,
@@ -389,6 +392,48 @@ async def _async_create_price_tracker(
     return "failed"
 
 
+def _price_tracker_entry(hass: HomeAssistant) -> ConfigEntry | None:
+    """The Price Tracker entry, if there is one."""
+    return next(
+        (
+            other
+            for other in hass.config_entries.async_entries(DOMAIN)
+            if other.unique_id == ENTRY_TYPE_PRICE_TRACKER
+        ),
+        None,
+    )
+
+
+def price_tracker_note(hass: HomeAssistant, plan: MigrationPlan) -> Note | None:
+    """What to add to a Price Tracker the user set up before the upgrade.
+
+    The migration adopts the legacy price sensors only into a Price Tracker
+    it creates itself, so with one set up already, the assets whose prices
+    the version 1 entry tracked are not handed over: the note names the ones
+    that Price Tracker does not track yet, by their labels -- asset names
+    and symbols, the same in every language. None when it tracks them all.
+    """
+    tracker = _price_tracker_entry(hass)
+    tracked = tracked_assets(tracker) if tracker is not None else {}
+    labels = sorted(
+        {
+            asset_display_label(asset)
+            for asset in plan.prices.values()
+            if asset["id"] not in tracked
+        },
+        key=str.casefold,
+    )
+    if not labels:
+        return None
+    return Note(
+        "price_tracker_exists",
+        {"assets": "\n".join(f"- {label}" for label in labels)},
+        "A Bitpanda Price Tracker was already set up, so the prices tracked before the "
+        "upgrade were not moved into it. Add these assets there to keep tracking them: "
+        f"{', '.join(labels)}.",
+    )
+
+
 def adopted_prices(
     hass: HomeAssistant, items: list[dict], planned: list[tuple[str, str]]
 ) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
@@ -404,14 +449,7 @@ def adopted_prices(
     the adoption list is still in the Price Tracker's data, its next setup
     adopts them, and `planned` stands.
     """
-    tracker = next(
-        (
-            other
-            for other in hass.config_entries.async_entries(DOMAIN)
-            if other.unique_id == ENTRY_TYPE_PRICE_TRACKER
-        ),
-        None,
-    )
+    tracker = _price_tracker_entry(hass)
     if tracker is None or CONF_LEGACY_ADOPT in tracker.data:
         return planned, []
     ent_reg = er.async_get(hass)
@@ -708,15 +746,17 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # entity registry itself saves later than config entries, and that
     # residual gap is an accepted risk, not one this code closes.
     renames, skipped = rewrite_portfolio_registry(hass, entry, plan)
+    notes = list(plan.notes)
     if outcome == "created":
         price_renames, not_adopted = adopted_prices(hass, items, price_renames)
         price_skipped += not_adopted
     elif outcome == "exists":
         price_renames = []
         price_skipped += [
-            (item["entity_id"], "a Price Tracker was already set up; add the asset there")
-            for item in items
+            (item["entity_id"], "a Price Tracker was already set up") for item in items
         ]
+        if (note := price_tracker_note(hass, plan)) is not None:
+            notes.append(note)
     remove_empty_legacy_device(hass, entry.entry_id, f"{entry.entry_id}_wallets")
     hass.config_entries.async_update_entry(
         entry,
@@ -738,5 +778,5 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ),
         version=3,
     )
-    _async_report(hass, renames + price_renames, skipped + price_skipped, plan.notes)
+    _async_report(hass, renames + price_renames, skipped + price_skipped, notes)
     return True

@@ -930,17 +930,31 @@ async def test_an_unresolvable_price_is_left_alone_and_listed(hass, legacy_api, 
     assert _not_migrated(hass) == f"- `{old}`"
 
 
-async def test_an_existing_price_tracker_does_not_block_the_migration(
-    hass, legacy_api, no_setup, caplog
-):
-    MockConfigEntry(
+def _price_tracker_set_up_before(hass, *groups) -> MockConfigEntry:
+    """A Price Tracker the user set up while the version 1 entry still waited
+    for its migration."""
+    tracker = MockConfigEntry(
         domain=DOMAIN,
         version=3,
         unique_id="price_tracker",
         data={"entry_type": "price_tracker"},
         options={"extra_currencies": []},
-    ).add_to_hass(hass)
-    entry = _v1_entry(hass, assets=["BTC"])
+        subentries_data=list(groups),
+    )
+    tracker.add_to_hass(hass)
+    return tracker
+
+
+async def test_an_existing_price_tracker_does_not_block_the_migration(
+    hass, legacy_api, no_setup, caplog
+):
+    """The migration adopts into a Price Tracker it creates itself: with one
+    set up already, the legacy price sensors stay where they are. A repair
+    issue of its own names the assets to add there -- by their labels, the
+    same in every language -- since the one the user has does not track
+    them."""
+    _price_tracker_set_up_before(hass)
+    entry = _v1_entry(hass, assets=["BTC", "XAU"])
     eid = entry.entry_id
     old = _legacy_entity(hass, entry, f"{eid}_BTC_price_EUR", "bitpanda_price_tracker_btc_eur")
 
@@ -954,9 +968,33 @@ async def test_an_existing_price_tracker_does_not_block_the_migration(
     assert reg_entry.config_entry_id == eid
     assert reg_entry.unique_id == f"{eid}_BTC_price_EUR"
     assert _not_migrated(hass) == f"- `{old}`"
-    assert f"- `{old}`: a Price Tracker was already set up; add the asset there" in _logged(
-        caplog
+    assert _issues(hass)["price_tracker_exists"].translation_placeholders == {
+        "assets": "- Bitcoin (BTC)\n- Gold (XAU)"
+    }
+    logged = _logged(caplog)
+    assert f"- `{old}`: a Price Tracker was already set up\n" in logged
+    assert (
+        "A Bitpanda Price Tracker was already set up, so the prices tracked before the "
+        "upgrade were not moved into it. Add these assets there to keep tracking them: "
+        "Bitcoin (BTC), Gold (XAU)."
+    ) in logged
+
+
+async def test_an_existing_price_tracker_is_asked_to_add_only_what_it_lacks(
+    hass, legacy_api, no_setup
+):
+    """An asset the Price Tracker tracks already is not named; when it
+    tracks them all, there is nothing to add and no such issue."""
+    _price_tracker_set_up_before(hass, price_group("crypto", *_by_symbol(symbol="BTC")))
+    entry = _v1_entry(hass, assets=["BTC"])
+    old = _legacy_entity(
+        hass, entry, f"{entry.entry_id}_BTC_price_EUR", "bitpanda_price_tracker_btc_eur"
     )
+
+    assert await async_migrate_entry(hass, entry)
+
+    assert "price_tracker_exists" not in _issues(hass)
+    assert _not_migrated(hass) == f"- `{old}`"
 
 
 async def test_a_failed_price_tracker_import_changes_nothing(hass, legacy_api, no_setup):
@@ -987,29 +1025,36 @@ async def test_a_failed_price_tracker_import_changes_nothing(hass, legacy_api, n
     assert dr.async_get(hass).async_get(device) is not None
 
 
-def _upgrade_with_every_issue(hass) -> tuple[MockConfigEntry, str]:
+def _upgrade_with_every_issue(hass) -> tuple[MockConfigEntry, str, str]:
     """A version 1 entry whose migration raises every repair issue there is:
-    a renamed wallet, a wallet left alone and the currency fallback. Returns
-    the entry and the entity ID of the wallet left alone."""
-    entry = _v1_entry(hass, currency="JPY", wallets=["cryptocoin_BTC", "cryptocoin_GONE"])
+    a renamed wallet; a wallet and a price sensor left alone; the currency
+    fallback; and a Price Tracker set up before the upgrade, which does not
+    track the asset whose price the entry tracked. Returns the entry and the
+    entity IDs of the wallet and the price sensor left alone."""
+    _price_tracker_set_up_before(hass)
+    entry = _v1_entry(
+        hass, currency="JPY", assets=["BTC"], wallets=["cryptocoin_BTC", "cryptocoin_GONE"]
+    )
     eid = entry.entry_id
     _legacy_entity(hass, entry, f"{eid}_wallet_cryptocoin_BTC", "bitpanda_wallets_btc_wallet")
     gone = _legacy_entity(
         hass, entry, f"{eid}_wallet_cryptocoin_GONE", "bitpanda_wallets_gone_wallet"
     )
-    return entry, gone
+    price = _legacy_entity(hass, entry, f"{eid}_BTC_price_EUR", "bitpanda_price_tracker_btc_eur")
+    return entry, gone, price
 
 
 async def test_the_upgrade_raises_exactly_the_repair_issues_that_apply(
     hass, legacy_api, no_setup
 ):
-    """Renamed entity IDs, entities left alone and the currency fallback,
-    each an issue of its own; an entity list is a language-neutral Markdown
-    list of entity IDs. Informational (not fixable), kept across restarts
-    until the user dismisses it, "Learn more" on the README's upgrade
-    section. Nothing else: no persistent notification, and no issue for the
-    new API key -- Home Assistant's reauthentication dialog asks for it."""
-    entry, gone = _upgrade_with_every_issue(hass)
+    """Renamed entity IDs, entities left alone, the currency fallback and the
+    assets to add to a Price Tracker set up before, each an issue of its
+    own; a list is a language-neutral Markdown list of entity IDs or asset
+    labels. Informational (not fixable), kept across restarts until the user
+    dismisses it, "Learn more" on the README's upgrade section. Nothing
+    else: no persistent notification, and no issue for the new API key --
+    Home Assistant's reauthentication dialog asks for it."""
+    entry, gone, price = _upgrade_with_every_issue(hass)
 
     with patch("homeassistant.components.persistent_notification.async_create") as notification:
         assert await async_migrate_entry(hass, entry)
@@ -1024,8 +1069,11 @@ async def test_the_upgrade_raises_exactly_the_repair_issues_that_apply(
             "renamed_entities",
             {"entities": "- `sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet`"},
         ),
-        "entities_not_migrated": ("entities_not_migrated", {"entities": f"- `{gone}`"}),
+        "entities_not_migrated": (
+            "entities_not_migrated", {"entities": f"- `{gone}`\n- `{price}`"},
+        ),
         "currency_dropped": ("currency_dropped", {"currency": "JPY"}),
+        "price_tracker_exists": ("price_tracker_exists", {"assets": "- Bitcoin (BTC)"}),
     }
     for issue in issues.values():
         assert (
@@ -1055,7 +1103,7 @@ async def test_the_full_mapping_is_logged_once_in_english(
     every reason -- in English like every log line, also where Home
     Assistant runs in another language."""
     hass.config.language = "de"
-    entry, gone = _upgrade_with_every_issue(hass)
+    entry, gone, price = _upgrade_with_every_issue(hass)
 
     assert await async_migrate_entry(hass, entry)
 
@@ -1064,8 +1112,12 @@ async def test_the_full_mapping_is_logged_once_in_english(
         "Renamed entity IDs. Check dashboards, automations and scripts that use them:\n"
         "- `sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet`\n\n"
         "Not migrated (left unchanged; delete them when you no longer need them):\n"
-        f"- `{gone}`: GONE no longer exists at Bitpanda\n\n"
+        f"- `{gone}`: GONE no longer exists at Bitpanda\n"
+        f"- `{price}`: a Price Tracker was already set up\n\n"
         "JPY is not available for the Bitpanda Portfolio; it now reports in EUR.\n\n"
+        "A Bitpanda Price Tracker was already set up, so the prices tracked before the "
+        "upgrade were not moved into it. Add these assets there to keep tracking them: "
+        "Bitcoin (BTC).\n\n"
         "Bitpanda needs a new API key with the permissions Guthaben (Balance), Transaktion "
         "(Transaction) and Earn (Read). Create it at https://app.bitpanda.com/my-account/apikey "
         "and enter it when Home Assistant asks for it."
@@ -1080,7 +1132,7 @@ def test_learn_more_leads_to_the_readmes_upgrade_section():
     and the dots dropped. Renaming the heading breaks the link -- and fails
     this test first."""
     readme = (Path(__file__).parent.parent / "README.md").read_text(encoding="utf-8")
-    assert "\n## ⬆️ Upgrading from 2026.06.x\n" in readme
+    assert "\n## \u2b06\ufe0f Upgrading from 2026.06.x\n" in readme
     assert UPGRADE_URL == (
         "https://github.com/Spegeli/hacs_bitpanda#%EF%B8%8F-upgrading-from-202606x"
     )
@@ -1101,12 +1153,12 @@ async def test_every_issue_text_renders_in_every_language(hass, legacy_api, no_s
     migration, read back from the issue registry: its translation key and
     exactly the placeholders the code supplied -- has a title and a
     description in every shipped language that use exactly those
-    placeholders and render with them. An entity list opens a paragraph of
-    its own, so the frontend renders it as a Markdown list. And strings.json
-    has no issue text the code never raises. Read from the files themselves:
-    Home Assistant would replace a mismatched translation with English,
-    hiding it."""
-    entry, _ = _upgrade_with_every_issue(hass)
+    placeholders and render with them. A list opens a paragraph of its own,
+    so the frontend renders it as a Markdown list. And strings.json has no
+    issue text the code never raises. Read from the files themselves: Home
+    Assistant would replace a mismatched translation with English, hiding
+    it."""
+    entry, _, _ = _upgrade_with_every_issue(hass)
     assert await async_migrate_entry(hass, entry)
     raised = {
         issue.translation_key: issue.translation_placeholders
@@ -1127,8 +1179,9 @@ async def test_every_issue_text_renders_in_every_language(hass, legacy_api, no_s
             )
             rendered = title.format(**placeholders) + description.format(**placeholders)
             assert all(value in rendered for value in placeholders.values()), (language, key)
-            if "entities" in placeholders:
-                assert "\n\n{entities}" in description, (language, key)
+            for name, value in placeholders.items():
+                if value.startswith("- "):
+                    assert f"\n\n{{{name}}}" in description, (language, key, name)
 
 
 async def test_an_interrupted_migration_can_run_again(hass, legacy_api, no_setup):

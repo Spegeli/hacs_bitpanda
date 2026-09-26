@@ -343,12 +343,13 @@ async def test_the_portfolio_groups_its_wallets_and_keeps_its_own_device_outside
 
 async def _next_refresh(hass, freezer) -> None:
     """The Portfolio's next regular refresh: Home Assistant's clock moves on
-    past its update interval, and the refresh it scheduled runs. The clock
-    matters: an empty portfolio is believed, and a sold asset's wallet
+    past its update interval, and the refresh it scheduled runs to its end
+    -- a background task, which only wait_background_tasks waits for. The
+    clock matters: an empty portfolio is believed, and a sold asset's wallet
     removed, only once their answers span two update intervals."""
     freezer.tick(timedelta(minutes=6))
     async_fire_time_changed(hass)
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
 
 async def test_a_deleted_wallet_group_comes_back_on_the_next_refresh_without_a_reload(
@@ -929,8 +930,9 @@ async def test_reauth_with_the_same_key_revives_a_portfolio_stopped_by_a_401(
     await _setup(hass, entry)
 
     portfolio_api.side_effect = BitpandaAuthError("Unauthorized for /portfolio")
+    # A scheduled refresh runs as a background task.
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=6))
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     [flow] = _reauth_flows(hass)
     assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_available").state == "unavailable"
 
@@ -948,7 +950,7 @@ async def test_reauth_with_the_same_key_revives_a_portfolio_stopped_by_a_401(
     assert _value(hass, "sensor.bitpanda_vision_vsn_wallet_available") == 50.0
     # ... and polling goes on from there.
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=6))
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     assert portfolio_api.call_count == calls + 2
 
 

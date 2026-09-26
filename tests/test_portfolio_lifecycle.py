@@ -606,8 +606,9 @@ async def test_the_earn_catalogue_keeps_refreshing_without_staking_sensors(hass)
     await hass.async_block_till_done()
     assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_staking") is None
 
+    # The scheduled refresh runs as a background task.
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(hours=25))
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     assert update_method.await_count >= 1
 
     # A successful refresh reschedules the next one as long as `_keep_polling`

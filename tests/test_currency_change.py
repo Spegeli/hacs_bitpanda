@@ -194,10 +194,11 @@ async def test_a_currency_change_recreates_the_sensors_without_the_old_history(
 
 async def _next_refresh(hass, freezer) -> None:
     """The Portfolio's next regular refresh: Home Assistant's clock moves on
-    past its update interval, and the refresh it scheduled runs."""
+    past its update interval, and the refresh it scheduled runs to its end
+    -- a background task, which only wait_background_tasks waits for."""
     freezer.tick(PORTFOLIO_UPDATE_INTERVAL + timedelta(minutes=1))
     async_fire_time_changed(hass)
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
 
 async def test_an_empty_answer_right_after_a_currency_change_waits_for_confirmation(

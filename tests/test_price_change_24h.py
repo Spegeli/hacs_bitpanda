@@ -37,10 +37,14 @@ def auto_enable_custom_integrations(recorder_mock, enable_custom_integrations):
 
 
 async def _later(hass, freezer, delta: timedelta) -> None:
-    """Home Assistant's clock moves on by `delta`, and what is due runs."""
+    """Home Assistant's clock moves on by `delta`, and what is due runs to
+    its end. Background tasks included: Home Assistant runs the 24 h lookup,
+    a time-interval action, as one -- and a coordinator's scheduled refresh
+    too -- and the lookup waits for the recorder's executor, however long
+    that takes on the machine at hand."""
     freezer.tick(delta)
     async_fire_time_changed(hass)
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
 
 async def test_the_24h_change_compares_with_the_price_recorded_a_day_before(hass, freezer):

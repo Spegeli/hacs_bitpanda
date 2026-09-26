@@ -98,10 +98,12 @@ async def async_retitle_groups(
     """
     known = await async_known_group_titles(hass)
     for group in groups_of_type(entry, subentry_type):
-        target = titles.get(group.unique_id)
-        if target is None or group.title == target:
+        # A group's category is its unique_id (see the module docstring).
+        category = group.unique_id
+        target = None if category is None else titles.get(category)
+        if category is None or target is None or group.title == target:
             continue
-        if group.title in known.get(group.unique_id, set()):
+        if group.title in known.get(category, set()):
             hass.config_entries.async_update_subentry(entry, group, title=target)
 
 
@@ -138,18 +140,18 @@ def entities_by_group(
     return out
 
 
-def price_group_data(category: str, records: Iterable[dict]) -> dict[str, Any]:
+def price_group_data(category: str, records: Iterable[dict[str, Any]]) -> dict[str, Any]:
     """What a Price Tracker group stores: its category and its assets'
     records by asset id."""
     return {CONF_CATEGORY: category, CONF_ASSETS: {record["id"]: record for record in records}}
 
 
 def price_group_subentries(
-    assets: Iterable[dict], titles: dict[str, str]
+    assets: Iterable[dict[str, Any]], titles: dict[str, str]
 ) -> list[ConfigSubentryData]:
     """New Price Tracker groups tracking `assets`: one per asset category,
     titled from `titles` (see async_group_titles)."""
-    by_category: dict[str, list[dict]] = {}
+    by_category: dict[str, list[dict[str, Any]]] = {}
     for asset in assets:
         record = slim_asset(asset)
         by_category.setdefault(asset_category(record), []).append(record)
@@ -164,7 +166,7 @@ def price_group_subentries(
     ]
 
 
-def tracked_assets(entry: ConfigEntry) -> dict[str, dict]:
+def tracked_assets(entry: ConfigEntry) -> dict[str, dict[str, Any]]:
     """Asset id -> record of every asset the Price Tracker tracks, in any group."""
     return {
         asset_id: record
@@ -187,7 +189,7 @@ def price_group_of_asset(entry: ConfigEntry, asset_id: str) -> ConfigSubentry | 
 
 @callback
 def async_add_asset_to_group(
-    hass: HomeAssistant, entry: ConfigEntry, group: ConfigSubentry, record: dict
+    hass: HomeAssistant, entry: ConfigEntry, group: ConfigSubentry, record: dict[str, Any]
 ) -> None:
     """Track `record` in the Price Tracker group `group`; its title stays.
 

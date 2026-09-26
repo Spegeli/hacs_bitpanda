@@ -6,14 +6,15 @@ the group of its asset type, which the flow creates when there is none yet.
 """
 from __future__ import annotations
 
-from datetime import timedelta
-from typing import Any
+from datetime import datetime, timedelta
+from typing import Any, cast
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigSubentryFlow, SubentryFlowResult
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -50,7 +51,7 @@ _CATALOGUE_KEY = f"{DOMAIN}_asset_catalogue"
 
 async def async_category_listing(
     hass: HomeAssistant, client: BitpandaApiClient, category: str
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Every asset of one category, all pages, slimmed, cached for 24 hours.
 
     Nothing here catches an API error: an error partway through a
@@ -58,7 +59,9 @@ async def async_category_listing(
     past its TTL is dropped on each call, so the cache holds at most a day's
     worth of what was actually browsed.
     """
-    store: dict[str, tuple] = hass.data.setdefault(_CATALOGUE_KEY, {})
+    store: dict[str, tuple[datetime, list[dict[str, Any]]]] = hass.data.setdefault(
+        _CATALOGUE_KEY, {}
+    )
     now = dt_util.utcnow()
     for expired in [
         key for key, (fetched_at, _) in store.items() if now - fetched_at >= _CATALOGUE_CACHE_TTL
@@ -69,7 +72,7 @@ async def async_category_listing(
     if cached is not None:
         return cached[1]
 
-    assets: list[dict] = []
+    assets: list[dict[str, Any]] = []
     seen: set[str] = set()
     for type_, group in ASSET_CATEGORY_FILTERS[category]:
         for asset in await client.async_list_assets(type_, group):
@@ -127,7 +130,9 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
             ),
         )
 
-    def _show_assets(self, options: list[dict], error: str | None) -> SubentryFlowResult:
+    def _show_assets(
+        self, options: list[SelectOptionDict], error: str | None
+    ) -> SubentryFlowResult:
         """One pick from `options`.
 
         `custom_value=True` is what makes the frontend render a single select
@@ -151,10 +156,12 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
             errors={"base": error} if error else None,
         )
 
-    async def _async_listing(self) -> tuple[list[dict], str | None]:
+    async def _async_listing(self) -> tuple[list[dict[str, Any]], str | None]:
         client = BitpandaApiClient(None, async_get_clientsession(self.hass))
+        # Set by the user step: this step is only ever reached through it.
+        category = cast(str, self._category)
         try:
-            return await async_category_listing(self.hass, client, self._category), None
+            return await async_category_listing(self.hass, client, category), None
         except BitpandaRateLimitError:
             return [], "rate_limited"
         except BitpandaApiError:
@@ -176,7 +183,7 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
         # ha-picker-field has no way to render a label for a raw value it
         # wasn't given).
         label_map = asset_label_map(catalogue)
-        options = sorted(
+        options: list[SelectOptionDict] = sorted(
             (
                 {"value": label, "label": label}
                 for label, asset in label_map.items()
@@ -197,7 +204,7 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
             return self._show_assets([], "no_assets_available")
         return self._show_assets(options, None)
 
-    async def _async_track(self, record: dict) -> SubentryFlowResult:
+    async def _async_track(self, record: dict[str, Any]) -> SubentryFlowResult:
         """Add `record` to the group of its asset type, or start that group.
 
         Joining ends the dialog with a message naming the group: no subentry

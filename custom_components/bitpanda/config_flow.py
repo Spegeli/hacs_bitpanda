@@ -7,9 +7,9 @@ setup dialogs race each other.
 """
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 import logging
-from typing import Any
+from typing import Any, cast
 
 import voluptuous as vol
 from homeassistant import config_entries
@@ -103,7 +103,7 @@ def _currency_select(options: list[str], *, multiple: bool = False) -> SelectSel
     )
 
 
-def extra_currencies(values) -> list[str]:
+def extra_currencies(values: Iterable[str] | None) -> list[str]:
     """The supported extra currencies among `values`, in one fixed order.
 
     `values` arrives lowercase from the selector form; upper-cased here
@@ -125,7 +125,7 @@ def extra_currencies_schema(selected: list[str]) -> vol.Schema:
     )
 
 
-def _language_field(languages: list[str], current: str) -> dict:
+def _language_field(languages: list[str], current: str) -> dict[vol.Required, SelectSelector]:
     """The language of an entry's own texts (language.py), one of `languages`,
     each labelled with its own name through `selector.language`.
 
@@ -445,18 +445,20 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         unloaded first (see async_purge_portfolio).
         """
         entry = self._get_reconfigure_entry()
+        # Set by async_step_reconfigure, the only step that leads here.
+        currency = cast(str, self._pending_currency)
         if user_input is None:
             return self.async_show_form(
                 step_id="confirm_currency",
                 data_schema=vol.Schema({}),
                 description_placeholders={
                     "old": entry.data[CONF_CURRENCY],
-                    "new": self._pending_currency,
+                    "new": currency,
                 },
             )
         updates: dict[str, Any] = {
-            CONF_CURRENCY: self._pending_currency,
-            CONF_CURRENCY_ID: self._currency_ids[self._pending_currency],
+            CONF_CURRENCY: currency,
+            CONF_CURRENCY_ID: self._currency_ids[currency],
         }
         if self._api_key:
             updates[CONF_API_KEY] = self._api_key
@@ -523,7 +525,7 @@ class BitpandaOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_price_tracker()
         return await self.async_step_portfolio()
 
-    async def _async_language_section(self) -> dict:
+    async def _async_language_section(self) -> dict[vol.Required, section]:
         """The language of the entry's own texts, in its open section."""
         field = _language_field(
             await async_shipped_languages(self.hass), entry_language(self.config_entry)

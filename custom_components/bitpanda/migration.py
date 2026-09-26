@@ -27,9 +27,10 @@ is a repair issue too (BLOCKER_ISSUES), for as long as it lasts.
 """
 from __future__ import annotations
 
+from collections.abc import Container
 from dataclasses import dataclass, field
 import logging
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import MAJOR_VERSION, MINOR_VERSION, __version__ as HA_VERSION
@@ -170,8 +171,8 @@ class MigrationPlan:
 
     currency: str
     currency_id: str
-    wallets: dict[str, dict] = field(default_factory=dict)
-    prices: dict[str, dict] = field(default_factory=dict)
+    wallets: dict[str, dict[str, Any]] = field(default_factory=dict)
+    prices: dict[str, dict[str, Any]] = field(default_factory=dict)
     cash_wallet: str | None = None
     reasons: dict[str, str] = field(default_factory=dict)
     notes: list[Note] = field(default_factory=list)
@@ -190,7 +191,9 @@ def legacy_price_key(entry_id: str, unique_id: str) -> tuple[str, str] | None:
     return head[len(prefix):], currency
 
 
-def free_entity_id(hass: HomeAssistant, entity_id: str, reserved=frozenset()) -> str:
+def free_entity_id(
+    hass: HomeAssistant, entity_id: str, reserved: Container[str] = frozenset()
+) -> str:
     """`entity_id`, or the first free "_2", "_3", ... variant, the way Home
     Assistant itself numbers a taken ID.
 
@@ -254,8 +257,8 @@ async def async_plan(hass: HomeAssistant, entry: ConfigEntry) -> MigrationPlan:
         # further down.
         raise BitpandaApiError("/currencies returned no usable currency list")
     ids = {c.get("symbol"): c.get("id") for c in currencies}
-    if currency in SUPPORTED_CURRENCIES and ids.get(currency):
-        plan = MigrationPlan(currency=currency, currency_id=ids[currency])
+    if currency in SUPPORTED_CURRENCIES and (currency_id := ids.get(currency)):
+        plan = MigrationPlan(currency=currency, currency_id=currency_id)
     else:
         plan = MigrationPlan(
             currency=DEFAULT_CURRENCY,
@@ -270,9 +273,11 @@ async def async_plan(hass: HomeAssistant, entry: ConfigEntry) -> MigrationPlan:
             )
         )
 
-    candidates: dict[str, list[dict]] = {}
+    candidates: dict[str, list[dict[str, Any]]] = {}
 
-    async def _resolve(symbol: str, prefix: str | None) -> tuple[dict | None, str | None]:
+    async def _resolve(
+        symbol: str, prefix: str | None
+    ) -> tuple[dict[str, Any] | None, str | None]:
         if symbol not in candidates:
             # Never an empty symbol: without the filter /assets lists the
             # whole 14,000-asset catalogue.
@@ -297,14 +302,15 @@ async def async_plan(hass: HomeAssistant, entry: ConfigEntry) -> MigrationPlan:
         if asset is not None:
             plan.wallets[wallet_id] = asset
         else:
-            plan.reasons[wallet_id] = reason
+            # _resolve gives a reason whenever it finds no asset.
+            plan.reasons[wallet_id] = cast(str, reason)
 
     for symbol in _legacy_symbols(hass, entry):
         asset, reason = await _resolve(symbol, None)
         if asset is not None:
             plan.prices[symbol] = asset
         else:
-            plan.reasons[symbol] = reason
+            plan.reasons[symbol] = cast(str, reason)
 
     # Portfolio Cash sums every fiat balance. The legacy fiat wallet in the
     # entry currency -- else the only one -- carries its history over.
@@ -321,7 +327,7 @@ async def async_plan(hass: HomeAssistant, entry: ConfigEntry) -> MigrationPlan:
 
 def plan_price_adoption(
     hass: HomeAssistant, entry: ConfigEntry, plan: MigrationPlan
-) -> tuple[list[dict], list[tuple[str, str]], list[tuple[str, str]]]:
+) -> tuple[list[dict[str, Any]], list[tuple[str, str]], list[tuple[str, str]]]:
     """Which legacy price entities the Price Tracker adopts, and as what.
 
     Changes nothing: the Price Tracker entry does the moving on its first
@@ -330,7 +336,7 @@ def plan_price_adoption(
     returned are the planned ones; every entity left alone comes with the
     reason, in English for the log.
     """
-    items: list[dict] = []
+    items: list[dict[str, Any]] = []
     renames: list[tuple[str, str]] = []
     skipped: list[tuple[str, str]] = []
     reserved: set[str] = set()
@@ -364,7 +370,7 @@ def plan_price_adoption(
 
 
 async def _async_create_price_tracker(
-    hass: HomeAssistant, entry: ConfigEntry, plan: MigrationPlan, items: list[dict]
+    hass: HomeAssistant, entry: ConfigEntry, plan: MigrationPlan, items: list[dict[str, Any]]
 ) -> str:
     """Create the Price Tracker through its import flow.
 
@@ -439,7 +445,7 @@ def price_tracker_note(hass: HomeAssistant, plan: MigrationPlan) -> Note | None:
 
 
 def adopted_prices(
-    hass: HomeAssistant, items: list[dict], planned: list[tuple[str, str]]
+    hass: HomeAssistant, items: list[dict[str, Any]], planned: list[tuple[str, str]]
 ) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
     """What the new Price Tracker made of the legacy price entities it was
     handed, read back from the entity registry: the renames it made, and
@@ -471,8 +477,10 @@ def adopted_prices(
         if entity_id is None or entity_id == item["entity_id"]:
             continue
         # Not a sensor the Price Tracker created afresh because the legacy
-        # entity was gone by the time it adopted.
-        if ent_reg.async_get(entity_id).previous_unique_id == item["unique_id"]:
+        # entity was gone by the time it adopted. Registered:
+        # async_get_entity_id has just found it.
+        reg_entry = cast(er.RegistryEntry, ent_reg.async_get(entity_id))
+        if reg_entry.previous_unique_id == item["unique_id"]:
             renames.append((item["entity_id"], entity_id))
     return renames, skipped
 

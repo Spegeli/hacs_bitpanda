@@ -2,6 +2,7 @@
 import asyncio
 from pathlib import Path
 
+import aiohttp
 import pytest
 from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client
 
@@ -73,3 +74,14 @@ async def test_fetch_maps_a_timeout():
         async with mocker.create_session(asyncio.get_running_loop()) as session:
             with pytest.raises(EcbError, match="Timeout"):
                 await async_fetch_ecb_rates(session)
+
+
+async def test_fetch_maps_a_connection_error_by_its_type_alone():
+    with mock_aiohttp_client() as mocker:
+        mocker.get(ECB_RATES_URL, exc=aiohttp.ClientConnectionError("details of the request"))
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            with pytest.raises(EcbError) as excinfo:
+                await async_fetch_ecb_rates(session)
+    assert str(excinfo.value) == "Connection error for the ECB rates: ClientConnectionError"
+    assert excinfo.value.__cause__ is None
+    assert excinfo.value.__suppress_context__

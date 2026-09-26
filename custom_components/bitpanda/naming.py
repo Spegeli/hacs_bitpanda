@@ -47,9 +47,9 @@ def asset_display_label(asset: dict) -> str:
     stock, ETF or ETC adds its ISIN (assets.asset_isin): "Name (SYMBOL /
     ISIN)", or "SYMBOL (ISIN)".
 
-    Compared ignoring case and spaces, so "BCI 5" / BCI5 reads "BCI5". Every
-    name of an asset comes from here: its devices', its entity IDs, and
-    every text and log line that names it.
+    Compared ignoring case and spaces, so "BCI 5" / BCI5 reads "BCI5". Device
+    names and entity IDs are built from it, and so are the texts and log
+    lines that name a known asset.
     """
     symbol = asset["symbol"]
     name = (asset.get("name") or "").strip()

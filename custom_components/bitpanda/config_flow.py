@@ -498,7 +498,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 # are `options.step.<step id>.sections`.
 _SECTION_CURRENCIES = "currencies"
 _SECTION_LANGUAGE = "language"
-# Both open: a section is the only way a Home Assistant form sets fields
+# Every one open: a section is the only way a Home Assistant form sets fields
 # apart, not a place to hide them.
 _OPEN: SectionConfig = {"collapsed": False}
 

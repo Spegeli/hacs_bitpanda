@@ -720,7 +720,7 @@ _ISIN_LABELS = {
     "de": "Asset: ISIN",
     "en": "Asset: ISIN",
     "es": "Activo: ISIN",
-    "fr": "Actif : ISIN",
+    "fr": "Actif\u00a0: ISIN",
     "it": "Asset: ISIN",
     "nl": "Asset: ISIN",
     "pl": "Aktywo: ISIN",

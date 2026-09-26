@@ -1,8 +1,16 @@
 """Tests for the asset directory that names the holdings."""
+import asyncio
 import logging
 
-from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
+from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client
+
+from custom_components.bitpanda.api import (
+    BitpandaApiClient,
+    BitpandaApiError,
+    BitpandaRateLimitError,
+)
 from custom_components.bitpanda.assets import AssetDirectory, slim_asset
+from custom_components.bitpanda.const import API_BASE_URL
 
 VSN = {
     "id": "1f051b7c-5980-6dda-9d3d-cf107d8d4bfb",
@@ -48,6 +56,24 @@ async def test_resolve_caches_slim_records():
     await directory.async_resolve([VSN["id"]])
     assert directory.get(VSN["id"]) == slim_asset(VSN)
     assert cache == {VSN["id"]: slim_asset(VSN)}
+
+
+async def test_a_holding_is_looked_up_by_its_id_alone_without_the_key():
+    """What the directory asks the real client for: one page of /assets,
+    filtered by the asset's id, keyless. Without the filter the lookup would
+    still name the holding -- by walking the whole catalogue page by page --
+    so the query itself is pinned: the mock matches a registered query as a
+    subset and would not notice a parameter lost or added."""
+    with mock_aiohttp_client() as mocker:
+        mocker.get(f"{API_BASE_URL}/assets", json={"data": [VSN], "has_next_page": False})
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            directory = AssetDirectory(BitpandaApiClient(None, session), {})
+            await directory.async_resolve([VSN["id"]])
+    assert mocker.call_count == 1
+    _, url, _, headers = mocker.mock_calls[0]
+    assert url.query_string == f"page_size=100&id={VSN['id']}"
+    assert "x-api-key" not in {name.lower() for name in headers or {}}
+    assert directory.get(VSN["id"]) == slim_asset(VSN)
 
 
 async def test_resolve_skips_cached_ids():

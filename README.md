@@ -231,7 +231,7 @@ The same step works in a script, which you can start from anywhere — from a bu
 
 ## ⬆️ Upgrading from 2026.06.x
 
-This release moves to Bitpanda's new Public API and splits the integration into two services. It needs Home Assistant **2025.5** or newer — on an older version the entry is left unmigrated, the integration does not load, and **Settings → Repairs** asks you to update Home Assistant.
+This release moves to Bitpanda's new Public API and splits the integration into two services. It needs Home Assistant **2025.5** or newer — on 2025.3 or 2025.4 the entry is left unmigrated, the integration does not load, and **Settings → Repairs** asks you to update Home Assistant; older versions cannot load the integration at all.
 
 If a **Bitpanda Portfolio** was set up while the old entry still waited for its upgrade — say, after an upgrade that was refused or failed — the old entry is not upgraded either: there can be only one Portfolio, and **Settings → Repairs** asks you to delete one of the two entries. If you keep the old one, restart Home Assistant afterwards to upgrade it.
 

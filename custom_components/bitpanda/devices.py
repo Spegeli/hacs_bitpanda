@@ -7,14 +7,15 @@ from homeassistant.helpers import device_registry as dr
 from .const import DOMAIN
 
 
-def device_identifier(device: dr.DeviceEntry) -> str | None:
-    """The identifier this integration gave `device`, or None.
+def device_identifiers(device: dr.DeviceEntry) -> set[str]:
+    """Every identifier this integration gave `device`: the second half of
+    each of its (DOMAIN, identifier) pairs.
 
-    Every device it creates carries exactly one: (DOMAIN, identifier).
+    Every device the integration creates carries exactly one, yet a device is
+    judged by all of them: one pair picked from the set at random could be
+    the one that does not tell.
     """
-    return next(
-        (identifier for domain, identifier in device.identifiers if domain == DOMAIN), None
-    )
+    return {identifier for domain, identifier in device.identifiers if domain == DOMAIN}
 
 
 def find_entry_device(

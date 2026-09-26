@@ -26,7 +26,7 @@ from .const import (
     DOMAIN,
     SUBENTRY_TYPE_PRICE_GROUP,
 )
-from .devices import device_identifier
+from .devices import device_identifiers
 from .groups import groups_of_type, tracked_assets
 from .naming import (
     asset_display_label,
@@ -201,7 +201,9 @@ def _remove_untracked(hass: HomeAssistant, entry: ConfigEntry, currencies: list[
     the devices of assets no longer tracked.
 
     Their history is kept: tracking the asset or currency again brings back
-    the same entity IDs. Only UUID-based IDs of this entry are touched.
+    the same entity IDs. Only UUID-based IDs of this entry are touched, and
+    a device goes only when no asset it names -- judged by every identifier
+    it carries -- is tracked any more.
     """
     tracked = tracked_assets(entry)
     ent_reg = er.async_get(hass)
@@ -211,11 +213,12 @@ def _remove_untracked(hass: HomeAssistant, entry: ConfigEntry, currencies: list[
             ent_reg.async_remove(reg_entry.entity_id)
     dev_reg = dr.async_get(hass)
     for device in dr.async_entries_for_config_entry(dev_reg, entry.entry_id):
-        identifier = device_identifier(device)
-        if identifier is None:
-            continue
-        asset_id = price_device_asset_id(entry.entry_id, identifier)
-        if asset_id is not None and asset_id not in tracked:
+        named = {
+            asset_id
+            for identifier in device_identifiers(device)
+            if (asset_id := price_device_asset_id(entry.entry_id, identifier)) is not None
+        }
+        if named and named.isdisjoint(tracked):
             dev_reg.async_remove_device(device.id)
 
 

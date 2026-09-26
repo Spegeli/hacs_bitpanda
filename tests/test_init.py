@@ -819,6 +819,80 @@ async def test_a_portfolio_that_is_not_loaded_refuses_only_its_portfolio_device(
     reload.assert_not_called()
 
 
+async def test_a_held_wallet_without_a_record_is_named_as_the_user_named_it(hass, portfolio_api):
+    """BTC's balance never parses, so the refusal names the wallet from its
+    device -- by the name the user gave it, where there is one."""
+    portfolio_api.return_value = [
+        *portfolio_api.return_value,
+        {"asset_id": BTC["id"], "balance": {"value": "unreadable"}},
+    ]
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    wallet = _add_device(hass, entry, "Bitcoin (BTC) Wallet", "wallet", BTC)
+    wallet = dr.async_get(hass).async_update_device(wallet.id, name_by_user="My bitcoins")
+
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await async_remove_config_entry_device(hass, entry, wallet)
+    assert exc_info.value.translation_key == "held_wallet_not_removable"
+    assert exc_info.value.translation_placeholders == {"asset": "My bitcoins"}
+
+
+# Identifiers no device of this integration carries today, merged into one
+# that does: a device is judged by every identifier it carries, and with this
+# many beside the one that matters, a check that read one arbitrary
+# identifier would all but never read that one.
+_EXTRA_IDENTIFIERS = frozenset(f"legacy_{number}" for number in range(15))
+
+
+def _with_extra_identifiers(hass, device: dr.DeviceEntry) -> dr.DeviceEntry:
+    return dr.async_get(hass).async_update_device(
+        device.id,
+        new_identifiers={*device.identifiers, *((DOMAIN, extra) for extra in _EXTRA_IDENTIFIERS)},
+    )
+
+
+async def test_a_device_carrying_the_portfolio_identifier_among_others_is_refused(
+    hass, portfolio_api
+):
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    device = _with_extra_identifiers(hass, _own_device(hass, entry, "portfolio"))
+
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await async_remove_config_entry_device(hass, entry, device)
+    assert exc_info.value.translation_key == "portfolio_device_not_removable"
+
+
+async def test_a_device_carrying_a_held_wallet_identifier_among_others_is_refused(
+    hass, portfolio_api
+):
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    calls = portfolio_api.call_count
+    device = _with_extra_identifiers(hass, _own_device(hass, entry, "wallet", VSN))
+
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await async_remove_config_entry_device(hass, entry, device)
+    await hass.async_block_till_done()
+    assert exc_info.value.translation_key == "held_wallet_not_removable"
+    assert exc_info.value.translation_placeholders == {"asset": "Vision (VSN)"}
+    assert portfolio_api.call_count == calls
+
+
+async def test_a_price_device_carrying_other_identifiers_still_takes_its_asset_along(
+    hass, price_api
+):
+    entry = _price_entry(hass, [], price_group("crypto", BTC, SOL))
+    await _setup(hass, entry)
+    device = _with_extra_identifiers(hass, _own_device(hass, entry, "price", SOL))
+
+    assert await async_remove_config_entry_device(hass, entry, device)
+    await hass.async_block_till_done()
+
+    assert list(_group(entry, "crypto").data["assets"]) == [BTC["id"]]
+    assert er.async_get(hass).async_get("sensor.bitpanda_solana_sol_eur") is None
+
+
 async def test_the_device_page_deletes_a_price_device(hass, price_api, hass_ws_client):
     ticker, _ = price_api
     entry = _price_entry(hass, [], price_group("crypto", BTC, SOL))

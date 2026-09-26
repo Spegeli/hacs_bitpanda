@@ -180,6 +180,26 @@ async def test_setup_removes_the_sensors_and_device_of_an_asset_no_longer_tracke
     assert dev_reg.async_get(btc_device) is not None
 
 
+async def test_setup_keeps_a_device_that_still_names_a_tracked_asset(hass):
+    """A device is judged by every identifier it carries, never by one picked
+    at random: one that names a tracked asset stays, whatever untracked
+    assets it names besides."""
+    entry = _price_tracker(hass, [], price_group("crypto", BTC))
+    btc_device = _price_device(hass, entry, BTC)
+    untracked = {
+        (DOMAIN, f"{entry.entry_id}_price_{number:08d}-0000-0000-0000-000000000000")
+        for number in range(15)
+    }
+    dev_reg = dr.async_get(hass)
+    dev_reg.async_update_device(
+        btc_device, new_identifiers={*dev_reg.async_get(btc_device).identifiers, *untracked}
+    )
+
+    await async_setup_price_entities(hass, entry, lambda entities, **kwargs: None)
+
+    assert dr.async_get(hass).async_get(btc_device) is not None
+
+
 # --- display_precision -----------------------------------------------------------------
 
 

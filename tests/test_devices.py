@@ -5,7 +5,7 @@ from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.const import DOMAIN
-from custom_components.bitpanda.devices import device_identifier, find_entry_device
+from custom_components.bitpanda.devices import device_identifiers, find_entry_device
 
 _PACKAGE = Path(__file__).parent.parent / "custom_components" / "bitpanda"
 
@@ -47,15 +47,18 @@ async def test_finds_the_device_of_its_own_entry(hass):
     assert find_entry_device(hass, other.entry_id, "shared") is None
 
 
-async def test_device_identifier_is_the_one_under_this_domain(hass):
+async def test_device_identifiers_are_every_one_under_this_domain(hass):
+    """All of them, not one picked at random: a device is judged by every
+    identifier this integration gave it."""
     entry = MockConfigEntry(domain=DOMAIN)
     entry.add_to_hass(hass)
     dev_reg = dr.async_get(hass)
     ours = dev_reg.async_get_or_create(
-        config_entry_id=entry.entry_id, identifiers={("other", "x"), (DOMAIN, "eid_portfolio")}
+        config_entry_id=entry.entry_id,
+        identifiers={("other", "x"), (DOMAIN, "eid_portfolio"), (DOMAIN, "eid_wallets")},
     )
     foreign = dev_reg.async_get_or_create(
         config_entry_id=entry.entry_id, identifiers={("other", "y")}
     )
-    assert device_identifier(ours) == "eid_portfolio"
-    assert device_identifier(foreign) is None
+    assert device_identifiers(ours) == {"eid_portfolio", "eid_wallets"}
+    assert device_identifiers(foreign) == set()

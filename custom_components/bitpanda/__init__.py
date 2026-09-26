@@ -30,7 +30,7 @@ from .const import (
     SUBENTRY_TYPE_WALLET_GROUP,
     entry_type,
 )
-from .devices import device_identifier
+from .devices import device_identifiers
 from .groups import (
     async_group_titles,
     async_remove_asset_from_group,
@@ -279,6 +279,11 @@ async def async_remove_config_entry_device(
     device, and the wallet of an asset the Portfolio holds. Deleting a price
     device stops tracking its asset.
 
+    A device is judged by every identifier this integration gave it, never
+    by one picked at random: it is the Portfolio device if any of them is
+    the Portfolio device's, a wallet if any of them names a wallet of this
+    entry, and a price device of every asset it names.
+
     Both refusals raise a translated HomeAssistantError instead of returning
     False. Home Assistant's device-removal websocket handler
     (websocket_remove_config_entry_from_device in
@@ -290,25 +295,33 @@ async def async_remove_config_entry_device(
     this integration's 2025.5.0 floor and in a 2026.9.3 test image. The
     message is in Home Assistant's language (see _async_refusal).
     """
-    identifier = device_identifier(device_entry)
-    if identifier is None:
-        return True
+    identifiers = device_identifiers(device_entry)
     entry_id = config_entry.entry_id
     if entry_type(config_entry) == ENTRY_TYPE_PRICE_TRACKER:
-        asset_id = price_device_asset_id(entry_id, identifier)
-        if asset_id is not None:
-            async_remove_asset_from_group(hass, config_entry, asset_id)
+        for identifier in identifiers:
+            asset_id = price_device_asset_id(entry_id, identifier)
+            if asset_id is not None:
+                async_remove_asset_from_group(hass, config_entry, asset_id)
         return True
-    if identifier == portfolio_device_identifier(entry_id):
+    if portfolio_device_identifier(entry_id) in identifiers:
         raise await _async_refusal(hass, "portfolio_device_not_removable")
-    asset_id = wallet_device_asset_id(entry_id, identifier)
-    if asset_id is None or config_entry.state is not ConfigEntryState.LOADED:
+    wallets = sorted(
+        asset_id
+        for identifier in identifiers
+        if (asset_id := wallet_device_asset_id(entry_id, identifier)) is not None
+    )
+    if not wallets or config_entry.state is not ConfigEntryState.LOADED:
         return True
     runtime: PortfolioRuntime = config_entry.runtime_data
-    if asset_id in runtime.portfolio.data.held:
-        record = runtime.portfolio.data.assets.get(asset_id)
+    data = runtime.portfolio.data
+    for asset_id in wallets:
+        if asset_id not in data.held:
+            continue
+        record = data.assets.get(asset_id)
         asset_label = (
-            asset_display_label(record) if record is not None else device_entry.name
+            asset_display_label(record)
+            if record is not None
+            else device_entry.name_by_user or device_entry.name
         )
         raise await _async_refusal(hass, "held_wallet_not_removable", {"asset": asset_label})
     # The wallet manager keeps a wallet until its asset has been missing from

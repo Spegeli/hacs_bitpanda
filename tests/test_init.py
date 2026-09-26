@@ -619,6 +619,36 @@ async def test_a_portfolio_wallet_group_already_in_the_current_language_is_untou
     assert portfolio_api.call_count == 1
 
 
+async def test_a_price_tracker_group_is_retitled_during_a_reload_after_a_runtime_language_switch(
+    hass, price_api
+):
+    """Not just at the first setup (the test above): the same guarantee --
+    retitling before the update listener is registered, so no extra reload
+    follows -- has to hold when the retitle happens inside a later reload,
+    triggered after the system language changed at runtime with no restart."""
+    ticker, _ = price_api
+    entry = _price_entry(
+        hass, [],
+        price_group("crypto", BTC, title="Cryptocurrencies"),
+        price_group("metal", GOLD, title="Precious metals"),
+    )
+    await _setup(hass, entry)
+    assert _group(entry, "crypto").title == "Cryptocurrencies"
+    calls = ticker.call_count
+
+    hass.config.language = "de"
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert _group(entry, "crypto").title == "Kryptowährungen"
+    assert _group(entry, "metal").title == "Edelmetalle"
+    # One more round of first-refresh calls (BTC, GOLD): the reload's own
+    # setup retitles before its update listener exists again, so the retitle
+    # itself does not trigger a second reload on top of this one.
+    assert ticker.call_count == calls + 2
+
+
 # --- Deleting a device from its device page ------------------------------------------
 
 
@@ -875,6 +905,26 @@ async def test_the_device_page_refuses_to_delete_a_held_wallet(
     assert response["error"]["translation_key"] == "held_wallet_not_removable"
     assert response["error"]["translation_placeholders"] == {"asset": "Vision (VSN)"}
     assert dr.async_get(hass).async_get(wallet.id) is not None
+
+
+async def test_a_refusal_after_a_runtime_language_switch_uses_the_new_language(
+    hass, portfolio_api, hass_ws_client
+):
+    """The _async_refusal docstring promises the exceptions translations are
+    "loaded now if the language changed since" -- covering a language switch
+    with no restart (and so no re-setup), distinct from the parametrized
+    tests above, which set the language before setup."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    hass.config.language = "de"
+    device = _own_device(hass, entry, "portfolio")
+
+    response = await _remove_through_the_device_page(hass, hass_ws_client, entry, device)
+
+    assert not response["success"]
+    assert response["error"]["message"] == _REFUSALS["de"]["portfolio"]
+    assert response["error"]["translation_domain"] == DOMAIN
+    assert response["error"]["translation_key"] == "portfolio_device_not_removable"
 
 
 async def test_deleting_a_sold_wallet_in_a_group_removes_the_emptied_group(

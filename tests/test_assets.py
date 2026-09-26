@@ -79,8 +79,8 @@ def test_pick_legacy_fiat_prefix_is_always_none():
 
 def test_pick_legacy_two_legacy_survivors_is_none():
     """Contrived: the real catalogue has zero symbol collisions within the
-    legacy-supported types alone, so this is synthesised.
-    Dropping with a warning beats silently guessing.
+    legacy-supported types alone, so this is synthesised. Leaving the entity
+    unmigrated, and saying why, beats silently guessing.
     """
     candidates = [
         _asset("DUP", "id-1", "cryptocoin", "coin"),

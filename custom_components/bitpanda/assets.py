@@ -154,7 +154,8 @@ def pick_legacy(candidates: list[dict], prefix: str | None) -> dict | None:
     Filters to legacy-supported types first — the legacy API never offered a
     stock or an ETF, so a stock can never be what a v1 entry meant. A wallet's
     category prefix then narrows further. More than one survivor returns None:
-    dropping an entry with a warning beats silently tracking the wrong asset.
+    an entity left in place, and listed with the reason in the migration
+    notification, beats one silently tracking the wrong asset.
     """
     survivors = legacy_candidates(candidates, prefix)
     return survivors[0] if len(survivors) == 1 else None
@@ -227,13 +228,14 @@ def asset_label_map(assets: Iterable[dict]) -> dict[str, dict]:
         if len(siblings) == 1:
             _place_asset(result, siblings[0], _label_rungs(siblings[0], label))
             continue
-        by_suffixed: dict[str, list[dict]] = {}
+        by_suffixed: dict[str, list[tuple[dict, list[str]]]] = {}
         for asset in siblings:
-            by_suffixed.setdefault(_label_rungs(asset, label)[1], []).append(asset)
+            rungs = _label_rungs(asset, label)
+            by_suffixed.setdefault(rungs[1], []).append((asset, rungs))
         for subgroup in by_suffixed.values():
             skip = 1 if len(subgroup) == 1 else 2
-            for asset in subgroup:
-                _place_asset(result, asset, _label_rungs(asset, label)[skip:])
+            for asset, rungs in subgroup:
+                _place_asset(result, asset, rungs[skip:])
     return result
 
 

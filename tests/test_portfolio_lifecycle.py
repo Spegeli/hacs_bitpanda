@@ -3,6 +3,7 @@ from datetime import timedelta
 import json
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from homeassistant.config_entries import ConfigSubentry
@@ -18,7 +19,7 @@ from pytest_homeassistant_custom_component.common import (
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.groups import async_get_or_create_wallet_group
 from custom_components.bitpanda.naming import asset_display_label, wallet_entity_id
-from custom_components.bitpanda.portfolio_coordinator import PortfolioRuntime
+from custom_components.bitpanda.portfolio_coordinator import PortfolioRuntime, RewardsCoordinator
 from custom_components.bitpanda.portfolio_model import EarnData, Holding, PortfolioData
 from custom_components.bitpanda.portfolio_sensor import (
     PortfolioEntityManager,
@@ -60,6 +61,18 @@ def _data(*holdings, unnamed=()) -> PortfolioData:
     return data
 
 
+def _current_rewards(hass, entry) -> RewardsCoordinator:
+    """Rewards fetched just now, and never polled on their own: a Staking
+    sensor added here has nothing to catch up on (async_refresh_if_stale)."""
+    rewards = RewardsCoordinator(
+        hass, entry, SimpleNamespace(async_get_operations=AsyncMock(return_value=[]))
+    )
+    rewards.update_interval = None
+    rewards.data = {}
+    rewards.last_update_success_time = dt_util.utcnow()
+    return rewards
+
+
 class _Harness:
     """A manager wired to a real entity platform, registry and coordinators.
 
@@ -83,7 +96,7 @@ class _Harness:
             portfolio=_coordinator("portfolio"),
             history=_coordinator("history"),
             earn=_coordinator("earn"),
-            rewards=_coordinator("rewards"),
+            rewards=_current_rewards(hass, self.entry),
             group_titles=_TITLES,
             data_at_setup=dict(self.entry.data),
             options_at_setup={},

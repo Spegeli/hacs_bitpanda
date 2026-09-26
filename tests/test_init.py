@@ -21,7 +21,7 @@ from pytest_homeassistant_custom_component.common import (
 from custom_components.bitpanda import _async_first_refresh, async_remove_config_entry_device
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaAuthError
 from custom_components.bitpanda.assets import slim_asset
-from custom_components.bitpanda.const import DOMAIN
+from custom_components.bitpanda.const import DOMAIN, REWARDS_UPDATE_INTERVAL
 from custom_components.bitpanda.devices import find_entry_device
 from custom_components.bitpanda.ecb import EcbRates
 from custom_components.bitpanda.naming import PORTFOLIO_KEYS, portfolio_unique_id
@@ -271,6 +271,57 @@ async def test_wallet_groups_the_manager_adds_or_removes_never_reload_the_portfo
     assert portfolio_api.call_count == calls + 4
     assert [sub.unique_id for sub in entry.subentries.values()] == ["crypto"]
     assert er.async_get(hass).async_get("sensor.bitpanda_gold_xau_wallet") is None
+
+
+async def test_a_staking_sensor_added_later_brings_old_rewards_up_to_date(hass, portfolio_api):
+    """The rewards are polled only while a Staking sensor listens. The first
+    one added after setup -- once something is staked -- finds the totals of
+    setup's own refresh; older than an interval, they are refreshed at once
+    instead of an interval later."""
+    staked = portfolio_api.return_value
+    portfolio_api.return_value = [
+        {**staked[0], "available_balance": {"value": "100.00000000"}},
+        staked[1],
+    ]
+    with patch(f"{_CLIENT}async_get_operations", AsyncMock(return_value=[])) as operations:
+        entry = _portfolio_entry(hass)
+        await _setup(hass, entry)
+        assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_staking") is None
+        assert operations.await_count == 1
+        # As if the rewards had last been fetched an interval ago.
+        entry.runtime_data.rewards.last_update_success_time = (
+            dt_util.utcnow() - REWARDS_UPDATE_INTERVAL
+        )
+
+        portfolio_api.return_value = staked
+        await _next_refresh(hass)
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_staking") is not None
+    assert operations.await_count == 2
+
+
+async def test_a_staking_sensor_asks_again_for_rewards_that_never_arrived(hass, portfolio_api):
+    rejected = AsyncMock(side_effect=BitpandaApiError("HTTP 503 from /operations"))
+    with patch(f"{_CLIENT}async_get_operations", rejected):
+        entry = _portfolio_entry(hass)
+        await _setup(hass, entry)
+        await hass.async_block_till_done(wait_background_tasks=True)
+    assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_staking") is not None
+    # Setup's own refresh, then the one the Staking sensor asked for.
+    assert rejected.await_count == 2
+
+
+async def test_a_staking_sensor_added_with_current_rewards_asks_for_nothing(
+    hass, portfolio_api
+):
+    """No extra polling: setup has just fetched them."""
+    with patch(f"{_CLIENT}async_get_operations", AsyncMock(return_value=[])) as operations:
+        entry = _portfolio_entry(hass)
+        await _setup(hass, entry)
+        await hass.async_block_till_done(wait_background_tasks=True)
+    assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_staking") is not None
+    assert operations.await_count == 1
 
 
 async def test_a_sudden_empty_portfolio_changes_nothing_until_it_is_confirmed(

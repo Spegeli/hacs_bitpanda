@@ -12,9 +12,14 @@ import math
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import (
+    DataUpdateCoordinator,
+    TimestampDataUpdateCoordinator,
+    UpdateFailed,
+)
+from homeassistant.util import dt as dt_util
 
 from .api import BitpandaApiClient, BitpandaApiError, BitpandaAuthError
 from .assets import AssetDirectory
@@ -154,7 +159,7 @@ class EarnCoordinator(DataUpdateCoordinator[EarnData]):
             raise _update_failed(err) from None
 
 
-class RewardsCoordinator(DataUpdateCoordinator[dict]):
+class RewardsCoordinator(TimestampDataUpdateCoordinator[dict]):
     """Aggregates Earn rewards from the operation history.
 
     /operations needs the Transaktion (Transaction) scope. Setup already
@@ -167,6 +172,9 @@ class RewardsCoordinator(DataUpdateCoordinator[dict]):
     BitpandaApiClient._paginate) and becomes UpdateFailed: the rewards
     attributes then stay absent, or keep the last complete totals, rather
     than showing a recount over part of the history.
+
+    Like every DataUpdateCoordinator it polls only while something listens,
+    and only Staking sensors do: see async_refresh_if_stale.
     """
 
     def __init__(
@@ -189,6 +197,30 @@ class RewardsCoordinator(DataUpdateCoordinator[dict]):
         except BitpandaApiError as err:
             raise _update_failed(err) from None
         return sum_rewards(operations)
+
+    @callback
+    def async_refresh_if_stale(self) -> None:
+        """Refresh in the background when the totals are missing or older
+        than REWARDS_UPDATE_INTERVAL.
+
+        Nothing polls this coordinator while no Staking sensor listens, so
+        the first one added after setup -- the first time anything is staked
+        since -- would show the totals of setup's own refresh, or none if
+        that failed, for up to another interval. Each Staking sensor calls
+        this as it is added. Current totals request nothing, and a burst of
+        new sensors does not multiply the requests: async_request_refresh is
+        debounced.
+        """
+        fetched = self.last_update_success_time
+        if (
+            self.data is not None
+            and fetched is not None
+            and dt_util.utcnow() - fetched < REWARDS_UPDATE_INTERVAL
+        ):
+            return
+        self.config_entry.async_create_background_task(
+            self.hass, self.async_request_refresh(), f"{DOMAIN} rewards refresh"
+        )
 
 
 async def collect_returns(

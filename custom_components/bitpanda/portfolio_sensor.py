@@ -301,6 +301,9 @@ class StakingSensor(_WalletPart):
             self.async_on_remove(
                 coordinator.async_add_listener(self._handle_coordinator_update, None)
             )
+        # Staking sensors are all that keeps the rewards polled: a new one
+        # catches up on totals that went stale while none was listening.
+        self._rewards.async_refresh_if_stale()
 
     def _value(self, holding: Holding) -> float | None:
         return holding.staking_value

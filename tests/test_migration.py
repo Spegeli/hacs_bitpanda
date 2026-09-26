@@ -1,5 +1,8 @@
 """Tests for v1 to v3 config entry migration."""
+import json
 import logging
+from pathlib import Path
+import re
 from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
@@ -8,6 +11,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.bitpanda import migration
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.ecb import EcbRates
@@ -758,6 +762,81 @@ async def test_the_notification_asks_for_a_new_key(hass, legacy_api, no_setup, n
     assert "https://app.bitpanda.com/my-account/apikey" in message
     assert "Earn (Read)" in message
     assert notify.call_args.kwargs["notification_id"] == "bitpanda_migration"
+    assert notify.call_args.kwargs["title"] == "Bitpanda upgraded"
+
+
+def _migration_warnings(caplog) -> list[str]:
+    return [
+        record.getMessage() for record in caplog.records
+        if record.name == "custom_components.bitpanda.migration"
+        and record.levelno == logging.WARNING
+    ]
+
+
+async def test_the_notification_is_in_home_assistants_language_and_the_log_in_english(
+    hass, legacy_api, no_setup, notify, caplog
+):
+    """Every text of the notification -- headings, reasons, notes -- comes
+    from the translations of the language Home Assistant runs in; the log
+    line keeps English, like every other."""
+    hass.config.language = "de"
+    entry = _v1_entry(hass, currency="JPY", wallets=["cryptocoin_BTC", "cryptocoin_GONE"])
+    eid = entry.entry_id
+    _legacy_entity(hass, entry, f"{eid}_wallet_cryptocoin_BTC", "bitpanda_wallets_btc_wallet")
+    gone = _legacy_entity(
+        hass, entry, f"{eid}_wallet_cryptocoin_GONE", "bitpanda_wallets_gone_wallet"
+    )
+
+    assert await async_migrate_entry(hass, entry)
+
+    assert notify.call_args.kwargs["title"] == "Bitpanda aktualisiert"
+    assert _message(notify) == (
+        "Bitpanda besteht jetzt aus zwei Diensten: Bitpanda Portfolio und Bitpanda Price "
+        "Tracker.\n\n"
+        "**Umbenannte Entitäts-IDs.** Prüfe Dashboards, Automationen und Skripte, die sie "
+        "verwenden:\n"
+        "- `sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet`\n\n"
+        "**Nicht migriert** (unverändert gelassen; lösche sie, wenn du sie nicht mehr "
+        "brauchst):\n"
+        f"- `{gone}`: GONE gibt es bei Bitpanda nicht mehr\n\n"
+        "Bitpanda bietet JPY nicht mehr an; das Portfolio meldet seine Werte jetzt in EUR.\n\n"
+        "Bitpanda braucht einen neuen API-Schlüssel mit den Berechtigungen Guthaben, "
+        "Transaktion und Earn (Read). Erstelle ihn unter "
+        "https://app.bitpanda.com/my-account/apikey und gib ihn ein, wenn Home Assistant "
+        "danach fragt. Zeigt ein Bitpanda-Dialog Rohtext, lade den Browser-Tab neu."
+    )
+    [logged] = _migration_warnings(caplog)
+    assert logged.startswith("Bitpanda is now two services")
+    assert f"- `{gone}`: GONE no longer exists at Bitpanda" in logged
+    assert "Bitpanda no longer offers JPY; the Portfolio now reports in EUR." in logged
+
+
+async def test_a_language_without_translations_gets_the_english_notification(
+    hass, legacy_api, no_setup, notify, caplog
+):
+    hass.config.language = "ja"
+    entry = _v1_entry(hass, wallets=["cryptocoin_GONE"])
+    gone = _legacy_entity(
+        hass, entry, f"{entry.entry_id}_wallet_cryptocoin_GONE", "bitpanda_wallets_gone_wallet"
+    )
+    assert await async_migrate_entry(hass, entry)
+    assert notify.call_args.kwargs["title"] == "Bitpanda upgraded"
+    assert f"`{gone}`: GONE no longer exists at Bitpanda" in _message(notify)
+    assert _migration_warnings(caplog) == [_message(notify)]
+
+
+def test_every_text_of_the_migration_has_a_template():
+    """A text without a template would show as its bare key: every key
+    migration.py names must exist under `exceptions` in strings.json -- and
+    every migration template there must still be in use."""
+    source = Path(migration.__file__).read_text(encoding="utf-8")
+    used = set(re.findall(r'"(migration_[a-z_]+)"', source))
+    strings = json.loads(
+        (Path(migration.__file__).parent / "strings.json").read_text(encoding="utf-8")
+    )
+    templates = {key for key in strings["exceptions"] if key.startswith("migration_")}
+    assert used
+    assert used == templates
 
 
 async def test_an_interrupted_migration_can_run_again(hass, legacy_api, no_setup, notify):

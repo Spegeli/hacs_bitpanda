@@ -339,6 +339,48 @@
     },
     "ecb_rates_failed": {
       "message": "Die Wechselkurse der EZB konnten nicht abgerufen werden: {error}"
+    },
+    "migration_title": {
+      "message": "Bitpanda aktualisiert"
+    },
+    "migration_intro": {
+      "message": "Bitpanda besteht jetzt aus zwei Diensten: Bitpanda Portfolio und Bitpanda Price Tracker."
+    },
+    "migration_renamed": {
+      "message": "**Umbenannte Entitäts-IDs.** Prüfe Dashboards, Automationen und Skripte, die sie verwenden:\n{renames}"
+    },
+    "migration_not_migrated": {
+      "message": "**Nicht migriert** (unverändert gelassen; lösche sie, wenn du sie nicht mehr brauchst):\n{entities}"
+    },
+    "migration_new_key": {
+      "message": "Bitpanda braucht einen neuen API-Schlüssel mit den Berechtigungen Guthaben, Transaktion und Earn (Read). Erstelle ihn unter {api_key_url} und gib ihn ein, wenn Home Assistant danach fragt. Zeigt ein Bitpanda-Dialog Rohtext, lade den Browser-Tab neu."
+    },
+    "migration_currency_dropped": {
+      "message": "Bitpanda bietet {currency} nicht mehr an; das Portfolio meldet seine Werte jetzt in EUR."
+    },
+    "migration_asset_ambiguous": {
+      "message": "{symbol} passt zu {count} Assets; unklar, welches gemeint ist"
+    },
+    "migration_asset_gone": {
+      "message": "{symbol} gibt es bei Bitpanda nicht mehr"
+    },
+    "migration_fiat_in_cash": {
+      "message": "Portfolio Bargeld umfasst jetzt alle Fiat-Guthaben"
+    },
+    "migration_currency_gone": {
+      "message": "Bitpanda bietet {currency} nicht mehr an"
+    },
+    "migration_duplicate": {
+      "message": "eine andere Entität steht bereits für dasselbe Asset"
+    },
+    "migration_price_tracker_exists": {
+      "message": "ein Price Tracker war bereits eingerichtet; füge das Asset dort hinzu"
+    },
+    "migration_unknown_asset": {
+      "message": "unbekanntes Asset"
+    },
+    "migration_unknown_wallet": {
+      "message": "unbekanntes Wallet"
     }
   },
   "services": {

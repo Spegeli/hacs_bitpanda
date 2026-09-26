@@ -10,6 +10,8 @@ and, while its ID is still the legacy default, renamed to the new scheme --
 the recorder moves history and statistics along with a rename. A user's own
 entity IDs are never renamed, and nothing that cannot be mapped with
 certainty is changed or deleted: it is listed in a notification instead.
+The notification is written in the language Home Assistant runs in, from
+templates under `exceptions` in strings.json and translations/.
 """
 from __future__ import annotations
 
@@ -24,6 +26,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.translation import async_get_translations
 
 from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
 from .assets import legacy_candidates, pick_legacy, slim_asset
@@ -116,6 +119,22 @@ def legacy_prefix(wallet_id: str) -> str | None:
     return None
 
 
+@dataclass(frozen=True)
+class Message:
+    """A text of the migration notification: the key of its template under
+    `exceptions` in strings.json, and the values of its placeholders."""
+
+    key: str
+    placeholders: dict[str, str] = field(default_factory=dict)
+
+    def render(self, templates: dict[str, str]) -> str:
+        """This text in the language of `templates`, the `exceptions`
+        translations as async_get_translations returns them: English stands
+        in for any template the language lacks."""
+        template = templates.get(f"component.{DOMAIN}.exceptions.{self.key}.message", self.key)
+        return template.format(**self.placeholders)
+
+
 @dataclass
 class MigrationPlan:
     """Everything the migration resolved, before anything is changed."""
@@ -125,8 +144,8 @@ class MigrationPlan:
     wallets: dict[str, dict] = field(default_factory=dict)
     prices: dict[str, dict] = field(default_factory=dict)
     cash_wallet: str | None = None
-    reasons: dict[str, str] = field(default_factory=dict)
-    notes: list[str] = field(default_factory=list)
+    reasons: dict[str, Message] = field(default_factory=dict)
+    notes: list[Message] = field(default_factory=list)
 
 
 def legacy_price_key(entry_id: str, unique_id: str) -> tuple[str, str] | None:
@@ -210,13 +229,11 @@ async def async_plan(hass: HomeAssistant, entry: ConfigEntry) -> MigrationPlan:
             currency=DEFAULT_CURRENCY,
             currency_id=ids.get(DEFAULT_CURRENCY) or EUR_CURRENCY_ID,
         )
-        plan.notes.append(
-            f"Bitpanda no longer offers {currency}; the Portfolio now reports in EUR."
-        )
+        plan.notes.append(Message("migration_currency_dropped", {"currency": currency}))
 
     candidates: dict[str, list[dict]] = {}
 
-    async def _resolve(symbol: str, prefix: str | None) -> tuple[dict | None, str]:
+    async def _resolve(symbol: str, prefix: str | None) -> tuple[dict | None, Message | None]:
         if symbol not in candidates:
             # Never an empty symbol: without the filter /assets lists the
             # whole 14,000-asset catalogue.
@@ -225,11 +242,13 @@ async def async_plan(hass: HomeAssistant, entry: ConfigEntry) -> MigrationPlan:
             )
         asset = pick_legacy(candidates[symbol], prefix)
         if asset is not None:
-            return slim_asset(asset), ""
+            return slim_asset(asset), None
         survivors = legacy_candidates(candidates[symbol], prefix)
         if len(survivors) > 1:
-            return None, f"{symbol} matches {len(survivors)} assets, which one is unclear"
-        return None, f"{symbol} no longer exists at Bitpanda"
+            return None, Message(
+                "migration_asset_ambiguous", {"symbol": symbol, "count": str(len(survivors))}
+            )
+        return None, Message("migration_asset_gone", {"symbol": symbol})
 
     fiat: list[str] = []
     for wallet_id in _legacy_wallet_ids(hass, entry):
@@ -259,13 +278,13 @@ async def async_plan(hass: HomeAssistant, entry: ConfigEntry) -> MigrationPlan:
         plan.cash_wallet = fiat[0]
     for wallet_id in fiat:
         if wallet_id != plan.cash_wallet:
-            plan.reasons[wallet_id] = "Portfolio Cash now covers every fiat balance"
+            plan.reasons[wallet_id] = Message("migration_fiat_in_cash")
     return plan
 
 
 def plan_price_adoption(
     hass: HomeAssistant, entry: ConfigEntry, plan: MigrationPlan
-) -> tuple[list[dict], list[tuple[str, str]], list[str]]:
+) -> tuple[list[dict], list[tuple[str, str]], list[tuple[str, Message]]]:
     """Which legacy price entities the Price Tracker adopts, and as what.
 
     Changes nothing: the Price Tracker entry does the moving on its first
@@ -273,7 +292,7 @@ def plan_price_adoption(
     """
     items: list[dict] = []
     renames: list[tuple[str, str]] = []
-    skipped: list[str] = []
+    skipped: list[tuple[str, Message]] = []
     reserved: set[str] = set()
     for reg_entry in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id):
         key = legacy_price_key(entry.entry_id, reg_entry.unique_id)
@@ -282,10 +301,17 @@ def plan_price_adoption(
         symbol, currency = key
         asset = plan.prices.get(symbol)
         if asset is None:
-            skipped.append(f"`{reg_entry.entity_id}`: {plan.reasons.get(symbol, 'unknown asset')}")
+            skipped.append(
+                (
+                    reg_entry.entity_id,
+                    plan.reasons.get(symbol, Message("migration_unknown_asset")),
+                )
+            )
             continue
         if currency not in SUPPORTED_CURRENCIES:
-            skipped.append(f"`{reg_entry.entity_id}`: Bitpanda no longer offers {currency}")
+            skipped.append(
+                (reg_entry.entity_id, Message("migration_currency_gone", {"currency": currency}))
+            )
             continue
         new_entity_id = None
         if is_default_entity_id(reg_entry.entity_id, legacy_price_object_id(symbol, currency)):
@@ -339,18 +365,18 @@ async def _async_create_price_tracker(
 
 def rewrite_portfolio_registry(
     hass: HomeAssistant, entry: ConfigEntry, plan: MigrationPlan
-) -> tuple[list[tuple[str, str]], list[str]]:
+) -> tuple[list[tuple[str, str]], list[tuple[str, Message]]]:
     """Re-key, rename and detach the entry's wallet and portfolio entities.
 
-    Returns the renames (old, new) and a line for every entity left alone.
-    Idempotent: an entity an earlier run already re-keyed carries a UUID
-    unique_id or a new Portfolio key and matches nothing here any more.
+    Returns the renames (old, new) and every entity left alone, with the
+    reason. Idempotent: an entity an earlier run already re-keyed carries a
+    UUID unique_id or a new Portfolio key and matches nothing here any more.
     """
     ent_reg = er.async_get(hass)
     eid = entry.entry_id
     wallet_prefix = f"{eid}_wallet_"
     renames: list[tuple[str, str]] = []
-    skipped: list[str] = []
+    skipped: list[tuple[str, Message]] = []
     reserved: set[str] = set()
     for reg_entry in list(er.async_entries_for_config_entry(ent_reg, eid)):
         unique_id = reg_entry.unique_id
@@ -369,17 +395,15 @@ def rewrite_portfolio_registry(
                 new_unique_id = portfolio_unique_id(eid, "cash")
                 target = portfolio_entity_id("cash")
             else:
-                reason = plan.reasons.get(wallet_id, "unknown wallet")
-                skipped.append(f"`{reg_entry.entity_id}`: {reason}")
+                reason = plan.reasons.get(wallet_id, Message("migration_unknown_wallet"))
+                skipped.append((reg_entry.entity_id, reason))
                 continue
         else:
             continue  # price entities: adopted by the Price Tracker
         if new_unique_id is not None and ent_reg.async_get_entity_id(
             reg_entry.domain, DOMAIN, new_unique_id
         ):
-            skipped.append(
-                f"`{reg_entry.entity_id}`: another entity already stands for the same asset"
-            )
+            skipped.append((reg_entry.entity_id, Message("migration_duplicate")))
             continue
         updates: dict[str, Any] = {"device_id": None}
         if new_unique_id is not None:
@@ -452,39 +476,49 @@ def async_adopt_legacy_prices(hass: HomeAssistant, entry: ConfigEntry) -> None:
     )
 
 
-def _notify(
+def _migration_text(
+    templates: dict[str, str],
+    renames: list[tuple[str, str]],
+    skipped: list[tuple[str, Message]],
+    notes: list[Message],
+) -> str:
+    """The notification's text in the language of `templates`."""
+    paragraphs = [Message("migration_intro").render(templates)]
+    if renames:
+        rename_list = "\n".join(f"- `{old}` → `{new}`" for old, new in renames)
+        paragraphs.append(Message("migration_renamed", {"renames": rename_list}).render(templates))
+    if skipped:
+        entity_list = "\n".join(
+            f"- `{entity_id}`: {reason.render(templates)}" for entity_id, reason in skipped
+        )
+        paragraphs.append(
+            Message("migration_not_migrated", {"entities": entity_list}).render(templates)
+        )
+    paragraphs += [note.render(templates) for note in notes]
+    paragraphs.append(Message("migration_new_key", {"api_key_url": API_KEY_URL}).render(templates))
+    return "\n\n".join(paragraphs)
+
+
+async def _async_notify(
     hass: HomeAssistant,
     renames: list[tuple[str, str]],
-    skipped: list[str],
-    notes: list[str],
+    skipped: list[tuple[str, Message]],
+    notes: list[Message],
 ) -> None:
-    lines = [
-        "Bitpanda is now two services: Bitpanda Portfolio and Bitpanda Price Tracker."
-    ]
-    if renames:
-        lines += [
-            "",
-            "**Renamed entity IDs.** Check dashboards, automations and scripts that use them:",
-        ]
-        lines += [f"- `{old}` → `{new}`" for old, new in renames]
-    if skipped:
-        lines += ["", "**Not migrated** (left unchanged, delete them when you no longer need them):"]
-        lines += [f"- {line}" for line in skipped]
-    for note in notes:
-        lines += ["", note]
-    lines += [
-        "",
-        "Bitpanda needs a new API key with the permissions Guthaben (Balance), "
-        f"Transaktion (Transaction) and Earn (Read). Create it at {API_KEY_URL} and "
-        "enter it when Home Assistant asks for it. If a Bitpanda dialog shows raw "
-        "text, reload the browser tab.",
-    ]
-    message = "\n".join(lines)
+    """Tell the user what changed, in the language Home Assistant runs in."""
+    english = await async_get_translations(hass, "en", "exceptions", {DOMAIN})
+    templates = await async_get_translations(
+        hass, hass.config.language, "exceptions", {DOMAIN}
+    )
     # A persistent notification lives in memory only. The same text goes to
-    # the log once, so the old -> new mapping outlives a restart.
-    _LOGGER.warning("%s", message)
+    # the log once -- in English, like every log line -- so the old -> new
+    # mapping outlives a restart.
+    _LOGGER.warning("%s", _migration_text(english, renames, skipped, notes))
     persistent_notification.async_create(
-        hass, message, title="Bitpanda upgraded", notification_id=f"{DOMAIN}_migration"
+        hass,
+        _migration_text(templates, renames, skipped, notes),
+        title=Message("migration_title").render(templates),
+        notification_id=f"{DOMAIN}_migration",
     )
 
 
@@ -569,8 +603,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if outcome == "exists":
         price_renames = []
         price_skipped += [
-            f"`{item['entity_id']}`: a Price Tracker was already set up; add the asset there"
-            for item in items
+            (item["entity_id"], Message("migration_price_tracker_exists")) for item in items
         ]
     remove_empty_legacy_device(hass, entry.entry_id, f"{entry.entry_id}_wallets")
     hass.config_entries.async_update_entry(
@@ -586,5 +619,5 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         options={},
         version=3,
     )
-    _notify(hass, renames + price_renames, skipped + price_skipped, plan.notes)
+    await _async_notify(hass, renames + price_renames, skipped + price_skipped, plan.notes)
     return True

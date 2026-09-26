@@ -50,6 +50,7 @@ from .portfolio_coordinator import (
     PortfolioCoordinator,
     PortfolioRuntime,
     RewardsCoordinator,
+    async_forget_empty_answers,
 )
 from .price_coordinator import EcbCoordinator, PriceTrackerRuntime, TickerCoordinator
 
@@ -285,6 +286,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     ):
         hass.services.async_remove(DOMAIN, "refresh")
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Forget what outlived the entry's setups: its count of empty
+    /portfolio answers, kept in hass.data across reloads."""
+    async_forget_empty_answers(hass, entry.entry_id)
 
 
 async def async_remove_config_entry_device(

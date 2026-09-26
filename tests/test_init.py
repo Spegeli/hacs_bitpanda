@@ -416,6 +416,20 @@ async def test_the_count_of_empty_answers_survives_a_reload(hass, portfolio_api)
     assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
 
 
+async def test_removing_the_portfolio_leaves_no_count_of_empty_answers(hass, portfolio_api):
+    """The count outlives reloads and retried setups, not the entry."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    portfolio_api.return_value = []
+    await _next_refresh(hass)
+    assert hass.data["bitpanda_empty_portfolio_answers"] == {entry.entry_id: 1}
+
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.entry_id not in hass.data["bitpanda_empty_portfolio_answers"]
+
+
 async def test_a_wallet_may_be_deleted_while_an_empty_answer_awaits_confirmation(
     hass, portfolio_api
 ):

@@ -47,8 +47,15 @@ _LOGGER = logging.getLogger(__name__)
 
 # Empty /portfolio answers in a row, per Portfolio entry, since the last one
 # taken as the truth (see PortfolioCoordinator). In hass.data rather than on
-# the coordinator, so the count outlives a reload or a failed setup.
+# the coordinator, so the count outlives a reload or a failed setup -- but
+# not the entry itself (async_forget_empty_answers).
 _EMPTY_ANSWERS = f"{DOMAIN}_empty_portfolio_answers"
+
+
+@callback
+def async_forget_empty_answers(hass: HomeAssistant, entry_id: str) -> None:
+    """Drop the count of empty answers of an entry that is being removed."""
+    hass.data.get(_EMPTY_ANSWERS, {}).pop(entry_id, None)
 
 
 def _auth_failed() -> ConfigEntryAuthFailed:

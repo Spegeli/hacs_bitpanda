@@ -44,12 +44,12 @@ The integration offers two services. Set up either or both — each one once.
 ### Manual Refresh
 - The `bitpanda.refresh` service updates the portfolio and the prices immediately, and returns once both are done
 - A call within the cooldown of the last accepted one is ignored, without an error. With a Price Tracker set up, the cooldown is its price interval (60 seconds, longer with many tracked assets), so an automation cannot push price requests beyond the normal polling rate; with only the Portfolio, it is 10 seconds
-- When a refresh fails — Bitpanda cannot be reached or answers with an error — the call fails with an error naming the service, such as **Bitpanda Portfolio**; the other service is refreshed all the same
+- When a refresh fails — Bitpanda cannot be reached, answers with an error, or reports an empty portfolio that is not confirmed yet — the call fails with an error naming the service, such as **Bitpanda Portfolio**; the other service is refreshed all the same
 - While neither service is loaded — for example while its setup is being retried — a call fails with an error saying there is nothing to refresh
 - ⚠️ A failed call stops a script or automation at that step, unless the step sets `continue_on_error: true` (see the [example](#-automation-examples))
 
 ### Long-term statistics
-- Every value sensor keeps long-term statistics: the Portfolio's figures, returns and wallets, and every price. They start with this version; the time before it has none
+- Every value sensor keeps long-term statistics: the Portfolio's figures, returns and wallets, and every price. Recording starts with this version; there are none for the time before
 - Show them over weeks or months with a **Statistics graph** card: under **Show stat types**, choose *State* for a money value, and *Mean*, *Min* or *Max* for a return
 - Changing the Portfolio currency deletes the Portfolio sensors' statistics along with their history — they were recorded in the old currency
 

@@ -4,7 +4,8 @@ Every value its sensors recorded is in the old currency and would be wrong
 next to the new one. What goes is what the Portfolio manages: its figures
 (naming.PORTFOLIO_KEYS), the wallet, staking and total sensors of this entry
 (naming.managed_asset_id), their devices -- the Portfolio device and the
-wallet devices -- and their history and statistics. Anything else of the
+wallet devices -- and their history and the long-term statistics every one
+of these sensors keeps (state_class, portfolio_sensor.py). Anything else of the
 entry -- a legacy entity the version 1 migration left in place, such as an
 unresolved wallet, another fiat wallet or a legacy price sensor, and the
 legacy device it sits on -- keeps its entity and its history: the

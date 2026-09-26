@@ -68,7 +68,7 @@ Everything lives in `custom_components/bitpanda/`:
 | `portfolio_sensor.py` | Portfolio sensors and the wallet lifecycle manager, which also keeps the wallet groups |
 | `price_coordinator.py` | Keyless ticker coordinator with its request budget, and the repair issue while that stretches its interval past 30 minutes; ECB coordinator |
 | `price_sensor.py` | Price sensors per asset and currency |
-| `purge.py` | Deletes the Portfolio's sensors with their history on a currency change |
+| `purge.py` | Deletes the Portfolio's sensors with their history and long-term statistics on a currency change |
 | `sensor.py` | Dispatches the sensor platform to the service |
 | `strings.json`, `translations/` | UI strings, seven languages (see [Translations](#translations)) |
 
@@ -108,7 +108,7 @@ The integration ships seven languages under `translations/`: English (`en`), Ger
 
 Which language a text is shown in depends on who writes it out:
 
-- **Home Assistant's frontend**, in each user's profile language: dialogs and forms, attribute names, group subtitles, repair issues (`issues`: the upgrade details, what blocks the upgrade, the Price Tracker's slow interval), the reason setup is being retried (`exceptions`, from the error's key and placeholders), and the errors of a `bitpanda.refresh` call made in the UI — `exceptions.nothing_to_refresh` while no entry is loaded, raised with its key alone, and `exceptions.refresh_failed` when a refresh failed, its placeholder the titles of the entries concerned (the log and automation traces show their English text, and no entry's language option applies: the call belongs to no single entry). Never write such a text out in the backend; hand the frontend its key and placeholders, and keep the placeholders free of words — entity IDs, codes, asset labels, entry titles and Markdown only.
+- **Home Assistant's frontend**, in each user's profile language: dialogs and forms, attribute names, group subtitles, repair issues (`issues`: the upgrade details, what blocks the upgrade, the Price Tracker's slow interval), the reason setup is being retried (`exceptions`, from the error's key and placeholders), and the errors of a `bitpanda.refresh` call made in the UI — `exceptions.nothing_to_refresh` while no entry is loaded, raised with its key alone, and `exceptions.refresh_failed` when a refresh failed, its placeholder the titles of the entries concerned (the log and automation traces show their English text, and no entry's language option applies: the call belongs to no single entry). Never write such a text out in the backend; hand the frontend its key and placeholders, and keep the placeholders free of words — entity IDs, codes, numbers, asset labels, entry titles and Markdown only.
 - **Home Assistant's backend**, in its system language: sensor names (`entity.sensor.*.name`).
 - **This integration**, in the entry's own language option: group titles (`selector.asset_group`) and the refusals to delete a device (`exceptions.*_not_removable`), which Home Assistant shows as they arrive. The option lives under **Configure** on each service (`language` in the entry's options, English by default); `language.entry_language(entry)` reads it and `language.async_shipped_languages` lists the choices, one per file under `translations/`, each labelled with its own name (`selector.language`, identical in every file). Never resolve one of these texts in `hass.config.language`.
 

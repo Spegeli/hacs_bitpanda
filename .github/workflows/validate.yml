@@ -3,14 +3,17 @@ name: Validate
 # Checks a change without publishing anything: hassfest, HACS, the Python
 # 3.13 checks, the release script on Python 3.12, the tests with their
 # coverage and mypy --strict (all in _validate.yml).
-#   push to any branch but main - everything, on every topic branch and dev
-#   pull request to main        - everything. "Validation result" is the check
-#                                 main's ruleset requires, so nothing merges
-#                                 unvalidated -- a contributor's pull request
-#                                 included: pull_request, never
-#                                 pull_request_target, runs a fork's code
-#                                 with a read-only token and no secrets
-#   manual                      - on any branch; the tests as chosen
+#   push to any branch but main - everything, on every topic branch and dev;
+#                                 summed up as "Validation summary"
+#   pull request to main        - everything, summed up as "Validation
+#                                 result": the check main's ruleset requires,
+#                                 so nothing merges unvalidated -- a
+#                                 contributor's pull request included:
+#                                 pull_request, never pull_request_target,
+#                                 runs a fork's code with a read-only token
+#                                 and no secrets
+#   manual                      - on any branch; the tests as chosen;
+#                                 summed up as "Validation summary"
 # main itself needs no run: changes only arrive through a validated pull
 # request, or as the release's version commit, validated just before.
 # No schedule: GitHub disables a workflow that has one after 60 days without
@@ -51,12 +54,17 @@ jobs:
       tests: ${{ github.event_name != 'workflow_dispatch' || inputs.tests }}
 
   # The one check main's ruleset requires; a fixed name stays valid when the
-  # jobs above change. always(), not !cancelled(): a skipped job counts as
-  # passed for a required check, so a failed or cancelled validation must
-  # still run this job and fail it. It needs every other job, or one could
-  # fail and leave it green.
+  # jobs above change. Only a pull request's run reports under that name,
+  # push and manual runs as "Validation summary": the ruleset matches the
+  # check by name on the pull request's head commit, and a push's run there
+  # counts as well. So only the pull request's own run, which validates the
+  # merge result, can satisfy it, and a push's run that a manual one
+  # cancelled leaves no red "Validation result" beside it. always(), not
+  # !cancelled(): a skipped job counts as passed for a required check, so a
+  # failed or cancelled validation must still run this job and fail it. It
+  # needs every other job, or one could fail and leave it green.
   result:
-    name: Validation result
+    name: ${{ github.event_name == 'pull_request' && 'Validation result' || 'Validation summary' }}
     needs: [checks]
     if: always()
     runs-on: ubuntu-24.04

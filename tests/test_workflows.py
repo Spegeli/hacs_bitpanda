@@ -297,6 +297,12 @@ def test_validation_result_is_the_one_required_check():
     """main's ruleset requires this one check by its name, which stays valid
     when the jobs behind it change.
 
+    Only a pull request's run reports under that name; push and manual runs
+    report as "Validation summary". The ruleset matches the check by name on
+    the pull request's head commit, and a push's run there counts as well:
+    only the pull request's own run, which validates the merge result, may
+    satisfy it.
+
     always(), not the default success() or !cancelled(): a skipped job
     counts as passed for a required check, so a failed or cancelled
     validation must still run this job, and fail it. It waits for every
@@ -306,7 +312,10 @@ def test_validation_result_is_the_one_required_check():
     """
     jobs = _workflow("validate.yml")["jobs"]
     result = jobs["result"]
-    assert result["name"] == "Validation result"
+    assert result["name"] == (
+        "${{ github.event_name == 'pull_request'"
+        " && 'Validation result' || 'Validation summary' }}"
+    )
     assert "checks" in result["needs"]
     assert sorted(result["needs"]) == sorted(key for key in jobs if key != "result")
     assert result["if"] == "always()"

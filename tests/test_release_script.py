@@ -265,10 +265,17 @@ def test_previous_ref_prerelease_is_the_newest_of_either_semver_kind():
     )
 
 
-def test_previous_ref_prerelease_ignores_legacy_tags():
-    """A pre-release cut before any SemVer stable exists has no previous
-    tag of "either type" -- its notes cover the whole history."""
-    assert previous_ref(["v2026.05.17", "v2026.06.04"], "prerelease") is None
+def test_previous_ref_prerelease_falls_back_to_the_newest_legacy_tag():
+    """A pre-release cut before any SemVer tag exists still has a previous
+    tag: a legacy date tag is itself a 1.x stable, so it counts as "either
+    type" too -- spec 12.6 resolves this same gap, for a stable release's
+    own range, to "the newest date tag". Review Important 1."""
+    assert previous_ref(["v2026.05.17", "v2026.06.04"], "prerelease") == "v2026.06.04"
+
+
+def test_previous_ref_prerelease_with_no_tags_at_all_is_none():
+    """Only a repository with no tags of any kind has no previous tag."""
+    assert previous_ref([], "prerelease") is None
 
 
 # --------------------------------------------------------------------------
@@ -384,6 +391,20 @@ def test_plan_stable_from_legacy_tags_only(monkeypatch):
     assert release.plan("stable", "major") == {
         "version": "2.0.0",
         "tag": "v2.0.0_redesign",
+        "previous": "v2026.06.04",
+    }
+
+
+def test_plan_prerelease_with_only_date_tags_falls_back_to_the_newest_one(monkeypatch):
+    """The real repository's first beta, cut before v2.0.0_redesign
+    exists: previous must be the newest date tag, not empty -- an empty
+    previous would republish everything already shipped under
+    v2026.05.29 and v2026.06.04 as if it were new. Review Important 1."""
+    monkeypatch.setattr(release, "git_tags", lambda: ["v2026.05.17", "v2026.06.04"])
+    monkeypatch.setattr(release, "list_commits", lambda from_ref, to_ref: [])
+    assert release.plan("prerelease", "major") == {
+        "version": "2.0.0-beta.1",
+        "tag": "v2.0.0-beta.1",
         "previous": "v2026.06.04",
     }
 

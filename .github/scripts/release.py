@@ -214,10 +214,12 @@ def previous_ref(tags: Sequence[str], release_type: ReleaseType) -> str | None:
 
     Stable: the newest stable tag (a "_redesign"-suffixed one still counts
     as one), or, before any SemVer stable exists, the newest legacy date
-    tag. Pre-release: the newest tag of either SemVer kind; a legacy date
-    tag never counts here, so a pre-release cut before the first SemVer
-    stable exists has no previous tag and its notes cover the whole
-    history.
+    tag. Pre-release: the newest tag of either SemVer kind, or -- before
+    any SemVer tag exists at all -- the same fallback as stable: a legacy
+    date tag is itself a 1.x stable, so it counts as "either type" too
+    (spec 12.6 resolves this same gap, for a stable release's own range,
+    to "the newest date tag"). Only a repository with no tags of any kind
+    has no previous tag, and its notes cover the whole history.
     """
     stable = [(tag, version) for tag in tags if (version := parse_stable_tag(tag)) is not None]
     if release_type == "stable":
@@ -235,7 +237,7 @@ def previous_ref(tags: Sequence[str], release_type: ReleaseType) -> str | None:
         (tag, _semver_sort_key(version, True, n)) for tag, (version, n) in prerelease
     ]
     if not candidates:
-        return None
+        return previous_ref(tags, "stable")
     return max(candidates, key=lambda pair: pair[1])[0]
 
 

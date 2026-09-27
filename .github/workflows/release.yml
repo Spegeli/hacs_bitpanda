@@ -174,9 +174,10 @@ jobs:
       # The next version, its tag and the previous release, which the notes
       # start after: a stable is the last stable plus the bump -- the one
       # the commits since call for, unless "Version bump" forces one; a beta
-      # carries the stable it leads to. The first stable after the date
-      # versions is tagged v2.0.0_redesign, once (CONTRIBUTING.md,
-      # "Releases").
+      # carries the stable it leads to. The first SemVer stable after the
+      # date versions carries the suffix _redesign, once: v2.0.0_redesign
+      # with the bump set to major (CONTRIBUTING.md, "Releases"). The script
+      # refuses a shallow clone, whose tags and history are incomplete.
       - name: Plan the version and the tag
         id: plan
         env:
@@ -283,6 +284,8 @@ jobs:
       # deploy key passes main's ruleset, its block on force pushes
       # included. A pre-release pushes no branch at all: only its tag, which
       # takes the version commit along -- dev stays as it is.
+      # Every error names the way out, and never one that would release the
+      # next version -- as a new run does once this version's tag is pushed.
       - name: Push the version commit and the tag
         if: ${{ !inputs.dry_run }}
         env:
@@ -291,12 +294,19 @@ jobs:
         run: |
           if [ "${RELEASE_TYPE}" = stable ]; then
             if ! git push origin HEAD:main; then
-              echo "::error::main refused the version commit. Either main moved since this run started -- start a new run (Actions, Create Release, Run workflow): re-running this one repeats its commit and is refused again -- or the deploy key cannot push to main: check its write access and the ruleset's bypass list. Nothing was tagged or released."
+              echo "::error::main refused the version commit; nothing was tagged or released. If main moved since this run started -- a pull request merged meanwhile -- start a new run (Actions, Create Release, Run workflow); re-running this one repeats its commit and is refused again. If the deploy key cannot push to main, check its write access and the ruleset's bypass list, then start a new run. But if this run re-ran all jobs of a release that had already pushed its tag, do not start a new run, which would release the next version: create the release for that tag by hand (see Releases in CONTRIBUTING.md)."
               exit 1
             fi
           fi
           git tag "${TAG}"
-          git push origin "refs/tags/${TAG}"
+          if ! git push origin "refs/tags/${TAG}"; then
+            if [ "${RELEASE_TYPE}" = stable ]; then
+              echo "::error::main took the version commit, but the tag ${TAG} was not pushed, and nothing was released. Start a new run on main with the same settings -- not a re-run, whose commit main now refuses: the new run plans the same version, finds it in manifest.json, commits nothing, then tags and publishes it."
+            else
+              echo "::error::The tag ${TAG} was not pushed; nothing was pushed or released. Start a new run on dev with the same settings."
+            fi
+            exit 1
+          fi
 
   # The GitHub release, for the tag the job before pushed, from that job's
   # outputs. It runs a third-party action, so it gets no checkout and never
@@ -326,3 +336,15 @@ jobs:
           prerelease: ${{ needs.commit.outputs.prerelease == 'true' }}
           make_latest: ${{ needs.commit.outputs.prerelease == 'true' && 'false' || 'true' }}
           draft: ${{ inputs.draft && needs.commit.outputs.prerelease != 'true' }}
+
+      # Only when the release could not be created: its tag is pushed
+      # already. "Re-run failed jobs" repeats this job alone, with the same
+      # outputs; "Re-run all jobs", or a new run, would plan past the pushed
+      # tag and release the next version, leaving this one without a
+      # release.
+      - name: Explain how to finish the release
+        if: failure()
+        env:
+          TAG: ${{ needs.commit.outputs.tag }}
+        run: |
+          echo "::error::The tag ${TAG} is pushed, but its GitHub release was not created. Use Re-run failed jobs: only this job runs again, with the same tag, title and notes. Do not use Re-run all jobs, and do not start another run: either plans past the pushed tag and releases the next version. If it fails again, create the release for the tag by hand (see Releases in CONTRIBUTING.md)."

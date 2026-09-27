@@ -765,6 +765,25 @@ def test_a_stable_release_pushes_main_without_force_then_its_tag(tmp_path):
     assert refused.returncode != 0
     assert "::error::" in refused.stdout
     assert _refs(origin) == before
+    # The error names the ways out: a new run where main moved or the key
+    # was the cause -- but no new run where this was "Re-run all jobs" of a
+    # release that had pushed its tag already: that would release the next
+    # version, so the release is made from that tag by hand.
+    assert "start a new run" in refused.stdout
+    assert "by hand" in refused.stdout
+
+    # The tag's push fails after main took the commit: main keeps it, the
+    # error says so, and the way out is a new run on main -- which finds
+    # the version in the manifest and only tags and publishes.
+    origin, clone = _release_clone(tmp_path / "tag-refused")
+    version_commit = _git(clone, "rev-parse", "HEAD")
+    _git(origin, "tag", "v2.0.0_redesign", "main")
+    before = _refs(origin)
+    untagged = _run_step(push, stable, cwd=clone)
+    assert untagged.returncode != 0
+    assert "::error::" in untagged.stdout
+    assert "new run on main" in untagged.stdout
+    assert _refs(origin) == {**before, "refs/heads/main": version_commit}
 
 
 def test_a_prerelease_pushes_its_tag_and_never_a_branch(tmp_path):
@@ -791,6 +810,15 @@ def test_a_prerelease_pushes_its_tag_and_never_a_branch(tmp_path):
         assert _refs(origin) == {**before, "refs/tags/v2.1.0-beta.1": version_commit}
         assert _git(origin, "rev-parse", "v2.1.0-beta.1~1") == validated
 
+    # The tag's push fails: nothing is pushed at all, and the error says so.
+    origin, clone = _release_clone(tmp_path / "tag-refused", "dev")
+    _git(origin, "tag", "v2.1.0-beta.1", "dev")
+    before = _refs(origin)
+    untagged = _run_step(push, prerelease, cwd=clone)
+    assert untagged.returncode != 0
+    assert "::error::" in untagged.stdout
+    assert _refs(origin) == before
+
 
 def test_publish_releases_the_tag_with_the_generated_notes():
     """The Publish job has no checkout: what it needs comes from the key
@@ -809,7 +837,8 @@ def test_publish_releases_the_tag_with_the_generated_notes():
         "notes": "${{ steps.notes.outputs.notes }}",
         "prerelease": "${{ inputs.release_type == 'prerelease' }}",
     }
-    [create] = jobs["publish"]["steps"]
+    create, explain = jobs["publish"]["steps"]
+    assert "if" not in create
     assert create["uses"] == "softprops/action-gh-release@v3"
     assert create["with"] == {
         "tag_name": "${{ needs.commit.outputs.tag }}",
@@ -819,6 +848,21 @@ def test_publish_releases_the_tag_with_the_generated_notes():
         "make_latest": "${{ needs.commit.outputs.prerelease == 'true' && 'false' || 'true' }}",
         "draft": "${{ inputs.draft && needs.commit.outputs.prerelease != 'true' }}",
     }
+
+    # When the release cannot be created, the tag is pushed already. The
+    # way out is "Re-run failed jobs", which repeats this job alone with the
+    # same outputs; "Re-run all jobs" or a new run would plan past the tag
+    # and release the next version, so the error says not to.
+    assert explain["if"] in ("failure()", "${{ failure() }}")
+    assert explain["env"] == {"TAG": "${{ needs.commit.outputs.tag }}"}
+    explained = _run_step(explain, {"needs.commit.outputs.tag": "v2.0.0_redesign"})
+    assert explained.returncode == 0, explained.stderr
+    assert "::error::" in explained.stdout
+    assert "v2.0.0_redesign" in explained.stdout
+    assert "Re-run failed jobs" in explained.stdout
+    assert "Re-run all jobs" in explained.stdout
+    assert "by hand" in explained.stdout
+    assert "start a new run" not in explained.stdout
 
 
 def test_release_plans_its_version_with_the_release_script(tmp_path):

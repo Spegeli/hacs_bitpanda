@@ -179,11 +179,29 @@ Follow the [Home Assistant developer guidelines](https://developers.home-assista
 
 1. Branch from `main`.
 2. Keep the change focused — one topic per PR.
-3. Use [Conventional Commits](https://www.conventionalcommits.org) for commit messages: `fix:`, `feat:`, `docs:`, `chore:`, `refactor:`, `ci:`.
+3. Write the commit messages as [Conventional Commits](https://www.conventionalcommits.org) — see [Commit messages](#commit-messages).
 4. Open the PR against `main` and fill in the template.
 5. CI validates the pull request (see [Continuous integration](#continuous-integration)); it merges only with a green **Validation result**.
 
-**Do not bump the version in `manifest.json`.** The maintainer sets it when cutting a release.
+**Do not bump the version in `manifest.json`.** The Create Release workflow sets it (see [Releases](#releases)).
+
+### Commit messages
+
+A release computes its version from the commit messages and writes its release notes from their subjects (see [Releases](#releases)), so a commit's type decides where the change shows up:
+
+| Type | Release notes section |
+|---|---|
+| `feat` | ✨ New Features |
+| `perf` | ⚡ Improvements |
+| `fix` | 🐛 Bug Fixes |
+| `refactor`, `style` | ♻️ Refactor & Code Quality |
+| `docs` | 📝 Documentation |
+| `test`, `ci`, `build`, `chore` | not listed |
+
+- **A change to CI, the tests or the release tooling alone is `ci:`, `test:`, `build:` or `chore:`** — also when it fixes or adds something there. The notes are for the people who run the integration: a `fix:` for a workflow would show up among their bug fixes.
+- A breaking change — `feat!:`, `fix(scope)!:`, or a line that starts with `BREAKING CHANGE:` in the message body — is listed under 💥 Breaking Changes, and only there, and makes the next version a major one.
+- The scope `security`, with any listed type, lists the change under 🔒 Security.
+- Write the description for the people who run the integration, in the imperative: the notes print it with a capital first letter, the scope in bold before it — `fix(fx): require …` becomes "**fx:** Require …". Within a section, a description that starts with `add` comes first, then everything else, then `fix`, then `remove`, `drop` and `delete`.
 
 ## Continuous integration
 
@@ -203,7 +221,7 @@ When Validate runs:
 - **A pull request to `main`** — all five checks.
 - **By hand** — Actions → Validate → Run workflow, on any branch. Clear "Also run the tests with coverage and mypy --strict" to skip those two; the other three always run.
 
-Validate does not run on `main` itself: changes reach it only through a validated pull request, or as a release's version commit, validated just before. A newer push to the same branch, or a new commit in the same pull request, cancels the run it makes obsolete.
+Validate does not run on `main` itself: changes reach it only through a validated pull request, or as a release's version commit, validated just before. A newer push to the same branch, or a new commit in the same pull request, cancels the run it makes obsolete. A run started by hand and a push's run on the same branch cancel each other as well, whichever starts later cancelling the other: start one by hand only after the push's run has finished, or that run is cancelled and its Validation result turns red. A run started by hand never counts for a pull request, so switching its tests off cannot stand in for the required check.
 
 **Validation result** sums up each run: green when every check passed or was switched off by hand, red when one failed or the run was cancelled. It is the one check `main` requires, so a pull request merges only with a green Validation result.
 
@@ -211,18 +229,38 @@ A pull request from a fork runs the same checks, with a read-only token and no s
 
 ## Releases
 
-The maintainer releases with the **Create Release** workflow (`.github/workflows/release.yml`); nobody bumps the version in `manifest.json` by hand. The version is the date in UTC, `YYYY.MM.DD`, tagged `vYYYY.MM.DD`; a second release on the same day gets `-1`, a third `-2`.
+The maintainer releases with the **Create Release** workflow (`.github/workflows/release.yml`); nobody bumps the version in `manifest.json` by hand. A release is one of two types, chosen under "Release type":
 
-To release: Actions → Create Release → Run workflow, on `main`. Whenever something in the release path has changed since the last release — the workflow, the deploy key, `main`'s ruleset — tick "Dry run: validate and compute the version; push and publish nothing" first. The workflow
+| | Stable (`stable`) | Pre-release (`prerelease`), a beta |
+|---|---|---|
+| Runs on | `main` | `dev` |
+| Version and tag | `X.Y.Z`, tag `vX.Y.Z` | `X.Y.Z-beta.N`, tag `vX.Y.Z-beta.N` |
+| Version commit | pushed to `main`, then tagged | only in its tag: `dev` stays as it is |
+| GitHub release | published at once and marked latest — or a draft, when asked for | published at once, marked as a pre-release, never latest |
+| HACS offers it | to everyone | only to installations that switched pre-releases on (see the README's [Beta versions](README.md#beta-versions)) |
+| Release notes list | the changes since the previous stable release | the changes since the previous release of either type |
 
-1. fails at once when started on any other branch, or on a tag ("Only on main");
+**Versions** follow [Semantic Versioning](https://semver.org). The next stable version is the last stable one plus a bump the commits since then call for (see [Commit messages](#commit-messages)): major when one of them is a breaking change, else minor when one is a `feat`, else patch. "Version bump" overrides that with major, minor or patch. A beta carries the stable version it leads to: after `2.0.0`, a `feat` on `dev` makes the betas `2.1.0-beta.1`, `2.1.0-beta.2`, and then the stable `2.1.0`. `manifest.json` gets the version without the `v`.
+
+**From the date versions to 2.0.0.** The date versions (`2026.06.04` and older) are the 1.x line: until the first Semantic Versioning stable exists, the next version counts from `1.0.0`. That first one is the redesign, `2.0.0`: release it — and any beta of it — with "Version bump" set to major, which "auto" would count as `1.1.0`. Its tag, once, is `v2.0.0_redesign`: HACS cannot read that tag as a version and compares it with the installed one as text, so every installation on a date version sees the update, while a plain `2.0.0` ranks below `2026.06.04`. `manifest.json` says `2.0.0` and the release is titled `v2.0.0`; later tags are plain again. An installation that skips `2.0.0` and stays on a date version sees no later update either; the README tells its owner how to install the newest version once.
+
+**Release notes** are generated from the commit subjects (see [Commit messages](#commit-messages)), in sections in this order, empty ones left out: 💥 Breaking Changes, ✨ New Features, ⚡ Improvements, 🐛 Bug Fixes, 🔒 Security, ♻️ Refactor & Code Quality, 📝 Documentation. For notes written by hand — the redesign's `2.0.0` — tick "Create a stable release as a draft, to write its notes by hand": the draft carries the generated notes, to be replaced before it is published. A pre-release cannot be a draft: HACS does not see drafts.
+
+To release: Actions → Create Release → Run workflow, on `main` for a stable release or on `dev` for a pre-release. Whenever something in the release path has changed since the last release — the workflow, the release script, the deploy key, `main`'s ruleset — tick "Dry run: validate, compute the version, tag and notes; push and publish nothing" first. The workflow
+
+1. fails at once unless a stable release runs on `main`, and a pre-release on `dev` and not as a draft ("Check branch");
 2. runs the complete validation: every check under [Continuous integration](#continuous-integration), the tests included — a release cannot switch them off ("Validate");
-3. sets the version in `manifest.json`, stops unless the file then carries exactly that version, and commits it as `github-actions[bot]` (`chore: bump version to <version>`), on top of exactly the commit it validated ("Commit version and tag");
-4. pushes that commit to `main` with the deploy key whose private key is the secret `RELEASE_DEPLOY_KEY` — the one direct push `main`'s ruleset lets through — and tags it. The job that holds the key runs no third-party action, only `actions/checkout` and shell: a tampered action could read the key;
-5. creates the GitHub release with generated notes, as a draft unless "Create as draft (review before publishing)" is cleared, in a job of its own that gets neither a checkout nor the key ("Publish release"). The maintainer writes the changelog into the draft and publishes it.
+3. computes the version, its tag and the release notes with `.github/scripts/release.py`, sets the version in `manifest.json`, stops unless the file then carries exactly that version, and commits it as `github-actions[bot]` (`chore: bump version to <version>`), on top of exactly the commit it validated ("Commit version and tag");
+4. pushes with the deploy key whose private key is the secret `RELEASE_DEPLOY_KEY`: a stable release pushes the commit to `main` — the one direct push `main`'s ruleset lets through — and then the tag; a pre-release pushes only the tag, which takes the commit along. The job that holds the key runs no third-party action, only `actions/checkout`, shell and the release script: a tampered action could read the key;
+5. creates the GitHub release, titled `v<version>`, with the generated notes, in a job of its own that gets neither a checkout nor the key ("Publish release").
 
-If `main` moved while the release ran — a pull request merged meanwhile — `main` refuses the push in step 4, and nothing is tagged or published: that state was never validated. Run the release again. Without `RELEASE_DEPLOY_KEY`, a release stops with an error before it commits anything.
+A dry run goes through steps 1–3, the commit staying in the runner: it shows the version, the tag, the previous release, the version commit and the notes, checks that the deploy key reaches the repository (when the secret is set), and stops — it pushes, tags and publishes nothing. It cannot tell whether the key may push past `main`'s ruleset; only a real release shows that.
 
-A dry run goes through steps 1–3, the commit staying in the runner, shows the version, the tag and the version commit, checks that the deploy key reaches the repository (when the secret is set), and stops: it pushes, tags and publishes nothing.
+When a release fails:
 
-After a release, merge `main` into `dev`, so the version commit reaches `dev` too: `git switch dev`, `git pull`, `git merge origin/main`, `git push`.
+- **`main` refuses the push** (step 4): either `main` moved while the release ran — a pull request merged meanwhile, a state that was never validated — or the deploy key cannot push to `main`: it lacks write access, or it is missing from the ruleset's bypass list. Nothing is tagged or published. Fix the key or the ruleset if that was the cause, then start a **new** run (Actions → Create Release → Run workflow). "Re-run jobs" would repeat the failed run on its original commit, which `main` refuses again once it has moved.
+- **The secret `RELEASE_DEPLOY_KEY` is missing**: the release stops with an error before it commits anything.
+- **The tag's push fails after `main` took the commit**: start a new run on `main` with the same settings. It computes the same version, finds it in `manifest.json` already and commits nothing, then tags and publishes.
+- **Publishing fails after the tag was pushed** (step 5): the tag exists, without a release. Create the release from that tag by hand (Releases → Draft a new release → choose the tag), titled `v<version>`, marked as a pre-release for a beta, with the notes the "Commit version and tag" job printed in its log. Do not start a new run for it: that would release the next version and leave this tag without a release.
+
+After a stable release, merge `main` into `dev`, so the version commit reaches `dev` too: `git switch dev`, `git pull`, `git merge origin/main`, `git push`. A pre-release leaves nothing to merge.

@@ -30,5 +30,5 @@ Wallet value bugs are easy to miss — state the numbers you verified.
 - [ ] README updated if user-facing behavior changed
 
 <!--
-Do NOT bump the version in manifest.json — the maintainer sets it during release.
+Do NOT bump the version in manifest.json — the release workflow sets it.
 -->

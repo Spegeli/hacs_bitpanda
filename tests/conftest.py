@@ -26,12 +26,12 @@ def pytest_configure(config):
     `--strict-markers` would express the same requirement, but only from the
     command line. Measured in this plugin stack: passed as a CLI flag it fails
     collection with "'timeout' not found in `markers` configuration option",
-    while the identical setting in `pytest.ini`'s `addopts` is discarded and
-    leaves only a warning. Hence an explicit hook rather than a config line.
+    while the identical setting in `pyproject.toml`'s `addopts` is discarded
+    and leaves only a warning. Hence an explicit hook rather than a config line.
     """
     if not config.pluginmanager.hasplugin("timeout"):
         raise pytest.UsageError(
-            "pytest-timeout is required; install it from requirements_test.txt"
+            "pytest-timeout is required; install it from tests/requirements.txt"
         )
 
 _FIXTURES = Path(__file__).parent / "fixtures"

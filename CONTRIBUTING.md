@@ -36,20 +36,20 @@ logger:
 
 ### Tests and typing
 
-Tests use `pytest-homeassistant-custom-component`, whose harness does not run on Windows. `requirements_test.txt` pins it — and with it the Home Assistant release the suite runs against, which needs Python 3.14 — and mypy. Install mypy from that file too, never with a bare `pip install mypy`: another mypy release can report errors CI does not, or miss ones it does. The tests and mypy need Python 3.14; the integration itself must still run on 3.13 (see [Things that are easy to get wrong](#things-that-are-easy-to-get-wrong)). On Linux or macOS, with Python 3.14:
+Tests use `pytest-homeassistant-custom-component`, whose harness does not run on Windows. `tests/requirements.txt` pins it — and with it the Home Assistant release the suite runs against, which needs Python 3.14 — and mypy. Install mypy from that file too, never with a bare `pip install mypy`: another mypy release can report errors CI does not, or miss ones it does. The tests and mypy need Python 3.14; the integration itself must still run on 3.13 (see [Things that are easy to get wrong](#things-that-are-easy-to-get-wrong)). On Linux or macOS, with Python 3.14:
 
 ```bash
-pip install -r requirements_test.txt
+pip install -r tests/requirements.txt
 python -m pytest tests/ -q --cov=custom_components.bitpanda --cov-report=term-missing --cov-fail-under=95
 python -m mypy --strict
 ```
 
-`pytest` runs the suite and reports the line coverage of each file, and fails under 95 % overall, as CI does; `mypy` checks the types of the integration in strict mode, as `mypy.ini` configures it — the tests are not type-checked.
+`pytest` runs the suite and reports the line coverage of each file, and fails under 95 % overall, as CI does; `mypy` checks the types of the integration in strict mode, as `pyproject.toml` configures it — the tests are not type-checked.
 
 The same in Docker, on any system, with the Python version and the pinned requirements CI uses; each run installs them afresh, which takes a few minutes. On Windows, run it from PowerShell: Git Bash rewrites the mount path.
 
 ```bash
-docker run --rm -v "${PWD}:/workspace" -w /workspace python:3.14 sh -c "pip install -q -r requirements_test.txt && python -m pytest tests/ -q --cov=custom_components.bitpanda --cov-report=term-missing --cov-fail-under=95 && python -m mypy --strict"
+docker run --rm -v "${PWD}:/workspace" -w /workspace python:3.14 sh -c "pip install -q -r tests/requirements.txt && python -m pytest tests/ -q --cov=custom_components.bitpanda --cov-report=term-missing --cov-fail-under=95 && python -m mypy --strict"
 ```
 
 CI enforces both on every push and pull request (`.github/workflows/tests.yml`): the suite must pass with at least 95 % line coverage, and `mypy --strict` must report no error. It also compiles the integration with Python 3.13. `config_flow.py` and `asset_flow.py` stay at 100 %, and every test that shows an error in a dialog goes on to finish that dialog.

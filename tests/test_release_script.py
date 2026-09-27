@@ -182,6 +182,13 @@ def test_compute_bump_auto_is_patch_otherwise():
     assert compute_bump([], "auto") == "patch"
 
 
+def test_compute_bump_auto_is_major_for_a_breaking_commit_of_any_type():
+    """A `!` or a footer is the author's own breaking signal, whatever the
+    type -- a CI or tooling change included (ruling R13)."""
+    assert compute_bump([_commit("fix"), _commit("ci", breaking=True)], "auto") == "major"
+    assert compute_bump([_commit("chore", breaking=True)], "auto") == "major"
+
+
 # --------------------------------------------------------------------------
 # Tag parsing -- legacy date tags are never a SemVer base
 # --------------------------------------------------------------------------
@@ -373,7 +380,9 @@ def test_build_notes_with_nothing_to_list():
 
 def test_build_notes_excludes_internal_types_merges_and_the_version_commit():
     """Review focus: test/ci/chore/build, merge commits and the release's
-    own "chore: bump version to ..." commit are never listed."""
+    own "chore: bump version to ..." commit are not listed -- unless a
+    tooling commit is breaking or has the security scope (ruling R13,
+    tested below)."""
     commits = [
         RawCommit(subject="test: add a regression test", body=""),
         RawCommit(subject="ci: cache pip downloads", body=""),
@@ -428,6 +437,58 @@ def test_build_notes_footer_breaking_change_also_files_under_breaking_only():
     notes = build_notes(commits)
     assert notes == "### \U0001F4A5 Breaking Changes\n\n- Adjust rounding"
     assert "Bug Fixes" not in notes
+
+
+def test_build_notes_lists_a_breaking_commit_of_any_type():
+    """Ruling R13: a breaking commit is listed under Breaking Changes
+    whatever its type -- also ci, test, build and chore, which are left out
+    otherwise: it makes the next version major, so the notes must say why."""
+    commits = [
+        RawCommit(subject="ci!: require the release runner's Python 3.12", body=""),
+        RawCommit(subject="test: add a regression test", body=""),
+        RawCommit(
+            subject="chore: rework the release tags",
+            body="Moves them.\n\nBREAKING CHANGE: older tags are gone.",
+        ),
+    ]
+    assert build_notes(commits) == (
+        "### \U0001F4A5 Breaking Changes\n\n"
+        "- Require the release runner's Python 3.12\n"
+        "- Rework the release tags"
+    )
+
+
+def test_build_notes_lists_the_security_scope_of_any_type():
+    """Ruling R13, spec 12.6: scope security, any type -- a chore or build
+    change to security is listed too, under Security."""
+    commits = [
+        RawCommit(subject="chore(security): rotate the pinned action digests", body=""),
+        RawCommit(subject="build(security): pin the test image by digest", body=""),
+        RawCommit(subject="chore: tidy the scripts", body=""),
+    ]
+    assert build_notes(commits) == (
+        "### \U0001F512 Security\n\n"
+        "- **security:** Rotate the pinned action digests\n"
+        "- **security:** Pin the test image by digest"
+    )
+
+
+def test_build_notes_reads_the_security_scope_in_any_case():
+    """The type is read case-insensitively, and so is the security scope:
+    Fix(Security) is a security fix. The scope is printed as written."""
+    commits = [RawCommit(subject="Fix(Security): patch a token leak", body="")]
+    assert build_notes(commits) == (
+        "### \U0001F512 Security\n\n- **Security:** Patch a token leak"
+    )
+
+
+def test_build_notes_lists_a_breaking_security_commit_only_as_breaking():
+    """Both rules of R13 apply; a commit is never listed twice, and
+    breaking comes first."""
+    commits = [RawCommit(subject="fix(security)!: drop the old token format", body="")]
+    assert build_notes(commits) == (
+        "### \U0001F4A5 Breaking Changes\n\n- **security:** Drop the old token format"
+    )
 
 
 def test_build_notes_orders_sections_in_the_global_order_and_omits_empty_ones():

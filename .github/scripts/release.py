@@ -313,9 +313,10 @@ _SECTIONS: tuple[tuple[str, str], ...] = (
     ("\U0001F4DD", "Documentation"),
 )
 
-# Never released-noted, whatever their scope: internal to the project, not
-# to the people running it. This is also what excludes the release's own
-# "chore: bump version to ..." commit -- no special case needed for it.
+# Internal to the project, not to the people running it: left out of the
+# notes -- unless breaking or scoped `security` (see `_section_for`). This
+# is also what leaves out the release's own "chore: bump version to ..."
+# commit -- no special case needed for it.
 _EXCLUDED_TYPES = frozenset({"test", "ci", "chore", "build"})
 
 
@@ -323,17 +324,20 @@ def _section_for(commit: Commit) -> str | None:
     """Which section (by name, from `_SECTIONS`) `commit` belongs in, or
     None to leave it out of the notes entirely.
 
-    A breaking commit is filed only under Breaking Changes, never also
-    under its own type's section. The `security` scope is checked before
-    any type, so it can pull a commit of any (listed) type into Security
-    instead of where its type would otherwise put it.
+    Ruling R13, in this order:
+    - A breaking commit of any type -- `ci`, `test`, `build` and `chore`
+      included -- is filed under Breaking Changes, and only there: it makes
+      the next version major (`compute_bump`), so the notes must say why.
+    - A commit scoped `security`, in any case and of any type, is filed
+      under Security instead of where its type would put it.
+    - Only then are the excluded types left out.
     """
-    if commit.type in _EXCLUDED_TYPES:
-        return None
     if commit.breaking:
         return "Breaking Changes"
-    if commit.scope == "security":
+    if commit.scope is not None and commit.scope.lower() == "security":
         return "Security"
+    if commit.type in _EXCLUDED_TYPES:
+        return None
     if commit.type == "feat":
         return "New Features"
     if commit.type == "perf":
@@ -380,7 +384,8 @@ def build_notes(commits: Sequence[RawCommit]) -> str:
     Sections follow the global order in `_SECTIONS`, empty ones omitted; a
     commit that fails to parse as a Conventional Commit -- a merge's
     subject has no header to parse -- is silently left out, the same as
-    one whose type is never released-noted (`_EXCLUDED_TYPES`)."""
+    one of an excluded type that is neither breaking nor scoped `security`
+    (`_section_for`)."""
     by_section: dict[str, list[Commit]] = {name: [] for _, name in _SECTIONS}
     for raw in commits:
         commit = parse_commit(raw)

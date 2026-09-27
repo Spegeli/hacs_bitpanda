@@ -72,6 +72,9 @@ def _portfolio(
         return out
     data = runtime.portfolio.data
     history = runtime.history.data
+    # The real outcome: a timeframe whose requests fail counts as failed
+    # while its sensor still shows its last return.
+    failing = runtime.history.failing_timeframes
     earn = runtime.earn.data
     out["coordinators"] = {
         "portfolio": {
@@ -82,8 +85,8 @@ def _portfolio(
         },
         "history": {
             **_health(runtime.history),
-            "timeframes": len(history.values) if history else 0,
-            "failed_timeframes": len(history.failed) if history else 0,
+            "timeframes": len(set(history.values) - failing) if history else 0,
+            "failed_timeframes": len(failing),
         },
         "earn": {**_health(runtime.earn), "offered_assets": len(earn.offered) if earn else 0},
         "rewards": {

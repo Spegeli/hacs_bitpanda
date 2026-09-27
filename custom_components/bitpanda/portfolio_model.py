@@ -248,16 +248,18 @@ def tolerate_failed_timeframes(
     interval: timedelta,
 ) -> PortfolioReturns:
     """`result`, with each timeframe whose own request failed keeping its
-    return from `previous` until its own failures are confirmed.
+    return from `previous` until its streak is confirmed.
 
-    Each failed timeframe adds a failure, asked for `at`, to its streak in
-    `streaks`, which FailureStreak's rule confirms at the regular pace
-    `interval`. Not confirmed yet, and not failed in `previous` either, it
-    leaves `failed` and takes its figure from `previous` -- unless it was
-    answered there without one: then it stays unknown. Confirmed, or
-    without a last return -- no `previous`, or failed there too -- it stays
-    in `failed`. A timeframe that answered ends its streak. `streaks` is
-    updated in place.
+    `streaks` holds each timeframe's refreshes in a row without a fresh
+    return; the caller adds those that failed as a whole, which never get
+    here (HistoryCoordinator). Each failed timeframe adds a failure, asked
+    for `at`, to its streak, which FailureStreak's rule confirms at the
+    regular pace `interval`. Not confirmed yet, and not failed in `previous`
+    either, it leaves `failed` and takes its figure from `previous` --
+    unless it was answered there without one: then it stays unknown.
+    Confirmed, or without a last return -- no `previous`, or failed there
+    too -- it stays in `failed`. A timeframe that answered ends its streak.
+    `streaks` is updated in place.
     """
     for timeframe in streaks.keys() - result.failed:
         del streaks[timeframe]

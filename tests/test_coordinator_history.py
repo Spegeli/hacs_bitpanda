@@ -302,13 +302,13 @@ async def test_the_coordinator_carries_a_failing_timeframe(hass, freezer):
     assert "WEEK" not in coordinator.data.values
 
 
-async def test_a_history_refresh_failing_as_a_whole_leaves_the_timeframes_alone(
+async def test_a_history_refresh_failing_as_a_whole_counts_for_every_timeframe(
     hass, freezer
 ):
-    """Every request of the third refresh fails: the refresh fails -- the
-    coordinator's own failure (tolerance.py), its data unchanged -- and no
-    timeframe counts it. The week, failing before and after it, has failed
-    twice on its own, not three times: it is still carried."""
+    """The week fails, then every request of a refresh fails -- the refresh
+    fails, its data unchanged (tolerance.py) -- then the week fails again:
+    three refreshes without a fresh return for the week, two intervals from
+    the first to the last, confirm its failure."""
     scripts = {timeframe: [1.0, 1.0, _DOWN, 1.0] for timeframe in PORTFOLIO_TIMEFRAMES}
     scripts["WEEK"] = [2.0, _DOWN, _DOWN, _DOWN]
     coordinator = _scripted_history(hass, **scripts)
@@ -322,8 +322,45 @@ async def test_a_history_refresh_failing_as_a_whole_leaves_the_timeframes_alone(
 
     await _refresh(coordinator, freezer)
     assert coordinator.last_update_success is True
-    assert coordinator.data.values["WEEK"] == 2.0
-    assert "WEEK" not in coordinator.data.failed
+    assert "WEEK" in coordinator.data.failed
+    assert "WEEK" not in coordinator.data.values
+
+
+async def test_a_timeframe_still_failing_after_a_confirmed_outage_is_unavailable_at_once(
+    hass, freezer
+):
+    """Three refreshes in a row fail as a whole, at the regular pace: the
+    outage is confirmed. At the next refresh the others answer and the week
+    fails: it has had no fresh return for four refreshes, so its return from
+    before the outage never comes back -- failed at once."""
+    scripts = {timeframe: [1.0, *[_DOWN] * 3, 1.0] for timeframe in PORTFOLIO_TIMEFRAMES}
+    scripts["WEEK"] = [2.0, *[_DOWN] * 4]
+    coordinator = _scripted_history(hass, **scripts)
+    await coordinator.async_refresh()
+    for _ in range(3):
+        await _refresh(coordinator, freezer)
+    assert coordinator.data_available is False
+
+    await _refresh(coordinator, freezer)
+    assert coordinator.data == PortfolioReturns(
+        values={"DAY": 1.0, "MONTH": 1.0, "SIX_MONTH": 1.0, "YEAR": 1.0},
+        failed=frozenset({"WEEK"}),
+    )
+
+
+async def test_the_failing_timeframes_are_those_whose_requests_fail_now(hass, freezer):
+    """What the diagnostics report as failed: every timeframe whose requests
+    fail now -- the week while it is carried over, all five after a refresh
+    that fails as a whole -- and none once they answer again."""
+    scripts = {timeframe: [1.0, 1.0, _DOWN, 1.0] for timeframe in PORTFOLIO_TIMEFRAMES}
+    scripts["WEEK"] = [2.0, _DOWN, _DOWN, 3.0]
+    coordinator = _scripted_history(hass, **scripts)
+    await coordinator.async_refresh()
+    seen = [coordinator.failing_timeframes]
+    for _ in range(3):
+        await _refresh(coordinator, freezer)
+        seen.append(coordinator.failing_timeframes)
+    assert seen == [set(), {"WEEK"}, set(PORTFOLIO_TIMEFRAMES), set()]
 
 
 async def test_quick_refreshes_never_confirm_a_timeframes_failure_sooner(hass, freezer):

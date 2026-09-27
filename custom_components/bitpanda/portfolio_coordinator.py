@@ -408,9 +408,11 @@ class HistoryCoordinator(TolerantCoordinator[PortfolioReturns]):
     other: the return sensors keep the last data until the failure is
     confirmed (tolerance.py). A timeframe whose own request fails while the
     others answer follows the same rule on its own: it keeps its last return
-    until its own failures are confirmed (tolerate_failed_timeframes). Such
-    a streak advances only in refreshes that return data, so a refresh that
-    fails as a whole counts for no timeframe.
+    until its own streak is confirmed (tolerate_failed_timeframes). Every
+    refresh without a fresh return counts for a timeframe, one that fails as
+    a whole included: so a return from before a confirmed outage never
+    comes back after it, and a timeframe still failing then is unavailable
+    at once.
     """
 
     config_entry: PortfolioConfigEntry
@@ -432,14 +434,28 @@ class HistoryCoordinator(TolerantCoordinator[PortfolioReturns]):
         )
         self._client = client
         self._currency_id = currency_id
-        # Timeframe -> its own failed requests in a row.
+        # Timeframe -> its refreshes in a row without a fresh return.
         self._streaks: dict[str, FailureStreak] = {}
+
+    @property
+    def failing_timeframes(self) -> frozenset[str]:
+        """The timeframes whose requests fail now -- carried over, confirmed
+        or without a last return alike. The real outcome, which diagnostics
+        report: PortfolioReturns.failed holds only the timeframes the
+        sensors show as unavailable."""
+        return frozenset(self._streaks)
 
     async def _async_fetch(self, requested_at: datetime) -> PortfolioReturns:
         try:
             result = await collect_returns(self._client, self._currency_id)
         except BitpandaAuthError:
             raise _auth_failed() from None
+        except UpdateFailed:
+            # Every request failed: no timeframe has a fresh return, and the
+            # refresh counts for each of them.
+            for timeframe in PORTFOLIO_TIMEFRAMES:
+                self._streaks.setdefault(timeframe, FailureStreak()).add(requested_at)
+            raise
         return tolerate_failed_timeframes(
             result, self.data, self._streaks, requested_at, PORTFOLIO_UPDATE_INTERVAL
         )

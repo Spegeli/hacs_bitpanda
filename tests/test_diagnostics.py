@@ -34,6 +34,15 @@ class _Coordinator:
         self.update_interval = interval
 
 
+class _History(_Coordinator):
+    """The History coordinator: also the timeframes whose requests fail now,
+    carried over or not."""
+
+    def __init__(self, data=None, failing=()):
+        super().__init__(data)
+        self.failing_timeframes = frozenset(failing)
+
+
 def _add_device(
     hass, entry, name: str, category: str | None = None, sensors: tuple[str, ...] = ("value",)
 ) -> None:
@@ -86,8 +95,9 @@ def _portfolio_entry(hass, *, loaded: bool) -> MockConfigEntry:
         data.assets = {"a": {"id": "a", "group": "coin"}}
         entry.runtime_data = SimpleNamespace(
             portfolio=_Coordinator(data),
-            history=_Coordinator(
-                PortfolioReturns(values={"DAY": 1.0}, failed=frozenset({"YEAR"}))
+            history=_History(
+                PortfolioReturns(values={"DAY": 1.0}, failed=frozenset({"YEAR"})),
+                failing={"YEAR"},
             ),
             earn=_Coordinator(EarnData(apr={}, offered=frozenset({"a"}))),
             rewards=_Coordinator(None, success=False),
@@ -107,6 +117,21 @@ async def test_portfolio_diagnostics_report_health_and_never_the_key(hass):
         "history": {"last_update_success": True, "timeframes": 1, "failed_timeframes": 1},
         "earn": {"last_update_success": True, "offered_assets": 1},
         "rewards": {"last_update_success": False, "assets_with_rewards": 0},
+    }
+
+
+async def test_portfolio_diagnostics_count_a_carried_timeframe_as_failed(hass):
+    """The week's requests fail while the sensor still shows its last return
+    (tolerate_failed_timeframes): the diagnostics report the real outcome --
+    one failed timeframe and one with a fresh return -- not what the sensors
+    show."""
+    entry = _portfolio_entry(hass, loaded=True)
+    entry.runtime_data.history = _History(
+        PortfolioReturns(values={"DAY": 1.0, "WEEK": 2.0}), failing={"WEEK"}
+    )
+    result = await async_get_config_entry_diagnostics(hass, entry)
+    assert result["coordinators"]["history"] == {
+        "last_update_success": True, "timeframes": 1, "failed_timeframes": 1,
     }
 
 

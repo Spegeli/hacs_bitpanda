@@ -431,11 +431,37 @@ _FIELD_SEP = "\x1f"  # ASCII unit separator: never appears in a commit message.
 _RECORD_SEP = "\x1e"  # ASCII record separator.
 
 
+class ReleaseError(Exception):
+    """A state of the checkout the script refuses to plan or write notes
+    from; `main` prints it and exits 1."""
+
+
 def _run_git(args: Sequence[str]) -> str:
-    """`git <args>` in the current checkout. Always an argument list, never
-    a shell string, so a ref or tag name is never open to shell syntax."""
-    result = subprocess.run(["git", *args], check=True, text=True, capture_output=True)
+    """`git <args>` in the current checkout; what it prints. Always an
+    argument list, never a shell string, so a ref or tag name is never open
+    to shell syntax. Only the output is captured: git's own error -- a
+    "fatal:" line naming the bad revision -- goes straight to the log,
+    where the CalledProcessError would show just an exit status."""
+    result = subprocess.run(["git", *args], check=True, text=True, stdout=subprocess.PIPE)
     return result.stdout
+
+
+def is_shallow_clone() -> bool:
+    """Whether the current checkout is a shallow clone -- what
+    actions/checkout gives without `fetch-depth: 0`."""
+    return _run_git(["rev-parse", "--is-shallow-repository"]).strip() == "true"
+
+
+def _require_the_whole_history() -> None:
+    """A shallow clone has no tags and a cut history: the plan would come
+    out plausible and wrong (1.0.1, v1.0.1_redesign), the notes short. So
+    plan and notes refuse it."""
+    if is_shallow_clone():
+        raise ReleaseError(
+            "the checkout is a shallow clone, without the tags and the history "
+            "the version and the notes come from. Check it out with fetch-depth: 0 "
+            "(actions/checkout), or run: git fetch --unshallow --tags"
+        )
 
 
 def git_tags() -> list[str]:
@@ -476,6 +502,7 @@ def plan(release_type: ReleaseType, bump_override: str) -> dict[str, str]:
     stable) -- never since the latest pre-release -- so a version target
     stays put across however many betas lead up to it.
     """
+    _require_the_whole_history()
     tags = git_tags()
     stable_base = previous_ref(tags, "stable")
     commits = [
@@ -501,6 +528,7 @@ def plan(release_type: ReleaseType, bump_override: str) -> dict[str, str]:
 def notes_command(from_ref: str, to_ref: str) -> str:
     """The Markdown release notes for the commit range `from_ref..to_ref`
     (or all of `to_ref`'s history when `from_ref` is empty)."""
+    _require_the_whole_history()
     return build_notes(list_commits(from_ref, to_ref))
 
 
@@ -527,12 +555,16 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
-    if args.command == "plan":
-        result = plan(args.type, args.bump)
-        for key, value in result.items():
-            print(f"{key}={value}")
-    else:
-        print(notes_command(args.from_ref, args.to_ref))
+    try:
+        if args.command == "plan":
+            result = plan(args.type, args.bump)
+            for key, value in result.items():
+                print(f"{key}={value}")
+        else:
+            print(notes_command(args.from_ref, args.to_ref))
+    except ReleaseError as error:
+        print(f"release.py: {error}", file=sys.stderr)
+        return 1
     return 0
 
 

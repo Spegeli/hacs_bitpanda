@@ -51,6 +51,15 @@ parse_prerelease_tag = release.parse_prerelease_tag
 _AFTER_REDESIGN = ["v2026.05.17", "v2026.06.04", "v2.0.0_redesign"]
 
 
+@pytest.fixture(autouse=True)
+def _a_complete_history(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """plan and notes refuse a shallow clone, which they ask git about. The
+    tests that stub git get a checkout with its whole history; those on a
+    real repository (the `repository` fixture) let git answer."""
+    if "repository" not in request.fixturenames:
+        monkeypatch.setattr(release, "is_shallow_clone", lambda: False)
+
+
 # --------------------------------------------------------------------------
 # parse_commit -- Conventional Commits header + BREAKING CHANGE footer
 # --------------------------------------------------------------------------
@@ -766,3 +775,57 @@ def test_the_git_layer_reads_a_real_repository(repository):
         "tag": "v2.0.1",
         "previous": "v2.0.0_redesign",
     }
+
+
+def test_plan_and_notes_refuse_a_shallow_clone(monkeypatch, capsys):
+    """A shallow clone -- what actions/checkout gives without fetch-depth:
+    0 -- has no tags and a cut history, and the plan would still look
+    plausible (1.0.1, v1.0.1_redesign) while being wrong. So plan and notes
+    refuse it, and say why and what to do. Task 7 review Minor 1."""
+    monkeypatch.setattr(release, "is_shallow_clone", lambda: True)
+    monkeypatch.setattr(release, "git_tags", lambda: [])
+    monkeypatch.setattr(release, "list_commits", lambda from_ref, to_ref: [])
+    with pytest.raises(release.ReleaseError, match="shallow"):
+        release.plan("stable", "major")
+    with pytest.raises(release.ReleaseError, match="shallow"):
+        release.notes_command("", "HEAD")
+    for argv in (
+        ["plan", "--type", "stable", "--bump", "major"],
+        ["notes", "--from", "", "--to", "HEAD"],
+    ):
+        assert release.main(argv) == 1
+        printed = capsys.readouterr()
+        assert printed.out == ""
+        assert "shallow" in printed.err
+        assert "fetch-depth: 0" in printed.err
+
+
+def test_git_says_whether_a_clone_is_shallow(repository, tmp_path, monkeypatch):
+    """A clone with --depth 1 is shallow, the repository it came from is
+    not -- and a plan in the shallow one is refused."""
+    _git_commit(repository, "feat: add one", second=1)
+    _git_commit(repository, "feat: add two", second=2)
+    assert release.is_shallow_clone() is False
+    clone = tmp_path / "shallow"
+    _git(tmp_path, "clone", "--quiet", "--depth", "1", repository.as_uri(), str(clone))
+    monkeypatch.chdir(clone)
+    assert release.is_shallow_clone() is True
+    with pytest.raises(release.ReleaseError, match="shallow"):
+        release.plan("stable", "auto")
+
+
+def test_a_git_failure_leaves_gits_own_message_in_the_log(repository):
+    """git's own error -- here the unknown revision of a tag that does not
+    exist -- reaches the log, rather than only an exit status 128 behind a
+    traceback. Task 7 review Minor 2."""
+    _git_commit(repository, "feat: add one", second=1)
+    failed = subprocess.run(
+        [sys.executable, str(_SCRIPT), "notes", "--from", "no-such-tag", "--to", "HEAD"],
+        cwd=repository,
+        env=_git_env(),
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert failed.returncode != 0
+    assert "fatal:" in failed.stderr

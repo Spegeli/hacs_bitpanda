@@ -155,6 +155,20 @@ jobs:
           mv tmp.json "${MANIFEST}"
           echo "manifest.json updated to ${VERSION}"
 
+      # A bump that did not land -- a jq filter gone wrong, a key misspelt --
+      # would ship a tag whose manifest.json still names the previous
+      # version. So the manifest must now carry exactly this one, as jq writes
+      # it; the closing quote rules out a longer version, 2026.09.27-1 for
+      # 2026.09.27.
+      - name: Check the version in manifest.json
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if ! grep -qF "\"version\": \"${VERSION}\"" "${MANIFEST}"; then
+            echo "::error::manifest.json does not carry version ${VERSION} after the update. Nothing was committed or pushed."
+            exit 1
+          fi
+
       - name: Commit updated manifest.json
         env:
           VERSION: ${{ steps.version.outputs.version }}

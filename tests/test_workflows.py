@@ -8,6 +8,7 @@ CONTRIBUTING.md ("Continuous integration", "Releases") describes. Where a
 script decides, they run it: with bash, as GitHub does, and with git on
 repositories of their own.
 """
+import json
 import os
 from pathlib import Path
 import re
@@ -624,6 +625,78 @@ def test_release_versions_by_utc_date_and_commits_as_the_actions_bot(tmp_path):
     assert 'git commit -m "chore: bump version to ' in script
     assert 'git config user.name "github-actions[bot]"' in script
     assert 'git config user.email "github-actions[bot]@users.noreply.github.com"' in script
+
+
+def _as_jq_writes(manifest: dict) -> str:
+    """`manifest` laid out as jq writes a JSON object: indented by two
+    spaces, one space after each colon, a newline at the end."""
+    return json.dumps(manifest, indent=2) + "\n"
+
+
+def test_release_writes_the_version_into_the_manifest_and_checks_it(tmp_path):
+    """The release's reason for being: the version goes into manifest.json,
+    the file Home Assistant and HACS read, in the commit that is pushed and
+    tagged. jq sets its "version". Right after, a check fails the release
+    unless the manifest carries exactly that version -- a bump that did not
+    land would ship a tag whose manifest names the previous one. Then the
+    file is added and committed, and nothing else. (jq itself runs only in
+    CI, so its command is held as written.)"""
+    release = _workflow(_RELEASE)
+    manifest = release["env"]["MANIFEST"]
+    steps = release["jobs"]["commit"]["steps"]
+    [version] = [index for index, step in enumerate(steps) if step.get("id") == "version"]
+    [update] = [index for index, step in enumerate(steps) if "jq " in step.get("run", "")]
+    [commit] = [index for index, step in enumerate(steps) if "git commit" in step.get("run", "")]
+    assert version < update < update + 1 < commit
+    assert steps[update]["env"] == {"VERSION": "${{ steps.version.outputs.version }}"}
+    written_by_jq = steps[update]["run"]
+    assert """jq --arg v "${VERSION}" '.version = $v' "${MANIFEST}" > tmp.json""" in written_by_jq
+    assert 'mv tmp.json "${MANIFEST}"' in written_by_jq
+
+    # The check, right after the update, on the manifest as jq leaves it.
+    check = steps[update + 1]
+    shipped = json.loads((Path(__file__).parents[1] / manifest).read_text(encoding="utf-8"))
+    version_value = {"steps.version.outputs.version": "2026.09.27"}
+    written = tmp_path / "written"
+    (written / manifest).parent.mkdir(parents=True)
+    checked = {}
+    for case, fields in {
+        "bumped": {"version": "2026.09.27"},
+        "not bumped": {"version": "2026.06.04"},
+        "another key bumped": {"version": "2026.06.04", "Version": "2026.09.27"},
+        "a longer version": {"version": "2026.09.27-1"},
+    }.items():
+        (written / manifest).write_text(_as_jq_writes({**shipped, **fields}), encoding="utf-8")
+        result = _run_step(check, version_value, cwd=written, env={"MANIFEST": manifest})
+        checked[case] = (result.returncode, "::error::" in result.stdout)
+    assert checked == {
+        "bumped": (0, False),
+        "not bumped": (1, True),
+        "another key bumped": (1, True),
+        "a longer version": (1, True),
+    }
+
+    # The commit, on top of the validated one: the manifest, and only it.
+    repository = tmp_path / "repository"
+    (repository / manifest).parent.mkdir(parents=True)
+    (repository / manifest).write_text(
+        _as_jq_writes({**shipped, "version": "2026.06.04"}), encoding="utf-8"
+    )
+    _git(tmp_path, "init", "--quiet", "--initial-branch=main", str(repository))
+    _git(repository, "add", manifest)
+    validated = _commit(repository, "The validated commit")
+    (repository / manifest).write_text(
+        _as_jq_writes({**shipped, "version": "2026.09.27"}), encoding="utf-8"
+    )
+    committed = _run_step(steps[commit], version_value, cwd=repository, env={"MANIFEST": manifest})
+    assert committed.returncode == 0, committed.stderr
+    bot = "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+    assert _git(repository, "log", "-1", "--format=%s|%an <%ae>|%cn <%ce>") == (
+        f"chore: bump version to 2026.09.27|{bot}|{bot}"
+    )
+    assert _git(repository, "rev-parse", "HEAD~1") == validated
+    assert _git(repository, "show", "--name-only", "--format=", "HEAD") == manifest
+    assert json.loads(_git(repository, "show", f"HEAD:{manifest}"))["version"] == "2026.09.27"
 
 
 def test_a_dry_run_checks_the_deploy_key_and_publishes_nothing(tmp_path):

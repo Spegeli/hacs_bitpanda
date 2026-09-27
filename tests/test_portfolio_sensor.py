@@ -232,6 +232,16 @@ def test_a_timeframe_whose_own_request_failed_is_unavailable():
     assert (day.native_value, day.available) == (1.25, True)
 
 
+def test_a_tolerated_history_failure_keeps_every_return():
+    """The history update failed, but the failure is not confirmed yet
+    (tolerance.py): the returns show the last data, available."""
+    history = _Coordinator(
+        PortfolioReturns(values={"DAY": 1.25}), last_update_success=False, data_available=True
+    )
+    day = PortfolioReturnSensor(history, "eid", "DAY")
+    assert (day.native_value, day.available) == (1.25, True)
+
+
 def test_a_failed_history_update_makes_every_return_unavailable():
     history = _Coordinator(PortfolioReturns(values={"DAY": 1.25}), last_update_success=False)
     assert PortfolioReturnSensor(history, "eid", "DAY").available is False

@@ -23,7 +23,6 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .assets import asset_attributes, asset_category
@@ -184,12 +183,13 @@ class PortfolioCashPlusSensor(_PortfolioFigure):
         return data.cash_plus_amounts or {}
 
 
-class PortfolioReturnSensor(CoordinatorEntity[HistoryCoordinator], SensorEntity):
+class PortfolioReturnSensor(TolerantEntity[HistoryCoordinator], SensorEntity):
     """The portfolio's return over one timeframe, in percent.
 
-    Unavailable while the history update failed or this timeframe's own
-    request did; unknown when Bitpanda answered for it without a usable
-    figure (PortfolioReturns).
+    Unavailable once a failure is confirmed, not at the first failed
+    request: the history update's (tolerance.py) or this timeframe's own
+    (PortfolioReturns.failed) -- at once when there is no last return to
+    show. Unknown when Bitpanda answered for it without a usable figure.
     """
 
     _attr_has_entity_name = True

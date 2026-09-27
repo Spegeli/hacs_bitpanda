@@ -1,13 +1,22 @@
 """Tests for the portfolio history coordinator."""
 import asyncio
+from datetime import timedelta
 
 import pytest
 from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from custom_components.bitpanda.api import BitpandaApiClient, BitpandaAuthError
-from custom_components.bitpanda.const import API_BASE_URL, PORTFOLIO_TIMEFRAMES
+from custom_components.bitpanda.api import (
+    BitpandaApiClient,
+    BitpandaApiError,
+    BitpandaAuthError,
+)
+from custom_components.bitpanda.const import (
+    API_BASE_URL,
+    PORTFOLIO_TIMEFRAMES,
+    PORTFOLIO_UPDATE_INTERVAL,
+)
 from custom_components.bitpanda.portfolio_coordinator import (
     HistoryCoordinator,
     collect_returns,
@@ -236,3 +245,94 @@ async def test_history_coordinator_raises_config_entry_auth_failed_on_401():
     assert (excinfo.value.translation_domain, excinfo.value.translation_key) == (
         "bitpanda", "api_key_rejected"
     )
+
+
+# ---------------------------------------------------------------------------
+# HistoryCoordinator.async_refresh: a timeframe whose own request fails
+#
+# With `hass` a refresh keeps its data and counts its failures
+# (tolerance.py). Nothing listens, so no refresh is scheduled: each test
+# moves the clock and refreshes by itself.
+# ---------------------------------------------------------------------------
+
+# A scripted request that fails.
+_DOWN = "down"
+
+
+class _Scripted:
+    """Fake API client scripted per timeframe: each request takes the next
+    item of its timeframe's script -- a return, or _DOWN for a request that
+    fails. A timeframe without a script answers 1.0."""
+
+    def __init__(self, **scripts):
+        self._scripts = {timeframe: list(script) for timeframe, script in scripts.items()}
+
+    async def async_get_portfolio_history(self, *, timeframe, equivalent_currency_id=None):
+        item = self._scripts[timeframe].pop(0) if timeframe in self._scripts else 1.0
+        if item == _DOWN:
+            raise BitpandaApiError(
+                "HTTP 503 from /portfolio-history",
+                kind="http_status", path="/portfolio-history", status=503,
+            )
+        return {"return_percentage": item}
+
+
+def _scripted_history(hass, **scripts) -> HistoryCoordinator:
+    return HistoryCoordinator(hass, entry=None, client=_Scripted(**scripts), currency_id=None)
+
+
+async def _refresh(coordinator, freezer, pace=PORTFOLIO_UPDATE_INTERVAL) -> None:
+    """One refresh, `pace` after the one before."""
+    freezer.tick(pace)
+    await coordinator.async_refresh()
+
+
+async def test_the_coordinator_carries_a_failing_timeframe(hass, freezer):
+    """The week answers, then its own requests fail while the others answer:
+    its last return stays through two refreshes at the regular pace, and
+    the third confirms the failure."""
+    coordinator = _scripted_history(hass, WEEK=[2.0, _DOWN, _DOWN, _DOWN])
+    await coordinator.async_refresh()
+    for _ in range(2):
+        await _refresh(coordinator, freezer)
+        assert coordinator.data.values["WEEK"] == 2.0
+        assert "WEEK" not in coordinator.data.failed
+    await _refresh(coordinator, freezer)
+    assert "WEEK" in coordinator.data.failed
+    assert "WEEK" not in coordinator.data.values
+
+
+async def test_a_history_refresh_failing_as_a_whole_leaves_the_timeframes_alone(
+    hass, freezer
+):
+    """Every request of the third refresh fails: the refresh fails -- the
+    coordinator's own failure (tolerance.py), its data unchanged -- and no
+    timeframe counts it. The week, failing before and after it, has failed
+    twice on its own, not three times: it is still carried."""
+    scripts = {timeframe: [1.0, 1.0, _DOWN, 1.0] for timeframe in PORTFOLIO_TIMEFRAMES}
+    scripts["WEEK"] = [2.0, _DOWN, _DOWN, _DOWN]
+    coordinator = _scripted_history(hass, **scripts)
+    await coordinator.async_refresh()
+    await _refresh(coordinator, freezer)
+    carried = coordinator.data
+
+    await _refresh(coordinator, freezer)
+    assert coordinator.last_update_success is False
+    assert coordinator.data is carried
+
+    await _refresh(coordinator, freezer)
+    assert coordinator.last_update_success is True
+    assert coordinator.data.values["WEEK"] == 2.0
+    assert "WEEK" not in coordinator.data.failed
+
+
+async def test_quick_refreshes_never_confirm_a_timeframes_failure_sooner(hass, freezer):
+    """Five failures of the week within two minutes -- refreshes asked for
+    by hand (homeassistant.update_entity), where the regular pace would have
+    brought one: it keeps its last return."""
+    coordinator = _scripted_history(hass, WEEK=[2.0, *[_DOWN] * 5])
+    await coordinator.async_refresh()
+    for _ in range(5):
+        await _refresh(coordinator, freezer, pace=timedelta(seconds=20))
+    assert coordinator.data.values["WEEK"] == 2.0
+    assert "WEEK" not in coordinator.data.failed

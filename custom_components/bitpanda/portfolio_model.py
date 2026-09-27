@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 from typing import Any, cast
 
 from .const import CASH_PLUS_GROUP, PORTFOLIO_UPDATE_INTERVAL, WALLET_REMOVAL_MISSES
-from .streaks import streak_confirmed
+from .streaks import FailureStreak, streak_confirmed
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -228,14 +228,50 @@ class PortfolioReturns:
     """The portfolio's return per /portfolio-history timeframe, from one
     refresh, in percent.
 
-    `values` holds every timeframe Bitpanda answered with a usable figure,
-    `failed` every timeframe whose own request failed. A timeframe in
-    neither was answered without a usable figure: its return is unknown,
-    where a failed one is unavailable.
+    `values` holds every timeframe with a usable figure, `failed` every
+    timeframe whose own request failed and whose failure is confirmed or
+    that has no last return (tolerate_failed_timeframes): until then a
+    failing timeframe keeps the return it had. A timeframe in neither was
+    last answered without a usable figure: its return is unknown, where a
+    failed one is unavailable.
     """
 
     values: dict[str, float]
     failed: frozenset[str] = frozenset()
+
+
+def tolerate_failed_timeframes(
+    result: PortfolioReturns,
+    previous: PortfolioReturns | None,
+    streaks: dict[str, FailureStreak],
+    at: datetime,
+    interval: timedelta,
+) -> PortfolioReturns:
+    """`result`, with each timeframe whose own request failed keeping its
+    return from `previous` until its own failures are confirmed.
+
+    Each failed timeframe adds a failure, asked for `at`, to its streak in
+    `streaks`, which FailureStreak's rule confirms at the regular pace
+    `interval`. Not confirmed yet, and not failed in `previous` either, it
+    leaves `failed` and takes its figure from `previous` -- unless it was
+    answered there without one: then it stays unknown. Confirmed, or
+    without a last return -- no `previous`, or failed there too -- it stays
+    in `failed`. A timeframe that answered ends its streak. `streaks` is
+    updated in place.
+    """
+    for timeframe in streaks.keys() - result.failed:
+        del streaks[timeframe]
+    values = dict(result.values)
+    failed = set(result.failed)
+    for timeframe in result.failed:
+        streak = streaks.setdefault(timeframe, FailureStreak())
+        streak.add(at)
+        if streak.confirmed(interval) or previous is None or timeframe in previous.failed:
+            continue
+        failed.discard(timeframe)
+        if timeframe in previous.values:
+            values[timeframe] = previous.values[timeframe]
+    return PortfolioReturns(values=values, failed=frozenset(failed))
 
 
 def lists_nothing(entries: list[dict[str, Any]]) -> bool:

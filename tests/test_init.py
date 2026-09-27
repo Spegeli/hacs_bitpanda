@@ -593,6 +593,36 @@ async def test_a_return_without_a_figure_is_unknown_and_a_failed_one_unavailable
     assert _value(hass, "sensor.bitpanda_portfolio_return_day") == 1.5
 
 
+async def test_a_return_keeps_its_value_while_its_timeframe_fails(hass, portfolio_api, freezer):
+    """The week's own request starts failing after setup while the other
+    timeframes answer: its return keeps its last value through two
+    refreshes, and the third, twelve minutes after the first, makes it
+    unavailable. The other returns are shown throughout."""
+    await _setup(hass, _portfolio_entry(hass))
+    week = "sensor.bitpanda_portfolio_return_week"
+    others = [
+        f"sensor.bitpanda_portfolio_return_{suffix}"
+        for suffix in ("day", "month", "6_months", "year")
+    ]
+
+    async def _history(*, timeframe, equivalent_currency_id=None):
+        if timeframe == "WEEK":
+            raise BitpandaApiError(
+                "HTTP 503 from /portfolio-history",
+                kind="http_status", path="/portfolio-history", status=503,
+            )
+        return {"return_percentage": 1.5}
+
+    with patch(f"{_CLIENT}async_get_portfolio_history", AsyncMock(side_effect=_history)):
+        for _ in range(2):
+            await _next_refresh(hass, freezer)
+            assert _value(hass, week) == 1.5
+            assert [_value(hass, entity_id) for entity_id in others] == [1.5] * 4
+        await _next_refresh(hass, freezer)
+        assert hass.states.get(week).state == "unavailable"
+        assert [_value(hass, entity_id) for entity_id in others] == [1.5] * 4
+
+
 async def test_a_held_wallet_whose_value_cannot_be_told_is_unknown(hass, portfolio_api, freezer):
     """While /portfolio lists the asset, its Wallet, Staking and Total are
     unknown when Bitpanda sends no value or an entry that cannot be read;

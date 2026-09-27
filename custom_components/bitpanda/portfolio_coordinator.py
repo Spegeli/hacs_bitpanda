@@ -49,7 +49,9 @@ from .portfolio_model import (
     parse_earn_configs,
     parse_portfolio,
     sum_rewards,
+    tolerate_failed_timeframes,
 )
+from .streaks import FailureStreak
 from .tolerance import TolerantCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -341,7 +343,8 @@ async def collect_returns(
 
     One request per timeframe — there is no combined call. A failure on one
     window is logged and recorded in `failed`, so the others still report
-    and its sensor alone goes unavailable. An auth error is different: it
+    and its sensor alone is affected (HistoryCoordinator keeps its last
+    return until the failure is confirmed). An auth error is different: it
     will not resolve by trying the next timeframe, so it propagates
     immediately instead of being counted as one of five failures --
     otherwise five 401s would read as "No portfolio history could be
@@ -398,8 +401,17 @@ async def collect_returns(
     return PortfolioReturns(values=out, failed=frozenset(failed))
 
 
-class HistoryCoordinator(DataUpdateCoordinator[PortfolioReturns]):
-    """Portfolio return over each supported timeframe."""
+class HistoryCoordinator(TolerantCoordinator[PortfolioReturns]):
+    """Portfolio return over each supported timeframe.
+
+    A refresh in which every request fails is a failed refresh like any
+    other: the return sensors keep the last data until the failure is
+    confirmed (tolerance.py). A timeframe whose own request fails while the
+    others answer follows the same rule on its own: it keeps its last return
+    until its own failures are confirmed (tolerate_failed_timeframes). Such
+    a streak advances only in refreshes that return data, so a refresh that
+    fails as a whole counts for no timeframe.
+    """
 
     config_entry: PortfolioConfigEntry
 
@@ -415,16 +427,22 @@ class HistoryCoordinator(DataUpdateCoordinator[PortfolioReturns]):
             _LOGGER,
             name=f"{DOMAIN}_history",
             update_interval=PORTFOLIO_UPDATE_INTERVAL,
+            regular_interval=PORTFOLIO_UPDATE_INTERVAL,
             config_entry=entry,
         )
         self._client = client
         self._currency_id = currency_id
+        # Timeframe -> its own failed requests in a row.
+        self._streaks: dict[str, FailureStreak] = {}
 
-    async def _async_update_data(self) -> PortfolioReturns:
+    async def _async_fetch(self, requested_at: datetime) -> PortfolioReturns:
         try:
-            return await collect_returns(self._client, self._currency_id)
+            result = await collect_returns(self._client, self._currency_id)
         except BitpandaAuthError:
             raise _auth_failed() from None
+        return tolerate_failed_timeframes(
+            result, self.data, self._streaks, requested_at, PORTFOLIO_UPDATE_INTERVAL
+        )
 
 
 @dataclass

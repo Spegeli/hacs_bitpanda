@@ -1,14 +1,20 @@
 """Tests for the Portfolio data model."""
+from datetime import UTC, datetime, timedelta
+
+import pytest
+
 from custom_components.bitpanda.portfolio_model import (
     EarnData,
     Holding,
     PortfolioData,
+    PortfolioReturns,
     _is_later,
     lists_nothing,
     parse_earn_configs,
     parse_portfolio,
     staking_applies,
     sum_rewards,
+    tolerate_failed_timeframes,
 )
 
 from tests.conftest import load_fixture
@@ -281,6 +287,70 @@ def test_cash_plus_amounts_is_unknown_with_an_unparsed_entry():
     )
     data.assets = {VSN: {"id": VSN, "group": "token"}}
     assert data.cash_plus_amounts is None
+
+
+# --- Returns: a timeframe whose own request fails ----------------------------------
+
+_I = timedelta(minutes=5)
+_T0 = datetime(2026, 9, 27, 12, 0, tzinfo=UTC)
+# A refresh in which the week's own request failed and the day answered.
+_WEEK_FAILED = PortfolioReturns(values={"DAY": 1.0}, failed=frozenset({"WEEK"}))
+
+
+def test_a_failing_timeframe_keeps_its_last_return_until_confirmed():
+    """At the regular pace the week keeps its last return through two
+    failures of its own; the third, two intervals after the first, confirms
+    the failure."""
+    streaks = {}
+    returns = PortfolioReturns(values={"DAY": 1.0, "WEEK": 2.0})
+    for at in (_T0, _T0 + _I):
+        returns = tolerate_failed_timeframes(_WEEK_FAILED, returns, streaks, at, _I)
+        assert returns == PortfolioReturns(values={"DAY": 1.0, "WEEK": 2.0})
+    returns = tolerate_failed_timeframes(_WEEK_FAILED, returns, streaks, _T0 + 2 * _I, _I)
+    assert returns == PortfolioReturns(values={"DAY": 1.0}, failed=frozenset({"WEEK"}))
+
+
+def test_a_timeframe_answered_without_a_figure_stays_unknown_while_it_fails():
+    """Bitpanda answered for the month without a usable figure, then the
+    month's own requests fail: there is no figure to keep, yet no failure is
+    confirmed either -- unknown, until the third failure confirms it."""
+    month_failed = PortfolioReturns(values={"DAY": 1.0}, failed=frozenset({"MONTH"}))
+    streaks = {}
+    returns = PortfolioReturns(values={"DAY": 1.0})
+    for at in (_T0, _T0 + _I):
+        returns = tolerate_failed_timeframes(month_failed, returns, streaks, at, _I)
+        assert returns == PortfolioReturns(values={"DAY": 1.0})
+    returns = tolerate_failed_timeframes(month_failed, returns, streaks, _T0 + 2 * _I, _I)
+    assert returns == PortfolioReturns(values={"DAY": 1.0}, failed=frozenset({"MONTH"}))
+
+
+def test_a_timeframe_without_a_last_return_fails_at_once():
+    """Nothing to keep: there was no refresh before -- the first one after
+    setup -- or the week had failed in it as well."""
+    for previous in (None, PortfolioReturns(values={"DAY": 1.0}, failed=frozenset({"WEEK"}))):
+        returns = tolerate_failed_timeframes(_WEEK_FAILED, previous, {}, _T0, _I)
+        assert returns == PortfolioReturns(
+            values={"DAY": 1.0}, failed=frozenset({"WEEK"})
+        ), previous
+
+
+@pytest.mark.parametrize(
+    "answer", [{"DAY": 1.0, "WEEK": 3.0}, {"DAY": 1.0}], ids=["with_figure", "without_figure"]
+)
+def test_an_answer_ends_a_timeframes_streak(answer):
+    """Fails, fails, answers, fails, fails, at the regular pace: four
+    failures in five refreshes, never three in a row. The week never fails
+    and keeps what it answered last -- an answer without a usable figure
+    ends the streak as well."""
+    streaks = {}
+    returns = PortfolioReturns(values={"DAY": 1.0, "WEEK": 2.0})
+    script = (
+        _WEEK_FAILED, _WEEK_FAILED, PortfolioReturns(values=answer), _WEEK_FAILED, _WEEK_FAILED
+    )
+    for step, result in enumerate(script):
+        returns = tolerate_failed_timeframes(result, returns, streaks, _T0 + step * _I, _I)
+        assert "WEEK" not in returns.failed, step
+    assert returns == PortfolioReturns(values=answer)
 
 
 # --- Earn ------------------------------------------------------------------------

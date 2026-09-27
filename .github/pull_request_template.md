@@ -24,7 +24,7 @@ Wallet value bugs are easy to miss — state the numbers you verified.
 ## Checklist
 
 - [ ] Tested on a real Home Assistant instance
-- [ ] CI's **Validation result** is green: hassfest, HACS validation, the tests (≥ 95 % coverage), `mypy --strict` and the Python 3.13 checks
+- [ ] CI's **Validation result** is green: hassfest, HACS validation, the tests (≥ 95 % coverage), `mypy --strict`, the Python 3.13 checks and the release script on Python 3.12
 - [ ] No API key or other secret is logged, committed or included in diagnostics
 - [ ] Translations updated and in sync: `strings.json` and all seven `translations/*.json` (`en`, `de`, `fr`, `nl`, `it`, `es`, `pl`)
 - [ ] README updated if user-facing behavior changed

@@ -18,8 +18,19 @@ asyncio_mode = "auto"
 # code must still run on 3.13, the Python of the 2025.5 floor: CI compiles
 # it with 3.13, and CONTRIBUTING.md ("Home Assistant 2025.5 is the floor")
 # names the rules the compile cannot check.
+#
+# modules + mypy_path add the release script alongside the integration:
+# mypy refuses to mix `packages`/`modules` with `files` in one run ("May
+# only specify one of: module/package, files, or command"), so the script
+# joins as the top-level module `release`, found via mypy_path since
+# `.github/scripts` is not itself a package (release.yml's key job runs
+# the script by path, never imports it -- see its own docstring). It must
+# also run on 3.12 (the key job's runner has no actions/setup-python), one
+# more reason it stays plain stdlib.
 [tool.mypy]
 packages = ["custom_components.bitpanda"]
+modules = ["release"]
+mypy_path = [".github/scripts"]
 strict = true
 
 # Home Assistant ships py.typed. Its recorder package imports get_instance

@@ -351,17 +351,32 @@ def _section_for(commit: Commit) -> str | None:
     return None
 
 
+# The first words that rank an item (spec 12.6), as whole words in any of
+# their forms -- a prefix would rank "address" as added and "dropdown" as
+# removed.
+_ADDED_WORDS = frozenset({"add", "adds", "added", "adding"})
+_FIXED_WORDS = frozenset({"fix", "fixes", "fixed", "fixing"})
+_REMOVED_WORDS = frozenset(
+    {
+        "remove", "removes", "removed", "removing",
+        "drop", "drops", "dropped", "dropping",
+        "delete", "deletes", "deleted", "deleting",
+    }
+)
+
+
 def _item_rank(description: str) -> int:
     """Where one item sorts within its section, by the description's first
     word (spec 12.6): Added, then everything else (Moved / Optimized /
     Changed), then Fixed, then Removed. Equal ranks keep the order they
     were given in -- `build_notes` sorts with Python's stable sort."""
-    word = description.split(" ", 1)[0].lower() if description else ""
-    if word.startswith("add"):
+    words = description.split(maxsplit=1)
+    word = words[0].lower() if words else ""
+    if word in _ADDED_WORDS:
         return 0
-    if word.startswith("fix"):
+    if word in _FIXED_WORDS:
         return 2
-    if word.startswith(("remove", "drop", "delete")):
+    if word in _REMOVED_WORDS:
         return 3
     return 1
 

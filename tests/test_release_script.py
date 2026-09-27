@@ -531,6 +531,34 @@ def test_build_notes_item_order_is_added_changed_fixed_removed():
     )
 
 
+def test_build_notes_ranks_items_by_whole_words():
+    """The rank comes from the description's first word as a whole word,
+    in any of its forms -- never from a prefix: "address" is no "add",
+    "dropdown" no "drop", and "removal", a noun, no "remove". Task 7 review
+    Minor 3."""
+    commits = [
+        RawCommit(subject="feat: dropdown for the currency", body=""),
+        RawCommit(subject="feat: removes the old flag", body=""),
+        RawCommit(subject="feat: fixed the header", body=""),
+        RawCommit(subject="feat: address the review findings", body=""),
+        RawCommit(subject="feat: adding a sensor", body=""),
+        RawCommit(subject="feat: removal of the icon option", body=""),
+        RawCommit(subject="feat: deleted the cache", body=""),
+        RawCommit(subject="feat: adds a group", body=""),
+    ]
+    assert build_notes(commits) == (
+        "### ✨ New Features\n\n"
+        "- Adding a sensor\n"
+        "- Adds a group\n"
+        "- Dropdown for the currency\n"
+        "- Address the review findings\n"
+        "- Removal of the icon option\n"
+        "- Fixed the header\n"
+        "- Removes the old flag\n"
+        "- Deleted the cache"
+    )
+
+
 def test_build_notes_pins_the_global_section_order_and_exact_emojis():
     """One commit per section, deliberately scrambled on input, so the
     output order can only come from `_SECTIONS` itself -- catches a

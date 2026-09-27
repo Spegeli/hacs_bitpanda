@@ -1,0 +1,105 @@
+name: Validate (internal)
+
+# Reusable workflow (workflow_call): the checks every change and every
+# release must pass. validate.yml calls it for pushes, pull requests and
+# manual runs; release.yml runs it before it commits anything.
+#   always       - hassfest, HACS and the Python 3.13 checks: quick checks
+#                  of what ships
+#   inputs.tests - the tests with their coverage and mypy --strict, minutes
+#                  each. Only a manual Validate run can switch them off; a
+#                  release never does.
+# Callers set permissions: contents: read.
+
+on:
+  workflow_call:
+    inputs:
+      tests:
+        description: "Run the tests with coverage and mypy --strict"
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  hassfest:
+    name: Hassfest validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: HACS validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hacs/action@main
+        with:
+          category: integration
+
+  # Home Assistant 2025.5, the floor (hacs.json), runs on Python 3.13, the
+  # tests and mypy below on 3.14 only. Compiling needs no Home Assistant and
+  # fails on any syntax newer than 3.13; CONTRIBUTING.md names what else the
+  # floor's Python asks of the code.
+  python-floor:
+    name: Python 3.13 syntax
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Compile the integration with Python 3.13
+        run: python -m compileall -q custom_components/bitpanda
+      # 3.13 evaluates annotations as it defines a class or function, so a
+      # name defined further down fails the import there -- which compiling
+      # cannot catch. This import defers them, in every module.
+      - name: Check that every module imports annotations from __future__
+        run: |
+          missing=$(grep -L '^from __future__ import annotations' custom_components/bitpanda/*.py || true)
+          if [ -n "$missing" ]; then
+            echo "Missing 'from __future__ import annotations':"
+            echo "$missing"
+            exit 1
+          fi
+
+  pytest:
+    name: Tests with coverage
+    if: inputs.tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: tests/requirements.txt
+      - name: Install the test requirements
+        run: python -m pip install -r tests/requirements.txt
+      - name: Run the tests
+        run: >-
+          python -m pytest tests/ -q
+          --cov=custom_components.bitpanda
+          --cov-report=term-missing
+          --cov-fail-under=95
+
+  mypy:
+    name: Strict typing
+    if: inputs.tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: tests/requirements.txt
+      # Home Assistant included: mypy checks the integration against its types.
+      - name: Install the test requirements
+        run: python -m pip install -r tests/requirements.txt
+      - name: Run mypy --strict
+        run: python -m mypy --strict

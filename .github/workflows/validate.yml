@@ -1,28 +1,76 @@
 name: Validate
 
+# Checks a change without publishing anything: hassfest, HACS, the Python
+# 3.13 checks, the tests with their coverage and mypy --strict (all in
+# _validate.yml).
+#   push to any branch but main - everything, on every topic branch and dev
+#   pull request to main        - everything. "Validation result" is the check
+#                                 main's ruleset requires, so nothing merges
+#                                 unvalidated -- a contributor's pull request
+#                                 included: pull_request, never
+#                                 pull_request_target, runs a fork's code
+#                                 with a read-only token and no secrets
+#   manual                      - on any branch; the tests as chosen
+# main itself needs no run: changes only arrive through a validated pull
+# request, or as the release's version commit, validated just before.
+# No schedule: GitHub disables a workflow that has one after 60 days without
+# repository activity, and then it runs on no push either.
+
+run-name: >-
+  ${{ github.event_name == 'pull_request'
+      && format('Validate PR #{0}: {1}', github.event.pull_request.number, github.event.pull_request.title)
+      || github.event_name == 'workflow_dispatch' && !inputs.tests
+      && format('Validate {0} (no tests)', github.ref_name)
+      || format('Validate {0}', github.ref_name) }}
+
 on:
   push:
-    branches: [dev, main]
+    branches-ignore: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      tests:
+        description: "Also run the tests with coverage and mypy --strict"
+        type: boolean
+        default: true
+
+# A newer push or pull request update makes the running validation obsolete.
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  validate-hassfest:
-    name: Hassfest validation
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      - uses: home-assistant/actions/hassfest@master
+  checks:
+    name: Checks
+    uses: ./.github/workflows/_validate.yml
+    with:
+      tests: ${{ github.event_name != 'workflow_dispatch' || inputs.tests }}
 
-  validate-hacs:
-    name: HACS validation
+  # The one check main's ruleset requires; a fixed name stays valid when the
+  # jobs above change. always(), not !cancelled(): a skipped job counts as
+  # passed for a required check, so a failed or cancelled validation must
+  # still run this job and fail it. It needs every other job, or one could
+  # fail and leave it green.
+  result:
+    name: Validation result
+    needs: [checks]
+    if: always()
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
-      - uses: hacs/action@main
-        with:
-          category: integration
+      # A check switched off by hand is skipped inside the call, which still
+      # ends in success. Anything but success -- a check that failed or timed
+      # out, a cancelled run -- fails the check.
+      - name: Summarize
+        env:
+          CHECKS: ${{ needs.checks.result }}
+        run: |
+          echo "Checks: ${CHECKS}"
+          if [ "${CHECKS}" != "success" ]; then
+            echo "::error::Validation did not pass"
+            exit 1
+          fi

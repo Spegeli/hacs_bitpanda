@@ -1,8 +1,8 @@
 name: Validate
 
 # Checks a change without publishing anything: hassfest, HACS, the Python
-# 3.13 checks, the tests with their coverage and mypy --strict (all in
-# _validate.yml).
+# 3.13 checks, the release script on Python 3.12, the tests with their
+# coverage and mypy --strict (all in _validate.yml).
 #   push to any branch but main - everything, on every topic branch and dev
 #   pull request to main        - everything. "Validation result" is the check
 #                                 main's ruleset requires, so nothing merges

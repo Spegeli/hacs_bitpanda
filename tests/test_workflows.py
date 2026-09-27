@@ -149,20 +149,28 @@ def test_internal_validation_offers_a_tests_switch():
 
 def test_internal_validation_always_runs_hassfest_hacs_and_the_floor_checks():
     """hassfest and HACS check what ships, the floor checks what Home
-    Assistant 2025.5's Python needs; each is quick, and no caller can skip
-    one. Only the tests and mypy, minutes each, can be switched off -- and
-    only as whole jobs: no step is skipped on a condition of its own, and no
-    job waits for another, which a switched-off one would skip with it."""
+    Assistant 2025.5's Python needs, and the release script is checked on
+    the Python the release runs it with; each is quick, and no caller can
+    skip one. Only the tests and mypy, minutes each, can be switched off --
+    and only as whole jobs: no step is skipped on a condition of its own,
+    and no job waits for another, which a switched-off one would skip with
+    it."""
     workflow = _workflow("_validate.yml")
     assert sorted(job["name"] for job in workflow["jobs"].values()) == [
         "HACS validation",
         "Hassfest validation",
         "Python 3.13 syntax",
+        "Release script on Python 3.12",
         "Strict typing",
         "Tests with coverage",
     ]
     jobs = _jobs_by_name(workflow)
-    for name in ("Hassfest validation", "HACS validation", "Python 3.13 syntax"):
+    for name in (
+        "Hassfest validation",
+        "HACS validation",
+        "Python 3.13 syntax",
+        "Release script on Python 3.12",
+    ):
         assert "if" not in jobs[name], name
     for name in ("Tests with coverage", "Strict typing"):
         assert jobs[name]["if"] in ("inputs.tests", "${{ inputs.tests }}"), name
@@ -196,12 +204,28 @@ def test_the_checks_run_what_ci_promises():
     """The gates and commands CONTRIBUTING.md names. The tests and mypy run
     on 3.14, which the pinned Home Assistant needs, and install from
     tests/requirements.txt -- another mypy release can find errors in
-    unchanged code. The floor job runs on 3.13, Home Assistant 2025.5's."""
+    unchanged code. The floor job runs on 3.13, Home Assistant 2025.5's.
+    The release script runs on 3.12, the key job's system Python, which the
+    tests and mypy never use: it must compile there, and plan a release
+    from the whole history, tags included."""
     jobs = _jobs_by_name(_workflow("_validate.yml"))
-    tests, typing, floor = (
+    tests, typing, floor, release_script = (
         jobs["Tests with coverage"],
         jobs["Strict typing"],
         jobs["Python 3.13 syntax"],
+        jobs["Release script on Python 3.12"],
+    )
+    assert _python(release_script) == "3.12"
+    [checkout] = [
+        step
+        for step in release_script["steps"]
+        if step.get("uses", "").startswith("actions/checkout@")
+    ]
+    assert checkout["with"] == {"fetch-depth": 0}
+    assert "python -m py_compile .github/scripts/release.py" in _script(release_script)
+    assert (
+        "python .github/scripts/release.py plan --type stable --bump auto"
+        in _script(release_script)
     )
     for job in (tests, typing):
         assert _python(job) == "3.14", job["name"]

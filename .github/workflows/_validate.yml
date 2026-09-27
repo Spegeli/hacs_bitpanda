@@ -3,8 +3,9 @@ name: Validate (internal)
 # Reusable workflow (workflow_call): the checks every change and every
 # release must pass. validate.yml calls it for pushes, pull requests and
 # manual runs; release.yml runs it before it commits anything.
-#   always       - hassfest, HACS and the Python 3.13 checks: quick checks
-#                  of what ships
+#   always       - hassfest, HACS, the Python 3.13 checks and the release
+#                  script on Python 3.12: quick checks of what ships and of
+#                  what releases it
 #   inputs.tests - the tests with their coverage and mypy --strict, minutes
 #                  each. Only a manual Validate run can switch them off; a
 #                  release never does.
@@ -64,6 +65,28 @@ jobs:
             echo "$missing"
             exit 1
           fi
+
+  # The release's key job runs .github/scripts/release.py on the runner's own
+  # python3 -- 3.12 on ubuntu-24.04 -- because it may run no action but
+  # actions/checkout (spec section 11). The tests and mypy use 3.14, so a
+  # change the script needs a newer Python for would otherwise show only at
+  # release time. This job compiles it with 3.12 and plans a release from
+  # the whole history and its tags, which the plan refuses to do without.
+  release-script:
+    name: Release script on Python 3.12
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Compile the release script with Python 3.12
+        run: python -m py_compile .github/scripts/release.py
+      - name: Plan a stable release with Python 3.12
+        run: python .github/scripts/release.py plan --type stable --bump auto
 
   pytest:
     name: Tests with coverage

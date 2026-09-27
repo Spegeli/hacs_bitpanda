@@ -281,6 +281,15 @@ def test_prerelease_after_a_stable_targets_the_next_stable():
     assert prerelease_tag(Version(2, 1, 1), 1) == "v2.1.1-beta.1"
 
 
+def test_prerelease_numbering_never_reuses_a_tag_after_a_gap():
+    """N = 1 + the *highest* existing beta number of the target, not 1 +
+    how many exist: with beta.1 and beta.3 present (beta.2 perhaps
+    deleted), the next beta must be beta.4, never the already-existing
+    beta.3 again. Controller ruling R9 (review Minor 4)."""
+    tags = [*_AFTER_REDESIGN, "v2.1.0-beta.1", "v2.1.0-beta.3"]
+    assert next_prerelease_version(tags, "minor") == (Version(2, 1, 0), 4)
+
+
 # --------------------------------------------------------------------------
 # previous_ref -- the tag notes (and a stable bump) start after
 # --------------------------------------------------------------------------

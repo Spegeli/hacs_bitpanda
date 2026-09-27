@@ -163,15 +163,18 @@ def next_prerelease_version(tags: Sequence[str], bump: Bump) -> tuple[Version, i
     """The pre-release version: the same target stable version
     `next_stable_version` would compute for the same `tags` and `bump` (a
     pre-release never changes what stable it leads to), and the next beta
-    number for that target -- one more than how many "v<target>-beta.*"
-    tags already exist."""
+    number for that target -- one more than the *highest* existing
+    "v<target>-beta.*" number, not simply how many exist: with beta.1 and
+    beta.3 present (beta.2 perhaps deleted), the next beta must be beta.4,
+    never the already-existing beta.3 again (controller ruling R9). The
+    two agree whenever there is no gap."""
     target = next_stable_version(tags, bump)
-    existing = sum(
-        1
+    existing_numbers = [
+        parsed[1]
         for tag in tags
         if (parsed := parse_prerelease_tag(tag)) is not None and parsed[0] == target
-    )
-    return target, existing + 1
+    ]
+    return target, max(existing_numbers, default=0) + 1
 
 
 def stable_tag(version: Version, tags: Sequence[str]) -> str:

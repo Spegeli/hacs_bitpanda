@@ -111,6 +111,10 @@ Or add it manually:
 2. Copy the `bitpanda` folder into your `config/custom_components/` directory
 3. Restart Home Assistant
 
+### Beta versions
+
+A new version can come out as a beta first, for testing before everyone gets it. HACS offers betas only to installations that ask for them: under **Settings → Devices & services → HACS**, open the **Bitpanda** device, enable its **Pre-release** switch (HACS creates it disabled) and turn it on. Turned off again, HACS offers stable versions only; a beta you installed stays until the next stable version replaces it.
+
 ---
 
 ## ⚙️ Configuration
@@ -239,6 +243,7 @@ If a **Bitpanda Portfolio** was set up while the old entry still waited for its 
 
 1. Create a new API key with **Guthaben (Balance)**, **Transaktion (Transaction)** and **Earn (Read)** at [app.bitpanda.com/my-account/apikey](https://app.bitpanda.com/my-account/apikey) — keys from the old key page never had Earn
 2. Update the integration through HACS and restart Home Assistant
+   - HACS offers no update? From 2.0.0 on, versions are numbers instead of dates, and HACS can rank a date such as 2026.06.04 above them. Install the newest version once by hand: **HACS → Bitpanda → ⋮ → Redownload**, open **Need a different version?**, pick the newest version not marked as a pre-release and download it. Later updates show up as usual.
 3. **Reload the browser tab** (`Ctrl+F5` / `Cmd+Shift+R`) — otherwise the integration's dialogs can show raw text from your browser's cached translations
 4. Home Assistant shows **New Bitpanda API key needed** — paste the new key (or use **⋮ → Reconfigure** on the Bitpanda Portfolio entry)
 5. The upgrade details appear under **Settings → Repairs**, in your profile language: **every renamed entity ID (old → new)**, the entities that could not be migrated, the Portfolio's switch to EUR if your old currency is not available, and the assets to add to a Bitpanda Price Tracker you had already set up — its prices are not moved into one that existed before the upgrade. The Home Assistant log keeps the same list in English, with the reason for each entity that was not migrated. **Check your dashboards, automations and scripts** for the old IDs.
@@ -291,6 +296,7 @@ The recorded history of the removed sensors stays in Home Assistant's database u
 | Problem | Solution |
 |---|---|
 | Integration doesn't load | Restart Home Assistant and clear the HACS cache |
+| HACS offers no update while you are on a date version (2026.x) | Install the newest version once by hand — see [Upgrading from 2026.06.x](#%EF%B8%8F-upgrading-from-202606x), step 2 |
 | "New Bitpanda API key needed" | The key expired, was revoked, or lacks a scope — paste a new key with all three scopes |
 | Setup says permissions are missing | Create a new key with all three scopes — scopes cannot be added to an existing key |
 | Dialogs show raw text | Reload the browser tab (`Ctrl+F5` / `Cmd+Shift+R`) — your browser cached old translations |

@@ -215,11 +215,11 @@ The maintainer releases with the **Create Release** workflow (`.github/workflows
 
 To release: Actions → Create Release → Run workflow, on `main`. Whenever something in the release path has changed since the last release — the workflow, the deploy key, `main`'s ruleset — tick "Dry run: validate and compute the version; push and publish nothing" first. The workflow
 
-1. fails at once when started on any other branch, or on a tag;
-2. runs the complete validation: every check under [Continuous integration](#continuous-integration), the tests included — a release cannot switch them off;
-3. sets the version in `manifest.json` and commits it as `github-actions[bot]` (`chore: bump version to <version>`), on top of exactly the commit it validated;
-4. pushes that commit to `main` with the deploy key whose private key is the secret `RELEASE_DEPLOY_KEY` — the one direct push `main`'s ruleset lets through — and tags it;
-5. creates the GitHub release with generated notes, as a draft unless "Create as draft (review before publishing)" is cleared. The maintainer writes the changelog into the draft and publishes it.
+1. fails at once when started on any other branch, or on a tag ("Only on main");
+2. runs the complete validation: every check under [Continuous integration](#continuous-integration), the tests included — a release cannot switch them off ("Validate");
+3. sets the version in `manifest.json`, stops unless the file then carries exactly that version, and commits it as `github-actions[bot]` (`chore: bump version to <version>`), on top of exactly the commit it validated ("Commit version and tag");
+4. pushes that commit to `main` with the deploy key whose private key is the secret `RELEASE_DEPLOY_KEY` — the one direct push `main`'s ruleset lets through — and tags it. The job that holds the key runs no third-party action, only `actions/checkout` and shell: a tampered action could read the key;
+5. creates the GitHub release with generated notes, as a draft unless "Create as draft (review before publishing)" is cleared, in a job of its own that gets neither a checkout nor the key ("Publish release"). The maintainer writes the changelog into the draft and publishes it.
 
 If `main` moved while the release ran — a pull request merged meanwhile — `main` refuses the push in step 4, and nothing is tagged or published: that state was never validated. Run the release again. Without `RELEASE_DEPLOY_KEY`, a release stops with an error before it commits anything.
 

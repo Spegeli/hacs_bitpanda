@@ -281,6 +281,15 @@ def test_prerelease_after_a_stable_targets_the_next_stable():
     assert prerelease_tag(Version(2, 1, 1), 1) == "v2.1.1-beta.1"
 
 
+def test_prerelease_numbering_ignores_betas_of_a_different_target():
+    """Existing betas that target a different stable (2.1.0) must not
+    affect the count for this one (3.0.0, from a major bump) -- otherwise
+    a stray 2.1.0-beta.* would push 3.0.0's own numbering ahead. Review
+    Important 3 (named risk 2)."""
+    tags = ["v2.0.0_redesign", "v2.1.0-beta.1", "v2.1.0-beta.2"]
+    assert next_prerelease_version(tags, "major") == (Version(3, 0, 0), 1)
+
+
 def test_prerelease_numbering_never_reuses_a_tag_after_a_gap():
     """N = 1 + the *highest* existing beta number of the target, not 1 +
     how many exist: with beta.1 and beta.3 present (beta.2 perhaps
@@ -336,6 +345,22 @@ def test_previous_ref_prerelease_falls_back_to_the_newest_legacy_tag():
 def test_previous_ref_prerelease_with_no_tags_at_all_is_none():
     """Only a repository with no tags of any kind has no previous tag."""
     assert previous_ref([], "prerelease") is None
+
+
+# --------------------------------------------------------------------------
+# Ordering is by version, not by `git tag --list`'s (lexical) order --
+# review Important 3: v2.10.0 sorts before v2.9.0 in `git tag --list`.
+# --------------------------------------------------------------------------
+
+def test_stable_ordering_is_numeric_not_tag_list_order():
+    tags = ["v2.0.0_redesign", "v2.10.0", "v2.9.0"]
+    assert next_stable_version(tags, "patch") == Version(2, 10, 1)
+    assert previous_ref(tags, "stable") == "v2.10.0"
+
+
+def test_prerelease_previous_ref_ordering_is_numeric_not_tag_list_order():
+    tags = ["v2.10.0-beta.10", "v2.10.0-beta.9"]
+    assert previous_ref(tags, "prerelease") == "v2.10.0-beta.10"
 
 
 # --------------------------------------------------------------------------
@@ -428,6 +453,8 @@ def test_build_notes_item_order_is_added_changed_fixed_removed():
         RawCommit(subject="feat: add a portfolio sensor", body=""),
         RawCommit(subject="feat: streamline the config flow", body=""),
         RawCommit(subject="feat: remove the deprecated icon option", body=""),
+        RawCommit(subject="feat: drop the legacy fallback path", body=""),
+        RawCommit(subject="feat: delete the temporary cache file", body=""),
         RawCommit(subject="feat: add a second sensor", body=""),
     ]
     notes = build_notes(commits)
@@ -437,7 +464,35 @@ def test_build_notes_item_order_is_added_changed_fixed_removed():
         "- Add a second sensor\n"
         "- Streamline the config flow\n"
         "- Fix the onboarding hint wording\n"
-        "- Remove the deprecated icon option"
+        "- Remove the deprecated icon option\n"
+        "- Drop the legacy fallback path\n"
+        "- Delete the temporary cache file"
+    )
+
+
+def test_build_notes_pins_the_global_section_order_and_exact_emojis():
+    """One commit per section, deliberately scrambled on input, so the
+    output order can only come from `_SECTIONS` itself -- catches a
+    swapped pair of headings, Breaking Changes moved out of first place,
+    or the Refactor & Code Quality emoji losing its U+FE0F variation
+    selector. Review Important 3."""
+    commits = [
+        RawCommit(subject="docs: expand the FAQ", body=""),
+        RawCommit(subject="style: reformat the config flow", body=""),
+        RawCommit(subject="fix(security): patch a token leak", body=""),
+        RawCommit(subject="fix: correct rounding", body=""),
+        RawCommit(subject="perf: speed up polling", body=""),
+        RawCommit(subject="feat: add a currency selector", body=""),
+        RawCommit(subject="feat!: drop the legacy sensor", body=""),
+    ]
+    assert build_notes(commits) == (
+        "### \U0001F4A5 Breaking Changes\n\n- Drop the legacy sensor"
+        "\n\n### ✨ New Features\n\n- Add a currency selector"
+        "\n\n### ⚡ Improvements\n\n- Speed up polling"
+        "\n\n### \U0001F41B Bug Fixes\n\n- Correct rounding"
+        "\n\n### \U0001F512 Security\n\n- **security:** Patch a token leak"
+        "\n\n### ♻️ Refactor & Code Quality\n\n- Reformat the config flow"
+        "\n\n### \U0001F4DD Documentation\n\n- Expand the FAQ"
     )
 
 

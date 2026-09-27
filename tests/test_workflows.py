@@ -500,7 +500,7 @@ def _with_the_release_script(clone: Path) -> None:
 
 def test_release_runs_only_by_hand_as_a_stable_or_a_prerelease():
     """Only the maintainer starts a release: a stable one, or a pre-release
-    -- a beta, for testing. The commits since the previous release choose
+    -- a beta, for testing. The commits since the last stable release choose
     the version's bump unless he forces one; a stable one can open as a
     draft, for notes written by hand; a dry run checks the path and pushes
     nothing. One release runs at a time and is never cancelled halfway
@@ -652,12 +652,17 @@ def test_release_keeps_the_deploy_key_from_third_party_actions():
     workflows = _every_workflow()
     release = _workflow(_RELEASE)
     assert "env" not in release
-    outside_the_jobs = [
-        name
+    # Above the jobs -- a workflow-level env reaches every one of them --
+    # no workflow names the key or reads a secret.
+    outside_the_jobs = {
+        name: str({key: part for key, part in workflow.items() if key != "jobs"})
         for name, workflow in workflows
-        if "RELEASE_DEPLOY_KEY" in str({key: part for key, part in workflow.items() if key != "jobs"})
-    ]
-    assert outside_the_jobs == []
+    }
+    assert [
+        name
+        for name, text in outside_the_jobs.items()
+        if "RELEASE_DEPLOY_KEY" in text or _READS_SECRETS.search(text)
+    ] == []
     assert [
         (name, key)
         for name, workflow in workflows

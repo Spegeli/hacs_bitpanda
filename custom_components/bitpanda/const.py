@@ -131,6 +131,12 @@ TICKER_HOURLY_BUDGET = 1800
 WALLET_REMOVAL_MISSES = 3
 WALLET_REMOVAL_TIME = (WALLET_REMOVAL_MISSES - 1) * PORTFOLIO_UPDATE_INTERVAL
 
+# Failed refreshes in a row, spread over (FAILURE_TOLERANCE - 1) regular
+# intervals at the least, that make a coordinator's sensors unavailable
+# rather than clearing them at the first failure (spec §3.1). The same rule
+# as WALLET_REMOVAL_MISSES, applied to failures by streaks.FailureStreak.
+FAILURE_TOLERANCE = 3
+
 # The asset group of Bitpanda's Cash Plus products. They count towards the
 # Portfolio's Cash Plus sensor and never get a wallet device.
 CASH_PLUS_GROUP = "fiat_earn"

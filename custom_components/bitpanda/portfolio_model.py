@@ -2,23 +2,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 from typing import Any, cast
 
-from .const import CASH_PLUS_GROUP, WALLET_REMOVAL_MISSES, WALLET_REMOVAL_TIME
+from .const import CASH_PLUS_GROUP, PORTFOLIO_UPDATE_INTERVAL, WALLET_REMOVAL_MISSES
+from .streaks import streak_confirmed
 
 _LOGGER = logging.getLogger(__name__)
 
 # The API quotes amounts as 8-decimal strings. Anything computed from them is
 # rounded to match rather than publishing float noise.
 DECIMALS = 8
-
-# Two regular refreshes are asked for an update interval apart at the least,
-# yet the wall clock can read a hair less between them. A few seconds of
-# grace keep the answer that completes the regular pace confirming -- fewer
-# than the cooldown between two refreshes by hand (const.REFRESH_MIN_COOLDOWN).
-_CLOCK_GRACE = timedelta(seconds=5)
 
 
 def confirmed(count: int, since: datetime, now: datetime) -> bool:
@@ -31,7 +26,9 @@ def confirmed(count: int, since: datetime, now: datetime) -> bool:
     brought in by hand, however many, never confirm sooner than that pace
     would.
     """
-    return count >= WALLET_REMOVAL_MISSES and now - since >= WALLET_REMOVAL_TIME - _CLOCK_GRACE
+    return streak_confirmed(
+        count, since, now, needed=WALLET_REMOVAL_MISSES, interval=PORTFOLIO_UPDATE_INTERVAL
+    )
 
 
 def to_float(container: dict[str, Any] | None, key: str = "value") -> float | None:

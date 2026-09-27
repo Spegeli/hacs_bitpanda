@@ -64,13 +64,23 @@ jobs:
     steps:
       # A check switched off by hand is skipped inside the call, which still
       # ends in success. Anything but success -- a check that failed or timed
-      # out, a cancelled run -- fails the check.
+      # out, a cancelled run -- fails the check. It reads the result of every
+      # job it needs, whichever they are, so a job added to needs is checked
+      # too; no result at all fails as well.
       - name: Summarize
         env:
-          CHECKS: ${{ needs.checks.result }}
+          RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
-          echo "Checks: ${CHECKS}"
-          if [ "${CHECKS}" != "success" ]; then
-            echo "::error::Validation did not pass"
+          echo "Results: ${RESULTS}"
+          passed=0
+          for result in ${RESULTS}; do
+            if [ "${result}" != "success" ]; then
+              echo "::error::Validation did not pass"
+              exit 1
+            fi
+            passed=$((passed + 1))
+          done
+          if [ "${passed}" -eq 0 ]; then
+            echo "::error::No check reported a result"
             exit 1
           fi

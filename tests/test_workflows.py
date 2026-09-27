@@ -8,6 +8,7 @@ CONTRIBUTING.md ("Continuous integration", "Releases") describes. Where a
 script decides, they run it: with bash, as GitHub does, and with git on
 repositories of their own.
 """
+import itertools
 import json
 import os
 from pathlib import Path
@@ -243,18 +244,21 @@ def test_validate_runs_the_tests_unless_switched_off_by_hand():
     )
 
 
-# The results GitHub reports for a job a later job needs.
+# The results GitHub reports for a job a later job needs, and the one
+# expression that hands the result job all of them: every job it needs,
+# whichever jobs that is.
 _JOB_RESULTS = ("success", "failure", "cancelled", "skipped")
-_A_JOB_RESULT = re.compile(r"\$\{\{\s*needs\.[\w-]+\.result\s*\}\}")
+_EVERY_RESULT = "${{ join(needs.*.result, ' ') }}"
 
 
-def _exit_status(step: dict, result: str) -> int:
+def _exit_status(step: dict, results: tuple[str, ...]) -> int:
     """The exit status of the step's script, run as GitHub runs it
-    (`bash -e`), with every job result its `env` reads set to `result`."""
+    (`bash -e`), when the jobs it needs ended in `results`, one per job:
+    its `env` gets them as join(needs.*.result, ' ') hands them over."""
     env = {
-        variable: result
+        variable: " ".join(results)
         for variable, value in step.get("env", {}).items()
-        if _A_JOB_RESULT.fullmatch(str(value))
+        if value == _EVERY_RESULT
     }
     return subprocess.run(
         ["bash", "-e", "-c", step["run"]],
@@ -271,7 +275,9 @@ def test_validation_result_is_the_one_required_check():
     always(), not the default success() or !cancelled(): a skipped job
     counts as passed for a required check, so a failed or cancelled
     validation must still run this job, and fail it. It waits for every
-    other job -- one it did not wait for could fail and leave it green.
+    other job and reads the result of each, whichever jobs that is -- one it
+    did not wait for, or did not read, could fail and leave it green. No
+    result at all is no pass either.
     """
     jobs = _workflow("validate.yml")["jobs"]
     result = jobs["result"]
@@ -282,14 +288,22 @@ def test_validation_result_is_the_one_required_check():
     assert result["runs-on"] == "ubuntu-24.04"
     assert type(result["timeout-minutes"]) is int
     [step] = result["steps"]
+    assert "if" not in step
+    assert step["env"] == {"RESULTS": _EVERY_RESULT}
     assert [value for value in _JOB_RESULTS if value in step["run"]] == ["success"]
     assert "exit 1" in step["run"]
-    assert {value: _exit_status(step, value) for value in _JOB_RESULTS} == {
+    # One job, as today, in each result -- and any number of jobs, each of
+    # which fails the check unless it succeeded.
+    assert {value: _exit_status(step, (value,)) for value in _JOB_RESULTS} == {
         "success": 0,
         "failure": 1,
         "cancelled": 1,
         "skipped": 1,
     }
+    for count in range(4):
+        for results in itertools.product(_JOB_RESULTS, repeat=count):
+            passed = bool(results) and set(results) == {"success"}
+            assert _exit_status(step, results) == (0 if passed else 1), results
 
 
 # release.yml, "Create Release": validates, then commits the version to main

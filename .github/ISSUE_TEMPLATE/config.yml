@@ -3,9 +3,6 @@ contact_links:
   - name: Troubleshooting & FAQ
     url: https://github.com/Spegeli/hacs_bitpanda#-troubleshooting
     about: Sensor unavailable, integration not loading, missing 24h change? Check here first — most issues are covered.
-  - name: Supported assets
-    url: https://github.com/Spegeli/hacs_bitpanda#supported-assets
-    about: The Price Tracker covers crypto, stocks, ETFs, ETCs, crypto indices and precious metals; fiat and Cash Plus appear in the Portfolio. Check the table before asking for an asset type.
   - name: Home Assistant Community Forum
     url: https://community.home-assistant.io
     about: General Home Assistant questions unrelated to this integration.

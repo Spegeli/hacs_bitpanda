@@ -109,6 +109,32 @@ def test_actions_use_their_current_major():
     assert outdated == []
 
 
+def test_no_script_has_an_expression_in_its_text():
+    """GitHub writes an expression's value into a run: script before bash
+    reads it, so a branch name, a pull request's title or an input could
+    turn into shell code there. Every value reaches a script through env."""
+    assert [
+        (name, key, step.get("name"))
+        for name, workflow in _every_workflow()
+        for key, job in workflow["jobs"].items()
+        for step in job.get("steps", [])
+        if "${{" in step.get("run", "")
+    ] == []
+
+
+def test_no_job_or_step_goes_on_after_a_failure():
+    """continue-on-error turns a failure into success: on a check, the
+    Validation result goes green while the check failed; on the release's
+    guard, key check or push, the release goes on."""
+    assert [
+        (name, key, part.get("name"))
+        for name, workflow in _every_workflow()
+        for key, job in workflow["jobs"].items()
+        for part in (job, *job.get("steps", []))
+        if "continue-on-error" in part
+    ] == []
+
+
 def test_internal_validation_offers_a_tests_switch():
     """Only other workflows call it; a caller that sets nothing runs
     everything."""
@@ -122,7 +148,9 @@ def test_internal_validation_offers_a_tests_switch():
 def test_internal_validation_always_runs_hassfest_hacs_and_the_floor_checks():
     """hassfest and HACS check what ships, the floor checks what Home
     Assistant 2025.5's Python needs; each is quick, and no caller can skip
-    one. Only the tests and mypy, minutes each, can be switched off."""
+    one. Only the tests and mypy, minutes each, can be switched off -- and
+    only as whole jobs: no step is skipped on a condition of its own, and no
+    job waits for another, which a switched-off one would skip with it."""
     workflow = _workflow("_validate.yml")
     assert sorted(job["name"] for job in workflow["jobs"].values()) == [
         "HACS validation",
@@ -136,6 +164,30 @@ def test_internal_validation_always_runs_hassfest_hacs_and_the_floor_checks():
         assert "if" not in jobs[name], name
     for name in ("Tests with coverage", "Strict typing"):
         assert jobs[name]["if"] in ("inputs.tests", "${{ inputs.tests }}"), name
+    assert [name for name, job in jobs.items() if "needs" in job] == []
+    assert [
+        (name, step.get("name", step.get("uses")))
+        for name, job in jobs.items()
+        for step in job["steps"]
+        if "if" in step
+    ] == []
+
+
+def test_internal_validation_checks_the_commit_its_caller_runs_for():
+    """Without a ref, actions/checkout checks out github.sha: the commit a
+    push brought, a pull request's merge commit, the commit a release was
+    started on -- and puts its version on top of. Any other ref would
+    validate something else than what merges or ships."""
+    checkouts = [
+        (key, step.get("with", {}))
+        for key, job in _workflow("_validate.yml")["jobs"].items()
+        for step in job["steps"]
+        if step.get("uses", "").startswith("actions/checkout@")
+    ]
+    assert sorted(key for key, _ in checkouts) == sorted(
+        _workflow("_validate.yml")["jobs"]
+    )
+    assert [key for key, with_ in checkouts if "ref" in with_] == []
 
 
 def test_the_checks_run_what_ci_promises():

@@ -52,7 +52,7 @@ The same in Docker, on any system, with the Python version and the pinned requir
 docker run --rm -v "${PWD}:/workspace" -w /workspace python:3.14 sh -c "pip install -q -r tests/requirements.txt && python -m pytest tests/ -q --cov=custom_components.bitpanda --cov-report=term-missing --cov-fail-under=95 && python -m mypy --strict"
 ```
 
-CI enforces both on every push and pull request (`.github/workflows/tests.yml`): the suite must pass with at least 95 % line coverage, and `mypy --strict` must report no error. It also compiles the integration with Python 3.13. `config_flow.py` and `asset_flow.py` stay at 100 %, and every test that shows an error in a dialog goes on to finish that dialog.
+CI runs both (see [Continuous integration](#continuous-integration)): the suite must pass with at least 95 % line coverage, and `mypy --strict` must report no error. `config_flow.py` and `asset_flow.py` stay at 100 %, and every test that shows an error in a dialog goes on to finish that dialog.
 
 ## Project layout
 
@@ -181,9 +181,33 @@ Follow the [Home Assistant developer guidelines](https://developers.home-assista
 2. Keep the change focused — one topic per PR.
 3. Use [Conventional Commits](https://www.conventionalcommits.org) for commit messages: `fix:`, `feat:`, `docs:`, `chore:`, `refactor:`, `ci:`.
 4. Open the PR against `main` and fill in the template.
-5. CI runs hassfest and HACS validation, the tests with their coverage, `mypy --strict`, and a compile of the integration with Python 3.13. All must pass.
+5. CI validates the pull request (see [Continuous integration](#continuous-integration)); it merges only with a green **Validation result**.
 
 **Do not bump the version in `manifest.json`.** The maintainer sets it when cutting a release.
+
+## Continuous integration
+
+One workflow, **Validate** (`.github/workflows/validate.yml`), checks every change. The checks themselves live in `.github/workflows/_validate.yml`, which a release runs as well:
+
+| Check | What it runs |
+|---|---|
+| Hassfest validation | Home Assistant's own checks of the integration (`hassfest`) |
+| HACS validation | HACS's checks of the repository |
+| Python 3.13 syntax | a compile of the integration with Python 3.13, the Python of the 2025.5 floor, and a check that every module keeps `from __future__ import annotations` |
+| Tests with coverage | the suite on Python 3.14, as under [Tests and typing](#tests-and-typing); fails under 95 % line coverage |
+| Strict typing | `python -m mypy --strict` on Python 3.14 |
+
+When Validate runs:
+
+- **A push to any branch but `main`** — all five checks.
+- **A pull request to `main`** — all five checks.
+- **By hand** — Actions → Validate → Run workflow, on any branch. Clear "Also run the tests with coverage and mypy --strict" to skip those two; the other three always run.
+
+Validate does not run on `main` itself: changes reach it only through a validated pull request, or as a release's version commit, validated just before. A newer push to the same branch, or a new commit in the same pull request, cancels the run it makes obsolete.
+
+**Validation result** sums up each run: green when every check passed or was switched off by hand, red when one failed or the run was cancelled. It is the one check `main` requires, so a pull request merges only with a green Validation result.
+
+A pull request from a fork runs the same checks, with a read-only token and no secrets: Validate uses `pull_request`, never `pull_request_target`. A first-time contributor's run waits for the maintainer's approval.
 
 ## Releases
 

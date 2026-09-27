@@ -22,8 +22,11 @@ def _load_script() -> ModuleType:
     spec = importlib.util.spec_from_file_location("release_script", _SCRIPT)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    # dataclasses (3.14) looks its own module up in sys.modules while
-    # processing a decorated class -- without this, exec_module raises.
+    # The script's `from __future__ import annotations` leaves its dataclass
+    # annotations as strings, and dataclasses reads those through the
+    # class's module in sys.modules (to tell a ClassVar). A module loaded
+    # from a path is not registered there by itself, so without this
+    # exec_module raises an AttributeError -- on 3.12 as on 3.14.
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module

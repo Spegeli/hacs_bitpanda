@@ -13,9 +13,11 @@ through the shell, never imports it:
 wrappers around the pure functions below (spec section 12: "Release types,
 versioning and changelog").
 
-Standard library only, and 3.12-compatible: the key job's runner has no
-`actions/setup-python` (a third-party action, kept out of the key job on
-purpose), so this runs on whatever Python ships with `ubuntu-24.04`.
+Standard library only, and 3.12-compatible: `actions/setup-python` is
+GitHub's own action, but the key job goes without it -- spec section 11
+allows that job only `actions/checkout` and shell -- so this runs on the
+Python `ubuntu-24.04` ships, 3.12. `_validate.yml`'s "Release script on
+Python 3.12" job compiles and runs it there on every change.
 """
 from __future__ import annotations
 
@@ -192,8 +194,8 @@ def stable_tag(version: Version, tags: Sequence[str]) -> str:
 def prerelease_tag(version: Version, n: int) -> str:
     """The tag for a pre-release -- always plain, even for the very first
     one: HACS only ever offers a pre-release to installations that opted in
-    ("Show beta versions"), so there is no legacy audience to redirect with
-    a text-comparison suffix."""
+    (HACS's per-repository "Pre-release" switch), so there is no legacy
+    audience to redirect with a text-comparison suffix."""
     return f"v{version}-beta.{n}"
 
 

@@ -211,4 +211,18 @@ A pull request from a fork runs the same checks, with a read-only token and no s
 
 ## Releases
 
-Releases are made by the maintainer. Version format is `YYYY.MM.DD`, tagged `vYYYY.MM.DD`. The version in `manifest.json` is bumped on `main`, then a tag and GitHub release with a changelog are created.
+The maintainer releases with the **Create Release** workflow (`.github/workflows/release.yml`); nobody bumps the version in `manifest.json` by hand. The version is the date in UTC, `YYYY.MM.DD`, tagged `vYYYY.MM.DD`; a second release on the same day gets `-1`, a third `-2`.
+
+To release: Actions → Create Release → Run workflow, on `main`. Whenever something in the release path has changed since the last release — the workflow, the deploy key, `main`'s ruleset — tick "Dry run: validate and compute the version; push and publish nothing" first. The workflow
+
+1. fails at once when started on any other branch, or on a tag;
+2. runs the complete validation: every check under [Continuous integration](#continuous-integration), the tests included — a release cannot switch them off;
+3. sets the version in `manifest.json` and commits it as `github-actions[bot]` (`chore: bump version to <version>`), on top of exactly the commit it validated;
+4. pushes that commit to `main` with the deploy key whose private key is the secret `RELEASE_DEPLOY_KEY` — the one direct push `main`'s ruleset lets through — and tags it;
+5. creates the GitHub release with generated notes, as a draft unless "Create as draft (review before publishing)" is cleared. The maintainer writes the changelog into the draft and publishes it.
+
+If `main` moved while the release ran — a pull request merged meanwhile — `main` refuses the push in step 4, and nothing is tagged or published: that state was never validated. Run the release again. Without `RELEASE_DEPLOY_KEY`, a release stops with an error before it commits anything.
+
+A dry run goes through steps 1–3, the commit staying in the runner, shows the version, the tag and the version commit, checks that the deploy key reaches the repository (when the secret is set), and stops: it pushes, tags and publishes nothing.
+
+After a release, merge `main` into `dev`, so the version commit reaches `dev` too: `git switch dev`, `git pull`, `git merge origin/main`, `git push`.

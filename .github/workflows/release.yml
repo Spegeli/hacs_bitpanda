@@ -1,35 +1,119 @@
 name: Create Release
 
+# Releases main, by hand: the complete validation first, then the version
+# commit to main, the tag and the GitHub release -- a draft, for the
+# changelog, unless "Create as draft" is cleared. The version is the date in
+# UTC, YYYY.MM.DD, with -1, -2, ... for more releases that day; nobody bumps
+# it by hand.
+#   Only on main - a run started from another branch or a tag fails here,
+#                  before anything is validated, committed, tagged or
+#                  published
+#   Validate     - everything _validate.yml checks, the tests included; a
+#                  release has no switch to leave them out
+#   Release      - only after the validation passed: commits the version on
+#                  top of the validated commit, pushes it to main, tags it
+#                  and creates the release
+# main accepts pull requests only. Its ruleset lets one push through: this
+# repository's deploy key, whose private key is the secret
+# RELEASE_DEPLOY_KEY. The version commit and the tag go over SSH with that
+# key; the job's token only creates the release.
+# A dry run checks all of this and leaves no trace: it validates, determines
+# the version, commits it in the runner and checks that the deploy key
+# reaches the repository -- and pushes, tags and publishes nothing. Start
+# with one whenever something in the release path changed.
+
+run-name: >-
+  ${{ inputs.dry_run && 'Create Release (dry run)'
+      || inputs.draft && 'Create Release (draft)'
+      || 'Create Release' }}
+
 on:
   workflow_dispatch:
     inputs:
       draft:
         description: "Create as draft (review before publishing)"
-        required: false
-        default: true
         type: boolean
+        default: true
+      dry_run:
+        description: "Dry run: validate and compute the version; push and publish nothing"
+        type: boolean
+        default: false
 
+# One release at a time. Another run waits; a run is never cancelled halfway
+# through its pushes.
 concurrency:
   group: release
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   MANIFEST: custom_components/bitpanda/manifest.json
 
 jobs:
+  # A release commits to main, tags and publishes, so it runs from main
+  # only. Every job after this one waits for it, so a run started anywhere
+  # else stops here.
+  only-main:
+    name: Only on main
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Refuse other branches
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::Create Release only runs on main, not on ${GITHUB_REF_NAME}."
+            exit 1
+          fi
+
+  # It checks github.sha, the commit this run was started on -- the one the
+  # release job commits the version on top of.
+  validate:
+    name: Validate
+    needs: only-main
+    uses: ./.github/workflows/_validate.yml
+    with:
+      tests: true
+
   release:
+    name: Release
+    needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-
+    permissions:
+      contents: write
     steps:
-      - name: Checkout
+      # Without the deploy key a release would fail only at the push, after
+      # the commit, with main's refusal -- or push with the token while main
+      # has no ruleset yet. So it stops here, with the reason. GitHub allows
+      # no secret in an if:, so the script tests it. A dry run pushes nothing
+      # and needs no key.
+      - name: Require the deploy key
+        if: ${{ !inputs.dry_run }}
+        env:
+          DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY }}
+        run: |
+          if [ -z "${DEPLOY_KEY}" ]; then
+            echo "::error::The secret RELEASE_DEPLOY_KEY is not set. Only this deploy key can push the version commit to main (see Releases in CONTRIBUTING.md). Nothing was committed or pushed."
+            exit 1
+          fi
+
+      # github.sha, not main: the commit this run was started on, which the
+      # validation checked. main may have moved since, to a state nobody
+      # validated. With the key, checkout sets origin up for SSH, so every
+      # push below goes through the deploy key; without it -- only a dry run
+      # gets here without one -- it falls back to the token.
+      - name: Check out the validated commit
         uses: actions/checkout@v7
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
+      # A second release on the same day gets -1, a third -2: a tag is never
+      # reused.
       - name: Determine version and tag
         id: version
         run: |
@@ -50,31 +134,71 @@ jobs:
             TAG="${BASE_TAG}-${SUFFIX}"
           fi
 
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "Determined version: ${VERSION} / tag: ${TAG}"
 
       - name: Update manifest.json
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          jq --arg v "${{ steps.version.outputs.version }}" '.version = $v' \
-            ${{ env.MANIFEST }} > tmp.json
-          mv tmp.json ${{ env.MANIFEST }}
-          echo "manifest.json updated to ${{ steps.version.outputs.version }}"
+          jq --arg v "${VERSION}" '.version = $v' "${MANIFEST}" > tmp.json
+          mv tmp.json "${MANIFEST}"
+          echo "manifest.json updated to ${VERSION}"
 
       - name: Commit updated manifest.json
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add ${{ env.MANIFEST }}
-          git diff --staged --quiet || git commit -m "chore: bump version to ${{ steps.version.outputs.version }}"
+          git add "${MANIFEST}"
+          git diff --staged --quiet || git commit -m "chore: bump version to ${VERSION}"
 
-      - name: Push commit and tag
+      # A dry run ends here: it shows what a release would push and checks
+      # the deploy key. git ls-remote proves that GitHub accepts the key for
+      # this repository; whether the key may write, past main's ruleset, only
+      # a real release shows.
+      - name: Dry run - show the release and check the deploy key
+        if: inputs.dry_run
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+          DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY }}
         run: |
-          git push origin HEAD
-          git tag ${{ steps.version.outputs.tag }}
-          git push origin ${{ steps.version.outputs.tag }}
+          echo "Version: ${VERSION}"
+          echo "Tag:     ${TAG}"
+          git show HEAD
+          if [ -n "${DEPLOY_KEY}" ]; then
+            git ls-remote --exit-code origin refs/heads/main
+            echo "The deploy key reaches the repository."
+          else
+            echo "::warning::The secret RELEASE_DEPLOY_KEY is not set: a real release would stop before it commits anything."
+          fi
+          echo "Dry run: nothing was pushed, tagged or published."
 
+      # The safety net: a plain push, never forced. The version commit sits
+      # on the validated commit, so if main moved meanwhile -- a pull request
+      # merged while this run validated -- the push is no fast-forward, main
+      # refuses it, and the script stops before the tag: nothing unvalidated
+      # is tagged or released. Forced, it would throw the merged change away,
+      # since the deploy key passes main's ruleset, its block on force pushes
+      # included.
+      - name: Push the version commit and the tag
+        if: ${{ !inputs.dry_run }}
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if ! git push origin HEAD:main; then
+            echo "::error::main refused the version commit. Either main moved since this run started -- run the release again -- or the deploy key cannot push to main: check its write access and the ruleset's bypass list. Nothing was tagged or released."
+            exit 1
+          fi
+          git tag "${TAG}"
+          git push origin "${TAG}"
+
+      # With the job's token. A draft waits for its changelog.
       - name: Create GitHub Release
+        if: ${{ !inputs.dry_run }}
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.tag }}

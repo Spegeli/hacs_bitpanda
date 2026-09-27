@@ -13,22 +13,28 @@
 - [ ] Documentation
 - [ ] Refactor / code quality
 - [ ] CI / repository
+- [ ] Breaking change — existing installations must act after updating
 
 ## How was this tested?
 
 <!--
-Which assets or wallet types did you test against, and in which currency?
+Which service (Portfolio, Price Tracker) and Home Assistant version? Which
+assets or wallet types, and in which currency?
 Wallet value bugs are easy to miss — state the numbers you verified.
 -->
 
 ## Checklist
 
-- [ ] Tested on a real Home Assistant instance
-- [ ] CI's **Validation result** is green: hassfest, HACS validation, the tests (≥ 95 % coverage), `mypy --strict`, the Python 3.13 checks and the release script on Python 3.12
+- [ ] Tested on a real Home Assistant instance, if the change affects the running integration
+- [ ] Tests and `mypy --strict` pass locally, unless the change is documentation only (see CONTRIBUTING → Tests and typing)
+- [ ] Commit messages follow Conventional Commits — the release notes are built from them
+- [ ] Translations updated and in sync, if UI strings changed: `strings.json` and all seven `translations/*.json` (`en`, `de`, `fr`, `nl`, `it`, `es`, `pl`)
 - [ ] No API key or other secret is logged, committed or included in diagnostics
-- [ ] Translations updated and in sync: `strings.json` and all seven `translations/*.json` (`en`, `de`, `fr`, `nl`, `it`, `es`, `pl`)
-- [ ] README updated if user-facing behavior changed
+- [ ] README updated, if user-facing behavior changed
 
 <!--
+Once this pull request is open, CI validates it: hassfest, HACS validation,
+the tests (≥ 95 % coverage), mypy --strict, the Python 3.13 checks and the
+release script on Python 3.12. It can merge only with a green "Validation result".
 Do NOT bump the version in manifest.json — the release workflow sets it.
 -->

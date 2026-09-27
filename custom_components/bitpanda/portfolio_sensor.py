@@ -73,6 +73,7 @@ from .portfolio_model import (
     confirmed,
     staking_applies,
 )
+from .tolerance import TolerantEntity
 
 _CONFIGURATION_URL = "https://www.bitpanda.com"
 
@@ -102,15 +103,16 @@ def wallet_device_info(entry_id: str, asset: dict[str, Any]) -> DeviceInfo:
 # --- Portfolio device ------------------------------------------------------------
 
 
-class _PortfolioFigure(CoordinatorEntity[PortfolioCoordinator], SensorEntity):
+class _PortfolioFigure(TolerantEntity[PortfolioCoordinator], SensorEntity):
     """One figure of the whole account.
 
-    Unavailable only while the update failed -- an empty answer held back
-    until it is confirmed included (PortfolioCoordinator). When the answer
-    arrived but the figure cannot be told from it -- an entry that could not
-    be read, a holding not classified yet, a value Bitpanda did not send --
-    the sensor stays available and its state is unknown: never a figure that
-    quietly leaves something out.
+    Unavailable once a failure is confirmed (tolerance.py), not at the first
+    failed update -- an empty answer held back until it is confirmed is one
+    (PortfolioCoordinator) -- and before any answer was taken as the truth.
+    When the answer arrived but the figure cannot be told from it -- an
+    entry that could not be read, a holding not classified yet, a value
+    Bitpanda did not send -- the sensor stays available and its state is
+    unknown: never a figure that quietly leaves something out.
     """
 
     _attr_has_entity_name = True
@@ -234,7 +236,7 @@ def _performance(holding: Holding) -> dict[str, float]:
     return out
 
 
-class _WalletPart(CoordinatorEntity[PortfolioCoordinator], SensorEntity):
+class _WalletPart(TolerantEntity[PortfolioCoordinator], SensorEntity):
     """One value of one holding."""
 
     _attr_has_entity_name = True
@@ -273,10 +275,11 @@ class _WalletPart(CoordinatorEntity[PortfolioCoordinator], SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Unavailable while the update failed, and once /portfolio no longer
-        lists the asset -- until the manager removes the wallet. While it is
-        listed (PortfolioData.held, an unreadable entry included), a value
-        that cannot be told is unknown."""
+        """Unavailable once a failure is confirmed (tolerance.py), and at
+        once when an answer no longer lists the asset -- it is gone, not out
+        of reach -- until the manager removes the wallet. While it is listed
+        (PortfolioData.held, an unreadable entry included), a value that
+        cannot be told is unknown."""
         data: PortfolioData | None = self.coordinator.data
         return super().available and data is not None and self._asset_id in data.held
 

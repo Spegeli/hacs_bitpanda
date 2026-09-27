@@ -458,12 +458,48 @@ async def test_a_staking_sensor_added_with_current_rewards_asks_for_nothing(
     assert operations.await_count == 1
 
 
+# The Internet connection at home is down: no request reaches Bitpanda.
+_NO_CONNECTION = BitpandaApiError(
+    "Cannot connect to /portfolio", kind="connection", path="/portfolio"
+)
+
+
+async def test_the_portfolio_keeps_its_figures_through_two_failed_refreshes(
+    hass, portfolio_api, freezer
+):
+    """The Portfolio's figures and wallets keep their last values through
+    two failed refreshes. The third, twelve minutes after the first, confirms
+    the outage: unavailable until Bitpanda answers again. The wallet stays
+    registered throughout: a failed refresh counts no miss."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    portfolio_api.side_effect = _NO_CONNECTION
+    ent_reg = er.async_get(hass)
+
+    for _ in range(2):
+        await _next_refresh(hass, freezer)
+        assert _value(hass, "sensor.bitpanda_portfolio_total") == 210.0
+        assert _value(hass, "sensor.bitpanda_vision_vsn_wallet_available") == 50.0
+
+    await _next_refresh(hass, freezer)
+    for entity_id in (
+        "sensor.bitpanda_portfolio_total", "sensor.bitpanda_vision_vsn_wallet_available"
+    ):
+        assert hass.states.get(entity_id).state == "unavailable"
+    assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is not None
+
+    portfolio_api.side_effect = None
+    await _next_refresh(hass, freezer)
+    assert _value(hass, "sensor.bitpanda_portfolio_total") == 210.0
+    assert _value(hass, "sensor.bitpanda_vision_vsn_wallet_available") == 50.0
+
+
 async def test_a_sudden_empty_portfolio_changes_nothing_until_it_is_confirmed(
     hass, portfolio_api, freezer
 ):
-    """A Bitpanda glitch must not read as a sale of everything: the Portfolio
-    goes unavailable, and its wallets stay, until three empty answers in a
-    row confirm it. From then on the usual rules apply."""
+    """A Bitpanda glitch must not read as a sale of everything: the
+    Portfolio's figures and its wallets stay as they were until three empty
+    answers in a row confirm it. From then on the usual rules apply."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
     portfolio_api.return_value = []
@@ -471,8 +507,8 @@ async def test_a_sudden_empty_portfolio_changes_nothing_until_it_is_confirmed(
 
     for _ in range(2):
         await _next_refresh(hass, freezer)
-        for entity_id in ("sensor.bitpanda_portfolio_total", "sensor.bitpanda_vision_vsn_wallet_available"):
-            assert hass.states.get(entity_id).state == "unavailable"
+        assert _value(hass, "sensor.bitpanda_portfolio_total") == 210.0
+        assert _value(hass, "sensor.bitpanda_vision_vsn_wallet_available") == 50.0
     assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is not None
 
     # Confirmed: the truth from here on, and the wallet's first miss.
@@ -482,6 +518,31 @@ async def test_a_sudden_empty_portfolio_changes_nothing_until_it_is_confirmed(
     assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is not None
     await _next_refresh(hass, freezer)
     assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is None
+
+
+async def test_an_empty_portfolio_mixed_with_a_timeout(hass, portfolio_api, freezer):
+    """An empty answer, a request that fails (a timeout, or here a lost
+    connection), an empty answer: three failed refreshes in a row -- an
+    empty answer held back is one -- twelve minutes from the first to the
+    last, so the outage is confirmed before the empty portfolio is. The
+    figures stay through the first two and are unavailable after the third;
+    the next empty answer, the third in a row, confirms the empty
+    portfolio: 0."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    portfolio_api.return_value = []
+
+    await _next_refresh(hass, freezer)
+    assert _value(hass, "sensor.bitpanda_portfolio_total") == 210.0
+    portfolio_api.side_effect = _NO_CONNECTION
+    await _next_refresh(hass, freezer)
+    assert _value(hass, "sensor.bitpanda_portfolio_total") == 210.0
+    portfolio_api.side_effect = None
+    await _next_refresh(hass, freezer)
+    assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unavailable"
+
+    await _next_refresh(hass, freezer)
+    assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
 
 
 async def test_a_figure_bitpanda_leaves_unreadable_is_unknown_not_unavailable(
@@ -617,7 +678,9 @@ async def test_refreshing_by_hand_never_confirms_an_empty_portfolio_sooner(
 ):
     """Empty answers by hand, twenty seconds apart: each fails the call, and
     none is the truth, however many -- until two update intervals have
-    passed since the first; the first empty answer after that is."""
+    passed since the first; the first empty answer after that is. Until
+    then the figures stay: however many failed refreshes, they came too
+    quickly to confirm an outage either."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
     portfolio_api.return_value = []
@@ -627,7 +690,7 @@ async def test_refreshing_by_hand_never_confirms_an_empty_portfolio_sooner(
             freezer.tick(timedelta(seconds=20))
             with pytest.raises(HomeAssistantError):
                 await _refresh(hass)
-        assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unavailable"
+        assert _value(hass, "sensor.bitpanda_portfolio_total") == 210.0
         assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is not None
 
         freezer.tick(2 * PORTFOLIO_UPDATE_INTERVAL)
@@ -1258,8 +1321,9 @@ async def test_a_failed_refresh_fails_the_action_and_names_the_service(
     hass, portfolio_api, price_api
 ):
     """The Portfolio's refresh fails, the Price Tracker's works: the call
-    fails with a translated error naming the Portfolio, whose sensors are
-    unavailable; the prices were refreshed all the same."""
+    fails with a translated error naming the Portfolio, whose sensors keep
+    their last figures -- one failure confirms no outage; the prices were
+    refreshed all the same."""
     ticker, _ = price_api
     portfolio = _portfolio_entry(hass)
     _price_entry(hass, [], price_group("crypto", BTC))
@@ -1275,14 +1339,14 @@ async def test_a_failed_refresh_fails_the_action_and_names_the_service(
     assert (excinfo.value.translation_key, excinfo.value.translation_placeholders) == (
         "refresh_failed", {"services": "Bitpanda Portfolio"}
     )
-    assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unavailable"
+    assert _value(hass, "sensor.bitpanda_portfolio_total") == 210.0
     assert ticker.call_count == ticker_calls + 1
     assert _value(hass, "sensor.bitpanda_bitcoin_btc_price_tracker_eur") == 100.0
 
 
 async def test_an_empty_portfolio_held_back_fails_the_refresh_action(hass, portfolio_api):
-    """An empty answer awaiting confirmation is a failed update (the
-    Portfolio's sensors go unavailable), so the call fails too."""
+    """An empty answer awaiting confirmation is a failed update, so the call
+    fails too -- while the Portfolio's sensors keep their values."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
     portfolio_api.return_value = []

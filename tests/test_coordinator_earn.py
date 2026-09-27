@@ -131,6 +131,7 @@ class _Coordinator:
     def __init__(self, data):
         self.data = data
         self.last_update_success = True
+        self.data_available = True
 
 
 def _vsn_staking_sensor(rewards) -> StakingSensor:

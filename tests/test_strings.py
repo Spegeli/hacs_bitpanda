@@ -594,9 +594,10 @@ def test_every_asset_category_has_a_group_title():
 class _Coordinator:
     """Duck-typed coordinator: what the entities read."""
 
-    def __init__(self, data=None, last_update_success=True):
+    def __init__(self, data=None, last_update_success=True, data_available=None):
         self.data = data
         self.last_update_success = last_update_success
+        self.data_available = last_update_success if data_available is None else data_available
 
 
 _VSN = {"id": "1f051b7c-5980-6dda-9d3d-cf107d8d4bfb", "symbol": "VSN", "name": "Vision",

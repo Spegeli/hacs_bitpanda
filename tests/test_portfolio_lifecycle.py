@@ -26,6 +26,7 @@ from custom_components.bitpanda.portfolio_sensor import (
     PortfolioEntityManager,
     async_setup_portfolio_entities,
 )
+from custom_components.bitpanda.tolerance import TolerantCoordinator
 
 from tests.conftest import device_names_in_subentry
 
@@ -83,6 +84,15 @@ def _current_rewards(hass, entry) -> RewardsCoordinator:
     return rewards
 
 
+def _tolerant(hass, entry, name) -> TolerantCoordinator:
+    """A Portfolio or History coordinator as its sensors see it: the base
+    class, whose data and outcome a test sets by hand, never polled."""
+    return TolerantCoordinator(
+        hass, _LOG, config_entry=entry, name=name, update_interval=None,
+        regular_interval=PORTFOLIO_UPDATE_INTERVAL,
+    )
+
+
 class _Harness:
     """A manager wired to a real entity platform, registry and coordinators.
 
@@ -96,16 +106,12 @@ class _Harness:
         self.entry.add_to_hass(hass)
         self.platform = MockEntityPlatform(hass, domain="sensor", platform_name=DOMAIN)
         self.platform.config_entry = self.entry
-
-        def _coordinator(name):
-            return DataUpdateCoordinator(
-                hass, _LOG, config_entry=self.entry, name=name, update_interval=None
-            )
-
         self.runtime = PortfolioRuntime(
-            portfolio=_coordinator("portfolio"),
-            history=_coordinator("history"),
-            earn=_coordinator("earn"),
+            portfolio=_tolerant(hass, self.entry, "portfolio"),
+            history=_tolerant(hass, self.entry, "history"),
+            earn=DataUpdateCoordinator(
+                hass, _LOG, config_entry=self.entry, name="earn", update_interval=None
+            ),
             rewards=_current_rewards(hass, self.entry),
             group_titles=_TITLES,
             data_at_setup=dict(self.entry.data),
@@ -574,21 +580,18 @@ async def test_the_earn_catalogue_keeps_refreshing_without_staking_sensors(hass)
     platform = MockEntityPlatform(hass, domain="sensor", platform_name=DOMAIN)
     platform.config_entry = entry
 
-    def _coordinator(name):
-        return DataUpdateCoordinator(
-            hass, _LOG, config_entry=entry, name=name, update_interval=None
-        )
-
     update_method = AsyncMock(return_value=EarnData(apr={}, offered=frozenset()))
     earn = DataUpdateCoordinator(
         hass, _LOG, config_entry=entry, name="earn",
         update_interval=timedelta(hours=24), update_method=update_method,
     )
     runtime = PortfolioRuntime(
-        portfolio=_coordinator("portfolio"),
-        history=_coordinator("history"),
+        portfolio=_tolerant(hass, entry, "portfolio"),
+        history=_tolerant(hass, entry, "history"),
         earn=earn,
-        rewards=_coordinator("rewards"),
+        rewards=DataUpdateCoordinator(
+            hass, _LOG, config_entry=entry, name="rewards", update_interval=None
+        ),
         group_titles=_TITLES,
         data_at_setup=dict(entry.data),
         options_at_setup={},

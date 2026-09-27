@@ -50,6 +50,7 @@ from .portfolio_model import (
     parse_portfolio,
     sum_rewards,
 )
+from .tolerance import TolerantCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -122,7 +123,7 @@ def _update_failed(err: BitpandaApiError) -> UpdateFailed:
     )
 
 
-class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
+class PortfolioCoordinator(TolerantCoordinator[PortfolioData]):
     """Polls /portfolio in the Portfolio currency and names the holdings.
 
     Values arrive converted by Bitpanda (`equivalent_currency_id`): no
@@ -131,16 +132,21 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
     A completely empty answer -- no asset and no fiat entry at all -- from
     an account that listed something before is far more likely a glitch at
     Bitpanda than a sale of everything. Such an answer fails the update
-    instead: the sensors go unavailable, and the wallet manager, which acts
-    only on successful refreshes, counts no miss and removes nothing. Only
-    an empty answer that makes WALLET_REMOVAL_MISSES of them in a row,
-    WALLET_REMOVAL_TIME after the first was asked for
+    instead: a failed refresh the tolerance covers like any other
+    (tolerance.py), so the sensors keep the last figures, and the wallet
+    manager, which acts only on successful refreshes, counts no miss and
+    removes nothing. Only an empty answer that makes WALLET_REMOVAL_MISSES
+    of them in a row, WALLET_REMOVAL_TIME after the first was asked for
     (portfolio_model.confirmed), is taken as the truth: Total 0, and from
     then on every empty answer is too, and the wallets count as missing as
-    usual. At the regular pace the third answer confirms; refreshes by hand
-    or a reload bring answers sooner, and they count, but never confirm
-    sooner. A failed request neither counts nor resets the streak; any
-    answer taken as the truth clears it.
+    usual. At the regular pace the third answer confirms -- the refresh that
+    would otherwise end the tolerance -- so the figures go from the last
+    ones to 0, never unavailable; with a failed request among the empty
+    answers the tolerance can end first, and the sensors are unavailable
+    until an answer is taken as the truth. Refreshes by hand or a reload
+    bring answers sooner, and they count, but never confirm sooner. A
+    failed request neither counts nor resets the streak; any answer taken
+    as the truth clears it.
 
     Listed something before: the last answer taken as the truth for this
     entry listed holdings or fiat. That and the streak are kept in
@@ -172,16 +178,14 @@ class PortfolioCoordinator(DataUpdateCoordinator[PortfolioData]):
             _LOGGER,
             name=f"{DOMAIN}_portfolio",
             update_interval=PORTFOLIO_UPDATE_INTERVAL,
+            regular_interval=PORTFOLIO_UPDATE_INTERVAL,
             config_entry=entry,
         )
         self._client = client
         self._currency_id = currency_id
         self._directory = directory
 
-    async def _async_update_data(self) -> PortfolioData:
-        # When the answer was asked for -- not when it arrived, which a slow
-        # request would put later than the regular pace.
-        requested_at = dt_util.utcnow()
+    async def _async_fetch(self, requested_at: datetime) -> PortfolioData:
         try:
             entries = await self._client.async_get_portfolio(
                 equivalent_currency_id=self._currency_id

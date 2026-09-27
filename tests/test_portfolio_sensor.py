@@ -27,11 +27,14 @@ BCPEUR = {"id": "1edf9721-e545-644c-9796-ae5b69a774d7", "symbol": "BCPEUR",
 
 
 class _Coordinator:
-    """Duck-typed coordinator: what the entities read."""
+    """Duck-typed coordinator: what the entities read. `data_available`
+    follows the outcome of the last refresh unless given: a failed refresh
+    whose failure is not confirmed yet leaves it True (tolerance.py)."""
 
-    def __init__(self, data=None, last_update_success=True):
+    def __init__(self, data=None, last_update_success=True, data_available=None):
         self.data = data
         self.last_update_success = last_update_success
+        self.data_available = last_update_success if data_available is None else data_available
 
 
 def _data(**holdings) -> PortfolioData:
@@ -167,9 +170,25 @@ def test_an_entry_that_could_not_be_read_makes_total_value_and_cash_plus_unknown
     assert PortfolioCashSensor(coordinator, "eid", "EUR").native_value == 10.0
 
 
-def test_a_failed_update_makes_every_figure_unavailable():
-    """Unavailable only when the update failed -- such as an empty answer
-    held back until it is confirmed -- whatever the last data said."""
+def test_a_tolerated_failure_keeps_every_figure():
+    """The last refresh failed -- the connection dropped, say, or an empty
+    answer is held back until it is confirmed -- but the failure is not
+    confirmed yet: every figure shows the last data, available."""
+    coordinator = _Coordinator(
+        _data(**{VSN["id"]: _vsn()}), last_update_success=False, data_available=True
+    )
+    for sensor_class, value in (
+        (PortfolioTotalSensor, 210.0),
+        (PortfolioCashSensor, 10.0),
+        (PortfolioCashPlusSensor, 0.0),
+    ):
+        sensor = sensor_class(coordinator, "eid", "EUR")
+        assert (sensor.native_value, sensor.available) == (value, True), sensor_class
+
+
+def test_a_confirmed_failure_makes_every_figure_unavailable():
+    """Unavailable once the failure is confirmed, whatever the last data
+    said."""
     coordinator = _Coordinator(_data(**{VSN["id"]: _vsn()}), last_update_success=False)
     for sensor_class in (PortfolioTotalSensor, PortfolioCashSensor, PortfolioCashPlusSensor):
         assert sensor_class(coordinator, "eid", "EUR").available is False, sensor_class
@@ -272,9 +291,10 @@ def test_a_wallet_whose_asset_is_gone_is_unavailable():
     assert sensor.available is False
 
 
-def _held_parts(data: PortfolioData) -> list:
-    """Wallet, Staking and Total of VSN over `data`."""
-    coordinator = _Coordinator(data)
+def _held_parts(data: PortfolioData, **outcome) -> list:
+    """Wallet, Staking and Total of VSN over `data`, the outcome of the last
+    refresh as `outcome` gives it (_Coordinator's keywords)."""
+    coordinator = _Coordinator(data, **outcome)
     earn = _Coordinator(EarnData(apr={}, offered=frozenset()))
     return [
         WalletSensor(coordinator, "eid", "EUR", VSN),
@@ -299,7 +319,33 @@ def test_a_held_asset_whose_entry_cannot_be_read_is_unknown():
         assert "units" not in sensor.extra_state_attributes
 
 
-def test_a_failed_refresh_makes_the_wallet_unavailable():
+def test_a_tolerated_failure_keeps_the_wallet():
+    """A failed refresh whose failure is not confirmed yet: Wallet, Staking
+    and Total show the last data, available."""
+    parts = _held_parts(
+        _data(**{VSN["id"]: _vsn()}), last_update_success=False, data_available=True
+    )
+    assert [(type(s).__name__, s.native_value, s.available) for s in parts] == [
+        ("WalletSensor", 50.0, True),
+        ("StakingSensor", 150.0, True),
+        ("WalletTotalSensor", 200.0, True),
+    ]
+
+
+def test_staking_keeps_its_value_through_a_tolerated_failure():
+    """Earn and Rewards feed attributes only, yet the sensor writes its state
+    after each of their refreshes too: whatever they report, its value and
+    availability follow the Portfolio's tolerance alone."""
+    portfolio = _Coordinator(
+        _data(**{VSN["id"]: _vsn()}), last_update_success=False, data_available=True
+    )
+    earn = _Coordinator(None, last_update_success=False)
+    rewards = _Coordinator(None, last_update_success=False)
+    sensor = StakingSensor(portfolio, earn, rewards, "eid", "EUR", VSN)
+    assert (sensor.native_value, sensor.available) == (150.0, True)
+
+
+def test_a_confirmed_failure_makes_the_wallet_unavailable():
     coordinator = _Coordinator(_data(**{VSN["id"]: _vsn()}), last_update_success=False)
     assert WalletSensor(coordinator, "eid", "EUR", VSN).available is False
 

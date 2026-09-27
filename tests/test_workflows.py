@@ -128,7 +128,7 @@ def test_internal_validation_always_runs_hassfest_hacs_and_the_floor_checks():
     for name in ("Hassfest validation", "HACS validation", "Python 3.13 syntax"):
         assert "if" not in jobs[name], name
     for name in ("Tests with coverage", "Strict typing"):
-        assert "inputs.tests" in jobs[name]["if"], name
+        assert jobs[name]["if"] in ("inputs.tests", "${{ inputs.tests }}"), name
 
 
 def test_the_checks_run_what_ci_promises():

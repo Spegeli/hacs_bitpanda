@@ -85,6 +85,57 @@ def test_parse_commit_reads_breaking_from_the_footer():
     assert commit is not None and commit.breaking is True
 
 
+def test_parse_commit_footer_detects_the_breaking_change_synonym():
+    """Conventional Commits allows BREAKING-CHANGE: as a synonym for
+    BREAKING CHANGE:. Review Important 2."""
+    commit = parse_commit(
+        RawCommit(
+            subject="feat: add a bulk endpoint",
+            body="BREAKING-CHANGE: removes the old one.",
+        )
+    )
+    assert commit is not None and commit.breaking is True
+
+
+def test_parse_commit_footer_is_detected_before_a_trailing_paragraph():
+    """Every commit in this repository ends with a Co-Authored-By: trailer
+    in its own paragraph, which can follow the footer -- detection must
+    not stop at the last paragraph."""
+    commit = parse_commit(
+        RawCommit(
+            subject="feat: drop the legacy sensor",
+            body=(
+                "BREAKING CHANGE: removes it entirely.\n\n"
+                "Co-Authored-By: Someone <someone@example.com>"
+            ),
+        )
+    )
+    assert commit is not None and commit.breaking is True
+
+
+def test_parse_commit_ignores_a_mid_line_breaking_change_mention():
+    """Only a footer -- BREAKING CHANGE: at the start of a line -- makes a
+    commit breaking; a reference to the concept elsewhere in the body, as
+    a docs commit describing this very convention might write, must not."""
+    commit = parse_commit(
+        RawCommit(
+            subject="docs: describe the release process",
+            body="See the BREAKING CHANGE: convention in the docs for the policy.",
+        )
+    )
+    assert commit is not None and commit.breaking is False
+
+
+def test_parse_commit_ignores_a_negated_breaking_change_mention():
+    commit = parse_commit(
+        RawCommit(
+            subject="fix: adjust rounding",
+            body="This is not a BREAKING CHANGE: the option stays.",
+        )
+    )
+    assert commit is not None and commit.breaking is False
+
+
 def test_parse_commit_type_is_case_insensitive():
     commit = parse_commit(RawCommit(subject="Feat: add x", body=""))
     assert commit is not None and commit.type == "feat"

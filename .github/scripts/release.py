@@ -269,6 +269,15 @@ _HEADER_RE = re.compile(
     r"^(?P<type>[A-Za-z]+)(?:\((?P<scope>[^()]+)\))?(?P<breaking>!)?:[ \t]*(?P<description>\S.*)$"
 )
 
+# The Conventional Commits footer, anchored to the start of a line: a
+# mid-sentence mention -- "This is not a BREAKING CHANGE: ...", or a docs
+# commit explaining the convention itself -- must never be mistaken for
+# the real thing (review Important 2). Not anchored to the end: every
+# commit in this repository ends with a Co-Authored-By: trailer, which can
+# follow the footer in its own paragraph. "BREAKING-CHANGE" is
+# Conventional Commits' own hyphenated synonym.
+_BREAKING_FOOTER_RE = re.compile(r"^BREAKING[ -]CHANGE: ", re.MULTILINE)
+
 
 def parse_commit(raw: RawCommit) -> Commit | None:
     """Parse one Conventional Commit header (+ body, for a BREAKING CHANGE
@@ -280,7 +289,7 @@ def parse_commit(raw: RawCommit) -> Commit | None:
     match = _HEADER_RE.match(raw.subject.strip())
     if match is None:
         return None
-    breaking = match["breaking"] is not None or "BREAKING CHANGE:" in raw.body
+    breaking = match["breaking"] is not None or _BREAKING_FOOTER_RE.search(raw.body) is not None
     return Commit(
         type=match["type"].lower(),
         scope=match["scope"],

@@ -240,11 +240,12 @@ def test_validation_result_is_the_one_required_check():
 
 
 # release.yml, "Create Release": validates, then commits the version to main
-# through the deploy key, tags it and creates the GitHub release.
+# through the deploy key and tags it (job "commit", which holds the key),
+# then creates the GitHub release (job "publish", which does not).
 _RELEASE = "release.yml"
 _DEPLOY_KEY = "${{ secrets.RELEASE_DEPLOY_KEY }}"
-# The condition of every step a dry run skips, and the spellings of the
-# condition of the one step only a dry run runs.
+# The condition of every step and job a dry run skips, and the spellings of
+# the condition of the one step only a dry run runs.
 _NOT_A_DRY_RUN = "${{ !inputs.dry_run }}"
 _ONLY_A_DRY_RUN = ("inputs.dry_run", "${{ inputs.dry_run }}")
 # Stands in for the deploy key's private key, which no script may print.
@@ -411,11 +412,11 @@ def test_release_refuses_other_branches_before_anything_else():
     """A release commits to main, tags and publishes, so it runs from main
     only. Started from another branch or a tag, it fails at its first job;
     each job after it waits for the one before, and none has an if: that
-    would run it anyway. Nothing carries the run past a failure either:
-    continue-on-error on the guard -- or on the key check or the push --
-    would let the release go on."""
+    would run it anyway -- the Publish job's only skips a dry run. Nothing
+    carries the run past a failure either: continue-on-error on the guard --
+    or on the key check or the push -- would let the release go on."""
     jobs = _workflow(_RELEASE)["jobs"]
-    assert sorted(jobs) == ["only-main", "release", "validate"]
+    assert sorted(jobs) == ["commit", "only-main", "publish", "validate"]
     only_main = jobs["only-main"]
     assert only_main["name"] == "Only on main"
     assert only_main["permissions"] == {}
@@ -444,9 +445,11 @@ def test_release_refuses_other_branches_before_anything_else():
         "refs/tags/v2026.09.27": 1,
     }
     assert "only-main" in _needs(jobs["validate"])
-    assert "validate" in _needs(jobs["release"])
+    assert "validate" in _needs(jobs["commit"])
+    assert "commit" in _needs(jobs["publish"])
     assert "if" not in jobs["validate"]
-    assert "if" not in jobs["release"]
+    assert "if" not in jobs["commit"]
+    assert jobs["publish"]["if"] == _NOT_A_DRY_RUN
     assert [
         (key, part.get("name"))
         for key, job in jobs.items()
@@ -473,27 +476,26 @@ def test_release_commits_exactly_the_validated_commit():
     main as it is by then, which may have moved on, unvalidated: nothing in
     the job pulls, rebases, merges, resets or switches it onto another. The
     deploy key sets origin up for the pushes."""
-    release = _workflow(_RELEASE)["jobs"]["release"]
-    assert release["name"] == "Release"
-    assert release["permissions"] == {"contents": "write"}
+    commit = _workflow(_RELEASE)["jobs"]["commit"]
+    assert commit["name"] == "Commit version and tag"
     [checkout] = [
-        step for step in release["steps"] if step.get("uses", "").startswith("actions/checkout@")
+        step for step in commit["steps"] if step.get("uses", "").startswith("actions/checkout@")
     ]
     assert checkout["with"]["ref"] == "${{ github.sha }}"
     assert checkout["with"]["fetch-depth"] == 0
     assert checkout["with"]["ssh-key"] == _DEPLOY_KEY
     moves = r"\bgit\s+(?:pull|rebase|merge|reset|checkout|switch|cherry-pick)\b"
-    assert re.findall(moves, _script(release)) == []
+    assert re.findall(moves, _script(commit)) == []
 
 
 def test_release_without_the_deploy_key_stops_before_pushing():
     """Only the deploy key can push the version commit to main. Without it
-    a release stops at once, with the reason: otherwise it would fail at
-    the push, after the commit, with main's refusal -- or, while main has no
-    ruleset yet, push with the token. GitHub allows no secret in an if:, so
-    the script tests the key, and never prints it. A dry run pushes
-    nothing and needs no key."""
-    steps = _workflow(_RELEASE)["jobs"]["release"]["steps"]
+    a release stops at once, with the reason: otherwise checkout would fall
+    back to the job's token, which only reads, and the release would fail at
+    the push, after the commit, with a refusal that hides why. GitHub allows
+    no secret in an if:, so the script tests the key, and never prints it.
+    A dry run pushes nothing and needs no key."""
+    steps = _workflow(_RELEASE)["jobs"]["commit"]["steps"]
     [checkout] = [
         index
         for index, step in enumerate(steps)
@@ -510,16 +512,43 @@ def test_release_without_the_deploy_key_stops_before_pushing():
     assert _A_KEY not in present.stdout + present.stderr
 
 
+def test_release_keeps_the_deploy_key_from_third_party_actions():
+    """The deploy key passes main's ruleset, its block on force pushes
+    included, and a tampered third-party action could read it from the job
+    it runs in. So one job holds the key, and it runs no action but
+    actions/checkout: the rest is shell. Its token only reads -- it pushes
+    with the key, over SSH. The GitHub release is created in a job of its
+    own, with a token that may write, without checkout and without the key;
+    a dry run skips it. The validation's third-party actions get no secret
+    either."""
+    jobs = _workflow(_RELEASE)["jobs"]
+    assert [key for key, job in jobs.items() if "RELEASE_DEPLOY_KEY" in str(job)] == ["commit"]
+    commit, publish = jobs["commit"], jobs["publish"]
+    assert [step["uses"] for step in commit["steps"] if "uses" in step] == ["actions/checkout@v7"]
+    assert commit["permissions"] == {"contents": "read"}
+    assert publish["name"] == "Publish release"
+    assert _needs(publish) == ["commit"]
+    assert publish["if"] == _NOT_A_DRY_RUN
+    assert publish["permissions"] == {"contents": "write"}
+    assert [
+        step for step in publish["steps"] if step.get("uses", "").startswith("actions/checkout@")
+    ] == []
+    assert "secrets" not in jobs["validate"]
+
+
 def test_release_pushes_without_force_and_tags_only_after_the_commit(tmp_path):
     """The push to main is the safety net. It is a plain push of the version
     commit, which sits on the validated commit: if main moved meanwhile -- a
     pull request merged while the release ran -- the push is no fast-forward
     and main refuses it; the script stops there, and nothing unvalidated is
     tagged or released. Forced, it would throw the merged change away: the
-    deploy key passes main's ruleset, its block on force pushes included. A
-    dry run pushes, tags and publishes nothing."""
-    steps = _workflow(_RELEASE)["jobs"]["release"]["steps"]
-    [push] = [step for step in steps if "git push" in step.get("run", "")]
+    deploy key passes main's ruleset, its block on force pushes included. The
+    release is created only after the push, from the tag the pushing job
+    hands on. A dry run pushes, tags and publishes nothing."""
+    jobs = _workflow(_RELEASE)["jobs"]
+    every_step = [step for job in jobs.values() for step in job.get("steps", [])]
+    [push] = [step for step in every_step if "git push" in step.get("run", "")]
+    assert push in jobs["commit"]["steps"]
     lines = push["run"].splitlines()
     pushes = [line for line in lines if "git push" in line]
     assert "git push origin HEAD:main" in pushes[0]
@@ -529,16 +558,20 @@ def test_release_pushes_without_force_and_tags_only_after_the_commit(tmp_path):
     assert tagging
     assert min(tagging) > lines.index(pushes[0])
     assert [line for line in pushes if any(_forces(word) for word in line.split())] == []
-    [publish] = [
-        step for step in steps if step.get("uses", "").startswith("softprops/action-gh-release@")
+    [create] = [
+        step
+        for step in every_step
+        if step.get("uses", "").startswith("softprops/action-gh-release@")
     ]
-    assert publish["uses"] == "softprops/action-gh-release@v3"
+    assert create in jobs["publish"]["steps"]
+    assert create["uses"] == "softprops/action-gh-release@v3"
     assert push["if"] == _NOT_A_DRY_RUN
-    assert publish["if"] == _NOT_A_DRY_RUN
-    assert steps.index(push) < steps.index(publish)
-    assert publish["with"]["tag_name"] == "${{ steps.version.outputs.tag }}"
-    assert publish["with"]["draft"] == "${{ inputs.draft }}"
-    assert publish["with"]["generate_release_notes"] is True
+    assert jobs["publish"]["if"] == _NOT_A_DRY_RUN
+    assert "commit" in _needs(jobs["publish"])
+    assert jobs["commit"]["outputs"] == {"tag": "${{ steps.version.outputs.tag }}"}
+    assert create["with"]["tag_name"] == "${{ needs.commit.outputs.tag }}"
+    assert create["with"]["draft"] == "${{ inputs.draft }}"
+    assert create["with"]["generate_release_notes"] is True
 
     tag = {"steps.version.outputs.tag": "v2026.09.27"}
     origin, clone = _release_clone(tmp_path / "main-unchanged")
@@ -563,7 +596,7 @@ def test_release_versions_by_utc_date_and_commits_as_the_actions_bot(tmp_path):
     reused. The Actions bot commits it into the manifest Home Assistant and
     HACS read."""
     release = _workflow(_RELEASE)
-    job = release["jobs"]["release"]
+    job = release["jobs"]["commit"]
     [version] = [step for step in job["steps"] if step.get("id") == "version"]
     assert 'date -u +"%Y.%m.%d"' in version["run"]
     origin, clone = _release_clone(tmp_path)
@@ -597,14 +630,17 @@ def test_a_dry_run_checks_the_deploy_key_and_publishes_nothing(tmp_path):
     """A dry run goes as far as the version commit, in the runner. Then it
     shows the version, the tag and the commit, checks that the deploy key
     reaches the repository -- when there is one: a dry run may start without
-    it -- and ends. The steps after it are the ones a dry run skips."""
-    steps = _workflow(_RELEASE)["jobs"]["release"]["steps"]
+    it -- and ends. The steps after it, and the Publish job, are the ones a
+    dry run skips."""
+    jobs = _workflow(_RELEASE)["jobs"]
+    steps = jobs["commit"]["steps"]
     [dry_run] = [step for step in steps if step.get("if") in _ONLY_A_DRY_RUN]
     [version] = [index for index, step in enumerate(steps) if step.get("id") == "version"]
     [commit] = [index for index, step in enumerate(steps) if "git commit" in step.get("run", "")]
     ends = steps.index(dry_run)
     assert version < commit < ends
     assert {step.get("if") for step in steps[ends + 1 :]} == {_NOT_A_DRY_RUN}
+    assert jobs["publish"]["if"] == _NOT_A_DRY_RUN
     assert "git ls-remote" in dry_run["run"]
 
     values = {

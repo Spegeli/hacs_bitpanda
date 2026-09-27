@@ -5,18 +5,22 @@ name: Create Release
 # changelog, unless "Create as draft" is cleared. The version is the date in
 # UTC, YYYY.MM.DD, with -1, -2, ... for more releases that day; nobody bumps
 # it by hand.
-#   Only on main - a run started from another branch or a tag fails here,
-#                  before anything is validated, committed, tagged or
-#                  published
-#   Validate     - everything _validate.yml checks, the tests included; a
-#                  release has no switch to leave them out
-#   Release      - only after the validation passed: commits the version on
-#                  top of the validated commit, pushes it to main, tags it
-#                  and creates the release
+#   Only on main           - a run started from another branch or a tag
+#                            fails here, before anything is validated,
+#                            committed, tagged or published
+#   Validate               - everything _validate.yml checks, the tests
+#                            included; a release has no switch to leave them
+#                            out
+#   Commit version and tag - only after the validation passed: commits the
+#                            version on top of the validated commit, pushes
+#                            it to main and tags it
+#   Publish release        - creates the GitHub release for that tag
 # main accepts pull requests only. Its ruleset lets one push through: this
 # repository's deploy key, whose private key is the secret
 # RELEASE_DEPLOY_KEY. The version commit and the tag go over SSH with that
-# key; the job's token only creates the release.
+# key, from a job that runs no third-party action: a tampered one could read
+# the key, and the key passes the ruleset. The release is created by a job of
+# its own, with its token and without the key.
 # A dry run checks all of this and leaves no trace: it validates, determines
 # the version, commits it in the runner and checks that the deploy key
 # reaches the repository -- and pushes, tags and publishes nothing. Start
@@ -69,7 +73,7 @@ jobs:
           fi
 
   # It checks github.sha, the commit this run was started on -- the one the
-  # release job commits the version on top of.
+  # next job commits the version on top of.
   validate:
     name: Validate
     needs: only-main
@@ -77,19 +81,24 @@ jobs:
     with:
       tests: true
 
-  release:
-    name: Release
+  # The one job that holds the deploy key, so it runs no action but
+  # actions/checkout; everything else is shell. Its token only reads: it
+  # pushes with the key, over SSH. It hands the tag to the Publish job.
+  commit:
+    name: Commit version and tag
     needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
     steps:
-      # Without the deploy key a release would fail only at the push, after
-      # the commit, with main's refusal -- or push with the token while main
-      # has no ruleset yet. So it stops here, with the reason. GitHub allows
-      # no secret in an if:, so the script tests it. A dry run pushes nothing
-      # and needs no key.
+      # Without the deploy key, checkout would fall back to the token, which
+      # only reads, and the release would fail at the push, after the commit,
+      # with a refusal that hides why. So it stops here, with the reason.
+      # GitHub allows no secret in an if:, so the script tests it. A dry run
+      # pushes nothing and needs no key.
       - name: Require the deploy key
         if: ${{ !inputs.dry_run }}
         env:
@@ -104,7 +113,7 @@ jobs:
       # validation checked. main may have moved since, to a state nobody
       # validated. With the key, checkout sets origin up for SSH, so every
       # push below goes through the deploy key; without it -- only a dry run
-      # gets here without one -- it falls back to the token.
+      # gets here without one -- it falls back to the token, which only reads.
       - name: Check out the validated commit
         uses: actions/checkout@v7
         with:
@@ -196,12 +205,24 @@ jobs:
           git tag "${TAG}"
           git push origin "${TAG}"
 
-      # With the job's token. A draft waits for its changelog.
+  # The GitHub release, for the tag the job before pushed. It runs a
+  # third-party action, so it gets no checkout and never sees the deploy key;
+  # its token may write, which creating a release needs. It runs only after
+  # the push and the tag succeeded, and not at all in a dry run.
+  publish:
+    name: Publish release
+    needs: commit
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      # A draft waits for its changelog.
       - name: Create GitHub Release
-        if: ${{ !inputs.dry_run }}
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: ${{ steps.version.outputs.tag }}
+          tag_name: ${{ needs.commit.outputs.tag }}
+          name: ${{ needs.commit.outputs.tag }}
           generate_release_notes: true
           draft: ${{ inputs.draft }}

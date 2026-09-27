@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Sequence
 from dataclasses import dataclass
+import io
 import re
 import subprocess
 import sys
@@ -441,8 +442,13 @@ def _run_git(args: Sequence[str]) -> str:
     argument list, never a shell string, so a ref or tag name is never open
     to shell syntax. Only the output is captured: git's own error -- a
     "fatal:" line naming the bad revision -- goes straight to the log,
-    where the CalledProcessError would show just an exit status."""
-    result = subprocess.run(["git", *args], check=True, text=True, stdout=subprocess.PIPE)
+    where the CalledProcessError would show just an exit status. The output
+    is read as UTF-8, which git writes, not in the locale's encoding --
+    cp1252 on Windows, ASCII under a bare C locale; a stray invalid byte
+    in an old commit becomes U+FFFD rather than stop a release."""
+    result = subprocess.run(
+        ["git", *args], check=True, stdout=subprocess.PIPE, encoding="utf-8", errors="replace"
+    )
     return result.stdout
 
 
@@ -480,6 +486,7 @@ def list_commits(from_ref: str, to_ref: str) -> list[RawCommit]:
             "log",
             "--no-merges",
             "--reverse",
+            "--encoding=UTF-8",
             f"--pretty=format:%s{_FIELD_SEP}%b{_RECORD_SEP}",
             range_arg,
         ]
@@ -554,6 +561,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    # The notes carry emoji and whatever the commit subjects hold, which a
+    # locale that is not UTF-8 -- Windows' cp1252, a bare C locale -- cannot
+    # write. So stdout writes UTF-8 whatever the host.
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding="utf-8")
     args = _build_parser().parse_args(argv)
     try:
         if args.command == "plan":

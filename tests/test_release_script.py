@@ -829,3 +829,48 @@ def test_a_git_failure_leaves_gits_own_message_in_the_log(repository):
     )
     assert failed.returncode != 0
     assert "fatal:" in failed.stderr
+
+
+def test_the_notes_are_utf_8_whatever_the_locale(repository):
+    """The runner's locale is UTF-8; a maintainer's machine may not be --
+    Windows reads and writes cp1252. So git's output is read as UTF-8, and
+    the notes are written as UTF-8, regardless: here under the C locale
+    with Python's UTF-8 mode off, where both would otherwise be ASCII.
+    Final review 2 m5."""
+    _git_commit(repository, "docs: explain the Größe of a wallet ✨", second=1)
+    env = {
+        name: value
+        for name, value in _git_env().items()
+        if not name.startswith(("LC_", "LANG", "PYTHON"))
+    }
+    env.update(LANG="C", LC_ALL="C", PYTHONUTF8="0", PYTHONCOERCECLOCALE="0")
+    written = subprocess.run(
+        [sys.executable, str(_SCRIPT), "notes", "--from", "", "--to", "HEAD"],
+        cwd=repository,
+        env=env,
+        capture_output=True,
+        check=False,
+    )
+    assert written.returncode == 0, written.stderr.decode("utf-8", "replace")
+    assert written.stdout.decode("utf-8") == (
+        "### \U0001F4DD Documentation\n\n- Explain the Größe of a wallet ✨\n"
+    )
+
+
+def test_a_byte_that_is_not_utf_8_does_not_stop_a_release(repository, tmp_path):
+    """git commit turns a Latin-1 message into UTF-8 itself, but a commit
+    object from elsewhere -- an import, a conversion -- can still carry a
+    stray byte. It becomes U+FFFD in the notes instead of failing the
+    release."""
+    empty_tree = _git(repository, "write-tree")
+    person = b"Test <test@example.invalid> 1790000000 +0000"
+    commit_object = tmp_path / "commit"
+    commit_object.write_bytes(
+        b"tree " + empty_tree.encode() + b"\nauthor " + person + b"\ncommitter " + person
+        + b"\n\ndocs: describe the caf\xe9 menu\n"
+    )
+    commit = _git(repository, "hash-object", "-t", "commit", "-w", str(commit_object))
+    _git(repository, "update-ref", "refs/heads/main", commit)
+    assert release.notes_command("", "HEAD") == (
+        "### \U0001F4DD Documentation\n\n- Describe the caf� menu"
+    )

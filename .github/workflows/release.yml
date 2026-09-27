@@ -1,19 +1,29 @@
 name: Create Release
 
-# Releases main, by hand: the complete validation first, then the version
-# commit to main, the tag and the GitHub release -- a draft, for the
-# changelog, unless "Create as draft" is cleared. The version is the date in
-# UTC, YYYY.MM.DD, with -1, -2, ... for more releases that day; nobody bumps
-# it by hand.
-#   Only on main           - a run started from another branch or a tag
-#                            fails here, before anything is validated,
-#                            committed, tagged or published
+# Releases by hand, in one of two types:
+#   stable     - from main: the version commit goes to main, then its tag;
+#                published at once and marked latest -- or as a draft, for
+#                notes written by hand
+#   prerelease - from dev: a beta of the next stable version, for testing.
+#                Its version commit exists only in its tag: dev stays as it
+#                is. Published at once as a pre-release, never latest, so
+#                HACS offers it only where betas are switched on
+# The version follows Semantic Versioning (X.Y.Z, betas X.Y.Z-beta.N):
+# .github/scripts/release.py computes it from the tags and the Conventional
+# Commits since the last stable release, "Version bump" can force the bump,
+# and the same script writes the release notes. Nobody bumps it by hand.
+#   Check branch           - a stable only on main, a pre-release only on dev
+#                            and never as a draft; any other start fails
+#                            here, before anything is validated, committed,
+#                            tagged or published
 #   Validate               - everything _validate.yml checks, the tests
 #                            included; a release has no switch to leave them
 #                            out
-#   Commit version and tag - only after the validation passed: commits the
-#                            version on top of the validated commit, pushes
-#                            it to main and tags it
+#   Commit version and tag - only after the validation passed: plans the
+#                            version, the tag and the notes, commits the
+#                            version on top of the validated commit and
+#                            pushes it -- to main, then the tag, or only the
+#                            tag
 #   Publish release        - creates the GitHub release for that tag
 # main accepts pull requests only. Its ruleset lets one push through: this
 # repository's deploy key, whose private key is the secret
@@ -21,30 +31,44 @@ name: Create Release
 # key, from a job that runs no third-party action: a tampered one could read
 # the key, and the key passes the ruleset. The release is created by a job of
 # its own, with its token and without the key.
-# A dry run checks all of this and leaves no trace: it validates, determines
-# the version, commits it in the runner and checks that the deploy key
-# reaches the repository -- and pushes, tags and publishes nothing. Start
-# with one whenever something in the release path changed.
+# A dry run checks what it can and leaves no trace: it validates, plans the
+# version, the tag and the notes, commits the version in the runner and
+# checks that the deploy key reaches the repository -- and pushes, tags and
+# publishes nothing. Whether the key may push past main's ruleset only a
+# real release shows. Start with one whenever something in the release path
+# changed.
 
 run-name: >-
-  ${{ inputs.dry_run && 'Create Release (dry run)'
-      || inputs.draft && 'Create Release (draft)'
-      || 'Create Release' }}
+  ${{ format('Create Release: {0}{1}{2}{3}',
+      inputs.release_type,
+      inputs.bump != 'auto' && format(', {0} bump', inputs.bump) || '',
+      inputs.draft && ', draft' || '',
+      inputs.dry_run && ' (dry run)' || '') }}
 
 on:
   workflow_dispatch:
     inputs:
+      release_type:
+        description: "Release type: stable from main, prerelease (a beta) from dev"
+        type: choice
+        options: [stable, prerelease]
+        default: stable
+      bump:
+        description: "Version bump: auto from the commits since the last stable, or force one"
+        type: choice
+        options: [auto, major, minor, patch]
+        default: auto
       draft:
-        description: "Create as draft (review before publishing)"
+        description: "Create a stable release as a draft, to write its notes by hand"
         type: boolean
-        default: true
+        default: false
       dry_run:
-        description: "Dry run: validate and compute the version; push and publish nothing"
+        description: "Dry run: validate, compute the version, tag and notes; push and publish nothing"
         type: boolean
         default: false
 
-# One release at a time. Another run waits; a run is never cancelled halfway
-# through its pushes.
+# One release at a time, of either type. Another run waits; a run is never
+# cancelled halfway through its pushes.
 concurrency:
   group: release
   cancel-in-progress: false
@@ -52,23 +76,40 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  MANIFEST: custom_components/bitpanda/manifest.json
+# No workflow-level env: it would reach the steps of every job, the Publish
+# job's third-party action included.
 
 jobs:
-  # A release commits to main, tags and publishes, so it runs from main
-  # only. Every job after this one waits for it, so a run started anywhere
-  # else stops here.
-  only-main:
-    name: Only on main
+  # A stable release pushes to main, so it runs from main only; a
+  # pre-release tests what dev holds -- what the next stable will ship --
+  # and leaves dev as it is. A draft beta would reach nobody: HACS does not
+  # see drafts. Every job after this one waits for it, so a run started
+  # anywhere else stops here.
+  check-branch:
+    name: Check branch
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}
     steps:
-      - name: Refuse other branches
+      - name: Refuse the wrong branch, and a draft pre-release
+        env:
+          RELEASE_TYPE: ${{ inputs.release_type }}
+          DRAFT: ${{ inputs.draft }}
         run: |
-          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
-            echo "::error::Create Release only runs on main, not on ${GITHUB_REF_NAME}."
+          case "${RELEASE_TYPE}" in
+            stable) BRANCH=main KIND="A stable release" ;;
+            prerelease) BRANCH=dev KIND="A pre-release" ;;
+            *)
+              echo "::error::Unknown release type \"${RELEASE_TYPE}\": stable or prerelease."
+              exit 1
+              ;;
+          esac
+          if [ "${GITHUB_REF}" != "refs/heads/${BRANCH}" ]; then
+            echo "::error::${KIND} runs only on ${BRANCH}, not on ${GITHUB_REF_NAME}."
+            exit 1
+          fi
+          if [ "${RELEASE_TYPE}" = prerelease ] && [ "${DRAFT}" = true ]; then
+            echo "::error::A pre-release is never a draft: HACS does not see drafts. Start it again with the draft switch off."
             exit 1
           fi
 
@@ -76,14 +117,16 @@ jobs:
   # next job commits the version on top of.
   validate:
     name: Validate
-    needs: only-main
+    needs: check-branch
     uses: ./.github/workflows/_validate.yml
     with:
       tests: true
 
   # The one job that holds the deploy key, so it runs no action but
-  # actions/checkout; everything else is shell. Its token only reads: it
-  # pushes with the key, over SSH. It hands the tag to the Publish job.
+  # actions/checkout; everything else is shell and the repository's own
+  # release script. Its token only reads: it pushes with the key, over SSH.
+  # It hands the version, the tag, the notes and the release type to the
+  # Publish job, which has no checkout.
   commit:
     name: Commit version and tag
     needs: validate
@@ -91,8 +134,13 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+    env:
+      MANIFEST: custom_components/bitpanda/manifest.json
     outputs:
-      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      notes: ${{ steps.notes.outputs.notes }}
+      prerelease: ${{ inputs.release_type == 'prerelease' }}
     steps:
       # Without the deploy key, checkout would fall back to the token, which
       # only reads, and the release would fail at the push, after the commit,
@@ -105,15 +153,17 @@ jobs:
           DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY }}
         run: |
           if [ -z "${DEPLOY_KEY}" ]; then
-            echo "::error::The secret RELEASE_DEPLOY_KEY is not set. Only this deploy key can push the version commit to main (see Releases in CONTRIBUTING.md). Nothing was committed or pushed."
+            echo "::error::The secret RELEASE_DEPLOY_KEY is not set. Only this deploy key can push the version commit and the tag (see Releases in CONTRIBUTING.md). Nothing was committed or pushed."
             exit 1
           fi
 
-      # github.sha, not main: the commit this run was started on, which the
-      # validation checked. main may have moved since, to a state nobody
-      # validated. With the key, checkout sets origin up for SSH, so every
-      # push below goes through the deploy key; without it -- only a dry run
-      # gets here without one -- it falls back to the token, which only reads.
+      # github.sha, not the branch: the commit this run was started on, which
+      # the validation checked. The branch may have moved since, to a state
+      # nobody validated. With the key, checkout sets origin up for SSH, so
+      # every push below goes through the deploy key; without it -- only a
+      # dry run gets here without one -- it falls back to the token, which
+      # only reads. fetch-depth 0: the release script reads every tag and
+      # the history since the previous release.
       - name: Check out the validated commit
         uses: actions/checkout@v7
         with:
@@ -121,108 +171,140 @@ jobs:
           fetch-depth: 0
           ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
-      # A second release on the same day gets -1, a third -2: a tag is never
-      # reused.
-      - name: Determine version and tag
-        id: version
+      # The next version, its tag and the previous release, which the notes
+      # start after: a stable is the last stable plus the bump -- the one
+      # the commits since call for, unless "Version bump" forces one; a beta
+      # carries the stable it leads to. The first stable after the date
+      # versions is tagged v2.0.0_redesign, once (CONTRIBUTING.md,
+      # "Releases").
+      - name: Plan the version and the tag
+        id: plan
+        env:
+          RELEASE_TYPE: ${{ inputs.release_type }}
+          BUMP: ${{ inputs.bump }}
         run: |
-          TODAY=$(date -u +"%Y.%m.%d")
-          BASE_TAG="v${TODAY}"
-
           git fetch --tags
+          PLAN=$(python3 .github/scripts/release.py plan --type "${RELEASE_TYPE}" --bump "${BUMP}")
+          echo "${PLAN}"
+          echo "${PLAN}" >> "$GITHUB_OUTPUT"
 
-          if ! git tag -l "${BASE_TAG}" | grep -q "^${BASE_TAG}$"; then
-            VERSION="${TODAY}"
-            TAG="${BASE_TAG}"
-          else
-            SUFFIX=1
-            while git tag -l "${BASE_TAG}-${SUFFIX}" | grep -q "^${BASE_TAG}-${SUFFIX}$"; do
-              SUFFIX=$((SUFFIX + 1))
-            done
-            VERSION="${TODAY}-${SUFFIX}"
-            TAG="${BASE_TAG}-${SUFFIX}"
-          fi
+      # The notes, from the commit subjects since the previous release. An
+      # output of several lines stands between two lines naming a delimiter;
+      # a random one, so no line of the notes can end them early and set an
+      # output of its own. They are printed as well: should the Publish job
+      # fail, the release is made from the tag by hand, with these notes.
+      - name: Write the release notes
+        id: notes
+        env:
+          PREVIOUS: ${{ steps.plan.outputs.previous }}
+        run: |
+          NOTES=$(python3 .github/scripts/release.py notes --from "${PREVIOUS}" --to HEAD)
+          printf '%s\n' "${NOTES}"
+          DELIMITER="notes_$(openssl rand -hex 16)"
+          {
+            echo "notes<<${DELIMITER}"
+            printf '%s\n' "${NOTES}"
+            echo "${DELIMITER}"
+          } >> "$GITHUB_OUTPUT"
 
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "Determined version: ${VERSION} / tag: ${TAG}"
-
+      # The version without the tag's v and without the transition suffix:
+      # 2.0.0 for v2.0.0_redesign, 2.1.0-beta.1 for v2.1.0-beta.1.
       - name: Update manifest.json
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.plan.outputs.version }}
         run: |
           jq --arg v "${VERSION}" '.version = $v' "${MANIFEST}" > tmp.json
           mv tmp.json "${MANIFEST}"
           echo "manifest.json updated to ${VERSION}"
 
-      # A bump that did not land -- a jq filter gone wrong, a key misspelt --
-      # would ship a tag whose manifest.json still names the previous
-      # version. So the manifest must now carry exactly this one, as jq writes
-      # it; the closing quote rules out a longer version, 2026.09.27-1 for
-      # 2026.09.27.
+      # A bump that did not land -- a jq filter gone wrong, a key misspelt, no
+      # version planned at all -- would ship a tag whose manifest.json still
+      # names the previous version. So the manifest must now carry exactly
+      # this one, as jq writes it; the closing quote rules out a longer
+      # version, 2.1.0-beta.1 for 2.1.0.
       - name: Check the version in manifest.json
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.plan.outputs.version }}
         run: |
-          if ! grep -qF "\"version\": \"${VERSION}\"" "${MANIFEST}"; then
-            echo "::error::manifest.json does not carry version ${VERSION} after the update. Nothing was committed or pushed."
+          if [ -z "${VERSION}" ] || ! grep -qF "\"version\": \"${VERSION}\"" "${MANIFEST}"; then
+            echo "::error::manifest.json does not carry version ${VERSION:-(none planned)} after the update. Nothing was committed or pushed."
             exit 1
           fi
 
       - name: Commit updated manifest.json
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.plan.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add "${MANIFEST}"
           git diff --staged --quiet || git commit -m "chore: bump version to ${VERSION}"
 
-      # A dry run ends here: it shows what a release would push and checks
-      # the deploy key. git ls-remote proves that GitHub accepts the key for
-      # this repository; whether the key may write, past main's ruleset, only
-      # a real release shows.
+      # A dry run ends here: it shows what a release would push and publish,
+      # and checks the deploy key. git ls-remote proves that GitHub accepts
+      # the key for this repository; whether the key may write, past main's
+      # ruleset, only a real release shows.
       - name: Dry run - show the release and check the deploy key
         if: inputs.dry_run
         env:
-          VERSION: ${{ steps.version.outputs.version }}
-          TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          TAG: ${{ steps.plan.outputs.tag }}
+          PREVIOUS: ${{ steps.plan.outputs.previous }}
+          NOTES: ${{ steps.notes.outputs.notes }}
           DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY }}
         run: |
-          echo "Version: ${VERSION}"
-          echo "Tag:     ${TAG}"
+          echo "Release type: ${RELEASE_TYPE}"
+          echo "Version:      ${VERSION}"
+          echo "Tag:          ${TAG}"
+          echo "Previous:     ${PREVIOUS:-none, so the notes cover the whole history}"
           git show HEAD
+          echo "Release notes:"
+          printf '%s\n' "${NOTES}"
           if [ -n "${DEPLOY_KEY}" ]; then
             git ls-remote --exit-code origin refs/heads/main
             echo "The deploy key reaches the repository."
           else
             echo "::warning::The secret RELEASE_DEPLOY_KEY is not set: a real release would stop before it commits anything."
           fi
+          if [ "${RELEASE_TYPE}" = stable ]; then
+            echo "A real release would push this commit to main, then the tag ${TAG}."
+          else
+            echo "A real release would push only the tag ${TAG}, which carries this commit; dev would stay as it is."
+          fi
           echo "Dry run: nothing was pushed, tagged or published."
 
-      # The safety net: a plain push, never forced. The version commit sits
-      # on the validated commit, so if main moved meanwhile -- a pull request
-      # merged while this run validated -- the push is no fast-forward, main
-      # refuses it, and the script stops before the tag: nothing unvalidated
-      # is tagged or released. Forced, it would throw the merged change away,
-      # since the deploy key passes main's ruleset, its block on force pushes
-      # included.
+      # A stable release: main first, and main is the safety net -- a plain
+      # push, never forced. The version commit sits on the validated commit,
+      # so if main moved meanwhile -- a pull request merged while this run
+      # validated -- the push is no fast-forward, main refuses it, and the
+      # script stops before the tag: nothing unvalidated is tagged or
+      # released. Forced, it would throw the merged change away, since the
+      # deploy key passes main's ruleset, its block on force pushes
+      # included. A pre-release pushes no branch at all: only its tag, which
+      # takes the version commit along -- dev stays as it is.
       - name: Push the version commit and the tag
         if: ${{ !inputs.dry_run }}
         env:
-          TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+          TAG: ${{ steps.plan.outputs.tag }}
         run: |
-          if ! git push origin HEAD:main; then
-            echo "::error::main refused the version commit. Either main moved since this run started -- run the release again -- or the deploy key cannot push to main: check its write access and the ruleset's bypass list. Nothing was tagged or released."
-            exit 1
+          if [ "${RELEASE_TYPE}" = stable ]; then
+            if ! git push origin HEAD:main; then
+              echo "::error::main refused the version commit. Either main moved since this run started -- start a new run (Actions, Create Release, Run workflow): re-running this one repeats its commit and is refused again -- or the deploy key cannot push to main: check its write access and the ruleset's bypass list. Nothing was tagged or released."
+              exit 1
+            fi
           fi
           git tag "${TAG}"
-          git push origin "${TAG}"
+          git push origin "refs/tags/${TAG}"
 
-  # The GitHub release, for the tag the job before pushed. It runs a
-  # third-party action, so it gets no checkout and never sees the deploy key;
-  # its token may write, which creating a release needs. It runs only after
-  # the push and the tag succeeded, and not at all in a dry run.
+  # The GitHub release, for the tag the job before pushed, from that job's
+  # outputs. It runs a third-party action, so it gets no checkout and never
+  # sees the deploy key; its token may write, which creating a release
+  # needs. It runs only after the pushes succeeded, and not at all in a dry
+  # run. Job outputs are strings: prerelease is 'true' or 'false'. The title
+  # is v<version>, without the transition tag's suffix; the body is the
+  # generated notes alone, without GitHub's own on top.
   publish:
     name: Publish release
     needs: commit
@@ -232,11 +314,15 @@ jobs:
     permissions:
       contents: write
     steps:
-      # A draft waits for its changelog.
+      # A stable release is published at once and marked latest, unless it
+      # opens as a draft; a pre-release is published at once, and never
+      # latest.
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.commit.outputs.tag }}
-          name: ${{ needs.commit.outputs.tag }}
-          generate_release_notes: true
-          draft: ${{ inputs.draft }}
+          name: v${{ needs.commit.outputs.version }}
+          body: ${{ needs.commit.outputs.notes }}
+          prerelease: ${{ needs.commit.outputs.prerelease == 'true' }}
+          make_latest: ${{ needs.commit.outputs.prerelease == 'true' && 'false' || 'true' }}
+          draft: ${{ inputs.draft && needs.commit.outputs.prerelease != 'true' }}

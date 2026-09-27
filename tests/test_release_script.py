@@ -7,9 +7,13 @@ reach it.
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
+import subprocess
 import sys
 from types import ModuleType
+
+import pytest
 
 _SCRIPT = Path(__file__).parents[1] / ".github" / "scripts" / "release.py"
 
@@ -533,9 +537,9 @@ def test_build_notes_item_order_is_added_changed_fixed_removed():
 
 def test_build_notes_ranks_items_by_whole_words():
     """The rank comes from the description's first word as a whole word,
-    in any of its forms -- never from a prefix: "address" is no "add",
-    "dropdown" no "drop", and "removal", a noun, no "remove". Task 7 review
-    Minor 3."""
+    in any of its forms and any case -- never from a prefix: "address" is
+    no "add", "dropdown" no "drop", and "removal", a noun, no "remove".
+    Task 7 review Minor 3."""
     commits = [
         RawCommit(subject="feat: dropdown for the currency", body=""),
         RawCommit(subject="feat: removes the old flag", body=""),
@@ -544,7 +548,7 @@ def test_build_notes_ranks_items_by_whole_words():
         RawCommit(subject="feat: adding a sensor", body=""),
         RawCommit(subject="feat: removal of the icon option", body=""),
         RawCommit(subject="feat: deleted the cache", body=""),
-        RawCommit(subject="feat: adds a group", body=""),
+        RawCommit(subject="feat: Adds a group", body=""),
     ]
     assert build_notes(commits) == (
         "### ✨ New Features\n\n"
@@ -674,3 +678,91 @@ def test_main_notes_prints_markdown(monkeypatch, capsys):
     exit_code = release.main(["notes", "--from", "", "--to", "HEAD"])
     assert exit_code == 0
     assert capsys.readouterr().out == "### ✨ New Features\n\n- Add a\n"
+
+
+# --------------------------------------------------------------------------
+# The git layer, on real repositories in tmp_path
+# --------------------------------------------------------------------------
+
+def _git_env() -> dict[str, str]:
+    """The environment for git: the test process's, less git's own
+    variables -- a hook's GIT_DIR would send git to this repository -- and
+    without the user's or the system's git configuration."""
+    inherited = {name: value for name, value in os.environ.items() if not name.startswith("GIT_")}
+    return {**inherited, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+
+
+def _git(repository: Path, *args: str, second: int = 0) -> str:
+    """Run git in `repository` as a test author, its clock at `second`
+    seconds past noon: commits made within one real second still keep the
+    order the test gives them."""
+    date = f"2026-09-27T12:00:{second:02d}+00:00"
+    author = {"NAME": "Test", "EMAIL": "test@example.invalid", "DATE": date}
+    env = {
+        **_git_env(),
+        **{f"GIT_{role}_{key}": value for role in ("AUTHOR", "COMMITTER") for key, value in author.items()},
+    }
+    return subprocess.run(
+        ["git", *args], cwd=repository, env=env, check=True, capture_output=True, encoding="utf-8"
+    ).stdout.strip()
+
+
+def _git_commit(repository: Path, message: str, second: int) -> None:
+    _git(repository, "commit", "--quiet", "--allow-empty", "--message", message, second=second)
+
+
+@pytest.fixture
+def repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """An empty repository on main, as the current directory -- where the
+    script's git layer runs git -- with git's own variables and the user's
+    configuration out of the way."""
+    path = tmp_path / "repository"
+    _git(tmp_path, "init", "--quiet", "--initial-branch=main", str(path))
+    for name in [name for name in os.environ if name.startswith("GIT_")]:
+        monkeypatch.delenv(name)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    monkeypatch.chdir(path)
+    return path
+
+
+def test_the_git_layer_reads_a_real_repository(repository):
+    """git_tags and list_commits against a real history: a body of several
+    lines comes through whole, a merge commit never does, the range starts
+    after the tag it names -- or covers everything when `from` is empty --
+    and the commits come oldest first. The notes and the plan follow from
+    them. Task 7 review Minor 6."""
+    _git_commit(repository, "feat: add the first feature", second=1)
+    _git(repository, "tag", "v2026.06.04")
+    _git(repository, "switch", "--quiet", "--create", "topic")
+    topic_body = "First line of the body.\nSecond line.\n\nBREAKING CHANGE: the topic moved."
+    _git_commit(repository, f"fix: repair the topic\n\n{topic_body}", second=2)
+    _git(repository, "switch", "--quiet", "main")
+    _git_commit(repository, "docs: describe the first feature", second=3)
+    _git(repository, "merge", "--quiet", "--no-ff", "--no-edit", "topic", second=4)
+    _git_commit(repository, "feat: add a second feature", second=5)
+    _git(repository, "tag", "v2.0.0_redesign")
+    _git_commit(repository, "fix: correct the second feature", second=6)
+
+    assert release.git_tags() == ["v2.0.0_redesign", "v2026.06.04"]
+    everything = [
+        RawCommit(subject="feat: add the first feature", body=""),
+        RawCommit(subject="fix: repair the topic", body=topic_body),
+        RawCommit(subject="docs: describe the first feature", body=""),
+        RawCommit(subject="feat: add a second feature", body=""),
+        RawCommit(subject="fix: correct the second feature", body=""),
+    ]
+    assert release.list_commits("", "HEAD") == everything
+    assert release.list_commits("v2026.06.04", "HEAD") == everything[1:]
+    assert release.list_commits("v2.0.0_redesign", "HEAD") == everything[4:]
+    assert release.notes_command("v2026.06.04", "HEAD") == (
+        "### \U0001F4A5 Breaking Changes\n\n- Repair the topic"
+        "\n\n### ✨ New Features\n\n- Add a second feature"
+        "\n\n### \U0001F41B Bug Fixes\n\n- Correct the second feature"
+        "\n\n### \U0001F4DD Documentation\n\n- Describe the first feature"
+    )
+    assert release.plan("stable", "auto") == {
+        "version": "2.0.1",
+        "tag": "v2.0.1",
+        "previous": "v2.0.0_redesign",
+    }

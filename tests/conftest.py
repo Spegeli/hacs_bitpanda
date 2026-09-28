@@ -112,7 +112,8 @@ def check_flow_texts():
     which pytest-homeassistant-custom-component does not ship. Without the
     check, a dropped text or a renamed placeholder shows the user a raw key
     or a literal {placeholder}. Checked for the config, options and subentry
-    flows: the step's texts, its errors and sections, and the abort reason.
+    flows: the step's title and texts, its errors and sections, and the abort
+    reason.
     Read from translations/en.json, which equals strings.json (test_strings).
     """
     english = json.loads(
@@ -148,7 +149,11 @@ def check_flow_texts():
             if step is None:
                 problems.append(("no step texts", result["step_id"]))
                 return result
-            shown += [step.get("description", ""), *step.get("data_description", {}).values()]
+            shown += [
+                step.get("title", ""),
+                step.get("description", ""),
+                *step.get("data_description", {}).values(),
+            ]
             for part in step.get("sections", {}).values():
                 shown += [part.get("description", ""), *part.get("data_description", {}).values()]
             for error in (result.get("errors") or {}).values():

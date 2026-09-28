@@ -33,8 +33,10 @@ Wallet value bugs are easy to miss — state the numbers you verified.
 - [ ] README updated, if user-facing behavior changed
 
 <!--
-Once this pull request is open, CI validates it: hassfest, HACS validation,
-the tests (≥ 95 % coverage), mypy --strict, the Python 3.13 checks and the
-release script on Python 3.12. It can merge only with a green "Validation result".
+A pull request to main is validated by CI: hassfest, HACS validation, the
+tests (≥ 95 % coverage), mypy --strict, the Python 3.13 checks and the
+release script on Python 3.12; it merges only with a green "Validation result".
+A pull request to dev is validated by the maintainer, who pushes it to a
+topic branch here, where the same checks run.
 Do NOT bump the version in manifest.json — the release workflow sets it.
 -->

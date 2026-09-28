@@ -183,13 +183,19 @@ Follow the [Home Assistant developer guidelines](https://developers.home-assista
 - `async`/`await` for anything touching the network.
 - Constants in `const.py`, not inline.
 
+## Branches
+
+- **`main`** holds the released code. It changes only through the pull request from `dev` and through a release's version commit, and it merges only with a green **Validation result** (see [Continuous integration](#continuous-integration)).
+- **`dev`** is where work comes together; betas are released from it.
+- **Topic branches** start from `dev` and go back into it.
+
 ## Pull requests
 
-1. Branch from `main`.
+1. Branch from `dev`.
 2. Keep the change focused — one topic per PR.
 3. Write the commit messages as [Conventional Commits](https://www.conventionalcommits.org) — see [Commit messages](#commit-messages).
-4. Open the PR against `main` and fill in the template.
-5. CI validates the pull request (see [Continuous integration](#continuous-integration)); it merges only with a green **Validation result**.
+4. Open the PR against `dev` and fill in the template.
+5. Validate runs for pull requests to `main` only, so run the tests and mypy yourself first (see [Tests and typing](#tests-and-typing)). The maintainer validates your pull request by pushing it to a topic branch of this repository, which runs every check.
 
 **Do not bump the version in `manifest.json`.** The Create Release workflow sets it (see [Releases](#releases)).
 
@@ -234,7 +240,7 @@ Validate does not run on `main` itself: changes reach it only through a validate
 
 One last check sums up each run: green when every check passed or was switched off by hand, red when one failed or the run was cancelled. A pull request's run calls it **Validation result**. It is the one check `main` requires, so a pull request merges only with a green Validation result. Push and manual runs call it **Validation summary**: GitHub would count a push's run on the pull request's head commit for the required check as well, and only the pull request's own run, which validates the merge result, may answer for it. A run started by hand never counts for a pull request anyway, so switching its tests off cannot stand in for the required check.
 
-A pull request from a fork runs the same checks, with a read-only token and no secrets: Validate uses `pull_request`, never `pull_request_target`. A first-time contributor's run waits for the maintainer's approval.
+A pull request to `main` from a fork runs the same checks, with a read-only token and no secrets: Validate uses `pull_request`, never `pull_request_target`. A first-time contributor's run waits for the maintainer's approval.
 
 ## Releases
 

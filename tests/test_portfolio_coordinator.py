@@ -245,10 +245,11 @@ async def test_the_count_of_empty_answers_goes_on_across_coordinators(hass, free
     assert (await _portfolio(hass, [], entry)[1]._async_update_data()).total == 0.0
 
 
-async def test_an_answer_taken_as_the_truth_clears_the_count(hass):
+async def test_an_answer_taken_as_the_truth_clears_the_count(hass, freezer):
     entry = _entry(hass)
     _register_wallet(hass, entry)
     await _refused(_portfolio(hass, [], entry)[1])
+    freezer.tick(2 * _REGULAR)
     await _portfolio(hass, _ENTRIES, entry)[1]._async_update_data()
     _, coordinator = _portfolio(hass, [], entry)
     for _ in range(WALLET_REMOVAL_MISSES - 1):
@@ -270,11 +271,12 @@ async def test_a_sudden_empty_answer_fails_until_answers_in_a_row_confirm_it(has
     assert (await coordinator._async_update_data()).total == 0.0
 
 
-async def test_an_answer_that_lists_something_starts_the_count_again(hass):
+async def test_an_answer_that_lists_something_starts_the_count_again(hass, freezer):
     client, coordinator = _portfolio(hass)
     await coordinator._async_update_data()
     client.entries = []
     await _refused(coordinator)
+    freezer.tick(2 * _REGULAR)
     client.entries = _ENTRIES
     await coordinator._async_update_data()
     client.entries = []

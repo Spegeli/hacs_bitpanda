@@ -96,7 +96,7 @@
               "extra_currencies": "Naast EUR"
             },
             "data_description": {
-              "extra_currencies": "Elke gekozen valuta voegt per asset een sensor toe; als je een valuta weghaalt, worden die sensoren verwijderd."
+              "extra_currencies": "Elke gekozen valuta voegt per asset een sensor toe. Als je een valuta weghaalt, worden die sensoren verwijderd; hun geschiedenis blijft bewaard en komt terug als je de valuta opnieuw kiest."
             }
           },
           "language": {

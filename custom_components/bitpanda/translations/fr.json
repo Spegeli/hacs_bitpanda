@@ -96,7 +96,7 @@
               "extra_currencies": "En plus de l'EUR"
             },
             "data_description": {
-              "extra_currencies": "Chaque devise sélectionnée ajoute un capteur par actif ; retirer une devise supprime ces capteurs."
+              "extra_currencies": "Chaque devise sélectionnée ajoute un capteur par actif. Retirer une devise retire ces capteurs ; leur historique est conservé et revient lorsque vous sélectionnez à nouveau la devise."
             }
           },
           "language": {

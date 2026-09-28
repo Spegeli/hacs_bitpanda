@@ -96,7 +96,7 @@
               "extra_currencies": "Zusätzlich zu EUR"
             },
             "data_description": {
-              "extra_currencies": "Jede gewählte Währung fügt pro Asset einen Sensor hinzu; wird eine Währung abgewählt, werden diese Sensoren gelöscht."
+              "extra_currencies": "Jede gewählte Währung fügt pro Asset einen Sensor hinzu. Wird eine Währung abgewählt, werden diese Sensoren entfernt; ihr Verlauf bleibt erhalten und ist wieder da, wenn du die Währung erneut wählst."
             }
           },
           "language": {

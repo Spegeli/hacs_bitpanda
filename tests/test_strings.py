@@ -351,7 +351,8 @@ _IN_ADDITION_TO_EUR = {
 
 def test_the_configure_currencies_field_says_what_comes_beside_eur():
     """So its help text no longer says that EUR always stays -- none does,
-    in any language; it keeps what choosing and removing a currency do."""
+    in any language; it keeps what choosing and removing a currency do, and
+    that a removed currency's sensors keep their history."""
     assert sorted(_IN_ADDITION_TO_EUR) == _LANGUAGES
     for language, label in _IN_ADDITION_TO_EUR.items():
         currencies = _load(f"translations/{language}.json")["options"]["step"]["price_tracker"][
@@ -366,10 +367,12 @@ def test_the_configure_currencies_field_says_what_comes_beside_eur():
         for language in ("en", "de")
     }
     assert help_texts == {
-        "en": "Each selected currency adds one sensor per asset; removing a currency "
-        "deletes those sensors.",
-        "de": "Jede gewählte Währung fügt pro Asset einen Sensor hinzu; wird eine Währung "
-        "abgewählt, werden diese Sensoren gelöscht.",
+        "en": "Each selected currency adds one sensor per asset. Removing a currency removes "
+        "those sensors; their history is kept and comes back when you select the currency "
+        "again.",
+        "de": "Jede gewählte Währung fügt pro Asset einen Sensor hinzu. Wird eine Währung "
+        "abgewählt, werden diese Sensoren entfernt; ihr Verlauf bleibt erhalten und ist wieder "
+        "da, wenn du die Währung erneut wählst.",
     }
 
 

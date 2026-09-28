@@ -96,7 +96,7 @@
               "extra_currencies": "Además de EUR"
             },
             "data_description": {
-              "extra_currencies": "Cada moneda seleccionada añade un sensor por activo; al quitar una moneda se eliminan esos sensores."
+              "extra_currencies": "Cada moneda seleccionada añade un sensor por activo. Al quitar una moneda se retiran esos sensores; su historial se conserva y vuelve cuando seleccionas de nuevo la moneda."
             }
           },
           "language": {

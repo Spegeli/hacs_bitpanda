@@ -96,7 +96,7 @@
               "extra_currencies": "In addition to EUR"
             },
             "data_description": {
-              "extra_currencies": "Each selected currency adds one sensor per asset; removing a currency deletes those sensors."
+              "extra_currencies": "Each selected currency adds one sensor per asset. Removing a currency removes those sensors; their history is kept and comes back when you select the currency again."
             }
           },
           "language": {

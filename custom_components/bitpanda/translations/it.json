@@ -96,7 +96,7 @@
               "extra_currencies": "Oltre a EUR"
             },
             "data_description": {
-              "extra_currencies": "Ogni valuta selezionata aggiunge un sensore per asset; togliere una valuta elimina quei sensori."
+              "extra_currencies": "Ogni valuta selezionata aggiunge un sensore per asset. Togliere una valuta rimuove quei sensori; la loro cronologia viene conservata e torna quando selezioni di nuovo la valuta."
             }
           },
           "language": {

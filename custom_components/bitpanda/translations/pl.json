@@ -96,7 +96,7 @@
               "extra_currencies": "Oprócz EUR"
             },
             "data_description": {
-              "extra_currencies": "Każda wybrana waluta dodaje jeden sensor na aktywo; usunięcie waluty usuwa te sensory."
+              "extra_currencies": "Każda wybrana waluta dodaje jeden sensor na aktywo. Usunięcie waluty usuwa te sensory; ich historia zostaje zachowana i wraca, gdy ponownie wybierzesz tę walutę."
             }
           },
           "language": {

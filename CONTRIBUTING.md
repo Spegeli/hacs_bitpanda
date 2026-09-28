@@ -81,7 +81,9 @@ Everything lives in `custom_components/bitpanda/`:
 | `price_sensor.py` | Price sensors per asset and currency |
 | `purge.py` | Deletes the Portfolio's sensors with their history and long-term statistics on a currency change |
 | `sensor.py` | Dispatches the sensor platform to the service |
+| `streaks.py` | The rule for things in a row — failed refreshes, empty answers, missing holdings — confirmed by count and time |
 | `strings.json`, `translations/` | UI strings, seven languages (see [Translations](#translations)) |
+| `tolerance.py` | `TolerantCoordinator` and `TolerantEntity`: sensors keep their last data through short outages |
 
 The Portfolio polls `/portfolio` and `/portfolio-history` every 5 minutes, `/operations` every hour and `/earn/configs` every 24 hours, all with the key. The Price Tracker polls `/tickers` without a key — every 60 seconds, stretched above 30 assets to stay within 1,800 requests per hour — and the ECB every 6 hours when extra currencies are configured. Add new reads to an existing coordinator rather than polling from a sensor.
 
@@ -106,6 +108,8 @@ The wallet lifecycle manager (`PortfolioEntityManager`) runs after every portfol
 **A symbol is not an id.** The 14,000-asset catalogue lets one symbol name several assets — `XAU` is both Gold (a tokenized metal) and GoldMoney Inc (a stock). Always resolve to, cache and compare by asset id, never the bare symbol.
 
 **Each authenticated endpoint needs one specific scope.** `/portfolio` needs Guthaben (Balance), `/operations` needs Transaktion (Transaction), `/earn/configs` needs Earn (Read). `/currencies`, `/assets` and `/tickers` are public endpoints that answer regardless of scope, so calling them successfully proves nothing about what a key can do.
+
+**Sensors ride out short outages.** A sensor of the Portfolio, its returns or the prices takes its availability from its coordinator's `data_available` (`tolerance.py`), never from `CoordinatorEntity.available`: the last data stays on show through failed refreshes until `FAILURE_TOLERANCE` of them in a row, at least two regular intervals apart from first to last, confirm the failure, and a rejected key confirms it at once. A coordinator whose sensors show its data derives from `TolerantCoordinator` and implements `_async_fetch`; its sensors derive from `TolerantEntity`. The ticker and history coordinators apply the same rule to a single asset or timeframe. A refresh that fails as a whole counts for every one of them, so a value from before a confirmed outage never comes back after it. This deliberately departs from Home Assistant's quality-scale rule `entity-unavailable` (the maintainer's decision, 2026-09-27): do not "fix" it back.
 
 **Never log the API key.** No `exc_info=True` on API error logging — tracebacks can carry the key. `diagnostics.py` must keep it redacted.
 

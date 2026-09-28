@@ -491,6 +491,13 @@ def test_sum_rewards_tolerates_unknown_operation_type():
     assert sum_rewards(ops) == {}
 
 
+def test_sum_rewards_survives_a_reward_without_transactions():
+    """`transactions: null` is a reward with nothing to count, not an error
+    that would stop every later rewards refresh while it stays in the
+    history."""
+    assert sum_rewards([{"operation_type": "reward", "transactions": None}]) == {}
+
+
 def test_sum_rewards_picks_the_later_timestamp_across_formats():
     """Same second, one with a fraction and one without — string compare fails here."""
     ops = [

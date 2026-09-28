@@ -400,7 +400,7 @@ def sum_rewards(operations: list[dict[str, Any]]) -> dict[str, RewardTotals]:
     for operation in operations:
         if operation.get("operation_type") != "reward":
             continue
-        for tx in operation.get("transactions", []):
+        for tx in operation.get("transactions") or []:
             if tx.get("wallet_owner") != "staking-service":
                 continue
             asset_id = tx.get("asset_id")

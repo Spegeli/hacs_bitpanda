@@ -295,7 +295,10 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
             price = convert_price(ticker.get("price"), None)
             if price is not None:
                 prices[asset_id] = price
-                del self._marks[asset_id]
+                # A round that overlapped this one may have removed the mark
+                # while this request was under way: Home Assistant 2025.5
+                # lets a refresh by hand run during a scheduled one.
+                self._marks.pop(asset_id, None)
 
         # Fresh prices only: last prices carried over never keep a round from
         # failing as a whole.

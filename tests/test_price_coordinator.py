@@ -1,4 +1,5 @@
 """Tests for the keyless ticker coordinator and the ECB coordinator."""
+import asyncio
 from contextlib import contextmanager
 from datetime import timedelta
 import logging
@@ -707,6 +708,44 @@ async def test_an_outage_cannot_leave_two_hanging_assets_in_front(freezer):
         answering_first,
     ]
     assert coordinator.data == dict.fromkeys(("a", "b", "c", "d"), 1.0)
+
+
+# --- Overlapping rounds ---------------------------------------------------------------
+#
+# Home Assistant 2025.5 takes no lock around a refresh: a refresh by hand
+# (bitpanda.refresh) can run while a scheduled one waits for an answer.
+
+
+class _HeldClient(_Client):
+    """A _Client whose first request for `held` waits: it sets `asked`, and
+    answers once `answer` is set."""
+
+    def __init__(self, prices, held):
+        super().__init__(prices)
+        self.held = held
+        self.asked = asyncio.Event()
+        self.answer = asyncio.Event()
+
+    async def async_get_ticker(self, asset_id):
+        if asset_id == self.held and not self.asked.is_set():
+            self.asked.set()
+            await self.answer.wait()
+        return await super().async_get_ticker(asset_id)
+
+
+async def test_two_overlapping_rounds_both_return_data():
+    """Round A waits for Bitcoin's answer. Meanwhile round B asks for both
+    assets -- Solana first, as A has marked Bitcoin -- and completes;
+    Bitcoin's fresh price removes its mark. Then Bitcoin answers A, whose
+    fresh price finds no mark left to remove: both rounds return data."""
+    client = _HeldClient({BTC: "1.00000000", SOL: "2.00000000"}, held=BTC)
+    coordinator = _coordinator(client)
+    round_a = asyncio.create_task(coordinator._async_update_data())
+    await client.asked.wait()
+    assert await coordinator._async_update_data() == {BTC: 1.0, SOL: 2.0}
+    client.answer.set()
+    assert await round_a == {BTC: 1.0, SOL: 2.0}
+    assert client.calls == [SOL, BTC, BTC, SOL]
 
 
 # --- TickerCoordinator through Home Assistant's refresh -----------------------------

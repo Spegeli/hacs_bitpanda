@@ -97,17 +97,40 @@ _CURRENT_MAJORS = {
     "softprops/action-gh-release": "v3",
 }
 
+_COMMIT = re.compile(r"[0-9a-f]{40}")
+
+# A `uses:` key as the workflows spell it. An action pinned to a commit names
+# the release of that commit in a comment: `uses: owner/action@<sha> # v3.0.3`.
+_USES = re.compile(r"^\s*(?:- )?uses: (\S+)(?: # (v\d+)\.\d+\.\d+)?$", re.MULTILINE)
+
+
+def _uses(name: str) -> list[tuple[str, str]]:
+    """Every `uses:` of the workflow file `name`, in file order, with the
+    major its comment names ("" without one). Read from the raw text:
+    YAML drops comments."""
+    return _USES.findall((_WORKFLOWS / name).read_text(encoding="utf-8"))
+
 
 def test_actions_use_their_current_major():
     """All workflows move to a new major together, so none is left behind
-    on one GitHub stops supporting."""
+    on one GitHub stops supporting. An action pinned to a commit counts by
+    the release its comment names."""
     outdated = []
     for name, workflow in _every_workflow():
-        for job in workflow["jobs"].values():
-            for step in job.get("steps", []):
-                action, _, ref = step.get("uses", "").partition("@")
-                if action in _CURRENT_MAJORS and ref != _CURRENT_MAJORS[action]:
-                    outdated.append((name, step["uses"]))
+        uses = _uses(name)
+        # The raw text misses no `uses:` GitHub reads.
+        assert [value for value, _ in uses] == [
+            item["uses"]
+            for job in workflow["jobs"].values()
+            for item in [job, *job.get("steps", [])]
+            if "uses" in item
+        ], name
+        for value, major in uses:
+            action, _, ref = value.partition("@")
+            if _COMMIT.fullmatch(ref):
+                ref = major
+            if action in _CURRENT_MAJORS and ref != _CURRENT_MAJORS[action]:
+                outdated.append((name, value))
     assert outdated == []
 
 
@@ -848,7 +871,15 @@ def test_publish_releases_the_tag_with_the_generated_notes():
     }
     create, explain = jobs["publish"]["steps"]
     assert "if" not in create
-    assert create["uses"] == "softprops/action-gh-release@v3"
+    # Pinned to the commit of release v3.0.3: a tag can be moved to other
+    # code, a commit cannot. This step holds the contents: write token.
+    assert create["uses"] == (
+        "softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64"
+    )
+    assert (create["uses"], "v3") in _uses(_RELEASE)
+    assert f"uses: {create['uses']} # v3.0.3\n" in (_WORKFLOWS / _RELEASE).read_text(
+        encoding="utf-8"
+    )
     assert create["with"] == {
         "tag_name": "${{ needs.commit.outputs.tag }}",
         "name": "v${{ needs.commit.outputs.version }}",

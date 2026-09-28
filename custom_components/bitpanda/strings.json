@@ -63,7 +63,7 @@
       },
       "confirm_currency": {
         "title": "Change the currency?",
-        "description": "Changing the currency from {old} to {new} deletes all Portfolio sensors including their history and recreates them in the new currency. This cannot be undone. Select \"Submit\" to continue, or close this dialog to keep {old}."
+        "description": "Changing the currency from {old} to {new} deletes all Portfolio sensors including their history and recreates them in the new currency. The deleted history cannot be restored; the currency itself can be changed again at any time.\n\nSelect \"Submit\" to change the currency. To keep {old}, close this dialog with the \"X\" instead: nothing changes then, and a new API key you entered is not saved either."
       }
     },
     "error": {

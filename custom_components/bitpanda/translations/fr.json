@@ -63,7 +63,7 @@
       },
       "confirm_currency": {
         "title": "Changer de devise ?",
-        "description": "Passer de {old} à {new} supprime tous les capteurs du Portfolio, y compris leur historique, puis les recrée dans la nouvelle devise. Cette action est irréversible. Cliquez sur « Valider » pour continuer, ou fermez cette boîte de dialogue pour conserver {old}."
+        "description": "Passer de {old} à {new} supprime tous les capteurs du Portfolio, y compris leur historique, puis les recrée dans la nouvelle devise. L'historique supprimé ne peut pas être restauré ; la devise elle-même peut être modifiée à nouveau à tout moment.\n\nCliquez sur « Valider » pour changer de devise. Pour conserver {old}, fermez plutôt cette boîte de dialogue avec le « X » : rien ne change alors, et une nouvelle clé API saisie n'est pas enregistrée non plus."
       }
     },
     "error": {

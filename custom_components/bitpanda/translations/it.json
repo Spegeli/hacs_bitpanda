@@ -63,7 +63,7 @@
       },
       "confirm_currency": {
         "title": "Cambiare la valuta?",
-        "description": "Passare da {old} a {new} elimina tutti i sensori del Portfolio, cronologia inclusa, e li ricrea nella nuova valuta. L'operazione non può essere annullata. Seleziona \"Invia\" per continuare oppure chiudi questa finestra per mantenere {old}."
+        "description": "Passare da {old} a {new} elimina tutti i sensori del Portfolio, cronologia inclusa, e li ricrea nella nuova valuta. La cronologia eliminata non può essere ripristinata; la valuta stessa si può cambiare di nuovo in qualsiasi momento.\n\nSeleziona \"Invia\" per cambiare valuta. Per mantenere {old}, chiudi invece questa finestra con la \"X\": così non cambia nulla e anche una nuova chiave API inserita non viene salvata."
       }
     },
     "error": {

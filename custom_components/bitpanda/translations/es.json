@@ -63,7 +63,7 @@
       },
       "confirm_currency": {
         "title": "¿Cambiar la moneda?",
-        "description": "Cambiar la moneda de {old} a {new} elimina todos los sensores del Portfolio, incluido su historial, y los vuelve a crear en la nueva moneda. Esto no se puede deshacer. Pulsa \"Enviar\" para continuar o cierra este cuadro de diálogo para conservar {old}."
+        "description": "Cambiar la moneda de {old} a {new} elimina todos los sensores del Portfolio, incluido su historial, y los vuelve a crear en la nueva moneda. El historial eliminado no se puede recuperar; la moneda en sí se puede volver a cambiar en cualquier momento.\n\nPulsa \"Enviar\" para cambiar la moneda. Para conservar {old}, cierra este cuadro de diálogo con la \"X\": así no cambia nada y tampoco se guarda una nueva clave API que hayas introducido."
       }
     },
     "error": {

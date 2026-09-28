@@ -63,7 +63,7 @@
       },
       "confirm_currency": {
         "title": "Währung ändern?",
-        "description": "Wenn du die Währung von {old} auf {new} änderst, werden alle Portfolio-Sensoren samt Verlauf gelöscht und in der neuen Währung neu angelegt. Das lässt sich nicht rückgängig machen. Klicke auf „OK“, um fortzufahren, oder schließe diesen Dialog, um {old} zu behalten."
+        "description": "Wenn du die Währung von {old} auf {new} änderst, werden alle Portfolio-Sensoren samt Verlauf gelöscht und in der neuen Währung neu angelegt. Der gelöschte Verlauf lässt sich nicht wiederherstellen; die Währung selbst kannst du später jederzeit wieder ändern.\n\nKlicke auf „OK“, um die Währung zu ändern. Möchtest du doch bei {old} bleiben, schließe den Dialog über das „X“. Dann ändert sich nichts, auch ein neu eingegebener API-Schlüssel wird nicht gespeichert."
       }
     },
     "error": {

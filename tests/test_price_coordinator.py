@@ -424,8 +424,9 @@ async def test_a_rate_limit_doubles_the_interval_and_is_logged_once(caplog):
             await coordinator._async_update_data()
         assert coordinator.update_interval == base * 4
     assert caplog.text.count("rate-limited") == 1
-    # The first 429 stops the round: no further requests after it.
-    assert client.calls == [BTC, BTC]
+    # The first 429 stops the round: no further requests after it. Bitcoin,
+    # whose request got it, is asked for last in the next round.
+    assert client.calls == [BTC, SOL]
 
     client.rate_limited = False
     await coordinator._async_update_data()
@@ -467,7 +468,8 @@ async def test_a_rate_limited_round_counts_for_every_asset(caplog, freezer):
 # through a hanging connection would take one timeout per tracked asset, and
 # stretch the tolerance with their number.
 
-# Five tracked assets, asked for in this order while each has a fresh price.
+# Five tracked assets, asked for in this order while each one's latest
+# request brought a fresh price.
 _FIVE = {f"asset-{number}": f"Asset {number}" for number in range(5)}
 
 
@@ -534,16 +536,26 @@ async def test_an_answered_request_breaks_a_run_of_unanswered_ones(answer):
     assert client.calls == list(_FIVE)
 
 
-async def test_the_assets_without_a_fresh_price_are_asked_for_last(freezer):
-    """The first and the third asset fail: from the next round on they are
-    asked for after the others, each group in tracked order -- and all in
-    tracked order again once their prices are back."""
+@pytest.mark.parametrize("failure", ["http_404", "timeout", "no_usable_price"])
+async def test_the_assets_without_a_fresh_price_are_asked_for_last(freezer, failure):
+    """The first and the third asset get no fresh price -- their requests
+    fail, or are answered without a usable price: from the next round on
+    they are asked for after the others, each group in tracked order -- and
+    all in tracked order again once their prices are back."""
     first, second, third, fourth, fifth = _FIVE
     client = _Client(dict.fromkeys(_FIVE, "1.00000000"))
     coordinator = _coordinator(client, _FIVE)
+
+    def without_a_fresh_price(assets):
+        client.failing = set(assets) if failure == "http_404" else set()
+        client.errors = dict.fromkeys(assets, "timeout") if failure == "timeout" else {}
+        for asset in _FIVE:
+            unusable = failure == "no_usable_price" and asset in assets
+            client.prices[asset] = "n/a" if unusable else "1.00000000"
+
     asked = []
-    for failing in ({first, third}, {first, third}, set(), set()):
-        client.failing = failing
+    for assets in ({first, third}, {first, third}, set(), set()):
+        without_a_fresh_price(assets)
         asked.append(await _asked_for(coordinator, client, freezer))
     late = [second, fourth, fifth, first, third]
     assert asked == [list(_FIVE), late, late, list(_FIVE)]
@@ -565,6 +577,50 @@ async def test_an_asset_that_never_answers_cannot_stop_the_rounds(freezer):
         shown.append(coordinator.data)
     assert asked == [["hanging", BTC, SOL]] + [[BTC, SOL, "hanging"]] * 3
     assert shown == [{BTC: 1.0, SOL: 2.0}] * 4
+
+
+async def test_two_assets_that_never_answer_stop_only_the_first_round(freezer):
+    """The first two tracked assets never answer, the others do. The first
+    round asks them first and stops as a whole. It counts for every asset,
+    yet only the two it asked go last: from the second round on they are
+    asked for after the others, whose fresh prices keep every round from
+    failing."""
+    first, second, third, fourth, fifth = _FIVE
+    client = _Client(
+        dict.fromkeys(_FIVE, "1.00000000"), errors={first: "timeout", second: "timeout"}
+    )
+    coordinator = _coordinator(client, _FIVE)
+    with pytest.raises(UpdateFailed):
+        await _asked_for(coordinator, client, freezer)
+    assert client.calls == [first, second]
+    asked, shown = [], []
+    for _ in range(3):
+        asked.append(await _asked_for(coordinator, client, freezer))
+        shown.append(coordinator.data)
+    assert asked == [[third, fourth, fifth, first, second]] * 3
+    assert shown == [{third: 1.0, fourth: 1.0, fifth: 1.0}] * 3
+
+
+async def test_a_stopped_round_moves_only_the_assets_it_asked(freezer):
+    """The third asset fails, then a short outage stops the next round after
+    two requests. The two assets it asked go last in the round after it;
+    the three it did not ask keep where they were -- the fourth and the
+    fifth first, the third last. Once every price is back, all are asked
+    for in tracked order again."""
+    first, second, third, fourth, fifth = _FIVE
+    client = _Client(dict.fromkeys(_FIVE, "1.00000000"), failing={third})
+    coordinator = _coordinator(client, _FIVE)
+    assert await _asked_for(coordinator, client, freezer) == list(_FIVE)
+    client.failing = set()
+    client.errors = dict.fromkeys(_FIVE, "connection")
+    with pytest.raises(UpdateFailed):
+        await _asked_for(coordinator, client, freezer)
+    assert client.calls == [first, second]
+    client.errors = {}
+    assert await _asked_for(coordinator, client, freezer) == [
+        fourth, fifth, first, second, third
+    ]
+    assert await _asked_for(coordinator, client, freezer) == list(_FIVE)
 
 
 # --- TickerCoordinator through Home Assistant's refresh -----------------------------

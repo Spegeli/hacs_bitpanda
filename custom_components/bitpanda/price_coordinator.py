@@ -187,9 +187,12 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
     answer at all (a timeout, or no connection) before any fresh price
     arrived. An answer of any kind, an HTTP error status or an unreadable
     body too, breaks such a run, and after a fresh price nothing stops the
-    round. The assets without a fresh price in the round before are asked
-    for last, so one that keeps failing -- hanging, say -- cannot stop a
-    round.
+    round. Each round asks for the assets without a fresh price last: those
+    whose own latest request brought none -- it failed, or the price was
+    unusable --, each group in tracked order. A round that stops moves only
+    the assets it asked behind the others and leaves the rest where they
+    were, so assets that keep failing -- hanging, say -- go last once asked,
+    behind the prices that keep the rounds from failing.
     """
 
     config_entry: PriceTrackerConfigEntry
@@ -214,6 +217,10 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
         self._tracked = dict(tracked)
         # Asset -> its rounds in a row without a fresh price.
         self._streaks: dict[str, FailureStreak] = {}
+        # The assets whose own latest request brought no fresh price -- it
+        # failed, or the price was unusable: a round asks for them last. A
+        # round that stops before asking an asset leaves its mark as it was.
+        self._asked_last: set[str] = set()
         # The assets warned about: their return is logged.
         self._announced: set[str] = set()
         self._backoff = 1
@@ -238,10 +245,14 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
         prices: dict[str, float] = {}
         # Requests in a row that got no answer at all.
         unanswered = 0
-        # The assets with a fresh price in the round before come first, then
-        # those without one, each in tracked order (a stable sort).
-        order = sorted(self._tracked, key=lambda asset: asset in self._streaks)
+        # The assets in _asked_last come last, the others first, each in
+        # tracked order (a stable sort). Not by streak: a round that stops
+        # counts for every asset, the ones it never asked included, so a
+        # streak cannot tell which ones hang.
+        order = sorted(self._tracked, key=lambda asset: asset in self._asked_last)
         for asset_id in order:
+            # Asked for last in the next round, unless a fresh price comes.
+            self._asked_last.add(asset_id)
             try:
                 ticker = await self._client.async_get_ticker(asset_id)
             except BitpandaRateLimitError:
@@ -268,6 +279,7 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
             price = convert_price(ticker.get("price"), None)
             if price is not None:
                 prices[asset_id] = price
+                self._asked_last.discard(asset_id)
 
         # Fresh prices only: last prices carried over never keep a round from
         # failing as a whole.

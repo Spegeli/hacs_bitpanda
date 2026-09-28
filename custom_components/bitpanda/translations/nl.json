@@ -82,7 +82,7 @@
           "currency": "Valuta"
         },
         "data_description": {
-          "api_key": "Laat het veld leeg om de huidige sleutel te behouden. Een nieuwe sleutel van [{api_key_url}]({api_key_url}) heeft de rechten Guthaben (Balance), Transaktion (Transaction) en Earn (Read) nodig.",
+          "api_key": "Laat het veld leeg om de huidige sleutel te behouden.\nEen nieuwe sleutel van [{api_key_url}]({api_key_url}) heeft de rechten Guthaben (Balance), Transaktion (Transaction) en Earn (Read) nodig – niet Trading.",
           "currency": "Als je de valuta wijzigt, worden alle Portfolio-sensoren met hun geschiedenis verwijderd; dat bevestig je in de volgende stap."
         }
       },

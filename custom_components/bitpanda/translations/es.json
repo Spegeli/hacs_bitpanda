@@ -82,7 +82,7 @@
           "currency": "Moneda"
         },
         "data_description": {
-          "api_key": "Deja el campo vacío para conservar la clave actual. Una clave nueva de [{api_key_url}]({api_key_url}) necesita los permisos Guthaben (Balance), Transaktion (Transaction) y Earn (Read).",
+          "api_key": "Deja el campo vacío para conservar la clave actual.\nUna clave nueva de [{api_key_url}]({api_key_url}) necesita los permisos Guthaben (Balance), Transaktion (Transaction) y Earn (Read) – no Trading.",
           "currency": "Cambiar la moneda elimina todos los sensores del Portfolio, incluido su historial; lo confirmarás en el siguiente paso."
         }
       },

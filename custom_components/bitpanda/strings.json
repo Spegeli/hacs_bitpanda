@@ -82,7 +82,7 @@
           "currency": "Currency"
         },
         "data_description": {
-          "api_key": "Leave empty to keep the current key. A new key from [{api_key_url}]({api_key_url}) needs the permissions Guthaben (Balance), Transaktion (Transaction) and Earn (Read).",
+          "api_key": "Leave empty to keep the current key.\nA new key from [{api_key_url}]({api_key_url}) needs the permissions Guthaben (Balance), Transaktion (Transaction) and Earn (Read) – not Trading.",
           "currency": "Changing the currency deletes all Portfolio sensors including their history; you confirm this in the next step."
         }
       },

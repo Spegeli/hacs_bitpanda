@@ -622,6 +622,33 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
     }
 
 
+def test_the_reconfigure_key_help_has_a_line_per_sentence():
+    """Under Reconfigure's key field: that an empty field keeps the key, and
+    on a line of its own what a new key needs -- with Trading set off by a
+    dash, as in the setup's guide. In the approved English and German
+    wording."""
+    help_texts = {
+        name: _load(name)["config"]["step"]["reconfigure"]["data_description"]["api_key"]
+        for name in _FILES
+    }
+    for name, help_text in help_texts.items():
+        keep, new_key = help_text.split("\n")
+        assert "[{api_key_url}]({api_key_url})" in new_key, name
+        chosen, left_out = new_key.split(" – ")
+        assert all(p in chosen for p in ("Guthaben", "Transaktion", "Earn (Read)")), name
+        assert "Trading" in left_out and "Trading" not in keep + chosen, name
+    assert help_texts["strings.json"] == (
+        "Leave empty to keep the current key.\n"
+        "A new key from [{api_key_url}]({api_key_url}) needs the permissions Guthaben (Balance),"
+        " Transaktion (Transaction) and Earn (Read) – not Trading."
+    )
+    assert help_texts["translations/de.json"] == (
+        "Lass das Feld leer, um den aktuellen Schlüssel zu behalten.\n"
+        "Ein neuer Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen"
+        " „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading“."
+    )
+
+
 def test_german_texts_quote_the_permission_names():
     """Wherever a German text names the key's permissions, it quotes them,
     as Bitpanda's key page labels them: „Guthaben“, „Transaktion“,

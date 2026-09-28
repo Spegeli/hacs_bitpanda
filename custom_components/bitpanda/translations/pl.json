@@ -82,7 +82,7 @@
           "currency": "Waluta"
         },
         "data_description": {
-          "api_key": "Pozostaw pole puste, aby zachować obecny klucz. Nowy klucz ze strony [{api_key_url}]({api_key_url}) potrzebuje uprawnień Guthaben (Balance), Transaktion (Transaction) i Earn (Read).",
+          "api_key": "Pozostaw pole puste, aby zachować obecny klucz.\nNowy klucz ze strony [{api_key_url}]({api_key_url}) potrzebuje uprawnień Guthaben (Balance), Transaktion (Transaction) i Earn (Read) – bez uprawnienia Trading.",
           "currency": "Zmiana waluty usuwa wszystkie sensory Portfolio wraz z ich historią; potwierdzisz to w następnym kroku."
         }
       },

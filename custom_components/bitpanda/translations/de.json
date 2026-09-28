@@ -82,7 +82,7 @@
           "currency": "Währung"
         },
         "data_description": {
-          "api_key": "Lass das Feld leer, um den aktuellen Schlüssel zu behalten. Ein neuer Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“.",
+          "api_key": "Lass das Feld leer, um den aktuellen Schlüssel zu behalten.\nEin neuer Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading“.",
           "currency": "Eine Änderung der Währung löscht alle Portfolio-Sensoren samt Verlauf; das bestätigst du im nächsten Schritt."
         }
       },

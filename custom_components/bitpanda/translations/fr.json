@@ -82,7 +82,7 @@
           "currency": "Devise"
         },
         "data_description": {
-          "api_key": "Laissez le champ vide pour conserver la clé actuelle. Une nouvelle clé créée sur [{api_key_url}]({api_key_url}) doit avoir les autorisations Guthaben (Balance), Transaktion (Transaction) et Earn (Read).",
+          "api_key": "Laissez le champ vide pour conserver la clé actuelle.\nUne nouvelle clé créée sur [{api_key_url}]({api_key_url}) doit avoir les autorisations Guthaben (Balance), Transaktion (Transaction) et Earn (Read) – pas Trading.",
           "currency": "Changer de devise supprime tous les capteurs du Portfolio, y compris leur historique ; vous le confirmerez à l'étape suivante."
         }
       },

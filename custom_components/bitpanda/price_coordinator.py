@@ -187,12 +187,18 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
     answer at all (a timeout, or no connection) before any fresh price
     arrived. An answer of any kind, an HTTP error status or an unreadable
     body too, breaks such a run, and after a fresh price nothing stops the
-    round. Each round asks for the assets without a fresh price last: those
-    whose own latest request brought none -- it failed, or the price was
-    unusable --, each group in tracked order. A round that stops moves only
-    the assets it asked behind the others and leaves the rest where they
-    were, so assets that keep failing -- hanging, say -- go last once asked,
-    behind the prices that keep the rounds from failing.
+    round. Nor does such a run stop a first round, before any data: there is
+    no last price to keep yet, and setup must not stall on assets that never
+    answer.
+
+    Each round asks for the assets without a fresh price last. An asset is
+    marked when its own latest request brings none -- it failed, or the
+    price was unusable -- and a fresh price removes the mark. The unmarked
+    assets come first, in tracked order, then the marked ones, the oldest
+    mark first. So a round that stops moves the assets it asked behind every
+    other, and the next round asks different ones first: once Bitpanda
+    answers the others again, each pair of assets that keep hanging stops
+    one round at the most.
     """
 
     config_entry: PriceTrackerConfigEntry
@@ -217,10 +223,14 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
         self._tracked = dict(tracked)
         # Asset -> its rounds in a row without a fresh price.
         self._streaks: dict[str, FailureStreak] = {}
-        # The assets whose own latest request brought no fresh price -- it
-        # failed, or the price was unusable: a round asks for them last. A
-        # round that stops before asking an asset leaves its mark as it was.
-        self._asked_last: set[str] = set()
+        # Asset -> its mark: its own latest request brought no fresh price --
+        # it failed, or the price was unusable. A mark is a number from
+        # _mark_count, which counts up at each mark -- never the clock: a
+        # round asks for the marked assets last, the oldest mark first. A
+        # fresh price removes the mark; a round that stops before asking an
+        # asset leaves its mark as it was.
+        self._marks: dict[str, int] = {}
+        self._mark_count = 0
         # The assets warned about: their return is logged.
         self._announced: set[str] = set()
         self._backoff = 1
@@ -245,14 +255,20 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
         prices: dict[str, float] = {}
         # Requests in a row that got no answer at all.
         unanswered = 0
-        # The assets in _asked_last come last, the others first, each in
-        # tracked order (a stable sort). Not by streak: a round that stops
-        # counts for every asset, the ones it never asked included, so a
-        # streak cannot tell which ones hang.
-        order = sorted(self._tracked, key=lambda asset: asset in self._asked_last)
+        # A first round, before any data, never stops for requests without an
+        # answer: there is no last price whose tolerance they could stretch,
+        # and setup must not stall on assets that never answer.
+        first_round = self.data is None
+        # The assets without a mark first, in tracked order (a stable sort),
+        # then the marked ones, the oldest mark first. Not by streak: a round
+        # that stops counts for every asset, the ones it never asked
+        # included, so a streak cannot tell which ones hang.
+        order = sorted(self._tracked, key=lambda asset: self._marks.get(asset, 0))
         for asset_id in order:
-            # Asked for last in the next round, unless a fresh price comes.
-            self._asked_last.add(asset_id)
+            # Marked, behind every asset marked before, unless a fresh price
+            # comes.
+            self._mark_count += 1
+            self._marks[asset_id] = self._mark_count
             try:
                 ticker = await self._client.async_get_ticker(asset_id)
             except BitpandaRateLimitError:
@@ -269,7 +285,7 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
                 ) from None
             except BitpandaApiError as err:
                 unanswered = unanswered + 1 if err.kind in _UNANSWERED else 0
-                if not prices and unanswered >= _UNANSWERED_IN_A_ROW:
+                if not first_round and not prices and unanswered >= _UNANSWERED_IN_A_ROW:
                     # Bitpanda is out of reach, and every further request
                     # would wait for its own timeout: the round fails as a
                     # whole, below.
@@ -279,7 +295,7 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
             price = convert_price(ticker.get("price"), None)
             if price is not None:
                 prices[asset_id] = price
-                self._asked_last.discard(asset_id)
+                del self._marks[asset_id]
 
         # Fresh prices only: last prices carried over never keep a round from
         # failing as a whole.

@@ -1147,6 +1147,32 @@ async def test_one_failing_asset_keeps_its_price_through_two_rounds(hass, price_
     assert [_value(hass, bitcoin), _value(hass, solana)] == [100.0, 100.0]
 
 
+async def test_the_price_tracker_is_set_up_although_its_first_assets_never_answer(
+    hass, price_api
+):
+    """Bitcoin and Solana, tracked first, never answer; Vision does. Setup's
+    round is a first round, which asks for every asset all the same: the
+    Price Tracker is set up, Vision's price is shown, and Bitcoin's and
+    Solana's are unavailable."""
+    ticker, _ = price_api
+
+    async def _ticker(asset_id):
+        if asset_id in (BTC["id"], SOL["id"]):
+            raise BitpandaApiError("Timeout for /tickers", kind="timeout", path="/tickers")
+        return {"price": "100.00000000"}
+
+    ticker.side_effect = _ticker
+    entry = _price_entry(hass, [], price_group("crypto", BTC, SOL, VSN))
+    await _setup(hass, entry)
+    assert entry.state is ConfigEntryState.LOADED
+    assert _value(hass, "sensor.bitpanda_vision_vsn_price_tracker_eur") == 100.0
+    for entity_id in (
+        "sensor.bitpanda_bitcoin_btc_price_tracker_eur",
+        "sensor.bitpanda_solana_sol_price_tracker_eur",
+    ):
+        assert hass.states.get(entity_id).state == "unavailable"
+
+
 async def test_a_price_sensor_registered_before_keeps_its_id_and_takes_the_new_names(
     hass, price_api
 ):

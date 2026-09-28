@@ -82,8 +82,8 @@ class _Client:
     "n/a" -- no usable price -- without one. While `rate_limited` every
     request gets a 429; an asset in `errors` fails with a BitpandaApiError of
     that kind (const.API_ERROR_KINDS) -- "timeout" and "connection" get no
-    answer at all --, and one in `failing` with an HTTP 404. `calls` records
-    the requests in order."""
+    answer at all, "http_status" is an HTTP 503 --, and one in `failing` with
+    an HTTP 404. `calls` records the requests in order."""
 
     def __init__(self, prices=None, failing=(), rate_limited=False, errors=None):
         self.prices = prices or {}
@@ -98,8 +98,10 @@ class _Client:
         if self.rate_limited:
             raise BitpandaRateLimitError(f"Rate limited on {path}")
         if asset_id in self.errors:
+            kind = self.errors[asset_id]
             raise BitpandaApiError(
-                f"Request to {path} failed", kind=self.errors[asset_id], path=path
+                f"Request to {path} failed", kind=kind, path=path,
+                status=503 if kind == "http_status" else None,
             )
         if asset_id in self.failing:
             raise BitpandaApiError(
@@ -466,7 +468,8 @@ async def test_a_rate_limited_round_counts_for_every_asset(caplog, freezer):
 #
 # Every request waits for its own timeout (api.py): a round that went on
 # through a hanging connection would take one timeout per tracked asset, and
-# stretch the tolerance with their number.
+# stretch the tolerance with their number. A first round, before any data,
+# has no tolerance to stretch: it asks for every asset.
 
 # Five tracked assets, asked for in this order while each one's latest
 # request brought a fresh price.
@@ -480,68 +483,85 @@ async def _asked_for(coordinator, client, freezer) -> list[str]:
     return list(client.calls)
 
 
+async def _try_round(coordinator, client, freezer) -> tuple[list[str], bool]:
+    """The assets the next round asks for, in order, and whether it returned
+    data -- False when it failed as a whole."""
+    client.calls.clear()
+    try:
+        await _next_round(coordinator, freezer)
+    except UpdateFailed:
+        return list(client.calls), False
+    return list(client.calls), True
+
+
 @pytest.mark.parametrize(
     "kinds",
     [("timeout", "timeout"), ("connection", "connection"), ("timeout", "connection")],
     ids=["timeouts", "no_connection", "mixed"],
 )
 async def test_two_unanswered_requests_before_any_price_stop_the_round(kinds):
-    """The first two requests get no answer -- a timeout, or no connection
-    at all: the round stops, the other assets unasked. It fails as a whole,
-    like a round without a fresh price, and counts for every asset."""
+    """After a first round, the first two requests get no answer -- a
+    timeout, or no connection at all: the round stops, the other assets
+    unasked. It fails as a whole, like a round without a fresh price, and
+    counts for every asset; the last prices stay."""
     first, second, *_ = _FIVE
-    client = _Client(
-        dict.fromkeys(_FIVE, "1.00000000"), errors={first: kinds[0], second: kinds[1]}
-    )
+    client = _Client(dict.fromkeys(_FIVE, "1.00000000"))
     coordinator = _coordinator(client, _FIVE)
+    await _round(coordinator)
+    client.errors = {first: kinds[0], second: kinds[1]}
+    client.calls.clear()
     with pytest.raises(UpdateFailed) as excinfo:
-        await coordinator._async_update_data()
+        await _round(coordinator)
     assert _translation(excinfo.value) == ("bitpanda", "no_prices", None)
     assert client.calls == [first, second]
     assert coordinator.failing_assets == set(_FIVE)
-    # A first round: no last price to show.
-    assert coordinator.data is None
+    assert coordinator.data == dict.fromkeys(_FIVE, 1.0)
 
 
 async def test_unanswered_requests_after_a_fresh_price_never_stop_the_round():
-    """A timeout, a price, then two timeouts in a row: a fresh price has
-    shown that Bitpanda answers, so the round goes on to the end."""
+    """After a first round: a timeout, a price, then two timeouts in a row.
+    A fresh price has shown that Bitpanda answers, so the round goes on to
+    the end."""
     first, second, third, fourth, fifth = _FIVE
-    client = _Client(
-        dict.fromkeys(_FIVE, "1.00000000"),
-        errors={first: "timeout", third: "timeout", fourth: "timeout"},
-    )
+    client = _Client(dict.fromkeys(_FIVE, "1.00000000"))
     coordinator = _coordinator(client, _FIVE)
-    assert await coordinator._async_update_data() == {second: 1.0, fifth: 1.0}
+    await _round(coordinator)
+    client.errors = {first: "timeout", third: "timeout", fourth: "timeout"}
+    client.calls.clear()
+    await _round(coordinator)
     assert client.calls == list(_FIVE)
+    assert coordinator.failing_assets == {first, third, fourth}
 
 
 @pytest.mark.parametrize("answer", ["http_404", "unreadable", "no_usable_price"])
 async def test_an_answered_request_breaks_a_run_of_unanswered_ones(answer):
-    """A timeout, then a request that is answered, if uselessly -- with an
-    HTTP 404, an unreadable body, no usable price --, then a timeout: not
-    two in a row, so the round goes on to the end."""
+    """After a first round: a timeout, then a request that is answered, if
+    uselessly -- with an HTTP 404, an unreadable body, no usable price --,
+    then a timeout. Not two in a row, so the round goes on to the end."""
     first, second, third, fourth, fifth = _FIVE
-    client = _Client(
-        dict.fromkeys(_FIVE, "1.00000000"), errors={first: "timeout", third: "timeout"}
-    )
+    client = _Client(dict.fromkeys(_FIVE, "1.00000000"))
+    coordinator = _coordinator(client, _FIVE)
+    await _round(coordinator)
+    client.errors = {first: "timeout", third: "timeout"}
     if answer == "http_404":
         client.failing = {second}
     elif answer == "unreadable":
         client.errors[second] = "unreadable"
     else:
         del client.prices[second]
-    coordinator = _coordinator(client, _FIVE)
-    assert await coordinator._async_update_data() == {fourth: 1.0, fifth: 1.0}
+    client.calls.clear()
+    await _round(coordinator)
     assert client.calls == list(_FIVE)
+    assert coordinator.failing_assets == {first, second, third}
 
 
 @pytest.mark.parametrize("failure", ["http_404", "timeout", "no_usable_price"])
 async def test_the_assets_without_a_fresh_price_are_asked_for_last(freezer, failure):
     """The first and the third asset get no fresh price -- their requests
     fail, or are answered without a usable price: from the next round on
-    they are asked for after the others, each group in tracked order -- and
-    all in tracked order again once their prices are back."""
+    they are asked for after the others, which keep their tracked order, the
+    first before the third, as they were marked -- and all in tracked order
+    again once their prices are back."""
     first, second, third, fourth, fifth = _FIVE
     client = _Client(dict.fromkeys(_FIVE, "1.00000000"))
     coordinator = _coordinator(client, _FIVE)
@@ -579,34 +599,45 @@ async def test_an_asset_that_never_answers_cannot_stop_the_rounds(freezer):
     assert shown == [{BTC: 1.0, SOL: 2.0}] * 4
 
 
-async def test_two_assets_that_never_answer_stop_only_the_first_round(freezer):
-    """The first two tracked assets never answer, the others do. The first
-    round asks them first and stops as a whole. It counts for every asset,
-    yet only the two it asked go last: from the second round on they are
-    asked for after the others, whose fresh prices keep every round from
-    failing."""
+async def test_a_first_round_never_stops(freezer):
+    """The first two tracked assets never answer. A first round -- no data
+    yet, so no last price whose tolerance they could stretch -- asks for
+    every asset all the same: the others' prices come, and setup cannot
+    stall on the two. From the next round on they are asked for last."""
     first, second, third, fourth, fifth = _FIVE
     client = _Client(
         dict.fromkeys(_FIVE, "1.00000000"), errors={first: "timeout", second: "timeout"}
     )
     coordinator = _coordinator(client, _FIVE)
-    with pytest.raises(UpdateFailed):
-        await _asked_for(coordinator, client, freezer)
-    assert client.calls == [first, second]
     asked, shown = [], []
     for _ in range(3):
         asked.append(await _asked_for(coordinator, client, freezer))
         shown.append(coordinator.data)
-    assert asked == [[third, fourth, fifth, first, second]] * 3
+    assert asked == [list(_FIVE)] + [[third, fourth, fifth, first, second]] * 2
     assert shown == [{third: 1.0, fourth: 1.0, fifth: 1.0}] * 3
 
 
-async def test_a_stopped_round_moves_only_the_assets_it_asked(freezer):
-    """The third asset fails, then a short outage stops the next round after
-    two requests. The two assets it asked go last in the round after it;
-    the three it did not ask keep where they were -- the fourth and the
-    fifth first, the third last. Once every price is back, all are asked
-    for in tracked order again."""
+async def test_a_first_round_without_any_answer_asks_for_every_asset():
+    """Nothing answers a first round: it asks for every asset before it
+    fails as a whole, and leaves no data -- there is no last price."""
+    client = _Client(errors=dict.fromkeys(_FIVE, "timeout"))
+    coordinator = _coordinator(client, _FIVE)
+    with pytest.raises(UpdateFailed) as excinfo:
+        await coordinator._async_update_data()
+    assert _translation(excinfo.value) == ("bitpanda", "no_prices", None)
+    assert client.calls == list(_FIVE)
+    assert coordinator.failing_assets == set(_FIVE)
+    assert coordinator.data is None
+
+
+async def test_the_marked_assets_are_asked_for_oldest_mark_first(freezer):
+    """The third asset fails in a first round; then a short outage stops the
+    next round after the first two requests. Once Bitpanda answers again,
+    the assets without a mark come first, in tracked order -- the fourth and
+    the fifth, which the stopped round did not ask -- then the marked ones,
+    the oldest mark first: the third before the first and the second, which
+    the stopped round moved behind every other. With every price back, all
+    are asked for in tracked order again."""
     first, second, third, fourth, fifth = _FIVE
     client = _Client(dict.fromkeys(_FIVE, "1.00000000"), failing={third})
     coordinator = _coordinator(client, _FIVE)
@@ -618,9 +649,64 @@ async def test_a_stopped_round_moves_only_the_assets_it_asked(freezer):
     assert client.calls == [first, second]
     client.errors = {}
     assert await _asked_for(coordinator, client, freezer) == [
-        fourth, fifth, first, second, third
+        fourth, fifth, third, first, second
     ]
     assert await _asked_for(coordinator, client, freezer) == list(_FIVE)
+
+
+async def test_an_http_error_round_cannot_leave_two_hanging_assets_in_front(freezer):
+    """h1 and h2, tracked first, never answer; a and b do, except in one
+    round in which both get an HTTP 503. That round fails -- no fresh price
+    -- and leaves every asset marked, a and b before h1 and h2. So the
+    rounds after it still ask for a and b first, and complete: that round
+    is the only one that fails."""
+    tracked = {"h1": "H1", "h2": "H2", "a": "A", "b": "B"}
+    hanging = {"h1": "timeout", "h2": "timeout"}
+    client = _Client(dict.fromkeys(("a", "b"), "1.00000000"))
+    coordinator = _coordinator(client, tracked)
+    http_503 = {"a": "http_status", "b": "http_status"}
+    rounds = []
+    for errors in ({}, {}, http_503, {}, {}, {}):
+        client.errors = {**hanging, **errors}
+        rounds.append(await _try_round(coordinator, client, freezer))
+    answering_first = (["a", "b", "h1", "h2"], True)
+    assert rounds == [
+        (["h1", "h2", "a", "b"], True),
+        answering_first,
+        (["a", "b", "h1", "h2"], False),
+        answering_first,
+        answering_first,
+        answering_first,
+    ]
+    assert coordinator.data == {"a": 1.0, "b": 1.0}
+
+
+async def test_an_outage_cannot_leave_two_hanging_assets_in_front(freezer):
+    """h1 and h2, tracked first, never answer; a to d do, except in two
+    rounds without a connection, which stop after two requests each and
+    mark a to d after h1 and h2. Once the connection is back, h1 and h2
+    hold the oldest marks: the first round asks for them first and stops,
+    which moves them behind every other asset, and the rounds after it
+    complete. One round stops after the outage, no more."""
+    tracked = {name: name.upper() for name in ("h1", "h2", "a", "b", "c", "d")}
+    hanging = {"h1": "timeout", "h2": "timeout"}
+    client = _Client(dict.fromkeys(("a", "b", "c", "d"), "1.00000000"))
+    coordinator = _coordinator(client, tracked)
+    rounds = []
+    for connected in (True, True, False, False, True, True, True):
+        client.errors = hanging if connected else dict.fromkeys(tracked, "connection")
+        rounds.append(await _try_round(coordinator, client, freezer))
+    answering_first = (["a", "b", "c", "d", "h1", "h2"], True)
+    assert rounds == [
+        (["h1", "h2", "a", "b", "c", "d"], True),
+        answering_first,
+        (["a", "b"], False),
+        (["c", "d"], False),
+        (["h1", "h2"], False),
+        answering_first,
+        answering_first,
+    ]
+    assert coordinator.data == dict.fromkeys(("a", "b", "c", "d"), 1.0)
 
 
 # --- TickerCoordinator through Home Assistant's refresh -----------------------------

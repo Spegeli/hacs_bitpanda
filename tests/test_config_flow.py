@@ -261,6 +261,19 @@ async def test_portfolio_currency_step_offers_the_supported_currencies(hass):
     assert config["translation_key"] == "currency"
 
 
+async def test_the_currency_step_offers_only_the_currencies_bitpanda_lists(hass):
+    """A supported currency that /currencies does not list has no id to
+    store, so the step does not offer it, and the form refuses it."""
+    listed = [c for c in load_fixture("currencies.json") if c["symbol"] != "HUF"]
+    result = await _submit_key(hass, await _portfolio_form(hass), "good", currencies=listed)
+    config = _selector_config(_section_schema(result["data_schema"], "currency"), "currency")
+    assert "huf" not in config["options"] and len(config["options"]) == 11
+    with pytest.raises(data_entry_flow.InvalidData):
+        await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"currency": {"currency": "huf"}, **_setup_language("en")}
+        )
+
+
 async def test_portfolio_creates_the_entry(hass):
     result = await _submit_key(hass, await _portfolio_form(hass), "  good  \n")
     result = await hass.config_entries.flow.async_configure(

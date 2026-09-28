@@ -1436,6 +1436,18 @@ async def test_without_extra_currencies_the_ecb_is_never_asked(hass, price_api):
     ecb.assert_not_called()
 
 
+async def test_the_price_tracker_is_set_up_while_the_ecb_is_unreachable(hass, price_api):
+    """Without ECB rates the EUR sensors still work: a failed first fetch of
+    the rates does not fail the setup. The other currencies wait for the
+    rates, with the status `no_rate`."""
+    _, ecb = price_api
+    ecb.side_effect = EcbError("Timeout fetching the ECB rates", kind="timeout")
+    await _setup(hass, _price_entry(hass, ["USD"], price_group("crypto", BTC)))
+    assert _value(hass, "sensor.bitpanda_bitcoin_btc_price_tracker_eur") == 100.0
+    usd = hass.states.get("sensor.bitpanda_bitcoin_btc_price_tracker_usd")
+    assert (usd.state, usd.attributes["conversion"]) == ("unknown", "no_rate")
+
+
 async def test_a_new_group_gets_its_sensors_after_the_reload(hass, price_api):
     entry = _price_entry(hass, [], price_group("crypto", BTC))
     await _setup(hass, entry)

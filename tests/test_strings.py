@@ -596,8 +596,8 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
             ' \u2013 not "Trade (Read)".\n'
             "3. Copy the key and paste it below. Bitpanda shows it only once.\n\n"
             "The integration only reads with it: it cannot trade or move money.\n"
-            "Bitpanda keys are valid for one year; after that, Home Assistant asks for a new"
-            " one.\n"
+            "Bitpanda keys are valid until the date you choose when creating them, one year at"
+            " most; after that, Home Assistant asks for a new one.\n"
             'You can replace the key at any time: open the ⋮ menu of the "Bitpanda Portfolio"'
             ' entry on the Bitpanda integration page and choose "Reconfigure".'
         ),
@@ -617,8 +617,8 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
             "3. Kopiere den Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal"
             " an.\n\n"
             "Die Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\n"
-            "Bitpanda-Schlüssel gelten ein Jahr; danach fragt Home Assistant nach einem"
-            " neuen.\n"
+            "Bitpanda-Schlüssel gelten bis zu dem Datum, das du beim Erstellen wählst,"
+            " höchstens ein Jahr; danach fragt Home Assistant nach einem neuen.\n"
             "Ersetzen kannst du den Schlüssel jederzeit: Öffne auf der"
             " Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“ und"
             " wähle „Neu konfigurieren“."

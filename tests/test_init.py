@@ -1228,6 +1228,24 @@ async def test_a_price_sensor_added_without_a_value_stores_its_precision_with_th
     assert _stored_precision(hass, shiba) == 8
 
 
+async def test_a_price_sensor_added_at_zero_stores_its_precision_with_its_first_other_price(
+    hass, price_api, freezer
+):
+    """A price of 0 says no more about its size than no price: the sensor
+    added at 0 stores the decimals of its first price other than 0."""
+    ticker, _ = price_api
+    ticker.return_value = {"price": "0.00000000"}
+    await _setup(hass, _price_entry(hass, [], price_group("crypto", _SHIB)))
+    shiba = "sensor.bitpanda_shiba_inu_shib_price_tracker_eur"
+    assert _value(hass, shiba) == 0.0
+    assert _stored_precision(hass, shiba) == 2
+
+    ticker.return_value = {"price": "0.0000108"}
+    await _next_price_round(hass, freezer)
+    assert _value(hass, shiba) == 0.0000108
+    assert _stored_precision(hass, shiba) == 8
+
+
 async def test_a_converted_price_stores_its_precision_once_the_rates_arrive(
     hass, price_api, freezer
 ):

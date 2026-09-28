@@ -165,8 +165,9 @@ class PriceSensor(TolerantEntity[TickerCoordinator], SensorEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         # Home Assistant has just stored the suggested precision, from the
-        # value as it is now: without one, 2 decimals.
-        self._precision_pending = self.native_value is None
+        # value as it is now: without one, or at 0, 2 decimals. A price of 0
+        # says no more about its size than none.
+        self._precision_pending = not self.native_value
         if self._ecb is not None and self._currency != "EUR":
             self.async_on_remove(
                 self._ecb.async_add_listener(self._handle_coordinator_update, None)
@@ -182,7 +183,7 @@ class PriceSensor(TolerantEntity[TickerCoordinator], SensorEntity):
     def _handle_coordinator_update(self) -> None:
         """The ticker's listener, and for a currency other than EUR the
         ECB's too."""
-        if self._precision_pending and self.native_value is not None:
+        if self._precision_pending and self.native_value:
             self._precision_pending = False
             # Home Assistant stores it as the sensor is added and whenever
             # its registry entry changes: let it store the first value's.

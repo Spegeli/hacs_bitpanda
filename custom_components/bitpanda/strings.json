@@ -389,7 +389,7 @@
       "message": "The Portfolio device is part of the Bitpanda Portfolio service and cannot be deleted on its own. To remove it, delete the \"Bitpanda Portfolio\" entry on the Bitpanda integration page (⋮ → \"Delete\")."
     },
     "held_wallet_not_removable": {
-      "message": "You still hold {asset}, so this wallet would come straight back. It is removed automatically once you no longer hold it."
+      "message": "While you hold {asset}, this wallet cannot be deleted – it would be created again at the next refresh. Once you no longer hold {asset}, it is removed automatically."
     },
     "api_key_rejected": {
       "message": "Bitpanda rejected the API key."

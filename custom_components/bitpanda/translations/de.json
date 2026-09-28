@@ -389,7 +389,7 @@
       "message": "Das Gerät „Portfolio“ gehört zum Dienst Bitpanda Portfolio und lässt sich nicht einzeln löschen. Um es zu entfernen, lösche den Eintrag „Bitpanda Portfolio“ auf der Bitpanda-Integrationsseite (⋮ → „Löschen“)."
     },
     "held_wallet_not_removable": {
-      "message": "Du hältst {asset} noch, daher käme dieses Wallet sofort zurück. Es wird automatisch entfernt, sobald du es nicht mehr hältst."
+      "message": "Solange du {asset} besitzt, lässt sich dieses Wallet nicht löschen – es würde beim nächsten Abruf sofort wieder angelegt. Sobald du {asset} nicht mehr besitzt, wird es automatisch entfernt."
     },
     "api_key_rejected": {
       "message": "Bitpanda hat den API-Schlüssel abgelehnt."

@@ -2009,29 +2009,32 @@ async def test_the_device_page_deletes_a_price_device(hass, price_api, hass_ws_c
 # What the device page's dialog shows for each refusal: the `message` of the
 # websocket error, in the entry's language (language.py) -- English unless
 # chosen otherwise under Configure, whatever language Home Assistant runs
-# in. The trailing "." of strings.json is dropped, as Home Assistant drops it
-# from a translated exception message (translation.async_get_exception_message).
+# in. The trailing "." of strings.json stays: the message is the dialog's
+# whole text, of several sentences, so the last one must not look cut off
+# (Home Assistant would drop it, translation.async_get_exception_message).
 _REFUSALS = {
     "en": {
         "portfolio": (
             "The Portfolio device is part of the Bitpanda Portfolio service and "
             'cannot be deleted on its own. To remove it, delete the "Bitpanda '
-            'Portfolio" entry on the Bitpanda integration page (⋮ → "Delete")'
+            'Portfolio" entry on the Bitpanda integration page (⋮ → "Delete").'
         ),
         "wallet": (
-            "You still hold Vision (VSN), so this wallet would come straight "
-            "back. It is removed automatically once you no longer hold it"
+            "While you hold Vision (VSN), this wallet cannot be deleted – it would be "
+            "created again at the next refresh. Once you no longer hold Vision (VSN), "
+            "it is removed automatically."
         ),
     },
     "de": {
         "portfolio": (
             "Das Gerät „Portfolio“ gehört zum Dienst Bitpanda Portfolio und lässt sich "
             "nicht einzeln löschen. Um es zu entfernen, lösche den Eintrag „Bitpanda "
-            "Portfolio“ auf der Bitpanda-Integrationsseite (⋮ → „Löschen“)"
+            "Portfolio“ auf der Bitpanda-Integrationsseite (⋮ → „Löschen“)."
         ),
         "wallet": (
-            "Du hältst Vision (VSN) noch, daher käme dieses Wallet sofort zurück. Es "
-            "wird automatisch entfernt, sobald du es nicht mehr hältst"
+            "Solange du Vision (VSN) besitzt, lässt sich dieses Wallet nicht löschen – es "
+            "würde beim nächsten Abruf sofort wieder angelegt. Sobald du Vision (VSN) nicht "
+            "mehr besitzt, wird es automatisch entfernt."
         ),
     },
 }

@@ -475,9 +475,11 @@ async def _async_refusal(
     the message is written here, from the `exceptions` translations, in the
     entry's own language (language.py: English unless chosen otherwise under
     Configure) -- read when the refusal is written, its translations loaded
-    now if not cached yet; English stands in for a missing text -- the way
-    Home Assistant renders one: trailing full stop dropped, placeholders
-    filled. The translation fields stay, for a frontend that translates
+    now if not cached yet; English stands in for a missing text, its
+    placeholders filled. The message keeps its trailing full stop: it is the
+    dialog's whole text, of several sentences, and Home Assistant's habit of
+    dropping it from a translated message would leave the last one
+    unfinished. The translation fields stay, for a frontend that translates
     them itself. Without any text, Home Assistant renders its English
     message as before.
     """
@@ -486,7 +488,6 @@ async def _async_refusal(
     )
     message = translations.get(f"component.{DOMAIN}.exceptions.{key}.message")
     if message:
-        message = message.rstrip(".")
         if placeholders:
             with suppress(KeyError):
                 message = message.format(**placeholders)

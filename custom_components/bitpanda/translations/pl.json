@@ -389,7 +389,7 @@
       "message": "Urządzenie „Portfolio” należy do usługi Bitpanda Portfolio i nie można go usunąć osobno. Aby się go pozbyć, usuń wpis „Bitpanda Portfolio” na stronie integracji Bitpanda (⋮ → „Usuń”)."
     },
     "held_wallet_not_removable": {
-      "message": "Nadal posiadasz {asset}, więc ten portfel od razu by wrócił. Zostanie usunięty automatycznie, gdy przestaniesz posiadać to aktywo."
+      "message": "Dopóki posiadasz {asset}, tego portfela nie można usunąć – zostałby od razu utworzony ponownie przy następnym odświeżeniu. Gdy przestaniesz posiadać {asset}, zostanie usunięty automatycznie."
     },
     "api_key_rejected": {
       "message": "Bitpanda odrzuciła klucz API."

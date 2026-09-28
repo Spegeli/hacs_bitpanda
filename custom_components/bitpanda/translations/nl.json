@@ -389,7 +389,7 @@
       "message": "Het apparaat \"Portfolio\" hoort bij de dienst Bitpanda Portfolio en kan niet apart worden verwijderd. Wil je het kwijt, verwijder dan de invoer \"Bitpanda Portfolio\" op de integratiepagina van Bitpanda (⋮ → \"Verwijderen\")."
     },
     "held_wallet_not_removable": {
-      "message": "Je bezit nog {asset}, dus deze wallet zou meteen terugkomen. Hij wordt automatisch verwijderd zodra je het niet meer bezit."
+      "message": "Zolang je {asset} bezit, kan deze wallet niet worden verwijderd – hij zou bij de volgende verversing meteen opnieuw worden aangemaakt. Zodra je {asset} niet meer bezit, wordt hij automatisch verwijderd."
     },
     "api_key_rejected": {
       "message": "Bitpanda heeft de API-sleutel geweigerd."

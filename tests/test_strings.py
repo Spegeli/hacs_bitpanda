@@ -513,6 +513,21 @@ def test_the_language_field_says_what_it_sets_for_each_service():
     }
 
 
+def test_german_texts_quote_the_permission_names():
+    """Wherever a German text names the key's permissions, it quotes them,
+    as Bitpanda's key page labels them: „Guthaben“, „Transaktion“,
+    „Earn (Read)“ and „Trading“ -- in the setup, the reauth and the
+    reconfigure help as in the missing-permissions error."""
+    unquoted = [
+        (key, name)
+        for key, text in _texts(_load("translations/de.json")).items()
+        if "Berechtigung" in text
+        for name in ("Guthaben", "Transaktion", "Earn (Read)", "Trading")
+        if name in text.replace(f"„{name}“", "")
+    ]
+    assert unquoted == []
+
+
 def test_the_refresh_action_says_what_it_does():
     """The action picker shows this text alone. It says what the action
     fetches, that the call waits for it, that a call within the cooldown is

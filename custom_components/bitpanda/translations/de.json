@@ -74,7 +74,7 @@
           "api_key": "API-Schlüssel"
         },
         "data_description": {
-          "api_key": "Der neue Schlüssel braucht die Berechtigungen Guthaben, Transaktion und Earn (Read)."
+          "api_key": "Der neue Schlüssel braucht die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“."
         }
       },
       "reconfigure": {
@@ -85,7 +85,7 @@
           "currency": "Währung"
         },
         "data_description": {
-          "api_key": "Lass das Feld leer, um den aktuellen Schlüssel zu behalten. Ein neuer Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen Guthaben, Transaktion und Earn (Read).",
+          "api_key": "Lass das Feld leer, um den aktuellen Schlüssel zu behalten. Ein neuer Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“.",
           "currency": "Eine Änderung der Währung löscht alle Portfolio-Sensoren samt Verlauf; das bestätigst du im nächsten Schritt."
         }
       },
@@ -96,7 +96,7 @@
     },
     "error": {
       "invalid_auth": "Bitpanda hat diesen API-Schlüssel abgelehnt. Prüfe, ob er vollständig kopiert wurde und mindestens eine der benötigten Berechtigungen hat.",
-      "missing_scopes": "Diesem API-Schlüssel fehlen Berechtigungen: {missing_scopes}. Einem bestehenden Schlüssel lassen sich keine Berechtigungen hinzufügen. Erstelle einen neuen mit Guthaben, Transaktion und Earn (Read).",
+      "missing_scopes": "Diesem API-Schlüssel fehlen Berechtigungen: {missing_scopes}. Einem bestehenden Schlüssel lassen sich keine Berechtigungen hinzufügen. Erstelle einen neuen mit „Guthaben“, „Transaktion“ und „Earn (Read)“.",
       "rate_limited": "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
       "cannot_connect": "Bitpanda ist nicht erreichbar. Versuche es später erneut.",
       "unknown": "Unerwarteter Fehler"

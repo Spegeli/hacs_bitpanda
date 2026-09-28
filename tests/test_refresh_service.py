@@ -6,6 +6,7 @@ tracked asset; the ticker interval is what keeps the latter inside the
 self-imposed budget, so the cooldown follows it and never drops below 10 s.
 The clock is the module's own `monotonic` name, patched there alone.
 """
+import asyncio
 from datetime import timedelta
 import json
 from pathlib import Path
@@ -244,6 +245,51 @@ async def test_an_entry_unloaded_while_an_earlier_refresh_runs_is_skipped(hass):
     await _call(hass)
     assert portfolio.async_refresh.await_count == 1
     tickers.async_refresh.assert_not_awaited()
+
+
+async def test_an_entry_reloaded_during_a_refresh_is_refreshed_with_its_new_state(hass):
+    """The other entry can also be reloaded meanwhile -- an asset added in
+    another tab. It is loaded again, with new runtime data; the old
+    runtime's coordinators were shut down and refresh nothing. The call
+    refreshes the entry through its new runtime and reports that outcome."""
+    await _set_up_the_integration(hass)
+    portfolio = _Coordinator(timedelta(minutes=5))
+    old_tickers = _Coordinator(timedelta(seconds=60), fails=True)
+    new_tickers = _Coordinator(timedelta(seconds=60))
+    _loaded(hass, "portfolio", _portfolio_runtime(portfolio))
+    tracker = _loaded(
+        hass, "price_tracker", PriceTrackerRuntime(tickers=old_tickers, ecb=None)
+    )
+
+    async def _refresh_while_the_tracker_reloads() -> None:
+        tracker.runtime_data = PriceTrackerRuntime(tickers=new_tickers, ecb=None)
+
+    portfolio.async_refresh.side_effect = _refresh_while_the_tracker_reloads
+    await _call(hass)
+    old_tickers.async_refresh.assert_not_awaited()
+    assert new_tickers.async_refresh.await_count == 1
+
+
+async def test_two_calls_at_once_refresh_once(hass):
+    """Two automations on one trigger call the action together. The first
+    call starts the cooldown before its first refresh, so the second one,
+    arriving while that refresh still runs, is ignored."""
+    portfolio, tickers = await _register(hass, timedelta(seconds=60))
+    inside = asyncio.Event()
+    release = asyncio.Event()
+
+    async def _held_refresh() -> None:
+        inside.set()
+        await release.wait()
+
+    portfolio.async_refresh.side_effect = _held_refresh
+    with patch("custom_components.bitpanda.monotonic", _Clock(1000.0)):
+        calls = asyncio.gather(_call(hass), _call(hass))
+        await inside.wait()
+        release.set()
+        await calls
+    assert portfolio.async_refresh.await_count == 1
+    assert tickers.async_refresh.await_count == 1
 
 
 async def test_a_call_within_the_cooldown_stays_silent_after_a_failed_one(hass):

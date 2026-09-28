@@ -317,11 +317,12 @@ def _async_register_refresh_service(hass: HomeAssistant) -> None:
     refreshed all the same). A script or automation stops at a failed call
     unless that step continues on error.
     """
-    # Empty until the first accepted call: the monotonic clock can start near
+    # None until the first accepted call: the monotonic clock can start near
     # zero after a boot.
-    last_accepted: dict[str, float] = {}
+    last_accepted: float | None = None
 
     async def handle_refresh(call: ServiceCall) -> None:
+        nonlocal last_accepted
         entries = _loaded_entries(hass)
         if not entries:
             # Before the cooldown: a refused call refreshed nothing, so it
@@ -330,23 +331,24 @@ def _async_register_refresh_service(hass: HomeAssistant) -> None:
                 translation_domain=DOMAIN, translation_key="nothing_to_refresh"
             )
         now = monotonic()
-        previous = last_accepted.get("time")
-        runtimes = [entry.runtime_data for entry in entries]
-        if previous is not None and now - previous < _refresh_cooldown(runtimes):
+        if last_accepted is not None and now - last_accepted < _refresh_cooldown(
+            [entry.runtime_data for entry in entries]
+        ):
             _LOGGER.debug("Refresh cooldown active, ignoring call")
             return
         # A refresh that fails has asked Bitpanda all the same: it starts the
-        # cooldown like any other.
-        last_accepted["time"] = now
+        # cooldown like any other. Set before the first await: a call that
+        # arrives while this one refreshes falls within the cooldown.
+        last_accepted = now
         failed: list[str] = []
-        for entry, runtime in zip(entries, runtimes, strict=True):
-            # An earlier refresh can take a while -- a long ticker round --
-            # and an entry unloaded meanwhile, by a reload or a currency
-            # change, has lost its runtime data and has nothing to refresh:
-            # hence the runtimes taken before the first await, and the check.
+        for entry in entries:
+            # An earlier refresh can take a while -- a long ticker round. An
+            # entry unloaded meanwhile, by a reload or a currency change, has
+            # lost its runtime data and has nothing to refresh; one reloaded
+            # meanwhile has new runtime data, hence it is read only here.
             if entry.state is not ConfigEntryState.LOADED:
                 continue
-            if not await _async_refresh_now(runtime):
+            if not await _async_refresh_now(entry.runtime_data):
                 failed.append(entry.title)
         if failed:
             raise HomeAssistantError(

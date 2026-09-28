@@ -43,6 +43,7 @@ from custom_components.bitpanda.api import (
     BitpandaRateLimitError,
 )
 from custom_components.bitpanda.assets import slim_asset
+from custom_components.bitpanda.groups import async_add_asset_to_group
 from custom_components.bitpanda.const import (
     DOMAIN,
     FIRST_LOAD_RETRY_INTERVAL,
@@ -1598,6 +1599,88 @@ async def test_renaming_a_price_group_does_not_reload_the_price_tracker(hass, pr
     assert entry.state is ConfigEntryState.LOADED
     assert entry.runtime_data is runtime
     assert ticker.call_count == calls
+
+
+async def test_a_change_to_the_price_trackers_data_reloads_it(hass, price_api):
+    """Its data is part of what it tracks, beside its options and its
+    groups: a change there reloads it."""
+    entry = _price_entry(hass, [], price_group("crypto", BTC))
+    await _setup(hass, entry)
+    runtime = entry.runtime_data
+
+    hass.config_entries.async_update_entry(entry, data={**entry.data, "note": "changed"})
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.runtime_data is not runtime
+
+
+async def test_switching_new_entities_off_does_not_reload_the_price_tracker(hass, price_api):
+    """A system option other than polling changes nothing it tracks, and
+    Home Assistant reloads nothing for it either: no prices are asked for."""
+    ticker, _ = price_api
+    entry = _price_entry(hass, [], price_group("crypto", BTC))
+    await _setup(hass, entry)
+    runtime = entry.runtime_data
+    calls = ticker.call_count
+
+    hass.config_entries.async_update_entry(entry, pref_disable_new_entities=True)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.runtime_data is runtime
+    assert ticker.call_count == calls
+
+
+async def test_an_asset_added_while_the_price_tracker_starts_gets_its_price(hass, price_api):
+    """No update listener exists while the Price Tracker starts -- here the
+    first price round of a reload. An asset added to a group meanwhile is not
+    in what that start tracks: once set up, the Price Tracker sees that what
+    it tracks changed and reloads once more, and the asset gets its price."""
+    ticker, _ = price_api
+    entry = _price_entry(hass, [], price_group("crypto", BTC))
+    await _setup(hass, entry)
+    gate, entered = asyncio.Event(), asyncio.Event()
+
+    async def _held(asset_id):
+        entered.set()
+        await gate.wait()
+        return {"price": "100.00000000"}
+
+    ticker.side_effect = _held
+    # A change to what it tracks: the listener reloads, and the reload's
+    # first round waits for the gate.
+    hass.config_entries.async_add_subentry(
+        entry,
+        ConfigSubentry(
+            data=MappingProxyType({"category": "metal", "assets": {GOLD["id"]: slim_asset(GOLD)}}),
+            subentry_type="price_group",
+            title="Precious metals",
+            unique_id="metal",
+        ),
+    )
+    await entered.wait()
+    async_add_asset_to_group(hass, entry, _group(entry, "crypto"), slim_asset(SOL))
+    ticker.side_effect = None
+    gate.set()
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert _value(hass, "sensor.bitpanda_solana_sol_price_tracker_eur") == 100.0
+
+
+async def test_a_start_with_no_change_meanwhile_reloads_nothing_more(hass, price_api):
+    """After an ordinary start the check at its end finds nothing changed --
+    the empty group the start dropped is its own change -- and reloads
+    nothing: one price round, one runtime."""
+    ticker, _ = price_api
+    entry = _price_entry(hass, [], price_group("crypto", BTC, SOL), price_group("metal"))
+    await _setup(hass, entry)
+    runtime = entry.runtime_data
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert entry.runtime_data is runtime
+    assert ticker.call_count == 2
 
 
 async def _refresh(hass) -> None:

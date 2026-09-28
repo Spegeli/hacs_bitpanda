@@ -121,12 +121,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> 
     )
     # The entry's type names its service, and so its runtime data.
     if is_price_tracker:
-        entry.runtime_data = await _async_start_price_tracker(
-            hass, cast(PriceTrackerConfigEntry, entry)
-        )
-        # Made once the start has dropped empty groups and the list of legacy
-        # entities to adopt: those changes are setup's own, none to reload for.
-        reload_listener = _price_tracker_reload_listener(entry)
+        tracker = cast(PriceTrackerConfigEntry, entry)
+        _async_prepare_price_tracker(hass, tracker)
+        # What the start tracks, read before its first await: the changes
+        # the preparation made are setup's own, none to reload for.
+        at_start = _price_tracker_config(entry)
+        entry.runtime_data = await _async_start_price_tracker(hass, tracker)
+        reload_listener = _price_tracker_reload_listener(at_start)
     else:
         entry.runtime_data = await _async_start_portfolio(
             hass, cast(PortfolioConfigEntry, entry), group_titles
@@ -134,6 +135,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> 
         reload_listener = _async_reload_on_new_data_or_options
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(reload_listener))
+    if is_price_tracker and _price_tracker_config(entry) != at_start:
+        # Changed while the start awaited its first prices, before the
+        # listener existed: an asset added meanwhile would never be asked
+        # for. Reloaded once this setup is done (the reload waits for it).
+        hass.config_entries.async_schedule_reload(entry.entry_id)
     return True
 
 
@@ -181,9 +187,9 @@ async def _async_start_portfolio(
     return runtime
 
 
-async def _async_start_price_tracker(
-    hass: HomeAssistant, entry: PriceTrackerConfigEntry
-) -> PriceTrackerRuntime:
+@callback
+def _async_prepare_price_tracker(hass: HomeAssistant, entry: PriceTrackerConfigEntry) -> None:
+    """Setup's own changes to the Price Tracker, before it starts."""
     if entry.data.get(CONF_LEGACY_ADOPT):
         # Before any entity exists -- see migration.async_adopt_legacy_prices.
         migration.async_adopt_legacy_prices(hass, entry)
@@ -192,6 +198,11 @@ async def _async_start_price_tracker(
     for group in groups_of_type(entry, SUBENTRY_TYPE_PRICE_GROUP):
         if not group.data[CONF_ASSETS]:
             hass.config_entries.async_remove_subentry(entry, group.subentry_id)
+
+
+async def _async_start_price_tracker(
+    hass: HomeAssistant, entry: PriceTrackerConfigEntry
+) -> PriceTrackerRuntime:
     session = async_get_clientsession(hass)
     tracked = {
         asset_id: asset_display_label(record)
@@ -255,11 +266,11 @@ def _price_tracker_config(entry: ConfigEntry) -> tuple[Any, ...]:
 
 
 def _price_tracker_reload_listener(
-    entry: ConfigEntry,
+    at_start: tuple[Any, ...],
 ) -> Callable[[HomeAssistant, ConfigEntry], Coroutine[Any, Any, None]]:
     """The Price Tracker's update listener: it reloads the entry once what it
-    tracks (_price_tracker_config) differs from what it tracked when the
-    listener was made.
+    tracks (_price_tracker_config) differs from `at_start`, what its start
+    tracked.
 
     Home Assistant calls it on any change to the entry: a new title for the
     entry or one of its groups, or a system option, too. None of those
@@ -267,10 +278,8 @@ def _price_tracker_reload_listener(
     again. Switching polling on or off, Home Assistant reloads the entry
     itself (its config_entries/update command, at 2025.5 as at 2026.9).
     """
-    at_setup = _price_tracker_config(entry)
-
     async def _async_reload_on_new_config(hass: HomeAssistant, changed: ConfigEntry) -> None:
-        if _price_tracker_config(changed) != at_setup:
+        if _price_tracker_config(changed) != at_start:
             await hass.config_entries.async_reload(changed.entry_id)
 
     return _async_reload_on_new_config

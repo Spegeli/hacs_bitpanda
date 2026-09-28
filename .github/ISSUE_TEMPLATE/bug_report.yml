@@ -29,10 +29,11 @@ body:
         - Price Tracker (price sensors, currencies, Add price tracker)
         - Portfolio (wallet, staking and total sensors)
         - Portfolio (total value, cash, Cash Plus, returns)
-        - Upgrade from an older version
-        - Setup / Configuration flow
-        - Manual refresh service
-        - Other / not sure
+        - Setup / Configure dialogs
+        - Refresh action (bitpanda.refresh)
+        - Upgrade from a date version
+        - Documentation
+        - Other
     validations:
       required: true
 
@@ -42,6 +43,16 @@ body:
       label: Integration version
       description: Settings → Devices & Services → Bitpanda, or the `version` field in `manifest.json`.
       placeholder: e.g. 2.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: Installation method
+      options:
+        - HACS
+        - Manual
     validations:
       required: true
 
@@ -56,10 +67,11 @@ body:
   - type: input
     id: currency
     attributes:
-      label: Configured currency
+      label: Currencies involved
+      description: The Portfolio's currency, or the Price Tracker's additional currencies, if the problem concerns them.
       placeholder: e.g. EUR
     validations:
-      required: true
+      required: false
 
   - type: input
     id: asset
@@ -118,7 +130,7 @@ body:
     id: diagnostics
     attributes:
       label: Diagnostics
-      description: Settings → Devices & Services → Bitpanda → ⋮ → Download diagnostics. The API key is redacted automatically.
+      description: Settings → Devices & services → Bitpanda → ⋮ on **Bitpanda Portfolio** or **Bitpanda Price Tracker** → Download diagnostics. The API key is left out automatically.
       render: json
     validations:
       required: false

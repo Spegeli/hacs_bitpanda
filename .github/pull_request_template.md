@@ -10,6 +10,8 @@
 
 - [ ] Bug fix
 - [ ] New feature
+- [ ] Improvement (performance)
+- [ ] Security
 - [ ] Documentation
 - [ ] Refactor / code quality
 - [ ] CI / repository

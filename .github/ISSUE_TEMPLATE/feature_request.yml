@@ -23,9 +23,9 @@ body:
         - Price Tracker (price sensors, currencies, Add price tracker)
         - Portfolio (wallet, staking and total sensors)
         - Portfolio (total value, cash, Cash Plus, returns)
-        - Upgrade from an older version
-        - Setup / Configuration flow
-        - Services / automations
+        - Setup / Configure dialogs
+        - Refresh action (bitpanda.refresh)
+        - Upgrade from a date version
         - Documentation
         - Other
     validations:

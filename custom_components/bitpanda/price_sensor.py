@@ -17,7 +17,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, State
+from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -129,6 +129,9 @@ class PriceSensor(TolerantEntity[TickerCoordinator], SensorEntity):
         self._attr_native_unit_of_measurement = currency
         self._attr_device_info = price_device_info(entry_id, asset)
         self._price_24h_ago: float | None = None
+        # Whether the display precision awaits the first value
+        # (async_added_to_hass).
+        self._precision_pending = False
 
     @property
     def _rates(self) -> EcbRates | None:
@@ -161,6 +164,9 @@ class PriceSensor(TolerantEntity[TickerCoordinator], SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        # Home Assistant has just stored the suggested precision, from the
+        # value as it is now: without one, 2 decimals.
+        self._precision_pending = self.native_value is None
         if self._ecb is not None and self._currency != "EUR":
             self.async_on_remove(
                 self._ecb.async_add_listener(self._handle_coordinator_update, None)
@@ -171,6 +177,17 @@ class PriceSensor(TolerantEntity[TickerCoordinator], SensorEntity):
                 self.hass, self._async_update_24h_change, CHANGE_24H_UPDATE_INTERVAL
             )
         )
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """The ticker's listener, and for a currency other than EUR the
+        ECB's too."""
+        if self._precision_pending and self.native_value is not None:
+            self._precision_pending = False
+            # Home Assistant stores it as the sensor is added and whenever
+            # its registry entry changes: let it store the first value's.
+            self.async_registry_entry_updated()
+        super()._handle_coordinator_update()
 
     async def _async_update_24h_change(self, _: datetime | None = None) -> None:
         """Read this sensor's own value from about 24 hours ago from the recorder."""

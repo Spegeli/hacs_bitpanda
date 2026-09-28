@@ -45,11 +45,12 @@ from custom_components.bitpanda.api import (
 from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.const import (
     DOMAIN,
+    FIRST_LOAD_RETRY_INTERVAL,
     PORTFOLIO_UPDATE_INTERVAL,
     REWARDS_UPDATE_INTERVAL,
 )
 from custom_components.bitpanda.devices import find_entry_device
-from custom_components.bitpanda.ecb import EcbRates
+from custom_components.bitpanda.ecb import EcbError, EcbRates
 from custom_components.bitpanda.naming import PORTFOLIO_KEYS, portfolio_unique_id
 
 from tests.conftest import device_names_in_subentry, load_fixture, price_group, wallet_group
@@ -1171,6 +1172,78 @@ async def test_the_price_tracker_is_set_up_although_its_first_assets_never_answe
         "sensor.bitpanda_solana_sol_price_tracker_eur",
     ):
         assert hass.states.get(entity_id).state == "unavailable"
+
+
+# A micro-cap missing from assets-sample.json, as Bitpanda's catalogue lists it.
+_SHIB = {
+    "id": "516a8dfd-2800-11ec-a40d-0a69e15c2b31",
+    "symbol": "SHIB",
+    "name": "SHIBA INU",
+    "type": "cryptocoin",
+    "group": "token",
+}
+
+
+def _stored_precision(hass, entity_id) -> int:
+    """The display precision Home Assistant stored for a sensor in the entity
+    registry: the frontend rounds the sensor's state to it."""
+    options = er.async_get(hass).async_get(entity_id).options
+    return options["sensor"]["suggested_display_precision"]
+
+
+async def test_a_price_sensor_added_without_a_value_stores_its_precision_with_the_first_one(
+    hass, price_api, freezer
+):
+    """Home Assistant stores a sensor's suggested display precision as it
+    adds the sensor -- without a value, 2 decimals -- and not again as its
+    state changes. SHIBA INU's request fails in the setup round, so its
+    sensor is added without a price; its first one, a round later, stores
+    the 8 decimals it needs. Bitcoin, added with its price, keeps its 2,
+    though its next price would need 4."""
+    ticker, _ = price_api
+    prices = {BTC["id"]: "100.00000000"}
+
+    async def _ticker(asset_id):
+        if asset_id not in prices:
+            raise BitpandaApiError("Timeout for /tickers", kind="timeout", path="/tickers")
+        return {"price": prices[asset_id]}
+
+    ticker.side_effect = _ticker
+    await _setup(hass, _price_entry(hass, [], price_group("crypto", BTC, _SHIB)))
+    bitcoin = "sensor.bitpanda_bitcoin_btc_price_tracker_eur"
+    shiba = "sensor.bitpanda_shiba_inu_shib_price_tracker_eur"
+    assert hass.states.get(shiba).state == "unavailable"
+    assert _stored_precision(hass, shiba) == 2
+
+    prices.update({BTC["id"]: "5.00000000", _SHIB["id"]: "0.0000108"})
+    await _next_price_round(hass, freezer)
+    assert [_value(hass, bitcoin), _value(hass, shiba)] == [5.0, 0.0000108]
+    assert _stored_precision(hass, shiba) == 8
+    assert _stored_precision(hass, bitcoin) == 2
+
+
+async def test_a_converted_price_stores_its_precision_once_the_rates_arrive(
+    hass, price_api, freezer
+):
+    """The same for a converted price: the ECB fetch fails at setup, so the
+    USD sensor is added without a value. The rates arrive at the retry,
+    FIRST_LOAD_RETRY_INTERVAL later, and the sensor stores the precision of
+    its first value."""
+    ticker, ecb = price_api
+    ticker.return_value = {"price": "0.0000108"}
+    ecb.side_effect = EcbError("Timeout fetching the ECB rates", kind="timeout")
+    await _setup(hass, _price_entry(hass, ["USD"], price_group("crypto", _SHIB)))
+    usd = "sensor.bitpanda_shiba_inu_shib_price_tracker_usd"
+    assert hass.states.get(usd).state == "unknown"
+    assert _stored_precision(hass, usd) == 2
+
+    ecb.side_effect = None
+    freezer.tick(FIRST_LOAD_RETRY_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    # 0.0000108 EUR at 2 USD per EUR.
+    assert _value(hass, usd) == 0.0000216
+    assert _stored_precision(hass, usd) == 8
 
 
 async def test_a_price_sensor_registered_before_keeps_its_id_and_takes_the_new_names(

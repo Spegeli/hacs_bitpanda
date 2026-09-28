@@ -310,15 +310,22 @@ async def test_null_data_becomes_an_empty_result():
     [
         ("/tickers/x", "async_get_ticker", ("x",), {"data": []}, {}),
         ("/tickers/x", "async_get_ticker", ("x",), {"data": None}, {}),
-        ("/portfolio", "async_get_portfolio", (), {"data": None}, []),
+        ("/tickers/x", "async_get_ticker", ("x",), {}, {}),
+        ("/portfolio", "async_get_portfolio", (), {}, []),
+        ("/portfolio", "async_get_portfolio", (), {"data": {}}, []),
         ("/currencies", "async_get_currencies", (), {"data": []}, []),
+        ("/currencies", "async_get_currencies", (), {}, []),
     ],
-    ids=["ticker_empty_list", "ticker_null", "portfolio_null", "currencies_empty_list"],
+    ids=[
+        "ticker_empty_list", "ticker_null", "ticker_absent", "portfolio_absent",
+        "portfolio_empty_object", "currencies_empty_list", "currencies_absent",
+    ],
 )
 async def test_an_empty_data_stays_an_empty_result(path, method, args, body, expected):
-    """Review Focus 1: however it is spelled -- an absent key, `null` or an
-    empty list -- an empty `data` stays today's empty result. K1's tighter
-    shape checks must not mistake it for a wrong shape."""
+    """However it is spelled -- an absent key, `null`, an empty list or an
+    empty object -- an empty `data` stays an empty result: the shape checks
+    must not mistake it for a wrong shape. (`null` for /portfolio:
+    test_null_data_becomes_an_empty_result.)"""
     with mock_aiohttp_client() as mocker:
         mocker.get(f"{API_BASE_URL}{path}", json=body)
         async with mocker.create_session(asyncio.get_running_loop()) as session:
@@ -330,10 +337,16 @@ async def test_an_empty_data_stays_an_empty_result(path, method, args, body, exp
     ("path", "method", "args", "body"),
     [
         ("/portfolio", "async_get_portfolio", (), {"data": "not-a-list"}),
+        ("/portfolio", "async_get_portfolio", (), {"data": ["not-an-object"]}),
         ("/currencies", "async_get_currencies", (), {"data": "not-a-list"}),
+        ("/currencies", "async_get_currencies", (), {"data": ["not-an-object"]}),
         ("/portfolio-history", "async_get_portfolio_history", (), {"data": "not-a-dict"}),
     ],
-    ids=["portfolio_data_not_a_list", "currencies_data_not_a_list", "history_data_not_a_dict"],
+    ids=[
+        "portfolio_data_not_a_list", "portfolio_item_not_an_object",
+        "currencies_data_not_a_list", "currencies_item_not_an_object",
+        "history_data_not_a_dict",
+    ],
 )
 async def test_a_present_data_of_the_wrong_shape_is_unreadable(path, method, args, body):
     """A present `data` that is not the shape its endpoint promises -- a

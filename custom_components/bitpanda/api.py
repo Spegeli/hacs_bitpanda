@@ -265,12 +265,14 @@ class BitpandaApiClient:
 
         A page whose `data` is not a list, or whose items are not objects,
         is as unreadable as a malformed body: an id could not be read from it
-        either way.
+        either way. So is an id that is no string or number, and a
+        `next_cursor` that is no string: neither can be compared with the ones
+        seen before.
         """
         params = dict(params)
         params.setdefault("page_size", MAX_PAGE_SIZE)
         out: list[dict[str, Any]] = []
-        seen: set[str] = set()
+        seen: set[str | int] = set()
         sent_cursors: set[str] = set()
 
         for _ in range(_MAX_PAGES):
@@ -280,6 +282,8 @@ class BitpandaApiClient:
                 if key is None:
                     key = item.get("operation_id")
                 if key is not None:
+                    if not isinstance(key, (str, int)):
+                        raise _unreadable(path)
                     if key in seen:
                         continue
                     seen.add(key)
@@ -292,6 +296,8 @@ class BitpandaApiClient:
                     f"{path} announced another page but sent no cursor",
                     kind=ERROR_INCOMPLETE_LISTING, path=path,
                 )
+            if not isinstance(cursor, str):
+                raise _unreadable(path)
             if cursor_fix is not None:
                 cursor = cursor_fix(cursor)
             if cursor in sent_cursors:

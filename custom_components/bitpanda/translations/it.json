@@ -31,12 +31,12 @@
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "Le valute aggiuntive sono facoltative; puoi sceglierle anche in seguito con \"Configura\" (⚙) sulla voce \"Bitpanda Price Tracker\" nella pagina dell'integrazione Bitpanda. Aggiungi poi gli asset con \"Aggiungi monitoraggio prezzo\" sulla stessa voce.",
+        "description": "Il Bitpanda Price Tracker crea sempre un sensore di prezzo in EUR per ogni asset monitorato. Facoltativamente, scegli qui valute aggiuntive in cui mostrare anche i prezzi.\n\nPuoi scegliere o modificare le valute aggiuntive anche in seguito con \"Configura\" (⚙) sulla voce \"Bitpanda Price Tracker\" nella pagina dell'integrazione Bitpanda. Dopo la configurazione iniziale, aggiungi gli asset con \"Aggiungi monitoraggio prezzo\" sulla stessa voce.",
         "data": {
           "extra_currencies": "Valute aggiuntive"
         },
         "data_description": {
-          "extra_currencies": "Ogni asset monitorato ha sempre un sensore di prezzo in EUR. Ogni valuta selezionata qui aggiunge un sensore in più per asset, convertito con i tassi di cambio di riferimento giornalieri della Banca centrale europea."
+          "extra_currencies": "Ogni valuta selezionata qui aggiunge un sensore in più per asset, convertito con i tassi di cambio di riferimento giornalieri della Banca centrale europea."
         }
       },
       "reauth_confirm": {

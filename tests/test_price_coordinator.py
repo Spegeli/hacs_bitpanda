@@ -358,6 +358,28 @@ async def test_an_asset_still_failing_after_a_confirmed_outage_is_left_out_at_on
     ]
 
 
+async def test_the_failing_assets_are_those_without_a_fresh_price_now(freezer):
+    """What the diagnostics report as failed: every asset without a fresh
+    price in the latest round -- Bitcoin while its last price is carried
+    over, every asset after a round that fails as a whole -- and none once
+    they answer again."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
+    coordinator = _coordinator(client)
+    await _round(coordinator)
+    seen = [coordinator.failing_assets]
+    client.failing = {BTC}
+    assert await _next_round(coordinator, freezer) == {BTC: 1.0, SOL: 2.0}
+    seen.append(coordinator.failing_assets)
+    client.failing = {BTC, SOL}
+    with pytest.raises(UpdateFailed):
+        await _next_round(coordinator, freezer)
+    seen.append(coordinator.failing_assets)
+    client.failing = set()
+    await _next_round(coordinator, freezer)
+    seen.append(coordinator.failing_assets)
+    assert seen == [set(), {BTC}, {BTC, SOL}, set()]
+
+
 async def test_a_rate_limit_doubles_the_interval_and_is_logged_once(caplog):
     client = _Client({BTC: "1.00000000", SOL: "2.00000000"}, rate_limited=True)
     coordinator = _coordinator(client)

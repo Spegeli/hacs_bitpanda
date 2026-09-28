@@ -43,6 +43,15 @@ class _History(_Coordinator):
         self.failing_timeframes = frozenset(failing)
 
 
+class _Tickers(_Coordinator):
+    """The ticker coordinator: also the assets without a fresh price now,
+    carried over or not. Asked for every 60 seconds."""
+
+    def __init__(self, data=None, failing=()):
+        super().__init__(data, interval=timedelta(seconds=60))
+        self.failing_assets = frozenset(failing)
+
+
 def _add_device(
     hass, entry, name: str, category: str | None = None, sensors: tuple[str, ...] = ("value",)
 ) -> None:
@@ -182,9 +191,7 @@ def _price_entry(hass, *, extra, ecb) -> MockConfigEntry:
         ],
     )
     entry.add_to_hass(hass)
-    entry.runtime_data = SimpleNamespace(
-        tickers=_Coordinator({"uuid-btc": 1.0}, interval=timedelta(seconds=60)), ecb=ecb
-    )
+    entry.runtime_data = SimpleNamespace(tickers=_Tickers({"uuid-btc": 1.0}), ecb=ecb)
     entry.mock_state(hass, ConfigEntryState.LOADED)
     return entry
 
@@ -199,9 +206,25 @@ async def test_price_tracker_diagnostics_list_the_groups(hass):
             {"category": "metal", "title": "My metals", "assets": [_GOLD]},
         ],
         "currencies": ["EUR", "USD"],
-        "tickers": {"last_update_success": True, "priced_assets": 1,
+        "tickers": {"last_update_success": True, "priced_assets": 1, "failed_assets": 0,
                     "update_interval_seconds": 60.0},
         "ecb": {"last_update_success": True, "rate_date": "2026-09-24"},
+    }
+
+
+async def test_price_tracker_diagnostics_count_a_carried_price_as_failed(hass):
+    """Solana's requests fail while its sensors still show its last price
+    (TickerCoordinator), and Gold's failure is confirmed, so it is left out
+    of the data: the diagnostics report the real outcome -- two failed
+    assets and one with a fresh price -- not what the sensors show."""
+    entry = _price_entry(hass, extra=[], ecb=None)
+    entry.runtime_data.tickers = _Tickers(
+        {"uuid-btc": 1.0, "uuid-sol": 2.0}, failing={"uuid-sol", "uuid-gold"}
+    )
+    result = await async_get_config_entry_diagnostics(hass, entry)
+    assert result["tickers"] == {
+        "last_update_success": True, "priced_assets": 1, "failed_assets": 2,
+        "update_interval_seconds": 60.0,
     }
 
 

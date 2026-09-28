@@ -124,9 +124,13 @@ def _price_tracker(
     if runtime is None:
         return out
     tickers = runtime.tickers
+    # The real outcome: an asset without a fresh price counts as failed
+    # while its sensors still show its last price.
+    failing = tickers.failing_assets
     out["tickers"] = {
         **_health(tickers),
-        "priced_assets": len(tickers.data or {}),
+        "priced_assets": len(set(tickers.data or {}) - failing),
+        "failed_assets": len(failing),
         "update_interval_seconds": (
             tickers.update_interval.total_seconds() if tickers.update_interval else None
         ),

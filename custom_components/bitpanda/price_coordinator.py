@@ -205,6 +205,14 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
                 self._base_interval,
             )
 
+    @property
+    def failing_assets(self) -> frozenset[str]:
+        """The assets without a fresh price in the latest round -- carried
+        over, confirmed or without a last price alike. The real outcome,
+        which diagnostics report: `data` holds the prices the sensors show,
+        carried ones included."""
+        return frozenset(self._streaks)
+
     async def _async_fetch(self, requested_at: datetime) -> dict[str, float]:
         prices: dict[str, float] = {}
         for asset_id in self._tracked:

@@ -22,7 +22,6 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .assets import asset_attributes
@@ -51,6 +50,7 @@ from .price_coordinator import (
     TickerCoordinator,
     convert_price,
 )
+from .tolerance import TolerantEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -94,11 +94,15 @@ def tracked_currencies(entry: ConfigEntry) -> list[str]:
     return ["EUR", *entry.options.get(CONF_EXTRA_CURRENCIES, [])]
 
 
-class PriceSensor(CoordinatorEntity[TickerCoordinator], SensorEntity):
+class PriceSensor(TolerantEntity[TickerCoordinator], SensorEntity):
     """Price of one asset in one currency.
 
     Named by its currency after its device, so it reads "Bitcoin (BTC) Price
-    Tracker EUR" on every Home Assistant version.
+    Tracker EUR" on every Home Assistant version. Unavailable once a failure
+    is confirmed, not at the first failed request: the whole ticker
+    update's (tolerance.py) or its asset's own, which leaves the asset out
+    of the data (TickerCoordinator) -- at once when there is no last price
+    to show.
     """
 
     _attr_has_entity_name = True

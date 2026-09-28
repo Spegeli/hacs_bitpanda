@@ -71,6 +71,9 @@ def test_convert_price_of_a_non_finite_number_is_none():
 
 # --- TickerCoordinator -------------------------------------------------------------
 
+# The regular pace of the rounds: price_interval of two tracked assets.
+_PACE = timedelta(seconds=60)
+
 
 class _Client:
     def __init__(self, prices=None, failing=(), rate_limited=False):
@@ -92,6 +95,41 @@ def _coordinator(client, tracked=None) -> TickerCoordinator:
     return TickerCoordinator(None, None, client, _TRACKED if tracked is None else tracked)
 
 
+async def _round(coordinator) -> dict:
+    """One round. Without Home Assistant, _async_update_data stores nothing:
+    its data is kept here, as DataUpdateCoordinator keeps it, for the next
+    round to carry last prices over from. A round that fails raises and
+    leaves the data as it was."""
+    coordinator.data = await coordinator._async_update_data()
+    return coordinator.data
+
+
+async def _next_round(coordinator, freezer, pace=_PACE) -> dict:
+    """The next round, `pace` after the one before."""
+    freezer.tick(pace)
+    return await _round(coordinator)
+
+
+async def _phases(coordinator, client, freezer, *phases) -> None:
+    """Rounds at the regular pace, phase by phase: each phase names the
+    assets whose requests fail and how many rounds it lasts."""
+    for failing, rounds in phases:
+        client.failing = failing
+        for _ in range(rounds):
+            await _next_round(coordinator, freezer)
+
+
+def _lines(caplog, level: int, text: str) -> list[str]:
+    """The price coordinator's log lines at `level` that mention `text`."""
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "custom_components.bitpanda.price_coordinator"
+        and record.levelno == level
+        and text in record.getMessage()
+    ]
+
+
 async def test_tickers_return_eur_prices():
     client = _Client({BTC: "73188.51648958", SOL: "150.00000000"})
     assert await _coordinator(client)._async_update_data() == {
@@ -106,14 +144,82 @@ async def test_nothing_tracked_makes_no_request():
     assert client.calls == []
 
 
-async def test_a_failing_asset_is_left_out_and_warned_about_once(caplog):
+async def test_a_failing_asset_keeps_its_last_price_for_two_rounds(caplog, freezer):
+    """Bitcoin's own request fails while Solana's answers: its last price
+    stays through two rounds at the regular pace. The third, two minutes
+    after the first, confirms the failure: Bitcoin is left out -- only its
+    own sensors go unavailable -- and warned about once."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
+    coordinator = _coordinator(client)
+    await _round(coordinator)
+    client.failing = {BTC}
+    with caplog.at_level(logging.WARNING):
+        for _ in range(2):
+            assert await _next_round(coordinator, freezer) == {BTC: 1.0, SOL: 2.0}
+        assert _lines(caplog, logging.WARNING, "Bitcoin (BTC)") == []
+        assert await _next_round(coordinator, freezer) == {SOL: 2.0}
+    assert _lines(caplog, logging.WARNING, "Bitcoin (BTC)") == [
+        "No price for Bitcoin (BTC); its price sensors are unavailable until it returns"
+    ]
+
+
+async def test_quick_rounds_never_confirm_an_assets_failure_sooner(caplog, freezer):
+    """Five failures of Bitcoin's request, ten seconds apart -- rounds asked
+    for by hand, which homeassistant.update_entity allows every ten seconds,
+    where the regular pace brings one a minute: it keeps its last price, and
+    nothing is warned about."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
+    coordinator = _coordinator(client)
+    await _round(coordinator)
+    client.failing = {BTC}
+    with caplog.at_level(logging.WARNING):
+        for _ in range(5):
+            data = await _next_round(coordinator, freezer, pace=timedelta(seconds=10))
+    assert data == {BTC: 1.0, SOL: 2.0}
+    assert _lines(caplog, logging.WARNING, "Bitcoin (BTC)") == []
+
+
+async def test_a_fresh_price_ends_an_assets_streak(freezer):
+    """Bitcoin fails twice, answers with a new price, then fails twice more,
+    at the regular pace: never three rounds in a row without a fresh price,
+    so it keeps its latest price throughout."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
+    coordinator = _coordinator(client)
+    await _round(coordinator)
+    await _phases(coordinator, client, freezer, ({BTC}, 2))
+    client.prices[BTC] = "3.00000000"
+    await _phases(coordinator, client, freezer, (set(), 1), ({BTC}, 2))
+    assert coordinator.data == {BTC: 3.0, SOL: 2.0}
+
+
+async def test_the_tolerance_stretches_with_the_price_interval(freezer):
+    """Sixty tracked assets are asked for every two minutes (price_interval),
+    and an asset's failures are timed in that interval: failing a minute
+    apart -- rounds asked for by hand -- it keeps its last price until its
+    failures span two such intervals."""
+    tracked = {f"asset-{number}": f"Asset {number}" for number in range(60)}
+    client = _Client(dict.fromkeys(tracked, "1.00000000"))
+    coordinator = _coordinator(client, tracked)
+    await _round(coordinator)
+    client.failing = {"asset-0"}
+    carried = []
+    for _ in range(5):
+        carried.append("asset-0" in await _next_round(coordinator, freezer))
+    assert carried == [True, True, True, True, False]
+
+
+async def test_a_failing_asset_is_warned_about_once_its_failure_is_confirmed(caplog, freezer):
+    """Bitcoin fails from the first round on, so it has no last price to
+    keep: it is left out of every round. Its failure is warned about once it
+    is confirmed, in the third round, and not again while it lasts."""
     client = _Client({SOL: "150.00000000"}, failing={BTC})
     coordinator = _coordinator(client)
+    warned = []
     with caplog.at_level(logging.WARNING):
-        first = await coordinator._async_update_data()
-        await coordinator._async_update_data()
-    assert first == {SOL: 150.0}
-    assert caplog.text.count("Bitcoin (BTC)") == 1
+        for _ in range(4):
+            assert await _next_round(coordinator, freezer) == {SOL: 150.0}
+            warned.append(len(_lines(caplog, logging.WARNING, "Bitcoin (BTC)")))
+    assert warned == [0, 0, 1, 1]
 
 
 async def test_an_unreadable_price_counts_as_a_failure():
@@ -126,41 +232,23 @@ async def test_a_non_finite_price_counts_as_a_failure():
     assert await _coordinator(client)._async_update_data() == {SOL: 150.0}
 
 
-async def test_a_recovered_asset_is_warned_about_again_when_it_fails_again(caplog):
-    client = _Client({BTC: "1.00000000", SOL: "2.00000000"}, failing={BTC})
+async def test_a_recovered_asset_is_warned_about_again_when_it_fails_again(caplog, freezer):
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
     coordinator = _coordinator(client)
     with caplog.at_level(logging.WARNING):
-        await coordinator._async_update_data()
-        client.failing = set()
-        await coordinator._async_update_data()
-        client.failing = {BTC}
-        await coordinator._async_update_data()
+        await _phases(coordinator, client, freezer, ({BTC}, 3), (set(), 1), ({BTC}, 3))
     assert caplog.text.count("Bitcoin (BTC)") == 2
 
 
-def _lines(caplog, level: int, text: str) -> list[str]:
-    """The price coordinator's log lines at `level` that mention `text`."""
-    return [
-        record.getMessage()
-        for record in caplog.records
-        if record.name == "custom_components.bitpanda.price_coordinator"
-        and record.levelno == level
-        and text in record.getMessage()
-    ]
-
-
-async def test_a_price_that_returns_is_logged_once_at_info(caplog):
-    """The outage window is readable from the log: one WARNING when the
-    price fails, one INFO when it returns -- neither repeated while the
-    state lasts. An asset that never failed is never announced."""
-    client = _Client({BTC: "1.00000000", SOL: "2.00000000"}, failing={BTC})
+async def test_a_price_that_returns_is_logged_once_at_info(caplog, freezer):
+    """The outage window is readable from the log: one WARNING once the
+    price's failure is confirmed, one INFO when it returns -- neither
+    repeated while the state lasts. An asset that never failed is never
+    announced."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
     coordinator = _coordinator(client)
     with caplog.at_level(logging.INFO):
-        await coordinator._async_update_data()
-        await coordinator._async_update_data()
-        client.failing = set()
-        await coordinator._async_update_data()
-        await coordinator._async_update_data()
+        await _phases(coordinator, client, freezer, ({BTC}, 3), (set(), 2))
     assert len(_lines(caplog, logging.WARNING, "Bitcoin (BTC)")) == 1
     assert _lines(caplog, logging.INFO, "Bitcoin (BTC)") == [
         "Price for Bitcoin (BTC) is back; its price sensors are available again"
@@ -168,30 +256,31 @@ async def test_a_price_that_returns_is_logged_once_at_info(caplog):
     assert _lines(caplog, logging.INFO, "Solana (SOL)") == []
 
 
-async def test_each_return_of_a_price_is_logged(caplog):
-    client = _Client({BTC: "1.00000000", SOL: "2.00000000"}, failing={BTC})
+async def test_each_return_of_a_price_is_logged(caplog, freezer):
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
     coordinator = _coordinator(client)
     with caplog.at_level(logging.INFO):
-        for failing in ({BTC}, set(), {BTC}, set()):
-            client.failing = failing
-            await coordinator._async_update_data()
+        await _phases(
+            coordinator, client, freezer, ({BTC}, 3), (set(), 1), ({BTC}, 3), (set(), 1)
+        )
     assert len(_lines(caplog, logging.WARNING, "Bitcoin (BTC)")) == 2
     assert len(_lines(caplog, logging.INFO, "Bitcoin (BTC)")) == 2
 
 
-async def test_a_price_back_after_a_failed_round_is_logged_once(caplog):
-    """A round in which every request failed fails the update and leaves
-    the failed asset as it was: its return is announced once, with the next
-    round that brings it back."""
-    client = _Client({BTC: "1.00000000", SOL: "2.00000000"}, failing={BTC})
+async def test_a_price_back_after_a_failed_round_is_logged_once(caplog, freezer):
+    """A round in which every request fails fails the update: it counts for
+    every asset's streak, yet announces nothing. Bitcoin's return is
+    announced once, with the next round that brings it back; Solana, never
+    announced, is not."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
     coordinator = _coordinator(client)
     with caplog.at_level(logging.INFO):
-        await coordinator._async_update_data()
+        await _phases(coordinator, client, freezer, ({BTC}, 3))
         client.failing = {BTC, SOL}
         with pytest.raises(UpdateFailed):
-            await coordinator._async_update_data()
+            await _next_round(coordinator, freezer)
         client.failing = set()
-        await coordinator._async_update_data()
+        await _next_round(coordinator, freezer)
     assert len(_lines(caplog, logging.INFO, "Bitcoin (BTC)")) == 1
     assert _lines(caplog, logging.INFO, "Solana (SOL)") == []
 
@@ -232,6 +321,43 @@ async def test_every_asset_failing_fails_the_update():
     assert _translation(excinfo.value) == ("bitpanda", "no_prices", None)
 
 
+async def test_every_request_failing_fails_the_round_even_with_prices_to_carry():
+    """Carried prices are no answer: a round in which no request brings a
+    fresh price fails as a whole, and the tolerance of the whole update
+    takes over (tolerance.py), however many last prices there are."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
+    coordinator = _coordinator(client)
+    await _round(coordinator)
+    client.failing = {BTC, SOL}
+    with pytest.raises(UpdateFailed) as excinfo:
+        await _round(coordinator)
+    assert _translation(excinfo.value) == ("bitpanda", "no_prices", None)
+
+
+async def test_an_asset_still_failing_after_a_confirmed_outage_is_left_out_at_once(
+    caplog, freezer
+):
+    """Three rounds in a row fail as a whole at the regular pace: nothing is
+    warned about per asset, the outage is the whole update's (tolerance.py).
+    In the next round Solana answers and Bitcoin fails: it has had no fresh
+    price for four rounds, so its price from before the outage never comes
+    back -- left out at once, and warned about."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
+    coordinator = _coordinator(client)
+    await _round(coordinator)
+    client.failing = {BTC, SOL}
+    with caplog.at_level(logging.WARNING):
+        for _ in range(3):
+            with pytest.raises(UpdateFailed):
+                await _next_round(coordinator, freezer)
+        assert _lines(caplog, logging.WARNING, "No price for") == []
+        client.failing = {BTC}
+        assert await _next_round(coordinator, freezer) == {SOL: 2.0}
+    assert _lines(caplog, logging.WARNING, "No price for") == [
+        "No price for Bitcoin (BTC); its price sensors are unavailable until it returns"
+    ]
+
+
 async def test_a_rate_limit_doubles_the_interval_and_is_logged_once(caplog):
     client = _Client({BTC: "1.00000000", SOL: "2.00000000"}, rate_limited=True)
     coordinator = _coordinator(client)
@@ -260,6 +386,26 @@ async def test_a_rate_limit_backoff_is_capped():
         with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()
     assert coordinator.update_interval == base * 16
+
+
+async def test_a_rate_limited_round_counts_for_every_asset(caplog, freezer):
+    """A 429 stops the round: it raises, and nothing is logged per asset.
+    Yet it brought no fresh price, so it counts for every asset's streak:
+    Bitcoin, failing in the rounds before and after it, is confirmed in the
+    round after it, two minutes after its first failure."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
+    coordinator = _coordinator(client)
+    await _round(coordinator)
+    client.failing = {BTC}
+    await _next_round(coordinator, freezer)
+    client.rate_limited = True
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(UpdateFailed):
+            await _next_round(coordinator, freezer)
+        assert _lines(caplog, logging.WARNING, "Bitcoin (BTC)") == []
+        client.rate_limited = False
+        assert await _next_round(coordinator, freezer) == {SOL: 2.0}
+    assert len(_lines(caplog, logging.WARNING, "Bitcoin (BTC)")) == 1
 
 
 def test_a_slow_interval_is_announced_at_construction(caplog):

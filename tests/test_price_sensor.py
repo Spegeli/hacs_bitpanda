@@ -26,9 +26,14 @@ _RATES = EcbRates(date="2026-09-24", rates={"USD": 1.1367})
 
 
 class _Coordinator:
-    def __init__(self, data=None, last_update_success=True):
+    """Duck-typed coordinator: what the entities read. `data_available`
+    follows the outcome of the last refresh unless given: a failed refresh
+    whose failure is not confirmed yet leaves it True (tolerance.py)."""
+
+    def __init__(self, data=None, last_update_success=True, data_available=None):
         self.data = data
         self.last_update_success = last_update_success
+        self.data_available = last_update_success if data_available is None else data_available
 
 
 def _sensor(currency="EUR", prices=None, rates=_RATES, ecb=True):
@@ -105,6 +110,23 @@ def test_without_rates_the_sensor_publishes_a_status_key_instead_of_a_value():
 def test_a_failing_ticker_makes_only_that_asset_unavailable():
     assert _sensor("EUR", prices={GOLD["id"]: 1.0}).available is False
     assert _sensor("EUR", prices={BTC["id"]: 1.0}).available is True
+
+
+def test_a_tolerated_failure_keeps_the_price():
+    """The ticker update failed, but its failure is not confirmed yet
+    (tolerance.py): the sensor goes on showing the last price."""
+    tickers = _Coordinator(
+        {BTC["id"]: 73188.51648958}, last_update_success=False, data_available=True
+    )
+    sensor = PriceSensor(tickers, None, "eid", BTC, "EUR")
+    assert (sensor.available, sensor.native_value) == (True, 73188.51648958)
+
+
+def test_a_confirmed_failure_makes_the_price_unavailable():
+    tickers = _Coordinator(
+        {BTC["id"]: 73188.51648958}, last_update_success=False, data_available=False
+    )
+    assert PriceSensor(tickers, None, "eid", BTC, "EUR").available is False
 
 
 def test_change_24h_attributes_from_the_recorded_price():

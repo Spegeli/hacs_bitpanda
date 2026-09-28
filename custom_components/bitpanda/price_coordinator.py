@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 import math
 from typing import Any
@@ -26,6 +26,8 @@ from .const import (
 )
 from .ecb import EcbError, EcbRates, async_fetch_ecb_rates
 from .portfolio_model import DECIMALS
+from .streaks import FailureStreak
+from .tolerance import TolerantCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -148,16 +150,25 @@ def convert_price(price: Any, rate: float | None) -> float | None:
     return round(value, DECIMALS)
 
 
-class TickerCoordinator(DataUpdateCoordinator[dict[str, float]]):
+class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
     """EUR prices of the tracked assets, one keyless /tickers request each.
 
-    A failing or delisted asset is left out of the data, so only its own
-    sensors go unavailable. It is warned about once, and its return is
-    logged once at INFO. The update fails as a whole only when every request
-    fails, or on a 429, which also stops the round and backs off -- warned
-    about once when the backoff starts, logged once at INFO when a round
-    succeeds again and ends it. The whole update's own failure and recovery
+    The update fails as a whole when no request brings a fresh price, or on
+    a 429, which also stops the round and backs off -- warned about once
+    when the backoff starts, logged once at INFO when a round succeeds again
+    and ends it. The price sensors keep the last prices until the failure is
+    confirmed (tolerance.py). The whole update's own failure and recovery
     DataUpdateCoordinator logs itself.
+
+    An asset whose own request fails, or whose price is unusable, while
+    others answer follows the same rule on its own: it keeps its last price
+    until its own streak is confirmed, then it is left out of the data, so
+    only its own sensors go unavailable -- a delisted asset's after three
+    rounds, and at once when there is no last price. Every round without a
+    fresh price counts for an asset, one that fails as a whole included: so
+    a price from before a confirmed outage never comes back after it. An
+    asset is warned about once its failure is confirmed, in a round that
+    returns data, and its return is logged once at INFO.
     """
 
     config_entry: PriceTrackerConfigEntry
@@ -175,11 +186,15 @@ class TickerCoordinator(DataUpdateCoordinator[dict[str, float]]):
             _LOGGER,
             name=f"{DOMAIN}_tickers",
             update_interval=self._base_interval,
+            regular_interval=self._base_interval,
             config_entry=entry,
         )
         self._client = client
         self._tracked = dict(tracked)
-        self._failing: set[str] = set()
+        # Asset -> its rounds in a row without a fresh price.
+        self._streaks: dict[str, FailureStreak] = {}
+        # The assets warned about: their return is logged.
+        self._announced: set[str] = set()
         self._backoff = 1
         if self._base_interval > _SLOW_INTERVAL:
             _LOGGER.warning(
@@ -190,9 +205,8 @@ class TickerCoordinator(DataUpdateCoordinator[dict[str, float]]):
                 self._base_interval,
             )
 
-    async def _async_update_data(self) -> dict[str, float]:
+    async def _async_fetch(self, requested_at: datetime) -> dict[str, float]:
         prices: dict[str, float] = {}
-        failed: set[str] = set()
         for asset_id in self._tracked:
             try:
                 ticker = await self._client.async_get_ticker(asset_id)
@@ -204,19 +218,20 @@ class TickerCoordinator(DataUpdateCoordinator[dict[str, float]]):
                     )
                 self._backoff = min(self._backoff * 2, _MAX_BACKOFF)
                 self.update_interval = self._base_interval * self._backoff
+                self._count_for_every_asset(requested_at)
                 raise UpdateFailed(
                     translation_domain=DOMAIN, translation_key="prices_rate_limited"
                 ) from None
             except BitpandaApiError:
-                failed.add(asset_id)
                 continue
             price = convert_price(ticker.get("price"), None)
-            if price is None:
-                failed.add(asset_id)
-                continue
-            prices[asset_id] = price
+            if price is not None:
+                prices[asset_id] = price
 
+        # Fresh prices only: last prices carried over never keep a round from
+        # failing as a whole.
         if self._tracked and not prices:
+            self._count_for_every_asset(requested_at)
             raise UpdateFailed(translation_domain=DOMAIN, translation_key="no_prices")
 
         if self._backoff != 1:
@@ -226,22 +241,63 @@ class TickerCoordinator(DataUpdateCoordinator[dict[str, float]]):
                 "Bitpanda answers the price requests again; back to polling every %s",
                 self._base_interval,
             )
+        return self._tolerate_failed_assets(prices, requested_at)
 
-        for asset_id in failed - self._failing:
-            _LOGGER.warning(
-                "No price for %s; its price sensors are unavailable until it "
-                "returns",
-                self._tracked[asset_id],
-            )
-        # Every tracked asset was asked for in this round: one that failed
-        # before and not now has its price back.
-        for asset_id in self._failing - failed:
-            _LOGGER.info(
-                "Price for %s is back; its price sensors are available again",
-                self._tracked[asset_id],
-            )
-        self._failing = failed
-        return prices
+    def _count_for_every_asset(self, requested_at: datetime) -> None:
+        """Add a round that fails as a whole to every asset's streak,
+        creating the missing ones: it brought no fresh price for any of
+        them. It warns about no asset -- the whole update's outage is warned
+        about once confirmed (tolerance.py) -- so the next round that returns
+        data warns about each asset still failing whose streak is confirmed.
+        """
+        for asset_id in self._tracked:
+            self._streaks.setdefault(asset_id, FailureStreak()).add(requested_at)
+
+    def _tolerate_failed_assets(
+        self, prices: dict[str, float], requested_at: datetime
+    ) -> dict[str, float]:
+        """The round's data: the fresh `prices`, and the last price of each
+        asset whose failure is not confirmed yet.
+
+        Every tracked asset was asked for in this round: one missing from
+        `prices` failed -- its request, or its price was unusable -- and adds
+        a failure, asked for at `requested_at`, to its streak. Until
+        FailureStreak's rule confirms the streak at the regular pace, the
+        asset keeps the price `data` still holds for it, if any. Once
+        confirmed, it is left out and warned about once. A fresh price ends
+        the streak, and the return of an asset warned about is logged once.
+        """
+        data: dict[str, float] = {}
+        last = self.data or {}
+        for asset_id, label in self._tracked.items():
+            if asset_id in prices:
+                data[asset_id] = prices[asset_id]
+                self._streaks.pop(asset_id, None)
+                if asset_id in self._announced:
+                    self._announced.remove(asset_id)
+                    _LOGGER.info(
+                        "Price for %s is back; its price sensors are available again",
+                        label,
+                    )
+                continue
+            streak = self._streaks.setdefault(asset_id, FailureStreak())
+            streak.add(requested_at)
+            if not streak.confirmed(self._regular_interval):
+                if asset_id in last:
+                    data[asset_id] = last[asset_id]
+                _LOGGER.debug(
+                    "No price for %s: failure %s in a row, not confirmed yet",
+                    label,
+                    streak.count,
+                )
+            elif asset_id not in self._announced:
+                self._announced.add(asset_id)
+                _LOGGER.warning(
+                    "No price for %s; its price sensors are unavailable until it "
+                    "returns",
+                    label,
+                )
+        return data
 
 
 class EcbCoordinator(DataUpdateCoordinator[EcbRates]):

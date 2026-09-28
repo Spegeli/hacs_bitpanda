@@ -1079,6 +1079,41 @@ async def test_price_tracker_setup_creates_one_sensor_per_asset_and_currency(has
     assert device.name == "Bitcoin (BTC) Price Tracker"
 
 
+async def _next_price_round(hass, freezer) -> None:
+    """The Price Tracker's next regular round: Home Assistant's clock moves
+    on past its update interval -- 60 seconds for a few assets -- and the
+    refresh it scheduled runs to its end, a background task."""
+    freezer.tick(timedelta(seconds=61))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+
+async def test_prices_keep_their_value_through_two_failed_rounds(hass, price_api, freezer):
+    """No ticker request reaches Bitpanda: the prices keep their last values,
+    in every currency, through two rounds. The third, two minutes after the
+    first, confirms the outage: unavailable until Bitpanda answers again."""
+    ticker, _ = price_api
+    await _setup(hass, _price_entry(hass, ["USD"], price_group("crypto", BTC)))
+    prices = [
+        "sensor.bitpanda_bitcoin_btc_price_tracker_eur",
+        "sensor.bitpanda_bitcoin_btc_price_tracker_usd",
+    ]
+    ticker.side_effect = BitpandaApiError(
+        "Cannot connect to /tickers", kind="connection", path="/tickers"
+    )
+
+    for _ in range(2):
+        await _next_price_round(hass, freezer)
+        assert [_value(hass, entity_id) for entity_id in prices] == [100.0, 200.0]
+
+    await _next_price_round(hass, freezer)
+    assert [hass.states.get(entity_id).state for entity_id in prices] == ["unavailable"] * 2
+
+    ticker.side_effect = None
+    await _next_price_round(hass, freezer)
+    assert [_value(hass, entity_id) for entity_id in prices] == [100.0, 200.0]
+
+
 async def test_a_price_sensor_registered_before_keeps_its_id_and_takes_the_new_names(
     hass, price_api
 ):
@@ -1169,10 +1204,12 @@ async def test_the_price_tracker_polls_the_assets_of_every_group(hass, price_api
 
 
 async def test_the_price_tracker_names_a_stock_etf_or_etc_with_its_isin(
-    hass, price_api, caplog
+    hass, price_api, caplog, freezer
 ):
     """Its device, its sensors and the log carry the ISIN in the label; the
-    log names the asset itself, without the device's " Price Tracker"."""
+    log names the asset itself, without the device's " Price Tracker". The
+    asset's failure is warned about once it is confirmed, at the third
+    round."""
     ticker, _ = price_api
     top500 = _fixture("SXR8", "security")
 
@@ -1184,6 +1221,8 @@ async def test_the_price_tracker_names_a_stock_etf_or_etc_with_its_isin(
     ticker.side_effect = _ticker
     entry = _price_entry(hass, [], price_group("crypto", BTC), price_group("etf", top500))
     await _setup(hass, entry)
+    for _ in range(2):
+        await _next_price_round(hass, freezer)
     registry_entry = er.async_get(hass).async_get(
         "sensor.bitpanda_top_500_us_stocks_x_acc_sxr8_ie00b5bmr087_price_tracker_eur"
     )

@@ -172,6 +172,14 @@ Entity IDs are English and fixed, whatever language Home Assistant runs in: `sen
 
 When two assets share a label, Home Assistant appends `_2` to the second one's ID.
 
+### Resetting names and entity IDs
+
+To go back to the names and entity IDs the integration gives, reset them in Home Assistant itself — deleting a device does not do it. The wallet of an asset you hold cannot be deleted, and a device that comes back, even after its whole group was deleted, gets your changes back: from Home Assistant 2025.7 on, it keeps the name, area and labels you gave it, and each of its sensors its name, icon, area, labels and entity ID.
+
+1. **Device name:** on the device page, select the pencil, clear the name and save. The device shows its default name again.
+2. **Sensor name and icon:** in the sensor's settings, clear **Name** or **Icon** and save.
+3. **Entity ID:** in the sensor's settings, select **Restore entity ID** (Home Assistant 2025.6 and newer). Clear a name you gave the sensor first (step 2): a name of your own takes precedence over the integration's entity ID.
+
 ### Attributes
 
 Home Assistant lists these in the entity's Details view (older versions: the Attributes section) under translated names grouped by prefix (e.g. "Asset: Menge", "Bilanz: investiert"); the keys in the table below are what templates use.

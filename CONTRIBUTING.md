@@ -11,10 +11,6 @@ By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 - **Improve translations** — corrections and new languages are welcome, see below.
 - **Submit code** — see the workflow below.
 
-## What cannot be added
-
-The Price Tracker covers crypto, stocks, ETFs, ETCs, Bitpanda Crypto Indices and tokenized precious metals — more than 14,000 assets across six catalogue categories. The three Cash Plus products (`fiat_earn` group) are left out of it: they are cash equivalents, one unit per unit of their currency. The Portfolio shows them as its Cash Plus sensor, and fiat as its Cash sensor — neither is a wallet.
-
 ## Development setup
 
 No build step and no dependencies beyond Home Assistant itself.
@@ -114,6 +110,8 @@ The wallet lifecycle manager (`PortfolioEntityManager`) runs after every portfol
 **Never log the API key.** No `exc_info=True` on API error logging — tracebacks can carry the key. `diagnostics.py` must keep it redacted.
 
 **Do not block the event loop.** All I/O is `async`. Use the shared `aiohttp` session from `async_get_clientsession(hass)`.
+
+**Cash Plus and fiat are never wallets.** The three Cash Plus products (group `fiat_earn`: BCPEUR, BCPUSD, BCPGBP) are cash equivalents, one unit per unit of their currency, so the Price Tracker leaves them out. The Portfolio shows them as its Cash Plus sensor, and fiat as its Cash sensor.
 
 ## Translations
 

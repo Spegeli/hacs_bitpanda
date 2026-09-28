@@ -11,6 +11,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp
 
 from custom_components.bitpanda.api import (
     BitpandaApiClient,
+    BitpandaApiError,
     BitpandaRateLimitError,
     _SCOPE_PROBES,
 )
@@ -42,6 +43,20 @@ async def test_all_scopes_present_returns_empty_list():
     assert mocker.mock_calls[0][1].query_string == ""
     assert mocker.mock_calls[1][1].query_string == "page_size=1"
     assert mocker.mock_calls[2][1].query_string == "page_size=1"
+
+
+async def test_a_probe_answered_unreadably_is_no_granted_scope():
+    """A probe whose answer cannot be read tells nothing about its scope:
+    the error propagates -- setup then says it could not connect -- instead
+    of the scope counting as granted."""
+    with mock_aiohttp_client() as mocker:
+        mocker.get(f"{API_BASE_URL}/portfolio", json=["not", "an", "object"])
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            with pytest.raises(BitpandaApiError) as excinfo:
+                await client.async_missing_scopes()
+
+    assert (excinfo.value.kind, excinfo.value.path) == ("unreadable", "/portfolio")
 
 
 async def test_missing_transaction_and_earn_scopes():

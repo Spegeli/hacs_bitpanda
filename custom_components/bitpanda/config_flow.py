@@ -152,9 +152,10 @@ def _language_field(languages: list[str], current: str) -> dict[vol.Required, Se
 # The sections of the forms. The Price Tracker's two, in their order, at
 # setup as under Configure; the Portfolio's language, one of its own so that
 # any later option gets a section of its own too -- at setup below its
-# currency. Their names and their fields' texts are
-# `<flow>.step.<step id>.sections`.
+# currency, which has a section of its own there. Their names and their
+# fields' texts are `<flow>.step.<step id>.sections`.
 _SECTION_CURRENCIES = "currencies"
+_SECTION_CURRENCY = "currency"
 _SECTION_LANGUAGE = "language"
 # Every one open: a section is the only way a Home Assistant form sets fields
 # apart, not a place to hide them.
@@ -279,7 +280,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(ENTRY_TYPE_PORTFOLIO)
             self._abort_if_unique_id_configured()
             # The form value travels lowercase (hassfest); stored upper again.
-            currency = user_input[CONF_CURRENCY].upper()
+            currency = user_input[_SECTION_CURRENCY][CONF_CURRENCY].upper()
             return self.async_create_entry(
                 title=PORTFOLIO_TITLE,
                 data={
@@ -291,13 +292,14 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 options={CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE]},
             )
         options = [c for c in SUPPORTED_CURRENCIES if c in self._currency_ids]
+        currency = vol.Schema(
+            {vol.Required(CONF_CURRENCY, default=DEFAULT_CURRENCY.lower()): _currency_select(options)}
+        )
         return self.async_show_form(
             step_id="currency",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
-                        CONF_CURRENCY, default=DEFAULT_CURRENCY.lower()
-                    ): _currency_select(options),
+                    vol.Required(_SECTION_CURRENCY): section(currency, _OPEN),
                     **await self._async_language_section(),
                 }
             ),

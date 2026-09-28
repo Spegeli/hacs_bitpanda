@@ -11,24 +11,27 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Saisissez votre clé API Bitpanda. Créez-en une sur [{api_key_url}]({api_key_url}).",
+        "description": "Le Bitpanda Portfolio affiche votre compte Bitpanda dans Home Assistant : sa valeur totale, vos rendements et un wallet pour chaque actif que vous détenez. L'intégration crée elle-même les wallets et les retire lorsque vous ne détenez plus un actif – vous n'avez rien à ajouter ni à supprimer.\n\nPour cela, l'intégration a besoin d'une clé API de [{api_key_url}]({api_key_url}). Elle ne fait que lire avec cette clé : elle ne peut ni passer d'ordres ni déplacer d'argent. Les clés Bitpanda sont valables un an ; ensuite, Home Assistant en demande une nouvelle. Vous pouvez aussi remplacer la clé vous-même à tout moment : ouvrez le menu ⋮ de l'entrée « Bitpanda Portfolio » sur la page de l'intégration Bitpanda et choisissez « Reconfigurer ».",
         "data": {
           "api_key": "Clé API"
         },
         "data_description": {
-          "api_key": "La clé doit avoir les autorisations Guthaben (Balance), Transaktion (Transaction) et Earn (Read) ; l'autorisation Trading n'est pas nécessaire. Il est impossible d'ajouter des autorisations à une clé existante par la suite."
+          "api_key": "Lors de la création de la clé, sélectionnez les autorisations Guthaben (Balance), Transaktion (Transaction) et Earn (Read) ; l'autorisation Trading n'est pas nécessaire. Il est impossible d'ajouter des autorisations à une clé existante par la suite."
         }
       },
       "currency": {
-        "title": "Devise du Portfolio",
-        "description": "Dans quelle devise voulez-vous voir votre portefeuille ?",
-        "data": {
-          "currency": "Devise"
-        },
-        "data_description": {
-          "currency": "Bitpanda exprime toutes les valeurs de votre portefeuille dans cette devise. Pour la modifier plus tard, ouvrez le menu ⋮ de l'entrée « Bitpanda Portfolio » sur la page de l'intégration Bitpanda et choisissez « Reconfigurer »."
-        },
+        "title": "Bitpanda Portfolio",
+        "description": "La clé API fonctionne. Choisissez maintenant la devise de votre portefeuille et la langue des titres de groupe et des messages.",
         "sections": {
+          "currency": {
+            "name": "Devise",
+            "data": {
+              "currency": "Devise du portefeuille"
+            },
+            "data_description": {
+              "currency": "Bitpanda exprime toutes les valeurs de votre portefeuille dans cette devise. Pour la modifier plus tard, ouvrez le menu ⋮ de l'entrée « Bitpanda Portfolio » sur la page de l'intégration Bitpanda et choisissez « Reconfigurer ». Un changement supprime tous les capteurs du Portfolio avec leur historique et les recrée dans la nouvelle devise."
+            }
+          },
           "language": {
             "name": "Langue",
             "data": {

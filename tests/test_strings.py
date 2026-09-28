@@ -172,7 +172,8 @@ _MENU_LABELS = {
 # The texts that send the user to one of those controls, by the control.
 _LABEL_REFERENCES = {
     "reconfigure": [
-        ("config", "step", "currency", "data_description", "currency"),
+        ("config", "step", "portfolio", "description"),
+        ("config", "step", "currency", "sections", "currency", "data_description", "currency"),
         ("options", "step", "portfolio", "description"),
         ("issues", "currency_dropped", "description"),
     ],
@@ -239,7 +240,8 @@ _INTEGRATION_PAGE = {
 # Each text, and the symbol it points to ("" for "Add price tracker", a button
 # or a menu item depending on the version).
 _LOCATED_TEXTS = {
-    ("config", "step", "currency", "data_description", "currency"): "⋮",
+    ("config", "step", "portfolio", "description"): "⋮",
+    ("config", "step", "currency", "sections", "currency", "data_description", "currency"): "⋮",
     ("options", "step", "portfolio", "description"): "⋮",
     ("issues", "currency_dropped", "description"): "⋮",
     ("config", "step", "price_tracker", "description"): "⚙",
@@ -397,6 +399,17 @@ def test_the_setup_words_the_currencies_as_configure_does():
         assert (setup["name"], setup["data"]) == (configure["name"], configure["data"]), name
         first = setup["data_description"]["extra_currencies"]
         assert configure["data_description"]["extra_currencies"].startswith(first + "\n"), name
+
+
+def test_both_portfolio_setup_steps_carry_the_service_name():
+    """The key step and the currency step are one dialog to the user: both
+    titled with the service's name, as the Price Tracker's setup is, while
+    their sections name what each asks for."""
+    for name in _FILES:
+        steps = _load(name)["config"]["step"]
+        assert (steps["portfolio"]["title"], steps["currency"]["title"]) == (
+            "Bitpanda Portfolio", "Bitpanda Portfolio",
+        ), name
 
 
 def test_the_setup_names_the_language_as_configure_does():

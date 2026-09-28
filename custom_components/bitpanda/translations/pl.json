@@ -11,24 +11,27 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Wprowadź swój klucz API platformy Bitpanda. Utwórz go na stronie [{api_key_url}]({api_key_url}).",
+        "description": "Bitpanda Portfolio pokazuje Twoje konto Bitpanda w Home Assistant: wartość całkowitą, Twoje stopy zwrotu i osobny portfel dla każdego aktywa, które posiadasz. Integracja sama tworzy portfele i usuwa je, gdy przestajesz posiadać dane aktywo – nie musisz niczego dodawać ani usuwać.\n\nDo tego integracja potrzebuje klucza API ze strony [{api_key_url}]({api_key_url}). Służy jej on tylko do odczytu: nie może handlować ani przenosić pieniędzy. Klucze Bitpanda są ważne przez rok; potem Home Assistant poprosi o nowy. Klucz możesz też w każdej chwili wymienić samodzielnie: otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio” i wybierz „Rekonfiguracja”.",
         "data": {
           "api_key": "Klucz API"
         },
         "data_description": {
-          "api_key": "Klucz potrzebuje uprawnień Guthaben (Balance), Transaktion (Transaction) i Earn (Read); uprawnienie Trading nie jest potrzebne. Do istniejącego klucza nie można później dodać uprawnień."
+          "api_key": "Przy tworzeniu klucza wybierz uprawnienia Guthaben (Balance), Transaktion (Transaction) i Earn (Read); uprawnienie Trading nie jest potrzebne. Do istniejącego klucza nie można później dodać uprawnień."
         }
       },
       "currency": {
-        "title": "Waluta Portfolio",
-        "description": "W jakiej walucie chcesz widzieć swoje portfolio?",
-        "data": {
-          "currency": "Waluta"
-        },
-        "data_description": {
-          "currency": "Bitpanda podaje wszystkie wartości Twojego portfolio w tej walucie. Aby ją później zmienić, otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio” i wybierz „Rekonfiguracja”."
-        },
+        "title": "Bitpanda Portfolio",
+        "description": "Klucz API działa. Teraz wybierz walutę swojego portfolio i język tytułów grup i komunikatów.",
         "sections": {
+          "currency": {
+            "name": "Waluta",
+            "data": {
+              "currency": "Waluta portfolio"
+            },
+            "data_description": {
+              "currency": "Bitpanda podaje wszystkie wartości Twojego portfolio w tej walucie. Aby ją później zmienić, otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio” i wybierz „Rekonfiguracja”. Zmiana usuwa wszystkie sensory Portfolio wraz z historią i tworzy je od nowa w nowej walucie."
+            }
+          },
           "language": {
             "name": "Język",
             "data": {

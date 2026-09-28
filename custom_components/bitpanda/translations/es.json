@@ -11,24 +11,27 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Introduce tu clave API de Bitpanda. Crea una en [{api_key_url}]({api_key_url}).",
+        "description": "El Bitpanda Portfolio muestra tu cuenta de Bitpanda en Home Assistant: el valor total, tus rendimientos y un wallet por cada activo que tienes. La integración crea los wallets por sí sola y los retira cuando dejas de tener un activo – no tienes que añadir ni eliminar nada.\n\nPara ello, la integración necesita una clave API de [{api_key_url}]({api_key_url}). Con ella solo lee: no puede operar ni mover dinero. Las claves de Bitpanda son válidas un año; después, Home Assistant pide una nueva. También puedes sustituir la clave por tu cuenta en cualquier momento: abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda y elige \"Reconfigurar\".",
         "data": {
           "api_key": "Clave API"
         },
         "data_description": {
-          "api_key": "La clave necesita los permisos Guthaben (Balance), Transaktion (Transaction) y Earn (Read); el permiso Trading no es necesario. A una clave existente no se le pueden añadir permisos más adelante."
+          "api_key": "Al crear la clave, selecciona los permisos Guthaben (Balance), Transaktion (Transaction) y Earn (Read); el permiso Trading no es necesario. A una clave existente no se le pueden añadir permisos más adelante."
         }
       },
       "currency": {
-        "title": "Moneda del Portfolio",
-        "description": "¿En qué moneda quieres ver tu cartera?",
-        "data": {
-          "currency": "Moneda"
-        },
-        "data_description": {
-          "currency": "Bitpanda expresa todos los valores de tu cartera en esta moneda. Para cambiarla más adelante, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda y elige \"Reconfigurar\"."
-        },
+        "title": "Bitpanda Portfolio",
+        "description": "La clave API funciona. Ahora elige la moneda de tu cartera y el idioma de los títulos de grupo y de los mensajes.",
         "sections": {
+          "currency": {
+            "name": "Moneda",
+            "data": {
+              "currency": "Moneda de la cartera"
+            },
+            "data_description": {
+              "currency": "Bitpanda expresa todos los valores de tu cartera en esta moneda. Para cambiarla más adelante, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda y elige \"Reconfigurar\". Un cambio elimina todos los sensores del Portfolio con su historial y los vuelve a crear en la nueva moneda."
+            }
+          },
           "language": {
             "name": "Idioma",
             "data": {

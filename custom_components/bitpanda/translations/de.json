@@ -11,24 +11,27 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Gib deinen Bitpanda API-Schlüssel ein. Erstelle einen unter [{api_key_url}]({api_key_url}).",
+        "description": "Das Bitpanda Portfolio zeigt dein Bitpanda-Konto in Home Assistant: den Gesamtwert, deine Renditen und für jedes Asset, das du besitzt, ein eigenes Wallet. Die Wallets legt die Integration selbst an und entfernt sie wieder, wenn du ein Asset nicht mehr besitzt – hinzufügen oder löschen musst du nichts.\n\nDafür braucht die Integration einen API-Schlüssel von [{api_key_url}]({api_key_url}). Sie liest damit nur: Handeln oder Geld bewegen kann sie nicht. Bitpanda-Schlüssel gelten ein Jahr; danach fragt Home Assistant nach einem neuen. Den Schlüssel kannst du auch jederzeit selbst ersetzen: Öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“ und wähle „Neu konfigurieren“.",
         "data": {
           "api_key": "API-Schlüssel"
         },
         "data_description": {
-          "api_key": "Der Schlüssel braucht die Berechtigungen Guthaben, Transaktion und Earn (Read); Trading wird nicht benötigt. Berechtigungen lassen sich einem bestehenden Schlüssel später nicht hinzufügen."
+          "api_key": "Wähle beim Erstellen die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“; „Trading“ brauchst du nicht. Einem bestehenden Schlüssel lassen sich Berechtigungen später nicht hinzufügen."
         }
       },
       "currency": {
-        "title": "Portfolio-Währung",
-        "description": "In welcher Währung möchtest du dein Portfolio sehen?",
-        "data": {
-          "currency": "Währung"
-        },
-        "data_description": {
-          "currency": "Bitpanda meldet alle Werte deines Portfolios in dieser Währung. Um sie später zu ändern, öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“ und wähle „Neu konfigurieren“."
-        },
+        "title": "Bitpanda Portfolio",
+        "description": "Der API-Schlüssel funktioniert. Wähle jetzt die Währung deines Portfolios und die Sprache für Gruppentitel und Meldungen.",
         "sections": {
+          "currency": {
+            "name": "Währung",
+            "data": {
+              "currency": "Portfolio-Währung"
+            },
+            "data_description": {
+              "currency": "Bitpanda meldet alle Werte deines Portfolios in dieser Währung. Um sie später zu ändern, öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“ und wähle „Neu konfigurieren“. Ein Wechsel löscht alle Portfolio-Sensoren samt Verlauf und legt sie in der neuen Währung neu an."
+            }
+          },
           "language": {
             "name": "Sprache",
             "data": {

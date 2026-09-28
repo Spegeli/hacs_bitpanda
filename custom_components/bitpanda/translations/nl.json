@@ -11,24 +11,27 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Voer je Bitpanda API-sleutel in. Maak er een aan op [{api_key_url}]({api_key_url}).",
+        "description": "De Bitpanda Portfolio toont je Bitpanda-account in Home Assistant: de totale waarde, je rendementen en een wallet voor elke asset die je bezit. De integratie maakt de wallets zelf aan en verwijdert ze weer als je een asset niet meer bezit – toevoegen of verwijderen hoef je niets.\n\nDaarvoor heeft de integratie een API-sleutel van [{api_key_url}]({api_key_url}) nodig. Ze leest er alleen mee: handelen of geld verplaatsen kan ze niet. Bitpanda-sleutels zijn een jaar geldig; daarna vraagt Home Assistant om een nieuwe. Je kunt de sleutel ook op elk moment zelf vervangen: open op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies \"Herconfigureer\".",
         "data": {
           "api_key": "API-sleutel"
         },
         "data_description": {
-          "api_key": "De sleutel heeft de rechten Guthaben (Balance), Transaktion (Transaction) en Earn (Read) nodig; het recht Trading is niet nodig. Rechten kunnen later niet aan een bestaande sleutel worden toegevoegd."
+          "api_key": "Kies bij het aanmaken de rechten Guthaben (Balance), Transaktion (Transaction) en Earn (Read); het recht Trading is niet nodig. Rechten kunnen later niet aan een bestaande sleutel worden toegevoegd."
         }
       },
       "currency": {
-        "title": "Portfolio-valuta",
-        "description": "In welke valuta wil je je portfolio zien?",
-        "data": {
-          "currency": "Valuta"
-        },
-        "data_description": {
-          "currency": "Bitpanda geeft alle waarden van je portfolio in deze valuta weer. Om de valuta later te wijzigen, open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies je \"Herconfigureer\"."
-        },
+        "title": "Bitpanda Portfolio",
+        "description": "De API-sleutel werkt. Kies nu de valuta van je portfolio en de taal van groepstitels en meldingen.",
         "sections": {
+          "currency": {
+            "name": "Valuta",
+            "data": {
+              "currency": "Portfolio-valuta"
+            },
+            "data_description": {
+              "currency": "Bitpanda geeft alle waarden van je portfolio in deze valuta weer. Om de valuta later te wijzigen, open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies je \"Herconfigureer\". Een wijziging verwijdert alle Portfolio-sensoren met hun geschiedenis en maakt ze opnieuw aan in de nieuwe valuta."
+            }
+          },
           "language": {
             "name": "Taal",
             "data": {

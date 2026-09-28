@@ -135,7 +135,7 @@ async def test_a_second_portfolio_aborts_even_from_an_open_dialog(hass):
     assert result["step_id"] == "currency"
     _portfolio_entry().add_to_hass(hass)
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"currency": "eur", **_setup_language("en")}
+        result["flow_id"], {"currency": {"currency": "eur"}, **_setup_language("en")}
     )
     assert result["type"] == _FLOW.ABORT
     assert result["reason"] == "already_configured"
@@ -152,7 +152,7 @@ async def _finish_portfolio_setup(hass, result) -> None:
     result = await _submit_key(hass, result, "good")
     assert result["step_id"] == "currency"
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"currency": "eur", **_setup_language("en")}
+        result["flow_id"], {"currency": {"currency": "eur"}, **_setup_language("en")}
     )
     assert result["type"] == _FLOW.CREATE_ENTRY
     assert (result["result"].data["api_key"], result["result"].data["currency"]) == (
@@ -252,7 +252,7 @@ async def test_portfolio_unexpected_error_is_logged_by_type_only(hass, caplog):
 async def test_portfolio_currency_step_offers_the_supported_currencies(hass):
     result = await _submit_key(hass, await _portfolio_form(hass), "good")
     assert result["step_id"] == "currency"
-    config = _selector_config(result["data_schema"], "currency")
+    config = _selector_config(_section_schema(result["data_schema"], "currency"), "currency")
     # Lowercase: hassfest's translation-key validator rejects uppercase
     # selector option keys.
     assert config["options"] == [
@@ -264,7 +264,7 @@ async def test_portfolio_currency_step_offers_the_supported_currencies(hass):
 async def test_portfolio_creates_the_entry(hass):
     result = await _submit_key(hass, await _portfolio_form(hass), "  good  \n")
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"currency": "usd", **_setup_language("it")}
+        result["flow_id"], {"currency": {"currency": "usd"}, **_setup_language("it")}
     )
     assert result["type"] == _FLOW.CREATE_ENTRY
     entry = result["result"]
@@ -1164,6 +1164,15 @@ async def test_the_price_tracker_setup_shows_its_currencies_as_configure_does(ha
     assert dict(schema.schema)["currencies"].options == {"collapsed": False}
     assert list(_section_schema(schema, "currencies").schema) == ["extra_currencies"]
     assert _section_schema(schema, "currencies")({}) == {"extra_currencies": []}
+
+
+async def test_the_portfolio_setup_shows_its_currency_in_an_open_section(hass):
+    """Like the language below it: under a heading of its own, open, with
+    EUR chosen until the user picks another."""
+    schema = (await _setup_form(hass, "portfolio"))["data_schema"]
+    assert dict(schema.schema)["currency"].options == {"collapsed": False}
+    assert list(_section_schema(schema, "currency").schema) == ["currency"]
+    assert _section_schema(schema, "currency")({}) == {"currency": "eur"}
 
 
 @pytest.mark.parametrize("service", ["price_tracker", "portfolio"])

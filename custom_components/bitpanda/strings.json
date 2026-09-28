@@ -11,24 +11,27 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Enter your Bitpanda API key. Create one at [{api_key_url}]({api_key_url}).",
+        "description": "The Bitpanda Portfolio shows your Bitpanda account in Home Assistant: its total value, your returns, and a wallet for every asset you hold. The integration creates the wallets itself and removes them when you no longer hold an asset – there is nothing to add or delete.\n\nFor this, the integration needs an API key from [{api_key_url}]({api_key_url}). It only reads with it: it cannot trade or move money. Bitpanda keys are valid for one year; after that, Home Assistant asks for a new one. You can also replace the key yourself at any time: open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page and choose \"Reconfigure\".",
         "data": {
           "api_key": "API key"
         },
         "data_description": {
-          "api_key": "The key needs the permissions Guthaben (Balance), Transaktion (Transaction) and Earn (Read); Trading is not needed. Permissions cannot be added to an existing key later."
+          "api_key": "When creating the key, select the permissions Guthaben (Balance), Transaktion (Transaction) and Earn (Read); Trading is not needed. Permissions cannot be added to an existing key later."
         }
       },
       "currency": {
-        "title": "Portfolio currency",
-        "description": "In which currency do you want to see your portfolio?",
-        "data": {
-          "currency": "Currency"
-        },
-        "data_description": {
-          "currency": "Bitpanda reports every value of your portfolio in this currency. To change it later, open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page and choose \"Reconfigure\"."
-        },
+        "title": "Bitpanda Portfolio",
+        "description": "The API key works. Now choose your portfolio's currency and the language of group titles and messages.",
         "sections": {
+          "currency": {
+            "name": "Currency",
+            "data": {
+              "currency": "Portfolio currency"
+            },
+            "data_description": {
+              "currency": "Bitpanda reports every value of your portfolio in this currency. To change it later, open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page and choose \"Reconfigure\". Changing it deletes all Portfolio sensors including their history and creates them again in the new currency."
+            }
+          },
           "language": {
             "name": "Language",
             "data": {

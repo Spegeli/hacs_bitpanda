@@ -1198,8 +1198,9 @@ async def test_a_price_sensor_added_without_a_value_stores_its_precision_with_th
     adds the sensor -- without a value, 2 decimals -- and not again as its
     state changes. SHIBA INU's request fails in the setup round, so its
     sensor is added without a price; its first one, a round later, stores
-    the 8 decimals it needs. Bitcoin, added with its price, keeps its 2,
-    though its next price would need 4."""
+    the 8 decimals it needs -- once: SHIBA INU's later price, which would
+    need 4, keeps them. Bitcoin, added with its price, keeps its 2, though
+    its next price would need 4."""
     ticker, _ = price_api
     prices = {BTC["id"]: "100.00000000"}
 
@@ -1220,6 +1221,11 @@ async def test_a_price_sensor_added_without_a_value_stores_its_precision_with_th
     assert [_value(hass, bitcoin), _value(hass, shiba)] == [5.0, 0.0000108]
     assert _stored_precision(hass, shiba) == 8
     assert _stored_precision(hass, bitcoin) == 2
+
+    prices[_SHIB["id"]] = "5.00000000"
+    await _next_price_round(hass, freezer)
+    assert _value(hass, shiba) == 5.0
+    assert _stored_precision(hass, shiba) == 8
 
 
 async def test_a_converted_price_stores_its_precision_once_the_rates_arrive(

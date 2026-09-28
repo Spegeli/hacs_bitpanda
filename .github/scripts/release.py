@@ -523,7 +523,8 @@ def _refuse_what_a_release_must_not_publish(
         raise ReleaseError(
             f"Nothing to release: no commit since {previous}. If {previous} was released"
             " a moment ago, there is nothing to do; if it has no GitHub release yet, create"
-            " it by hand from the tag (see Releases in CONTRIBUTING.md)."
+            " it by hand from the tag, or delete the tag if you withdrew its draft (see"
+            " Releases in CONTRIBUTING.md)."
         )
     if latest_stable_version(tags) is None and bump != "major":
         raise ReleaseError(

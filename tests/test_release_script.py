@@ -888,7 +888,8 @@ def _nothing_to_release(previous: str) -> str:
     return (
         f"Nothing to release: no commit since {previous}. If {previous} was released"
         " a moment ago, there is nothing to do; if it has no GitHub release yet, create"
-        " it by hand from the tag (see Releases in CONTRIBUTING.md)."
+        " it by hand from the tag, or delete the tag if you withdrew its draft (see"
+        " Releases in CONTRIBUTING.md)."
     )
 
 

@@ -265,9 +265,9 @@ class BitpandaApiClient:
 
         A page whose `data` is not a list, or whose items are not objects,
         is as unreadable as a malformed body: an id could not be read from it
-        either way. So is an id that is no string or number, and a
-        `next_cursor` that is no string: neither can be compared with the ones
-        seen before.
+        either way. So is an id that is no string or integer, and a
+        `next_cursor` that is no string: Bitpanda sends neither, and an object
+        or a list could not be compared with the ones seen before.
         """
         params = dict(params)
         params.setdefault("page_size", MAX_PAGE_SIZE)

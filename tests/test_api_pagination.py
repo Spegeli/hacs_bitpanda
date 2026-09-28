@@ -373,9 +373,9 @@ async def test_a_page_of_no_objects_is_unreadable(body):
     ids=["id_an_object", "id_a_list", "cursor_a_list", "cursor_an_object"],
 )
 async def test_an_id_or_a_cursor_that_cannot_be_compared_is_unreadable(body):
-    """Ids and cursors are compared with the ones seen before. One that is
-    no string -- an object, a list -- cannot be: the page is as unreadable as
-    a malformed body, not an unexpected error."""
+    """Ids and cursors are compared with the ones seen before. An object or
+    a list cannot be: the page is as unreadable as a malformed body, not an
+    unexpected error."""
     with mock_aiohttp_client() as mocker:
         mocker.get(f"{API_BASE_URL}/assets", json=body)
         async with mocker.create_session(asyncio.get_running_loop()) as session:

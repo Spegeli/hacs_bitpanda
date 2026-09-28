@@ -161,22 +161,32 @@
       "step": {
         "user": {
           "title": "Preis-Tracker hinzufügen",
-          "description": "Welche Art von Asset möchtest du verfolgen?",
+          "description": "Ein Preis-Tracker verfolgt den Preis eines Assets – in EUR und in den gewählten zusätzlichen Währungen. Wähle zuerst die Art des Assets.",
           "data": {
             "category": "Asset-Typ"
           },
           "data_description": {
-            "category": "Der nächste Schritt listet alle Assets dieses Typs auf, die noch nicht verfolgt werden."
+            "category": "Der nächste Schritt zeigt alle Assets dieses Typs, die du noch nicht verfolgst. Große Listen wie Aktien laden beim ersten Öffnen einige Sekunden."
           }
         },
         "asset": {
           "title": "Preis-Tracker hinzufügen",
-          "description": "Welches Asset möchtest du verfolgen?",
+          "description": "Wähle das Asset, dessen Preis du verfolgen möchtest.",
           "data": {
             "asset": "Asset"
           },
           "data_description": {
-            "asset": "Tippe, um nach Name, Symbol oder ISIN zu suchen, und wähle ein Asset. Klicke ohne Auswahl auf „OK“, um zu den Asset-Typen zurückzukehren."
+            "asset": "Tippe einen Namen oder ein Symbol ein, um die Liste zu durchsuchen. Ohne Auswahl bringt dich „OK“ zurück zu den Asset-Typen."
+          }
+        },
+        "security": {
+          "title": "Preis-Tracker hinzufügen",
+          "description": "Wähle das Asset, dessen Preis du verfolgen möchtest.",
+          "data": {
+            "asset": "Asset"
+          },
+          "data_description": {
+            "asset": "Tippe einen Namen, ein Symbol oder eine ISIN ein, um die Liste zu durchsuchen. Ohne Auswahl bringt dich „OK“ zurück zu den Asset-Typen."
           }
         }
       },

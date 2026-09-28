@@ -161,22 +161,32 @@
       "step": {
         "user": {
           "title": "Aggiungi monitoraggio prezzo",
-          "description": "Che tipo di asset vuoi monitorare?",
+          "description": "Un monitoraggio prezzo segue il prezzo di un asset – in EUR e nelle valute aggiuntive scelte. Scegli prima il tipo di asset.",
           "data": {
             "category": "Tipo di asset"
           },
           "data_description": {
-            "category": "Il passaggio successivo elenca tutti gli asset di questo tipo non ancora monitorati."
+            "category": "Il passaggio successivo elenca tutti gli asset di questo tipo che non monitori ancora. Gli elenchi grandi, come le azioni, impiegano qualche secondo a caricarsi la prima volta."
           }
         },
         "asset": {
           "title": "Aggiungi monitoraggio prezzo",
-          "description": "Quale asset vuoi monitorare?",
+          "description": "Scegli l'asset di cui vuoi monitorare il prezzo.",
           "data": {
             "asset": "Asset"
           },
           "data_description": {
-            "asset": "Digita per cercare per nome, simbolo o ISIN, poi scegli un asset. Seleziona \"Invia\" senza scegliere nulla per tornare ai tipi di asset."
+            "asset": "Digita un nome o un simbolo per cercare nell'elenco. Per tornare ai tipi di asset, seleziona \"Invia\" senza scegliere nulla."
+          }
+        },
+        "security": {
+          "title": "Aggiungi monitoraggio prezzo",
+          "description": "Scegli l'asset di cui vuoi monitorare il prezzo.",
+          "data": {
+            "asset": "Asset"
+          },
+          "data_description": {
+            "asset": "Digita un nome, un simbolo o un ISIN per cercare nell'elenco. Per tornare ai tipi di asset, seleziona \"Invia\" senza scegliere nulla."
           }
         }
       },

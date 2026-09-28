@@ -161,22 +161,32 @@
       "step": {
         "user": {
           "title": "Dodaj śledzenie ceny",
-          "description": "Jaki rodzaj aktywa chcesz śledzić?",
+          "description": "Śledzenie ceny pokazuje cenę jednego aktywa – w EUR i w wybranych dodatkowych walutach. Najpierw wybierz rodzaj aktywa.",
           "data": {
             "category": "Rodzaj aktywa"
           },
           "data_description": {
-            "category": "Następny krok pokaże wszystkie aktywa tego rodzaju, które nie są jeszcze śledzone."
+            "category": "Następny krok pokaże wszystkie aktywa tego rodzaju, których jeszcze nie śledzisz. Duże listy, takie jak akcje, wczytują się za pierwszym razem kilka sekund."
           }
         },
         "asset": {
           "title": "Dodaj śledzenie ceny",
-          "description": "Które aktywo chcesz śledzić?",
+          "description": "Wybierz aktywo, którego cenę chcesz śledzić.",
           "data": {
             "asset": "Aktywo"
           },
           "data_description": {
-            "asset": "Zacznij pisać, aby wyszukać po nazwie, symbolu lub numerze ISIN, a potem wybierz jedno aktywo. Kliknij „Zatwierdź” bez wyboru, aby wrócić do rodzajów aktywów."
+            "asset": "Wpisz nazwę lub symbol, aby przeszukać listę. Aby wrócić do rodzajów aktywów, kliknij „Zatwierdź” bez wyboru."
+          }
+        },
+        "security": {
+          "title": "Dodaj śledzenie ceny",
+          "description": "Wybierz aktywo, którego cenę chcesz śledzić.",
+          "data": {
+            "asset": "Aktywo"
+          },
+          "data_description": {
+            "asset": "Wpisz nazwę, symbol lub numer ISIN, aby przeszukać listę. Aby wrócić do rodzajów aktywów, kliknij „Zatwierdź” bez wyboru."
           }
         }
       },

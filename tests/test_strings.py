@@ -184,6 +184,7 @@ _LABEL_REFERENCES = {
     "submit": [
         ("config", "step", "confirm_currency", "description"),
         ("config_subentries", "price_group", "step", "asset", "data_description", "asset"),
+        ("config_subentries", "price_group", "step", "security", "data_description", "asset"),
     ],
     "delete": [
         ("issues", "portfolio_exists", "description"),
@@ -520,7 +521,7 @@ def test_every_field_has_a_help_text():
         for name, step in steps.items()
         for key, texts in step.get("sections", {}).items()
     }
-    assert len(labelled) == 12
+    assert len(labelled) == 13
     for name, step in labelled.items():
         assert set(step.get("data_description", {})) == set(step["data"]), name
 
@@ -661,10 +662,24 @@ def test_the_price_group_flow_has_its_strings():
     strings = json.loads((_DIR / "strings.json").read_text(encoding="utf-8"))
     assert set(strings["config_subentries"]) == {"price_group", "wallet_group"}
     group = strings["config_subentries"]["price_group"]
-    assert set(group["step"]) == {"user", "asset"}
+    assert set(group["step"]) == {"user", "asset", "security"}
     assert set(group["abort"]) == {"already_configured", "asset_added"}
     assert "{asset}" in group["abort"]["asset_added"]
     assert "{group}" in group["abort"]["asset_added"]
+
+
+def test_only_the_securities_search_names_the_isin():
+    """Stocks, ETFs and ETCs show their ISIN in the list, the other asset
+    types have none: only the securities' step says it can be searched for.
+    Otherwise both steps are the same dialog -- title, text and label."""
+    for name in _FILES:
+        steps = _load(name)["config_subentries"]["price_group"]["step"]
+        asset, security = steps["asset"], steps["security"]
+        assert "ISIN" in security["data_description"]["asset"], name
+        assert "ISIN" not in asset["data_description"]["asset"], name
+        assert [asset[key] for key in ("title", "description", "data")] == [
+            security[key] for key in ("title", "description", "data")
+        ], name
 
 
 def test_the_wallet_group_is_named_and_has_no_flow():

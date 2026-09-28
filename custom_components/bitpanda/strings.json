@@ -161,22 +161,32 @@
       "step": {
         "user": {
           "title": "Add price tracker",
-          "description": "Which kind of asset do you want to track?",
+          "description": "A price tracker follows the price of one asset – in EUR and in the chosen additional currencies. First choose the kind of asset.",
           "data": {
             "category": "Asset type"
           },
           "data_description": {
-            "category": "The next step lists every asset of this type that is not tracked yet."
+            "category": "The next step lists every asset of this type that you do not track yet. Large lists such as stocks take a few seconds to load the first time."
           }
         },
         "asset": {
           "title": "Add price tracker",
-          "description": "Which asset do you want to track?",
+          "description": "Choose the asset whose price you want to track.",
           "data": {
             "asset": "Asset"
           },
           "data_description": {
-            "asset": "Type to search by name, symbol or ISIN, then pick one asset. To go back to the asset types, select \"Submit\" without picking one."
+            "asset": "Type a name or a symbol to search the list. To go back to the asset types, select \"Submit\" without choosing one."
+          }
+        },
+        "security": {
+          "title": "Add price tracker",
+          "description": "Choose the asset whose price you want to track.",
+          "data": {
+            "asset": "Asset"
+          },
+          "data_description": {
+            "asset": "Type a name, a symbol or an ISIN to search the list. To go back to the asset types, select \"Submit\" without choosing one."
           }
         }
       },

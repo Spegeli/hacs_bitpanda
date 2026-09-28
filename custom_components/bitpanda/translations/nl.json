@@ -161,22 +161,32 @@
       "step": {
         "user": {
           "title": "Prijstracker toevoegen",
-          "description": "Welk soort asset wil je volgen?",
+          "description": "Een prijstracker volgt de prijs van één asset – in EUR en in de gekozen extra valuta. Kies eerst het soort asset.",
           "data": {
             "category": "Assettype"
           },
           "data_description": {
-            "category": "De volgende stap toont alle assets van dit type die nog niet gevolgd worden."
+            "category": "De volgende stap toont alle assets van dit type die je nog niet volgt. Grote lijsten zoals aandelen laden de eerste keer een paar seconden."
           }
         },
         "asset": {
           "title": "Prijstracker toevoegen",
-          "description": "Welke asset wil je volgen?",
+          "description": "Kies de asset waarvan je de prijs wilt volgen.",
           "data": {
             "asset": "Asset"
           },
           "data_description": {
-            "asset": "Typ om te zoeken op naam, symbool of ISIN en kies dan een asset. Klik zonder keuze op \"Verzenden\" om terug te gaan naar de assettypes."
+            "asset": "Typ een naam of een symbool om in de lijst te zoeken. Klik zonder keuze op \"Verzenden\" om terug te gaan naar de assettypes."
+          }
+        },
+        "security": {
+          "title": "Prijstracker toevoegen",
+          "description": "Kies de asset waarvan je de prijs wilt volgen.",
+          "data": {
+            "asset": "Asset"
+          },
+          "data_description": {
+            "asset": "Typ een naam, een symbool of een ISIN om in de lijst te zoeken. Klik zonder keuze op \"Verzenden\" om terug te gaan naar de assettypes."
           }
         }
       },

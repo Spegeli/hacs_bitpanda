@@ -3,6 +3,10 @@
 Category first, then one searchable pick from that category's catalogue --
 public data, fetched without a key and cached for 24 hours. The asset joins
 the group of its asset type, which the flow creates when there is none yet.
+
+The pick shows under one of two step ids, each with texts of its own:
+`security` for stocks, ETFs and ETCs, whose labels carry their ISIN, and
+`asset` for every other type, whose help text leaves the ISIN out.
 """
 from __future__ import annotations
 
@@ -24,6 +28,7 @@ from homeassistant.util import dt as dt_util
 from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
 from .assets import (
     ASSET_CATEGORY_FILTERS,
+    ISIN_CATEGORIES,
     asset_category,
     asset_label_map,
     resolve_asset,
@@ -138,10 +143,12 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
         `custom_value=True` is what makes the frontend render a single select
         as a searchable combo box (without it: a plain, unsearchable list).
         The field is optional: submitting it empty goes back to the categories,
-        the way out of every error and of an empty listing.
+        the way out of every error and of an empty listing. Stocks, ETFs and
+        ETCs show under the step id `security`, whose help text names the
+        ISIN they can be searched by (see the module docstring).
         """
         return self.async_show_form(
-            step_id="asset",
+            step_id="security" if self._category in ISIN_CATEGORIES else "asset",
             data_schema=vol.Schema(
                 {
                     vol.Optional("asset"): SelectSelector(
@@ -203,6 +210,13 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
         if not options:
             return self._show_assets([], "no_assets_available")
         return self._show_assets(options, None)
+
+    async def async_step_security(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """The asset step of stocks, ETFs and ETCs: the same pick, under its
+        own step id only for texts that name the ISIN."""
+        return await self.async_step_asset(user_input)
 
     async def _async_track(self, record: dict[str, Any]) -> SubentryFlowResult:
         """Add `record` to the group of its asset type, or start that group.

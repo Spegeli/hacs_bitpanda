@@ -161,22 +161,32 @@
       "step": {
         "user": {
           "title": "Añadir seguimiento de precio",
-          "description": "¿Qué tipo de activo quieres seguir?",
+          "description": "Un seguimiento de precio sigue el precio de un activo – en EUR y en las monedas adicionales elegidas. Elige primero el tipo de activo.",
           "data": {
             "category": "Tipo de activo"
           },
           "data_description": {
-            "category": "El siguiente paso muestra todos los activos de este tipo que aún no tienen seguimiento."
+            "category": "El siguiente paso muestra todos los activos de este tipo que aún no sigues. Las listas grandes, como las acciones, tardan unos segundos en cargarse la primera vez."
           }
         },
         "asset": {
           "title": "Añadir seguimiento de precio",
-          "description": "¿Qué activo quieres seguir?",
+          "description": "Elige el activo cuyo precio quieres seguir.",
           "data": {
             "asset": "Activo"
           },
           "data_description": {
-            "asset": "Escribe para buscar por nombre, símbolo o ISIN y elige un activo. Pulsa \"Enviar\" sin elegir nada para volver a los tipos de activo."
+            "asset": "Escribe un nombre o un símbolo para buscar en la lista. Para volver a los tipos de activo, pulsa \"Enviar\" sin elegir nada."
+          }
+        },
+        "security": {
+          "title": "Añadir seguimiento de precio",
+          "description": "Elige el activo cuyo precio quieres seguir.",
+          "data": {
+            "asset": "Activo"
+          },
+          "data_description": {
+            "asset": "Escribe un nombre, un símbolo o un ISIN para buscar en la lista. Para volver a los tipos de activo, pulsa \"Enviar\" sin elegir nada."
           }
         }
       },

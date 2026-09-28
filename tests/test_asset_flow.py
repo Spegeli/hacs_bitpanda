@@ -86,13 +86,15 @@ _STEP_TEXTS = json.loads(
 )["config_subentries"]["price_group"]["step"]
 
 
-async def test_every_field_of_both_steps_has_a_label_and_a_help_text(hass):
-    """Each field shows its label and, under it, its help text."""
+async def test_every_field_of_every_step_has_a_label_and_a_help_text(hass):
+    """Each field shows its label and, under it, its help text -- in the
+    asset step of either kind of search too."""
     entry = _entry(hass)
     forms = [await _start(hass, entry)]
     with patch(_LIST, AsyncMock(return_value=_metals())):
         forms.append(await _pick_category(hass, entry))
-    assert [result["step_id"] for result in forms] == ["user", "asset"]
+        forms.append(await _pick_category(hass, entry, "stock"))
+    assert [result["step_id"] for result in forms] == ["user", "asset", "security"]
     for result in forms:
         step = _STEP_TEXTS[result["step_id"]]
         fields = {str(marker) for marker in result["data_schema"].schema}
@@ -227,6 +229,58 @@ async def test_expired_listings_are_dropped_not_kept(hass):
         await _pick_category(hass, _entry(hass))
     assert "stock" not in store
     assert "metal" in store
+
+
+# --- One asset step per kind of search -------------------------------------------
+# Stocks, ETFs and ETCs show their ISIN in the list, the other types have
+# none. The asset step shows under a step id of its own for each kind, so
+# each has a help text of its own -- the securities' naming the ISIN.
+
+
+@pytest.mark.parametrize(
+    ("category", "step_id"),
+    [
+        ("crypto", "asset"),
+        ("index", "asset"),
+        ("metal", "asset"),
+        ("stock", "security"),
+        ("etf", "security"),
+        ("etc", "security"),
+    ],
+)
+async def test_each_asset_type_is_picked_in_the_step_of_its_search(hass, category, step_id):
+    with patch(_LIST, AsyncMock(return_value=_metals())):
+        result = await _pick_category(hass, _entry(hass), category)
+    assert (result["type"], result["step_id"]) == (_FLOW.FORM, step_id)
+
+
+async def test_a_security_is_picked_like_any_asset(hass):
+    """The securities' step is the asset step under texts of its own: an
+    empty submit goes back to the asset types with the type picked before,
+    and a pick is tracked."""
+    stock = _fixture("517")
+    entry = _entry(hass)
+    with patch(_LIST, AsyncMock(return_value=[stock])):
+        result = await _pick_category(hass, entry, "stock")
+        assert result["step_id"] == "security"
+        result = await hass.config_entries.subentries.async_configure(result["flow_id"], {})
+        assert result["step_id"] == "user"
+        assert result["data_schema"]({}) == {"category": "stock"}
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {"category": "stock"}
+        )
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {"asset": stock["id"]}
+        )
+    assert result["type"] == _FLOW.CREATE_ENTRY
+    [group] = entry.subentries.values()
+    assert dict(group.data) == {"category": "stock", "assets": {stock["id"]: slim_asset(stock)}}
+
+
+async def test_a_listing_error_stays_in_the_securities_step(hass):
+    with patch(_LIST, AsyncMock(side_effect=BitpandaRateLimitError("Rate limited on /assets"))):
+        result = await _pick_category(hass, _entry(hass), "etf")
+    assert (result["step_id"], result["errors"]["base"]) == ("security", "rate_limited")
 
 
 # --- Picking ---------------------------------------------------------------------

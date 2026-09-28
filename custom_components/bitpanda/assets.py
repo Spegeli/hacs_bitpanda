@@ -43,10 +43,11 @@ ASSET_CATEGORY_FILTERS: dict[str, list[tuple[str, str | None]]] = {
 # The category of an asset no filter above lists, such as Cash Plus.
 CATEGORY_OTHER = "other"
 
-# The categories whose assets show their ISIN (asset_isin). The catalogue
-# gives one to every stock, ETF and ETC -- and to Cash Plus, which keeps its
-# plain label -- never to crypto, an index or a metal.
-_ISIN_CATEGORIES = frozenset({"stock", "etf", "etc"})
+# The categories whose assets show their ISIN (asset_isin), and so the ones
+# "Add price tracker" lets search by ISIN (asset_flow). The catalogue gives
+# one to every stock, ETF and ETC -- and to Cash Plus, which keeps its plain
+# label -- never to crypto, an index or a metal.
+ISIN_CATEGORIES = frozenset({"stock", "etf", "etc"})
 
 
 def slim_asset(asset: dict[str, Any]) -> dict[str, Any]:
@@ -69,7 +70,7 @@ def asset_isin(asset: dict[str, Any]) -> str | None:
     """The ISIN a stock, ETF or ETC shows in its label
     (naming.asset_display_label) and attributes; None for any other asset,
     and for one whose record carries none."""
-    if asset_category(asset) not in _ISIN_CATEGORIES:
+    if asset_category(asset) not in ISIN_CATEGORIES:
         return None
     return asset.get("isin") or None
 

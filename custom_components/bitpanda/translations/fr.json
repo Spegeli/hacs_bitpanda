@@ -161,22 +161,32 @@
       "step": {
         "user": {
           "title": "Ajouter un suivi de prix",
-          "description": "Quel type d'actif voulez-vous suivre ?",
+          "description": "Un suivi de prix affiche le prix d'un actif – en EUR et dans les devises supplémentaires choisies. Choisissez d'abord le type d'actif.",
           "data": {
             "category": "Type d'actif"
           },
           "data_description": {
-            "category": "L'étape suivante liste tous les actifs de ce type qui ne sont pas encore suivis."
+            "category": "L'étape suivante liste tous les actifs de ce type que vous ne suivez pas encore. Les grandes listes, comme les actions, mettent quelques secondes à se charger la première fois."
           }
         },
         "asset": {
           "title": "Ajouter un suivi de prix",
-          "description": "Quel actif voulez-vous suivre ?",
+          "description": "Choisissez l'actif dont vous voulez suivre le prix.",
           "data": {
             "asset": "Actif"
           },
           "data_description": {
-            "asset": "Tapez pour rechercher par nom, symbole ou ISIN, puis choisissez un actif. Cliquez sur « Valider » sans rien choisir pour revenir aux types d'actifs."
+            "asset": "Tapez un nom ou un symbole pour rechercher dans la liste. Pour revenir aux types d'actifs, cliquez sur « Valider » sans rien choisir."
+          }
+        },
+        "security": {
+          "title": "Ajouter un suivi de prix",
+          "description": "Choisissez l'actif dont vous voulez suivre le prix.",
+          "data": {
+            "asset": "Actif"
+          },
+          "data_description": {
+            "asset": "Tapez un nom, un symbole ou un ISIN pour rechercher dans la liste. Pour revenir aux types d'actifs, cliquez sur « Valider » sans rien choisir."
           }
         }
       },

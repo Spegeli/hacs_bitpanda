@@ -1260,7 +1260,8 @@ def _fields_without_texts(flow: str, result) -> dict[str, list[str]]:
 
 async def test_every_field_of_every_form_has_a_label_and_a_help_text(hass):
     """Setup of both services, reauth, reconfigure and both Configure forms:
-    each field shows its label and, under it, its help text."""
+    each field shows its label and, under it, its help text -- but the key
+    in the Portfolio's setup, whose step text is the guide to it."""
     forms = []
     result = await _portfolio_form(hass)
     forms.append(("config", result))
@@ -1292,8 +1293,10 @@ async def test_every_field_of_every_form_has_a_label_and_a_help_text(hass):
         ("options", "portfolio"),
         ("options", "price_tracker"),
     ]
+    without_help_text = {("config", "portfolio"): {"data_description": ["api_key"]}}
     for flow, result in forms:
-        assert _fields_without_texts(flow, result) == {}, (flow, result["step_id"])
+        form = (flow, result["step_id"])
+        assert _fields_without_texts(flow, result) == without_help_text.get(form, {}), form
 
 
 async def test_stored_currency_round_trips_through_the_options_form(hass):

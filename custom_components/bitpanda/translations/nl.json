@@ -11,12 +11,9 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "De Bitpanda Portfolio toont je Bitpanda-account in Home Assistant: de totale waarde, je rendementen en een wallet voor elke asset die je bezit. De integratie maakt de wallets zelf aan en verwijdert ze weer als je een asset niet meer bezit – toevoegen of verwijderen hoef je niets.\n\nDaarvoor heeft de integratie een API-sleutel van [{api_key_url}]({api_key_url}) nodig. Ze leest er alleen mee: handelen of geld verplaatsen kan ze niet. Bitpanda-sleutels zijn een jaar geldig; daarna vraagt Home Assistant om een nieuwe. Je kunt de sleutel ook op elk moment zelf vervangen: open op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies \"Herconfigureer\".",
+        "description": "De Bitpanda Portfolio toont je Bitpanda-account in Home Assistant: de totale waarde, je rendementen en een wallet voor elke asset die je bezit. De integratie maakt de wallets zelf aan en verwijdert ze weer als je een asset niet meer bezit – toevoegen of verwijderen hoef je niets.\n\nDaarvoor heeft de integratie een API-sleutel nodig. Zo maak je er een aan:\n\n1. Open [{api_key_url}]({api_key_url}) en maak een nieuwe sleutel aan.\n2. Kies alleen de rechten Guthaben (Balance), Transaktion (Transaction) en Earn (Read) – niet Trading.\n3. Kopieer de sleutel en plak hem hieronder. Bitpanda toont hem maar één keer.\n\nDe integratie leest er alleen mee: handelen of geld verplaatsen kan ze niet.\nBitpanda-sleutels zijn een jaar geldig; daarna vraagt Home Assistant om een nieuwe.\nJe kunt de sleutel op elk moment vervangen: open op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies \"Herconfigureer\".",
         "data": {
           "api_key": "API-sleutel"
-        },
-        "data_description": {
-          "api_key": "Kies bij het aanmaken de rechten Guthaben (Balance), Transaktion (Transaction) en Earn (Read); het recht Trading is niet nodig. Rechten kunnen later niet aan een bestaande sleutel worden toegevoegd."
         }
       },
       "currency": {

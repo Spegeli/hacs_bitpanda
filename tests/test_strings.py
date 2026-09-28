@@ -556,11 +556,77 @@ def test_the_setup_menu_says_what_each_service_is_for():
     }
 
 
+def test_the_portfolio_setup_walks_through_creating_the_key():
+    """The Portfolio's setup step says what the service shows, then walks
+    through creating the key as a numbered list of its own between blank
+    lines -- open the key page, choose the permissions with Trading set off
+    by a dash, paste the key -- and ends with a line each on what the key
+    allows, how long it is valid and where to replace it. Its field has no
+    help text: the step text is the guide, and a key that lacks a
+    permission gets the error that says so. In the approved English and
+    German wording."""
+    for name in _FILES:
+        step = _load(name)["config"]["step"]["portfolio"]
+        assert set(step) == {"title", "description", "data"}, name
+        shows, needs, guide, key = step["description"].split("\n\n")
+        assert "\n" not in shows + needs, name
+        open_page, permissions, paste = guide.split("\n")
+        assert open_page.startswith("1. ") and "[{api_key_url}]({api_key_url})" in open_page, name
+        chosen, left_out = permissions.split(" – ")
+        assert chosen.startswith("2. "), name
+        assert all(p in chosen for p in ("Guthaben", "Transaktion", "Earn (Read)")), name
+        assert "Trading" in left_out and "Trading" not in chosen, name
+        assert paste.startswith("3. "), name
+        assert len(key.split("\n")) == 3, name
+    assert _load("strings.json")["config"]["step"]["portfolio"] == {
+        "title": "Bitpanda Portfolio",
+        "description": (
+            "The Bitpanda Portfolio shows your Bitpanda account in Home Assistant: its total"
+            " value, your returns, and a wallet for every asset you hold. The integration"
+            " creates the wallets itself and removes them when you no longer hold an asset"
+            " – you do not need to add or delete any.\n\n"
+            "For this, the integration needs an API key. To create one:\n\n"
+            "1. Open [{api_key_url}]({api_key_url}) and create a new key.\n"
+            "2. Select only the permissions Guthaben (Balance), Transaktion (Transaction) and"
+            " Earn (Read) – not Trading.\n"
+            "3. Copy the key and paste it below. Bitpanda shows it only once.\n\n"
+            "The integration only reads with it: it cannot trade or move money.\n"
+            "Bitpanda keys are valid for one year; after that, Home Assistant asks for a new"
+            " one.\n"
+            'You can replace the key at any time: open the ⋮ menu of the "Bitpanda Portfolio"'
+            ' entry on the Bitpanda integration page and choose "Reconfigure".'
+        ),
+        "data": {"api_key": "API key"},
+    }
+    assert _load("translations/de.json")["config"]["step"]["portfolio"] == {
+        "title": "Bitpanda Portfolio",
+        "description": (
+            "Das Bitpanda Portfolio zeigt dein Bitpanda-Konto in Home Assistant: den"
+            " Gesamtwert, deine Renditen und für jedes Asset, das du besitzt, ein eigenes"
+            " Wallet. Die Wallets legt die Integration selbst an und entfernt sie wieder, wenn"
+            " du ein Asset nicht mehr besitzt – hinzufügen oder löschen musst du nichts.\n\n"
+            "Dafür braucht die Integration einen API-Schlüssel. So erstellst du ihn:\n\n"
+            "1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen Schlüssel.\n"
+            "2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“"
+            " – kein „Trading“.\n"
+            "3. Kopiere den Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal"
+            " an.\n\n"
+            "Die Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\n"
+            "Bitpanda-Schlüssel gelten ein Jahr; danach fragt Home Assistant nach einem"
+            " neuen.\n"
+            "Ersetzen kannst du den Schlüssel jederzeit: Öffne auf der"
+            " Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“ und"
+            " wähle „Neu konfigurieren“."
+        ),
+        "data": {"api_key": "API-Schlüssel"},
+    }
+
+
 def test_german_texts_quote_the_permission_names():
     """Wherever a German text names the key's permissions, it quotes them,
     as Bitpanda's key page labels them: „Guthaben“, „Transaktion“,
-    „Earn (Read)“ and „Trading“ -- in the setup, the reauth and the
-    reconfigure help as in the missing-permissions error."""
+    „Earn (Read)“ and „Trading“ -- in the setup's guide, the reauth and
+    the reconfigure help as in the missing-permissions error."""
     unquoted = [
         (key, name)
         for key, text in _texts(_load("translations/de.json")).items()
@@ -586,11 +652,17 @@ def test_the_refresh_action_says_what_it_does():
     )
 
 
+# The one field without a help text: the key in the Portfolio's setup, whose
+# step text above it is the guide to creating the key.
+_WITHOUT_HELP_TEXT = {"config.portfolio"}
+
+
 def test_every_field_has_a_help_text():
     """Under every field of every dialog -- setup, reauth, reconfigure,
     Configure and "Add price tracker" -- a help text (`data_description`)
-    says what it is for: exactly one per labelled field. The flow tests
-    check that every field a form shows is labelled."""
+    says what it is for: exactly one per labelled field, except where the
+    step text is the guide to its field. The flow tests check that every
+    field a form shows is labelled."""
     strings = _load("strings.json")
     steps = {
         **{f"config.{step_id}": step for step_id, step in strings["config"]["step"].items()},
@@ -609,7 +681,8 @@ def test_every_field_has_a_help_text():
     }
     assert len(labelled) == 13
     for name, step in labelled.items():
-        assert set(step.get("data_description", {})) == set(step["data"]), name
+        helped = set() if name in _WITHOUT_HELP_TEXT else set(step["data"])
+        assert set(step.get("data_description", {})) == helped, name
 
 
 # --- Failed requests: one text per kind of failure ---------------------------------

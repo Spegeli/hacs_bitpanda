@@ -11,12 +11,9 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Bitpanda Portfolio pokazuje Twoje konto Bitpanda w Home Assistant: wartość całkowitą, Twoje stopy zwrotu i osobny portfel dla każdego aktywa, które posiadasz. Integracja sama tworzy portfele i usuwa je, gdy przestajesz posiadać dane aktywo – nie musisz niczego dodawać ani usuwać.\n\nDo tego integracja potrzebuje klucza API ze strony [{api_key_url}]({api_key_url}). Służy jej on tylko do odczytu: nie może handlować ani przenosić pieniędzy. Klucze Bitpanda są ważne przez rok; potem Home Assistant poprosi o nowy. Klucz możesz też w każdej chwili wymienić samodzielnie: otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio” i wybierz „Rekonfiguracja”.",
+        "description": "Bitpanda Portfolio pokazuje Twoje konto Bitpanda w Home Assistant: wartość całkowitą, Twoje stopy zwrotu i osobny portfel dla każdego aktywa, które posiadasz. Integracja sama tworzy portfele i usuwa je, gdy przestajesz posiadać dane aktywo – nie musisz niczego dodawać ani usuwać.\n\nDo tego integracja potrzebuje klucza API. Jak go utworzyć:\n\n1. Otwórz [{api_key_url}]({api_key_url}) i utwórz nowy klucz.\n2. Wybierz tylko uprawnienia Guthaben (Balance), Transaktion (Transaction) i Earn (Read) – bez uprawnienia Trading.\n3. Skopiuj klucz i wklej go poniżej. Bitpanda pokazuje go tylko raz.\n\nIntegracja używa klucza tylko do odczytu: nie może handlować ani przenosić pieniędzy.\nKlucze Bitpanda są ważne przez rok; potem Home Assistant poprosi o nowy.\nKlucz możesz w każdej chwili wymienić: otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio” i wybierz „Rekonfiguracja”.",
         "data": {
           "api_key": "Klucz API"
-        },
-        "data_description": {
-          "api_key": "Przy tworzeniu klucza wybierz uprawnienia Guthaben (Balance), Transaktion (Transaction) i Earn (Read); uprawnienie Trading nie jest potrzebne. Do istniejącego klucza nie można później dodać uprawnień."
         }
       },
       "currency": {

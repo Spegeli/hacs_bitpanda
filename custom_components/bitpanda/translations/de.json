@@ -35,7 +35,7 @@
               "language": "Sprache für Gruppentitel und Meldungen"
             },
             "data_description": {
-              "language": "Gruppentitel und die eigenen Meldungen der Integration verwenden diese Sprache. Sensornamen folgen der Systemsprache von Home Assistant."
+              "language": "Gruppentitel und die eigenen Meldungen der Integration verwenden diese Sprache. Sensornamen folgen der Systemsprache von Home Assistant. Diese Sprache kannst du später mit „Konfigurieren“ (⚙) beim Eintrag „Bitpanda Portfolio“ auf der Bitpanda-Integrationsseite ändern."
             }
           }
         }

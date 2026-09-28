@@ -35,7 +35,7 @@
               "language": "Lingua dei titoli dei gruppi e dei messaggi"
             },
             "data_description": {
-              "language": "I titoli dei gruppi e i messaggi propri dell'integrazione usano questa lingua. I nomi dei sensori seguono la lingua di sistema di Home Assistant."
+              "language": "I titoli dei gruppi e i messaggi propri dell'integrazione usano questa lingua. I nomi dei sensori seguono la lingua di sistema di Home Assistant. Puoi modificare questa lingua in seguito con \"Configura\" (⚙) sulla voce \"Bitpanda Portfolio\" nella pagina dell'integrazione Bitpanda."
             }
           }
         }

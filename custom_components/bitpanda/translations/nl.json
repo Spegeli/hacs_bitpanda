@@ -35,7 +35,7 @@
               "language": "Taal van groepstitels en meldingen"
             },
             "data_description": {
-              "language": "Groepstitels en de eigen meldingen van de integratie gebruiken deze taal. Sensornamen volgen de systeemtaal van Home Assistant."
+              "language": "Groepstitels en de eigen meldingen van de integratie gebruiken deze taal. Sensornamen volgen de systeemtaal van Home Assistant. Je kunt deze taal later wijzigen via \"Configureren\" (⚙) bij de invoer \"Bitpanda Portfolio\" op de integratiepagina van Bitpanda."
             }
           }
         }

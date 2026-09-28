@@ -178,6 +178,7 @@ _LABEL_REFERENCES = {
     ],
     "configure": [
         ("config", "step", "price_tracker", "description"),
+        ("config", "step", "currency", "sections", "language", "data_description", "language"),
         ("config", "abort", "no_reconfigure"),
     ],
     "submit": [
@@ -241,6 +242,7 @@ _LOCATED_TEXTS = {
     ("options", "step", "portfolio", "description"): "⋮",
     ("issues", "currency_dropped", "description"): "⋮",
     ("config", "step", "price_tracker", "description"): "⚙",
+    ("config", "step", "currency", "sections", "language", "data_description", "language"): "⚙",
     ("issues", "price_tracker_exists", "description"): "",
     ("issues", "portfolio_exists", "description"): "⋮",
     ("exceptions", "portfolio_device_not_removable", "message"): "⋮",
@@ -378,15 +380,20 @@ def test_the_configure_currencies_field_says_what_comes_beside_eur():
 
 def test_the_setup_names_the_language_as_configure_does():
     """Both setup dialogs -- the Price Tracker's, the Portfolio's currency
-    step -- ask for the language in a section worded exactly like
-    Configure's: one setting, one wording, wherever it is set."""
+    step -- ask for the language in a section worded like Configure's: one
+    setting, one wording, wherever it is set. The Portfolio's help text goes
+    on to say where to change the language later; the Price Tracker's text
+    above its form says so already, for both of its settings."""
     for name in _FILES:
         strings = _load(name)
         configure = strings["options"]["step"]["price_tracker"]["sections"]["language"]
-        for step_id in ("price_tracker", "currency"):
-            assert strings["config"]["step"][step_id]["sections"] == {"language": configure}, (
-                name, step_id,
-            )
+        steps = strings["config"]["step"]
+        assert steps["price_tracker"]["sections"] == {"language": configure}, name
+        portfolio = steps["currency"]["sections"]["language"]
+        assert (portfolio["name"], portfolio["data"]) == (configure["name"], configure["data"]), name
+        assert portfolio["data_description"]["language"].startswith(
+            configure["data_description"]["language"] + " "
+        ), name
 
 
 def test_every_field_has_a_help_text():

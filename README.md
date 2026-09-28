@@ -69,7 +69,7 @@ Entity IDs, device names and log messages are always English. A group you rename
 ## 📋 Requirements
 
 - Home Assistant **2025.5** or newer
-- For the Portfolio: a Bitpanda account and an API key ([create one here](https://app.bitpanda.com/my-account/apikey)). The Price Tracker needs neither.
+- For the Portfolio: a Bitpanda account and an API key (see [Set up the Portfolio](#set-up-the-portfolio)). The Price Tracker needs neither.
 
 ---
 
@@ -96,7 +96,10 @@ Or add it by hand:
 
 ### Beta versions
 
-A new version can come out as a beta first, for testing before everyone gets it. HACS offers betas only to installations that ask for them: under **Settings → Devices & services → HACS**, open the **Bitpanda** device, enable its **Pre-release** switch (HACS creates it disabled) and turn it on. Turned off again, HACS offers stable versions only; a beta you installed stays until the next stable version replaces it.
+A new version can come out as a beta first, for testing before everyone gets it. HACS offers two ways to get one:
+
+- **Once, a version of your choice:** **HACS → Bitpanda → ⋮ → Redownload**, open **Need a different version?**, choose the version under **Release** — betas are marked as pre-releases — and select **Download**. Restart Home Assistant afterwards.
+- **As updates:** under **Settings → Devices & services → HACS**, open **Bitpanda**. Its **Pre-release** switch is under **Diagnostic** and disabled at first: select it, open its settings (⚙), enable it, and turn it on once it appears. HACS then offers betas as updates too. Turned off again, it offers stable versions only; a beta you installed stays until the next stable version replaces it.
 
 ---
 

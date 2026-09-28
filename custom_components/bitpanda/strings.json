@@ -121,7 +121,7 @@
               "extra_currencies": "In addition to EUR"
             },
             "data_description": {
-              "extra_currencies": "Each selected currency adds one more sensor per asset, converted with the daily reference rates of the European Central Bank. Removing a currency removes those sensors; their history is kept and comes back when you select the currency again."
+              "extra_currencies": "Each selected currency adds one more sensor per asset, converted with the daily reference rates of the European Central Bank.\nRemoving a currency removes those sensors; their history is kept and comes back when you select the currency again."
             }
           },
           "language": {

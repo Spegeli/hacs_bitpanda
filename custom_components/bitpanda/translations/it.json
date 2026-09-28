@@ -121,7 +121,7 @@
               "extra_currencies": "Oltre a EUR"
             },
             "data_description": {
-              "extra_currencies": "Ogni valuta selezionata aggiunge un sensore in più per asset, convertito con i tassi di cambio di riferimento giornalieri della Banca centrale europea. Togliere una valuta rimuove quei sensori; la loro cronologia viene conservata e torna quando selezioni di nuovo la valuta."
+              "extra_currencies": "Ogni valuta selezionata aggiunge un sensore in più per asset, convertito con i tassi di cambio di riferimento giornalieri della Banca centrale europea.\nTogliere una valuta rimuove quei sensori; la loro cronologia viene conservata e torna quando selezioni di nuovo la valuta."
             }
           },
           "language": {

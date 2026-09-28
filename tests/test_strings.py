@@ -371,10 +371,10 @@ def test_the_configure_currencies_field_says_what_comes_beside_eur():
     }
     assert help_texts == {
         "en": "Each selected currency adds one more sensor per asset, converted with the daily "
-        "reference rates of the European Central Bank. Removing a currency removes those "
+        "reference rates of the European Central Bank.\nRemoving a currency removes those "
         "sensors; their history is kept and comes back when you select the currency again.",
         "de": "Jede gewählte Währung fügt pro Asset einen weiteren Sensor hinzu, umgerechnet mit "
-        "den täglichen Referenzkursen der Europäischen Zentralbank. Wird eine Währung "
+        "den täglichen Referenzkursen der Europäischen Zentralbank.\nWird eine Währung "
         "abgewählt, werden diese Sensoren entfernt; ihr Verlauf bleibt erhalten und ist wieder "
         "da, wenn du die Währung erneut wählst.",
     }
@@ -384,8 +384,9 @@ def test_the_setup_words_the_currencies_as_configure_does():
     """The Price Tracker's setup shows its currencies as Configure does: in a
     section of the same name, the field under the same label, and the same
     first sentence under it -- what a currency adds and how it is
-    converted. Configure goes on to say what removing one does; at setup
-    there is nothing to remove."""
+    converted. Configure goes on, on a line of its own (the help text is
+    Markdown with line breaks, at the 2025.5 floor as at 2026.9), to say
+    what removing one does; at setup there is nothing to remove."""
     for name in _FILES:
         strings = _load(name)
         step = strings["config"]["step"]["price_tracker"]
@@ -394,7 +395,7 @@ def test_the_setup_words_the_currencies_as_configure_does():
         configure = strings["options"]["step"]["price_tracker"]["sections"]["currencies"]
         assert (setup["name"], setup["data"]) == (configure["name"], configure["data"]), name
         first = setup["data_description"]["extra_currencies"]
-        assert configure["data_description"]["extra_currencies"].startswith(first + " "), name
+        assert configure["data_description"]["extra_currencies"].startswith(first + "\n"), name
 
 
 def test_the_setup_names_the_language_as_configure_does():

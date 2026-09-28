@@ -121,7 +121,7 @@
               "extra_currencies": "En plus de l'EUR"
             },
             "data_description": {
-              "extra_currencies": "Chaque devise sélectionnée ajoute un capteur de plus par actif, converti avec les taux de référence quotidiens de la Banque centrale européenne. Retirer une devise retire ces capteurs ; leur historique est conservé et revient lorsque vous sélectionnez à nouveau la devise."
+              "extra_currencies": "Chaque devise sélectionnée ajoute un capteur de plus par actif, converti avec les taux de référence quotidiens de la Banque centrale européenne.\nRetirer une devise retire ces capteurs ; leur historique est conservé et revient lorsque vous sélectionnez à nouveau la devise."
             }
           },
           "language": {

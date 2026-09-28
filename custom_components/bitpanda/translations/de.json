@@ -121,7 +121,7 @@
               "extra_currencies": "Zusätzlich zu EUR"
             },
             "data_description": {
-              "extra_currencies": "Jede gewählte Währung fügt pro Asset einen weiteren Sensor hinzu, umgerechnet mit den täglichen Referenzkursen der Europäischen Zentralbank. Wird eine Währung abgewählt, werden diese Sensoren entfernt; ihr Verlauf bleibt erhalten und ist wieder da, wenn du die Währung erneut wählst."
+              "extra_currencies": "Jede gewählte Währung fügt pro Asset einen weiteren Sensor hinzu, umgerechnet mit den täglichen Referenzkursen der Europäischen Zentralbank.\nWird eine Währung abgewählt, werden diese Sensoren entfernt; ihr Verlauf bleibt erhalten und ist wieder da, wenn du die Währung erneut wählst."
             }
           },
           "language": {

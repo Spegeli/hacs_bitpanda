@@ -121,7 +121,7 @@
               "extra_currencies": "Naast EUR"
             },
             "data_description": {
-              "extra_currencies": "Elke gekozen valuta voegt per asset nog een sensor toe, omgerekend met de dagelijkse referentiekoersen van de Europese Centrale Bank. Als je een valuta weghaalt, worden die sensoren verwijderd; hun geschiedenis blijft bewaard en komt terug als je de valuta opnieuw kiest."
+              "extra_currencies": "Elke gekozen valuta voegt per asset nog een sensor toe, omgerekend met de dagelijkse referentiekoersen van de Europese Centrale Bank.\nAls je een valuta weghaalt, worden die sensoren verwijderd; hun geschiedenis blijft bewaard en komt terug als je de valuta opnieuw kiest."
             }
           },
           "language": {

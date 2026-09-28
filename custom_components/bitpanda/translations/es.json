@@ -121,7 +121,7 @@
               "extra_currencies": "Además de EUR"
             },
             "data_description": {
-              "extra_currencies": "Cada moneda seleccionada añade un sensor más por activo, convertido con los tipos de cambio de referencia diarios del Banco Central Europeo. Al quitar una moneda se retiran esos sensores; su historial se conserva y vuelve cuando seleccionas de nuevo la moneda."
+              "extra_currencies": "Cada moneda seleccionada añade un sensor más por activo, convertido con los tipos de cambio de referencia diarios del Banco Central Europeo.\nAl quitar una moneda se retiran esos sensores; su historial se conserva y vuelve cuando seleccionas de nuevo la moneda."
             }
           },
           "language": {

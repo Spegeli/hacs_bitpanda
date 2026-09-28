@@ -139,7 +139,13 @@ class BitpandaApiClient:
         self._headers = {"x-api-key": api_key} if api_key else {}
 
     async def _request(self, path: str, params: dict[str, Any] | None = None) -> Any:
-        """Perform one GET and return the decoded body.
+        """Perform one GET and return the decoded body, always a dict.
+
+        A 200 whose JSON is not an object -- null, a list, a bare string or
+        number -- is as unreadable as a body that fails to parse at all: every
+        caller does `.get` on what comes back, so a wrong top-level shape
+        would otherwise escape as an unlogged AttributeError instead of the
+        outage it is.
 
         Failures are logged at DEBUG only: every caller either reports an
         outage once itself (the coordinators) or turns it into a form error,
@@ -179,7 +185,10 @@ class BitpandaApiClient:
                         kind=ERROR_RATE_LIMITED, path=path, status=status,
                     )
                 response.raise_for_status()
-                return await response.json()
+                body = await response.json()
+                if not isinstance(body, dict):
+                    raise _unreadable(path)
+                return body
         except aiohttp.ContentTypeError:
             # A 200 answer that is no JSON -- a maintenance or captive-portal
             # page served as text/html: json() refuses its content type
@@ -232,6 +241,10 @@ class BitpandaApiClient:
         far as the whole listing. That, a listing longer than _MAX_PAGES, and a
         page that announces another without a cursor all raise instead: a
         failed update is honest, a truncated total published as fact is not.
+
+        A page whose `data` is not a list, or whose items are not objects,
+        is as unreadable as a malformed body: an id could not be read from it
+        either way.
         """
         params = dict(params)
         params.setdefault("page_size", MAX_PAGE_SIZE)
@@ -241,7 +254,12 @@ class BitpandaApiClient:
 
         for _ in range(_MAX_PAGES):
             body = await self._request(path, params)
-            for item in body.get("data") or []:
+            data = body.get("data") or []
+            if not isinstance(data, list):
+                raise _unreadable(path)
+            for item in data:
+                if not isinstance(item, dict):
+                    raise _unreadable(path)
                 key = item.get("id")
                 if key is None:
                     key = item.get("operation_id")
@@ -275,8 +293,12 @@ class BitpandaApiClient:
 
     async def async_get_currencies(self) -> list[dict[str, Any]]:
         """List all fiat currencies. Not paginated."""
-        body = await self._request("/currencies")
-        return body.get("data") or []
+        path = "/currencies"
+        body = await self._request(path)
+        data = body.get("data") or []
+        if not isinstance(data, list) or not all(isinstance(item, dict) for item in data):
+            raise _unreadable(path)
+        return data
 
     async def async_get_assets(
         self,
@@ -319,8 +341,12 @@ class BitpandaApiClient:
         Always returns EUR. Every currency parameter that could plausibly exist
         was probed and is silently ignored, so none is sent.
         """
-        body = await self._request(f"/tickers/{asset_id}")
-        return body.get("data") or {}
+        path = f"/tickers/{asset_id}"
+        body = await self._request(path)
+        data = body.get("data") or {}
+        if not isinstance(data, dict):
+            raise _unreadable(path)
+        return data
 
     async def async_get_portfolio(
         self, *, equivalent_currency_id: str | None = None
@@ -334,8 +360,12 @@ class BitpandaApiClient:
         params: dict[str, Any] = {}
         if equivalent_currency_id:
             params["equivalent_currency_id"] = equivalent_currency_id
-        body = await self._request("/portfolio", params or None)
-        return body.get("data") or []
+        path = "/portfolio"
+        body = await self._request(path, params or None)
+        data = body.get("data") or []
+        if not isinstance(data, list) or not all(isinstance(item, dict) for item in data):
+            raise _unreadable(path)
+        return data
 
     async def async_get_portfolio_history(
         self,
@@ -352,8 +382,12 @@ class BitpandaApiClient:
         params: dict[str, Any] = {"timeframe": timeframe}
         if equivalent_currency_id:
             params["equivalent_currency_id"] = equivalent_currency_id
-        body = await self._request("/portfolio-history", params)
-        return body.get("data") or {}
+        path = "/portfolio-history"
+        body = await self._request(path, params)
+        data = body.get("data") or {}
+        if not isinstance(data, dict):
+            raise _unreadable(path)
+        return data
 
     async def async_get_earn_configs(self) -> list[dict[str, Any]]:
         """Available Earn products and their rates.

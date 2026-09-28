@@ -308,6 +308,31 @@ async def test_paginate_raises_when_another_page_is_announced_without_a_cursor()
     assert mocker.call_count == 1
 
 
+# --- Malformed items (K1) -----------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"data": ["x"], "has_next_page": False},
+        {"data": "x", "has_next_page": False},
+    ],
+    ids=["item_not_a_dict", "data_not_a_list"],
+)
+async def test_a_page_of_no_objects_is_unreadable(body):
+    """A page whose `data` is not a list, or whose items are not objects,
+    cannot be matched against a wallet or an asset id: as unreadable as a
+    malformed body, not silently skipped."""
+    with mock_aiohttp_client() as mocker:
+        mocker.get(f"{API_BASE_URL}/assets", json=body)
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            with pytest.raises(BitpandaApiError, match="/assets") as excinfo:
+                await client.async_get_assets()
+
+    assert _incomplete(excinfo.value) == ("unreadable", "/assets", None)
+
+
 @pytest.mark.timeout(5)
 async def test_pagination_errors_never_carry_the_api_key():
     secret = "totally-secret-key"

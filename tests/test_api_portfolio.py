@@ -163,8 +163,14 @@ async def test_request_failures_are_logged_at_debug_only(caplog):
         ({"exc": aiohttp.ClientConnectionError("details")}, BitpandaApiError, "connection", None),
         ({"exc": asyncio.TimeoutError()}, BitpandaApiError, "timeout", None),
         ({"text": "not json{"}, BitpandaApiError, "unreadable", None),
+        ({"text": "null"}, BitpandaApiError, "unreadable", None),
+        ({"text": "[]"}, BitpandaApiError, "unreadable", None),
+        ({"text": '"maintenance"'}, BitpandaApiError, "unreadable", None),
     ],
-    ids=["http", "redirect", "unauthorized", "rate_limited", "connection", "timeout", "unreadable"],
+    ids=[
+        "http", "redirect", "unauthorized", "rate_limited", "connection", "timeout",
+        "unreadable", "json_null", "json_list", "json_string",
+    ],
 )
 async def test_a_failed_request_says_what_failed_without_words(response, error, kind, status):
     """Beside its English message for the log, every failure carries what
@@ -181,6 +187,25 @@ async def test_a_failed_request_says_what_failed_without_words(response, error, 
         kind, "/portfolio", status
     )
     assert secret not in repr(vars(excinfo.value))
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"data": [{"price": "1"}]}, {"data": "x"}],
+    ids=["list", "string"],
+)
+async def test_a_ticker_answer_that_is_no_object_is_unreadable(body):
+    """`data` must be an object: a ticker's non-empty list or a bare string
+    is as unreadable as a malformed body, not a value handed to the caller."""
+    with mock_aiohttp_client() as mocker:
+        mocker.get(f"{API_BASE_URL}/tickers/x", json=body)
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            with pytest.raises(BitpandaApiError) as excinfo:
+                await client.async_get_ticker("x")
+    assert (excinfo.value.kind, excinfo.value.path, excinfo.value.status) == (
+        "unreadable", "/tickers/x", None
+    )
 
 
 async def test_a_redirect_is_an_error():
@@ -277,3 +302,48 @@ async def test_null_data_becomes_an_empty_result():
         async with mocker.create_session(asyncio.get_running_loop()) as session:
             client = BitpandaApiClient("key", session)
             assert await client.async_get_portfolio() == []
+
+
+@pytest.mark.parametrize(
+    ("path", "method", "args", "body", "expected"),
+    [
+        ("/tickers/x", "async_get_ticker", ("x",), {"data": []}, {}),
+        ("/tickers/x", "async_get_ticker", ("x",), {"data": None}, {}),
+        ("/portfolio", "async_get_portfolio", (), {"data": None}, []),
+        ("/currencies", "async_get_currencies", (), {"data": []}, []),
+    ],
+    ids=["ticker_empty_list", "ticker_null", "portfolio_null", "currencies_empty_list"],
+)
+async def test_an_empty_data_stays_an_empty_result(path, method, args, body, expected):
+    """Review Focus 1: however it is spelled -- an absent key, `null` or an
+    empty list -- an empty `data` stays today's empty result. K1's tighter
+    shape checks must not mistake it for a wrong shape."""
+    with mock_aiohttp_client() as mocker:
+        mocker.get(f"{API_BASE_URL}{path}", json=body)
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            assert await getattr(client, method)(*args) == expected
+
+
+@pytest.mark.parametrize(
+    ("path", "method", "args", "body"),
+    [
+        ("/portfolio", "async_get_portfolio", (), {"data": "not-a-list"}),
+        ("/currencies", "async_get_currencies", (), {"data": "not-a-list"}),
+        ("/portfolio-history", "async_get_portfolio_history", (), {"data": "not-a-dict"}),
+    ],
+    ids=["portfolio_data_not_a_list", "currencies_data_not_a_list", "history_data_not_a_dict"],
+)
+async def test_a_present_data_of_the_wrong_shape_is_unreadable(path, method, args, body):
+    """A present `data` that is not the shape its endpoint promises -- a
+    string where a list or an object belongs -- is as unreadable as an
+    absent or malformed body."""
+    with mock_aiohttp_client() as mocker:
+        mocker.get(f"{API_BASE_URL}{path}", json=body)
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            with pytest.raises(BitpandaApiError) as excinfo:
+                await getattr(client, method)(*args)
+    assert (excinfo.value.kind, excinfo.value.path, excinfo.value.status) == (
+        "unreadable", path, None
+    )

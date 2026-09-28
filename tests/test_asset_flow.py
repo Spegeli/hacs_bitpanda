@@ -10,10 +10,11 @@ from homeassistant.util import dt as dt_util
 import pytest
 import voluptuous as vol
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client
 
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
 from custom_components.bitpanda.assets import asset_label, slim_asset
-from custom_components.bitpanda.const import DOMAIN
+from custom_components.bitpanda.const import API_BASE_URL, DOMAIN
 
 from tests.conftest import load_fixture, price_group
 
@@ -181,6 +182,22 @@ async def test_listing_errors_map_to_form_errors(hass, failure, error):
     assert result["errors"]["base"] == error
     assert _options(result) == []
     await _finish_by_starting_a_group(hass, entry, result, "metal", SILVER)
+
+
+async def test_a_listing_of_the_wrong_shape_says_cannot_connect(hass):
+    """CB2: the real client against the test mocker, one level up from
+    api.py's own tests -- a wrong-shaped /assets body must not escape
+    _paginate as AttributeError and leave the dialog showing "Unknown error
+    occurred"; it is as unreadable as a malformed body, and cannot_connect
+    the same way."""
+    entry = _entry(hass)
+    with mock_aiohttp_client() as mocker:
+        mocker.get(
+            f"{API_BASE_URL}/assets",
+            json={"data": ["x"], "has_next_page": False},
+        )
+        result = await _pick_category(hass, entry)
+    assert result["errors"]["base"] == "cannot_connect"
 
 
 async def test_the_catalogue_is_fetched_without_a_key(hass):

@@ -9,8 +9,14 @@ import pytest
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client
 
-from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
+from custom_components.bitpanda.api import (
+    BitpandaApiClient,
+    BitpandaApiError,
+    BitpandaRateLimitError,
+)
+from custom_components.bitpanda.const import API_BASE_URL
 from custom_components.bitpanda.ecb import EcbError, EcbRates
 from custom_components.bitpanda.price_coordinator import (
     EcbCoordinator,
@@ -250,6 +256,23 @@ async def test_an_unreadable_price_counts_as_a_failure():
 async def test_a_non_finite_price_counts_as_a_failure():
     client = _Client({BTC: "nan", SOL: "150.00000000"})
     assert await _coordinator(client)._async_update_data() == {SOL: 150.0}
+
+
+async def test_an_asset_answered_with_no_object_fails_alone():
+    """CB2: a malformed /tickers body -- here, a bare `null` -- must not
+    escape as AttributeError and abort the round for every asset. The real
+    client against the test mocker: _Client, a fake, always answers a dict
+    or raises BitpandaApiError, so it cannot reproduce this."""
+    with mock_aiohttp_client() as mocker:
+        mocker.get(f"{API_BASE_URL}/tickers/{BTC}", text="null")
+        mocker.get(
+            f"{API_BASE_URL}/tickers/{SOL}", json={"data": {"price": "150.00000000"}}
+        )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            coordinator = _coordinator(client)
+            assert await _round(coordinator) == {SOL: 150.0}
+    assert coordinator.failing_assets == {BTC}
 
 
 async def test_a_recovered_asset_is_warned_about_again_when_it_fails_again(caplog, freezer):

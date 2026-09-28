@@ -1,9 +1,10 @@
 """Tests for the coordinators whose sensors keep their last data through
 short outages, and the entities that follow them (tolerance.py)."""
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 import logging
+from typing import Any
 
 import pytest
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -37,12 +38,23 @@ class _Replaced:
     data: int
 
 
+@dataclass
+class _Held:
+    """A refresh that waits: it sets `entered`, and answers with `answer` --
+    data, or an exception to raise -- once `release` is set."""
+
+    answer: Any
+    entered: asyncio.Event = field(default_factory=asyncio.Event)
+    release: asyncio.Event = field(default_factory=asyncio.Event)
+
+
 class _Probe(TolerantCoordinator[int]):
     """Answers from a script: an int is the data, an exception is raised, a
-    _Replaced replaces the data and fails, and _HANG hangs until the refresh
-    is cancelled. A callable is called first and answers with what it
-    returns -- time can pass in it while the answer is on its way. Every
-    fetch records the time its refresh was asked for."""
+    _Replaced replaces the data and fails, _HANG hangs until the refresh is
+    cancelled, and a _Held waits to be released. A callable is called first
+    and answers with what it returns -- time can pass in it while the answer
+    is on its way. Every fetch records the time its refresh was asked
+    for."""
 
     def __init__(self, hass, *script):
         super().__init__(
@@ -59,6 +71,10 @@ class _Probe(TolerantCoordinator[int]):
             item = item()
         if item == _HANG:
             await asyncio.Event().wait()
+        if isinstance(item, _Held):
+            item.entered.set()
+            await item.release.wait()
+            item = item.answer
         if isinstance(item, _Replaced):
             self.data = item.data
             raise _down()
@@ -112,6 +128,22 @@ def _rejection_records(caplog) -> list[logging.LogRecord]:
         record for record in caplog.records
         if "the API key was rejected" in record.getMessage()
     ]
+
+
+async def _refresh_in_steps(probe) -> None:
+    """One refresh as DataUpdateCoordinator._async_refresh runs it on every
+    Home Assistant version supported, as far as the tolerance is concerned:
+    _async_update_data awaited, its outcome recorded, then the hook -- all
+    in the running task. Home Assistant's own notice to the listeners is
+    left out: the listeners hear from the tolerance alone."""
+    try:
+        probe.data = await probe._async_update_data()
+    except (UpdateFailed, ConfigEntryAuthFailed) as err:
+        probe.last_exception = err
+        probe.last_update_success = False
+    else:
+        probe.last_update_success = True
+    probe._async_refresh_finished()
 
 
 async def _cancel_a_refresh(probe) -> None:
@@ -201,6 +233,35 @@ async def test_a_rejected_key_after_a_cancelled_refresh_tells_the_listeners(hass
     await _refresh(probe, freezer)
     assert entity.available is False
     assert seen == [True, False]
+
+
+async def test_a_hook_without_a_noted_refresh_still_tells_a_confirmation(hass, freezer):
+    """Should the hook ever run without _async_update_data before it -- no
+    Home Assistant version supported does that -- the clock stands in for
+    the request time, and the outcome and the data now for those before
+    it. A failure confirmed there is still told to the listeners."""
+    probe = _Probe(hass, 1)
+    seen = _listen(probe)
+    await probe.async_refresh()
+    freezer.tick(_REGULAR)
+    probe.last_update_success = False
+    probe.last_exception = ConfigEntryAuthFailed()
+    probe._async_refresh_finished()
+    assert seen == [True, False]
+    assert probe._streak.first == dt_util.utcnow()
+
+
+async def test_a_cancelled_refresh_leaves_no_state_behind(hass, freezer):
+    """A refresh notes its state as it begins, for the hook, which Home
+    Assistant does not call after a refresh cancelled while under way. The
+    next refresh drops what the cancelled one left, its task being done,
+    and nothing is kept once that refresh is over."""
+    probe = _Probe(hass, 1, _HANG, 2)
+    await probe.async_refresh()
+    await _cancel_a_refresh(probe)
+    assert len(probe._refreshes) == 1
+    await _refresh(probe, freezer)
+    assert probe._refreshes == {}
 
 
 async def test_a_failed_refresh_that_replaces_the_data_tells_the_listeners(hass, freezer):
@@ -321,6 +382,51 @@ async def test_a_key_rejected_after_a_success_is_left_to_home_assistant(
         record.levelno for record in caplog.records
         if record.getMessage().startswith("Authentication failed while fetching probe data")
     ] == [logging.ERROR]
+
+
+async def test_overlapping_refreshes_are_each_judged_by_their_own_state(
+    hass, freezer, caplog
+):
+    """Home Assistant 2025.5 takes no lock around a refresh, so refreshes can
+    overlap. Refresh A begins after a failure and waits. Meanwhile refresh C
+    succeeds, then refresh B begins after that success and waits too. B
+    fails, then A fails with a rejected key, which confirms the failure.
+    Each hook takes the state its own refresh noted as it began: B's request
+    time starts the streak and A's ends it, not the clock's. A, begun after
+    a failure, tells the listeners itself -- exactly once -- and warns about
+    the key; Home Assistant would do neither for it. Judged by B's state,
+    begun after a success, A would do neither too, and the sensors would go
+    on showing the last data."""
+    held_a = _Held(ConfigEntryAuthFailed())
+    held_b = _Held(_down())
+    probe = _Probe(hass, 1, _down(), held_a, 2, held_b)
+    seen = _listen(probe)
+    await _refresh_in_steps(probe)
+    freezer.tick(_REGULAR)
+    await _refresh_in_steps(probe)
+    freezer.tick(_REGULAR)
+    asked_a = dt_util.utcnow()
+    refresh_a = asyncio.create_task(_refresh_in_steps(probe))
+    await held_a.entered.wait()
+    freezer.tick(_REGULAR)
+    await _refresh_in_steps(probe)
+    freezer.tick(_REGULAR)
+    asked_b = dt_util.utcnow()
+    refresh_b = asyncio.create_task(_refresh_in_steps(probe))
+    await held_b.entered.wait()
+    freezer.tick(_REGULAR)
+    with caplog.at_level(logging.WARNING):
+        held_b.release.set()
+        await refresh_b
+        assert seen == []
+        held_a.release.set()
+        await refresh_a
+    assert seen == [False]
+    assert (probe._streak.count, probe._streak.first, probe._streak.last) == (
+        2, asked_b, asked_a
+    )
+    assert [record.getMessage() for record in _rejection_records(caplog)] == [_KEY_REJECTED]
+    assert probe._refreshes == {}
 
 
 async def test_a_slow_first_failure_does_not_prolong_it(hass, freezer):

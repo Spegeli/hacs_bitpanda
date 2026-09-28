@@ -9,9 +9,11 @@ fetched: the maintainer's decision, 2026-09-27.
 """
 from __future__ import annotations
 
+import asyncio
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
-from typing import Any, TypeVar, final
+from typing import Any, Generic, TypeVar, final
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -23,6 +25,18 @@ from .streaks import FailureStreak
 
 _DataT = TypeVar("_DataT")
 _CoordinatorT = TypeVar("_CoordinatorT", bound="TolerantCoordinator[Any]")
+
+
+@dataclass(frozen=True)
+class _Refresh(Generic[_DataT]):
+    """What a refresh noted as it began, for _async_refresh_finished: when
+    it was asked for, and the outcome and the data before it -- Home
+    Assistant's own previous_update_success and previous_data, which it
+    keeps for each refresh."""
+
+    requested_at: datetime
+    succeeded_before: bool
+    data_before: _DataT | None
 
 
 class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
@@ -55,6 +69,11 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
     item whose own failure the refresh confirms, say --, and the listeners
     are then told. last_update_success stays the real outcome of the last
     refresh, as diagnostics and bitpanda.refresh report it.
+
+    Refreshes can overlap: Home Assistant 2025.5 takes no lock around one,
+    so a refresh by hand can run while a scheduled one is under way. Each is
+    judged by its own request time and the outcome and data before it, as
+    Home Assistant judges each by its own; see _async_refresh_finished.
     """
 
     def __init__(
@@ -79,14 +98,10 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
         # Whether the failure is confirmed: by the streak, or at once by a
         # rejected key. Only a success clears it, whatever fails after it.
         self._confirmed = False
-        # When the refresh under way was asked for: kept by
-        # _async_update_data for _async_refresh_finished, which drops it.
-        self._requested_at: datetime | None = None
-        # The outcome and the data before the refresh under way, as
-        # DataUpdateCoordinator compares them once it is done: kept by
-        # _async_update_data for _async_refresh_finished.
-        self._succeeded_before = True
-        self._data_before: _DataT | None = None
+        # The refreshes under way, by the task that runs each: noted by
+        # _async_update_data, taken back by _async_refresh_finished, which
+        # Home Assistant calls in the same task.
+        self._refreshes: dict[asyncio.Task[Any] | None, _Refresh[_DataT]] = {}
         # Whether a rejected key has been logged since the last success: by
         # Home Assistant, rejected right after it, or here.
         self._rejection_logged = False
@@ -103,13 +118,20 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
         # When the refresh was asked for -- not when its answer arrived,
         # which a slow request would put later than the regular pace.
         requested_at = dt_util.utcnow()
-        self._requested_at = requested_at
-        # Home Assistant's own previous_update_success and previous_data. The
-        # streak cannot stand in for the outcome: a refresh cancelled while
-        # under way never gets to _async_refresh_finished, yet Home Assistant
-        # 2026.9 marks it failed.
-        self._succeeded_before = self.last_update_success
-        self._data_before = self.data
+        # A refresh that never got to _async_refresh_finished left its entry
+        # behind: one cancelled while under way, or one whose error Home
+        # Assistant raises again before the hook -- a rejected key at the
+        # first refresh, say. Its task is done by now, or will be by the next
+        # refresh: every refresh drops the entries of the tasks that are.
+        for ended in [task for task in self._refreshes if task is not None and task.done()]:
+            del self._refreshes[ended]
+        # Home Assistant's own previous_update_success and previous_data, for
+        # this refresh alone. The streak cannot stand in for the outcome: a
+        # refresh cancelled while under way never gets to the hook, yet Home
+        # Assistant 2026.9 marks it failed.
+        self._refreshes[asyncio.current_task()] = _Refresh(
+            requested_at, self.last_update_success, self.data
+        )
         return await self._async_fetch(requested_at)
 
     async def _async_fetch(self, requested_at: datetime) -> _DataT:
@@ -131,23 +153,36 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
         confirmed or the data changed (a subclass leaving out an item whose
         own failure the refresh confirms): otherwise the sensors would go on
         showing the last data.
+
+        Each refresh is judged by what it noted as it began, taken back
+        here. Home Assistant awaits _async_update_data and calls this in the
+        same task, 2025.5 and 2026.9 alike, so the running task finds its
+        own entry even when refreshes overlap. A refresh without an entry --
+        one that never passed _async_update_data, which neither version runs
+        -- takes the clock for its request time, and the outcome and the
+        data now for those before it. That keeps every confirmation told:
+        after a failure the outcome now reads failed, so a newly confirmed
+        failure always tells the listeners, and a rejected key is always
+        warned about -- at worst in addition to Home Assistant. Only a change
+        of the data in such a refresh would go untold, the data now standing
+        in for the data before.
         """
         super()._async_refresh_finished()
-        requested_at, self._requested_at = self._requested_at, None
+        refresh = self._refreshes.pop(asyncio.current_task(), None)
+        if refresh is None:
+            refresh = _Refresh(dt_util.utcnow(), self.last_update_success, self.data)
         if self.last_update_success:
             self._streak = FailureStreak()
             self._confirmed = False
             self._rejection_logged = False
             return
-        # Every refresh passes _async_update_data first; should one ever
-        # not, the clock stands in for its request time.
-        self._streak.add(requested_at if requested_at is not None else dt_util.utcnow())
-        tell = self.data is not self._data_before
+        self._streak.add(refresh.requested_at)
+        tell = self.data is not refresh.data_before
         rejected = isinstance(self.last_exception, ConfigEntryAuthFailed)
         if rejected and not self._rejection_logged:
             self._rejection_logged = True
             # Home Assistant logs a rejected key only after a success.
-            if not self._succeeded_before:
+            if not refresh.succeeded_before:
                 self.logger.warning(
                     "%s: the API key was rejected; its sensors are unavailable "
                     "until a new key is entered",
@@ -168,7 +203,7 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
                     self._streak.count,
                 )
         # After a success Home Assistant tells the listeners itself.
-        if tell and not self._succeeded_before:
+        if tell and not refresh.succeeded_before:
             self.async_update_listeners()
 
 

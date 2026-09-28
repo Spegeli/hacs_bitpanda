@@ -76,7 +76,7 @@ Cash Plus products are cash equivalents — one unit is one unit of their curren
 The integration's texts follow three different settings:
 - **Profile language** (your user profile → **Language**): per user, in the browser, at once — dialogs and forms, attribute names, the group subtitles ("Wallet group", "Price tracker group"), the reason shown while setup fails or is retried, the integration's issues under **Settings → Repairs**, and the errors a `bitpanda.refresh` call shows in the UI — a failed refresh, or nothing to refresh while neither service is loaded (the log and automation traces keep them in English)
 - **System language** (**Settings → System → General → Language**): shared by all users — sensor names, from the next start of Home Assistant
-- **Language of group titles and messages** (chosen when you add a service, changed later under **Configure**, the ⚙ on each service's entry): shared by all users, in effect as soon as you save — the titles of that service's groups (e.g. "Cryptocurrencies" → "Kryptowährungen") and the integration's own messages, such as why a device cannot be deleted — not the `bitpanda.refresh` errors, which follow the profile language; a group you renamed yourself keeps its name (newer versions offer **⋮ → Rename**). The setup dialog preselects the system language if the integration ships it, English otherwise; a service upgraded from 2026.06.x starts in English
+- **Language of group titles** — for the Portfolio, **of group titles and messages** (chosen when you add a service, changed later under **Configure**, the ⚙ on each service's entry): shared by all users, in effect as soon as you save — the titles of that service's groups (e.g. "Cryptocurrencies" → "Kryptowährungen") and, for the Portfolio, its message why a device cannot be deleted — not the `bitpanda.refresh` errors, which follow the profile language; a group you renamed yourself keeps its name (newer versions offer **⋮ → Rename**). The setup dialog preselects the system language if the integration ships it, English otherwise; a service upgraded from 2026.06.x starts in English
 - Tip: to see everything in one language, choose it in all three and restart Home Assistant
 
 ---
@@ -137,7 +137,7 @@ Bitpanda API keys expire after **one year** — see [Changing the key or the cur
 1. Go to **Settings → Devices & Services → Add Integration** and search for **Bitpanda**
 2. Choose **Bitpanda Portfolio** or **Bitpanda Price Tracker** — the list only offers what is not set up yet
 3. **Portfolio:** enter your API key — setup checks all three scopes and names any that is missing — then choose your currency and the language of group titles and messages (see [Languages](#languages))
-4. **Price Tracker:** choose additional currencies if you want them — every asset always gets its EUR sensor — and the language of group titles and messages (see [Languages](#languages))
+4. **Price Tracker:** choose additional currencies if you want them — every asset always gets its EUR sensor — and the language of group titles (see [Languages](#languages))
 
 ### 3. Track prices
 

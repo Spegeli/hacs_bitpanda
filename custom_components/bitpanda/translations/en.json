@@ -35,7 +35,7 @@
               "language": "Language of group titles and messages"
             },
             "data_description": {
-              "language": "Group titles and the integration's own messages use this language. Sensor names follow Home Assistant's system language. You can change this language later with \"Configure\" (⚙) on the \"Bitpanda Portfolio\" entry of the Bitpanda integration page."
+              "language": "Group titles, such as \"Cryptocurrencies\", appear in this language, and so does the message explaining why a device cannot be deleted. Sensor names follow Home Assistant's system language, dialogs and attribute names the language of your user profile. You can change this language later with \"Configure\" (⚙) on the \"Bitpanda Portfolio\" entry of the Bitpanda integration page."
             }
           }
         }
@@ -56,10 +56,10 @@
           "language": {
             "name": "Language",
             "data": {
-              "language": "Language of group titles and messages"
+              "language": "Language of group titles"
             },
             "data_description": {
-              "language": "Group titles and the integration's own messages use this language. Sensor names follow Home Assistant's system language."
+              "language": "Group titles, such as \"Cryptocurrencies\", appear in this language. Sensor names follow Home Assistant's system language, dialogs and attribute names the language of your user profile."
             }
           }
         }
@@ -127,10 +127,10 @@
           "language": {
             "name": "Language",
             "data": {
-              "language": "Language of group titles and messages"
+              "language": "Language of group titles"
             },
             "data_description": {
-              "language": "Group titles and the integration's own messages use this language. Sensor names follow Home Assistant's system language."
+              "language": "Group titles, such as \"Cryptocurrencies\", appear in this language. Sensor names follow Home Assistant's system language, dialogs and attribute names the language of your user profile."
             }
           }
         }
@@ -145,7 +145,7 @@
               "language": "Language of group titles and messages"
             },
             "data_description": {
-              "language": "Group titles and the integration's own messages use this language. Sensor names follow Home Assistant's system language."
+              "language": "Group titles, such as \"Cryptocurrencies\", appear in this language, and so does the message explaining why a device cannot be deleted. Sensor names follow Home Assistant's system language, dialogs and attribute names the language of your user profile."
             }
           }
         }

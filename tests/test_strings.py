@@ -313,7 +313,7 @@ def test_each_service_has_options_texts_of_its_own():
     """Configure shows one form per service, each under its own step id
     (config_flow.BitpandaOptionsFlow), every field in a named section: the
     Price Tracker's in two, the Portfolio's language in one of its own,
-    worded like the Price Tracker's in every language. Every field has a
+    under the same heading as the Price Tracker's. Every field has a
     label and a help text, in its section. The Portfolio keeps its step
     text (where to find Reconfigure); the Price Tracker has none."""
     steps = _load("strings.json")["options"]["step"]
@@ -332,8 +332,8 @@ def test_each_service_has_options_texts_of_its_own():
     for name in _FILES:
         steps = _load(name)["options"]["step"]
         assert (
-            steps["portfolio"]["sections"]["language"]
-            == steps["price_tracker"]["sections"]["language"]
+            steps["portfolio"]["sections"]["language"]["name"]
+            == steps["price_tracker"]["sections"]["language"]["name"]
         ), name
 
 
@@ -398,21 +398,90 @@ def test_the_setup_words_the_currencies_as_configure_does():
 
 
 def test_the_setup_names_the_language_as_configure_does():
-    """Both setup dialogs -- the Price Tracker's, the Portfolio's currency
-    step -- ask for the language in a section worded like Configure's: one
-    setting, one wording, wherever it is set. The Portfolio's help text goes
-    on to say where to change the language later; the Price Tracker's text
-    above its form says so already, for both of its settings."""
+    """Each service's setup -- the Price Tracker's, the Portfolio's currency
+    step -- asks for the language in a section worded like its own Configure
+    section: one setting, one wording, wherever it is set. The Portfolio's
+    help text goes on to say where to change the language later; the Price
+    Tracker's text above its form says so already, for both of its
+    settings."""
     for name in _FILES:
         strings = _load(name)
-        configure = strings["options"]["step"]["price_tracker"]["sections"]["language"]
+        configure = strings["options"]["step"]
         steps = strings["config"]["step"]
-        assert steps["price_tracker"]["sections"]["language"] == configure, name
-        portfolio = steps["currency"]["sections"]["language"]
-        assert (portfolio["name"], portfolio["data"]) == (configure["name"], configure["data"]), name
-        assert portfolio["data_description"]["language"].startswith(
-            configure["data_description"]["language"] + " "
+        assert (
+            steps["price_tracker"]["sections"]["language"]
+            == configure["price_tracker"]["sections"]["language"]
         ), name
+        portfolio = steps["currency"]["sections"]["language"]
+        own = configure["portfolio"]["sections"]["language"]
+        assert (portfolio["name"], portfolio["data"]) == (own["name"], own["data"]), name
+        assert portfolio["data_description"]["language"].startswith(
+            own["data_description"]["language"] + " "
+        ), name
+
+
+def test_the_language_field_says_what_it_sets_for_each_service():
+    """Each service's language field names what follows it: the Price
+    Tracker's its group titles alone -- it writes no messages of its own --
+    the Portfolio's also the message why a device cannot be deleted. The
+    help text gives the crypto group's own title as its example and names
+    what follows the other two languages."""
+    for name in _FILES:
+        strings = _load(name)
+        crypto = strings["selector"]["asset_group"]["options"]["crypto"]
+        steps = strings["options"]["step"]
+        tracker = steps["price_tracker"]["sections"]["language"]
+        portfolio = steps["portfolio"]["sections"]["language"]
+        assert tracker["data"]["language"] != portfolio["data"]["language"], name
+        for texts in (tracker, portfolio):
+            assert crypto in texts["data_description"]["language"], name
+    shown = {
+        language: {
+            service: (
+                texts["data"]["language"],
+                texts["data_description"]["language"],
+            )
+            for service in ("price_tracker", "portfolio")
+            for texts in [
+                _load(f"translations/{language}.json")["options"]["step"][service]["sections"][
+                    "language"
+                ]
+            ]
+        }
+        for language in ("en", "de")
+    }
+    assert shown == {
+        "en": {
+            "price_tracker": (
+                "Language of group titles",
+                'Group titles, such as "Cryptocurrencies", appear in this language. Sensor names '
+                "follow Home Assistant's system language, dialogs and attribute names the "
+                "language of your user profile.",
+            ),
+            "portfolio": (
+                "Language of group titles and messages",
+                'Group titles, such as "Cryptocurrencies", appear in this language, and so does '
+                "the message explaining why a device cannot be deleted. Sensor names follow Home "
+                "Assistant's system language, dialogs and attribute names the language of your "
+                "user profile.",
+            ),
+        },
+        "de": {
+            "price_tracker": (
+                "Sprache der Gruppentitel",
+                "Gruppentitel wie „Kryptowährungen“ erscheinen in dieser Sprache. Sensornamen "
+                "folgen der Systemsprache von Home Assistant, Dialoge und Attributnamen der "
+                "Sprache deines Benutzerprofils.",
+            ),
+            "portfolio": (
+                "Sprache für Gruppentitel und Meldungen",
+                "Gruppentitel wie „Kryptowährungen“ erscheinen in dieser Sprache, ebenso die "
+                "Meldung, warum sich ein Gerät nicht löschen lässt. Sensornamen folgen der "
+                "Systemsprache von Home Assistant, Dialoge und Attributnamen der Sprache deines "
+                "Benutzerprofils.",
+            ),
+        },
+    }
 
 
 def test_every_field_has_a_help_text():

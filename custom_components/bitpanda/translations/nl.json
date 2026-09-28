@@ -35,7 +35,7 @@
               "language": "Taal van groepstitels en meldingen"
             },
             "data_description": {
-              "language": "Groepstitels en de eigen meldingen van de integratie gebruiken deze taal. Sensornamen volgen de systeemtaal van Home Assistant. Je kunt deze taal later wijzigen via \"Configureren\" (⚙) bij de invoer \"Bitpanda Portfolio\" op de integratiepagina van Bitpanda."
+              "language": "Groepstitels zoals \"Cryptovaluta\" verschijnen in deze taal, net als de melding waarom een apparaat niet kan worden verwijderd. Sensornamen volgen de systeemtaal van Home Assistant, dialogen en attribuutnamen de taal van je gebruikersprofiel. Je kunt deze taal later wijzigen via \"Configureren\" (⚙) bij de invoer \"Bitpanda Portfolio\" op de integratiepagina van Bitpanda."
             }
           }
         }
@@ -56,10 +56,10 @@
           "language": {
             "name": "Taal",
             "data": {
-              "language": "Taal van groepstitels en meldingen"
+              "language": "Taal van groepstitels"
             },
             "data_description": {
-              "language": "Groepstitels en de eigen meldingen van de integratie gebruiken deze taal. Sensornamen volgen de systeemtaal van Home Assistant."
+              "language": "Groepstitels zoals \"Cryptovaluta\" verschijnen in deze taal. Sensornamen volgen de systeemtaal van Home Assistant, dialogen en attribuutnamen de taal van je gebruikersprofiel."
             }
           }
         }
@@ -127,10 +127,10 @@
           "language": {
             "name": "Taal",
             "data": {
-              "language": "Taal van groepstitels en meldingen"
+              "language": "Taal van groepstitels"
             },
             "data_description": {
-              "language": "Groepstitels en de eigen meldingen van de integratie gebruiken deze taal. Sensornamen volgen de systeemtaal van Home Assistant."
+              "language": "Groepstitels zoals \"Cryptovaluta\" verschijnen in deze taal. Sensornamen volgen de systeemtaal van Home Assistant, dialogen en attribuutnamen de taal van je gebruikersprofiel."
             }
           }
         }
@@ -145,7 +145,7 @@
               "language": "Taal van groepstitels en meldingen"
             },
             "data_description": {
-              "language": "Groepstitels en de eigen meldingen van de integratie gebruiken deze taal. Sensornamen volgen de systeemtaal van Home Assistant."
+              "language": "Groepstitels zoals \"Cryptovaluta\" verschijnen in deze taal, net als de melding waarom een apparaat niet kan worden verwijderd. Sensornamen volgen de systeemtaal van Home Assistant, dialogen en attribuutnamen de taal van je gebruikersprofiel."
             }
           }
         }

@@ -35,7 +35,7 @@
               "language": "Język tytułów grup i komunikatów"
             },
             "data_description": {
-              "language": "Tytuły grup i własne komunikaty integracji używają tego języka. Nazwy sensorów są w języku systemu Home Assistant. Ten język możesz później zmienić, klikając „Konfiguruj” (⚙) przy wpisie „Bitpanda Portfolio” na stronie integracji Bitpanda."
+              "language": "Tytuły grup, takie jak „Kryptowaluty”, są wyświetlane w tym języku, podobnie jak komunikat wyjaśniający, dlaczego nie można usunąć urządzenia. Nazwy sensorów są w języku systemu Home Assistant, a okna dialogowe i nazwy atrybutów – w języku Twojego profilu użytkownika. Ten język możesz później zmienić, klikając „Konfiguruj” (⚙) przy wpisie „Bitpanda Portfolio” na stronie integracji Bitpanda."
             }
           }
         }
@@ -56,10 +56,10 @@
           "language": {
             "name": "Język",
             "data": {
-              "language": "Język tytułów grup i komunikatów"
+              "language": "Język tytułów grup"
             },
             "data_description": {
-              "language": "Tytuły grup i własne komunikaty integracji używają tego języka. Nazwy sensorów są w języku systemu Home Assistant."
+              "language": "Tytuły grup, takie jak „Kryptowaluty”, są wyświetlane w tym języku. Nazwy sensorów są w języku systemu Home Assistant, a okna dialogowe i nazwy atrybutów – w języku Twojego profilu użytkownika."
             }
           }
         }
@@ -127,10 +127,10 @@
           "language": {
             "name": "Język",
             "data": {
-              "language": "Język tytułów grup i komunikatów"
+              "language": "Język tytułów grup"
             },
             "data_description": {
-              "language": "Tytuły grup i własne komunikaty integracji używają tego języka. Nazwy sensorów są w języku systemu Home Assistant."
+              "language": "Tytuły grup, takie jak „Kryptowaluty”, są wyświetlane w tym języku. Nazwy sensorów są w języku systemu Home Assistant, a okna dialogowe i nazwy atrybutów – w języku Twojego profilu użytkownika."
             }
           }
         }
@@ -145,7 +145,7 @@
               "language": "Język tytułów grup i komunikatów"
             },
             "data_description": {
-              "language": "Tytuły grup i własne komunikaty integracji używają tego języka. Nazwy sensorów są w języku systemu Home Assistant."
+              "language": "Tytuły grup, takie jak „Kryptowaluty”, są wyświetlane w tym języku, podobnie jak komunikat wyjaśniający, dlaczego nie można usunąć urządzenia. Nazwy sensorów są w języku systemu Home Assistant, a okna dialogowe i nazwy atrybutów – w języku Twojego profilu użytkownika."
             }
           }
         }

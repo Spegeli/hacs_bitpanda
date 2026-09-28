@@ -35,7 +35,7 @@
               "language": "Sprache für Gruppentitel und Meldungen"
             },
             "data_description": {
-              "language": "Gruppentitel und die eigenen Meldungen der Integration verwenden diese Sprache. Sensornamen folgen der Systemsprache von Home Assistant. Diese Sprache kannst du später mit „Konfigurieren“ (⚙) beim Eintrag „Bitpanda Portfolio“ auf der Bitpanda-Integrationsseite ändern."
+              "language": "Gruppentitel wie „Kryptowährungen“ erscheinen in dieser Sprache, ebenso die Meldung, warum sich ein Gerät nicht löschen lässt. Sensornamen folgen der Systemsprache von Home Assistant, Dialoge und Attributnamen der Sprache deines Benutzerprofils. Diese Sprache kannst du später mit „Konfigurieren“ (⚙) beim Eintrag „Bitpanda Portfolio“ auf der Bitpanda-Integrationsseite ändern."
             }
           }
         }
@@ -56,10 +56,10 @@
           "language": {
             "name": "Sprache",
             "data": {
-              "language": "Sprache für Gruppentitel und Meldungen"
+              "language": "Sprache der Gruppentitel"
             },
             "data_description": {
-              "language": "Gruppentitel und die eigenen Meldungen der Integration verwenden diese Sprache. Sensornamen folgen der Systemsprache von Home Assistant."
+              "language": "Gruppentitel wie „Kryptowährungen“ erscheinen in dieser Sprache. Sensornamen folgen der Systemsprache von Home Assistant, Dialoge und Attributnamen der Sprache deines Benutzerprofils."
             }
           }
         }
@@ -127,10 +127,10 @@
           "language": {
             "name": "Sprache",
             "data": {
-              "language": "Sprache für Gruppentitel und Meldungen"
+              "language": "Sprache der Gruppentitel"
             },
             "data_description": {
-              "language": "Gruppentitel und die eigenen Meldungen der Integration verwenden diese Sprache. Sensornamen folgen der Systemsprache von Home Assistant."
+              "language": "Gruppentitel wie „Kryptowährungen“ erscheinen in dieser Sprache. Sensornamen folgen der Systemsprache von Home Assistant, Dialoge und Attributnamen der Sprache deines Benutzerprofils."
             }
           }
         }
@@ -145,7 +145,7 @@
               "language": "Sprache für Gruppentitel und Meldungen"
             },
             "data_description": {
-              "language": "Gruppentitel und die eigenen Meldungen der Integration verwenden diese Sprache. Sensornamen folgen der Systemsprache von Home Assistant."
+              "language": "Gruppentitel wie „Kryptowährungen“ erscheinen in dieser Sprache, ebenso die Meldung, warum sich ein Gerät nicht löschen lässt. Sensornamen folgen der Systemsprache von Home Assistant, Dialoge und Attributnamen der Sprache deines Benutzerprofils."
             }
           }
         }

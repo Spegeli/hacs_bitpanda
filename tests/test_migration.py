@@ -438,11 +438,18 @@ async def test_an_upgrade_that_runs_leaves_no_blocker_issue(hass, legacy_api, no
     assert _issues(hass) == {}
 
 
-async def test_a_currency_no_longer_offered_falls_back_to_eur(hass, legacy_api, no_setup):
-    entry = _v1_entry(hass, currency="JPY")
+@pytest.mark.parametrize("listed", ["missing", "without_id"])
+async def test_a_currency_no_longer_offered_falls_back_to_eur(hass, legacy_api, no_setup, listed):
+    """A supported currency that /currencies no longer lists, or lists
+    without an id: the Portfolio falls back to EUR, with a repair issue
+    that names the currency."""
+    currencies, _ = legacy_api
+    rest = [c for c in load_fixture("currencies.json") if c["symbol"] != "USD"]
+    currencies.return_value = rest if listed == "missing" else [*rest, {"symbol": "USD", "id": None}]
+    entry = _v1_entry(hass, currency="USD")
     assert await async_migrate_entry(hass, entry)
-    assert entry.data["currency"] == "EUR"
-    assert entry.data["currency_id"] == _EUR_ID
+    assert (entry.data["currency"], entry.data["currency_id"]) == ("EUR", _EUR_ID)
+    assert _issues(hass)["currency_dropped"].translation_placeholders == {"currency": "USD"}
 
 
 async def test_a_listed_currency_the_integration_does_not_support_falls_back_to_eur(
@@ -865,6 +872,46 @@ async def test_legacy_price_sensors_move_to_the_price_tracker(hass, legacy_api, 
         "- `sensor.bitpanda_price_tracker_btc_usd` → `sensor.bitpanda_bitcoin_btc_price_tracker_usd`"
         in _renamed(hass)
     )
+
+
+async def test_a_legacy_price_in_a_currency_no_longer_offered_is_left_alone_and_listed(
+    hass, legacy_api, price_api, caplog
+):
+    """The Price Tracker would delete a sensor in a currency it never
+    tracks. So the migration leaves it with the old entry and lists it as
+    not migrated, with the reason in the log."""
+    entry = _v1_entry(hass, assets=["BTC"])
+    eid = entry.entry_id
+    _legacy_entity(hass, entry, f"{eid}_BTC_price_EUR", "bitpanda_price_tracker_btc_eur")
+    jpy = _legacy_entity(hass, entry, f"{eid}_BTC_price_JPY", "bitpanda_price_tracker_btc_jpy")
+    assert await async_migrate_entry(hass, entry)
+    await hass.async_block_till_done()
+    [tracker] = _price_trackers(hass)
+    assert tracker.options["extra_currencies"] == []
+    left = er.async_get(hass).async_get(jpy)
+    assert (left.config_entry_id, left.unique_id) == (eid, f"{eid}_BTC_price_JPY")
+    assert _not_migrated(hass) == f"- `{jpy}`"
+    assert f"- `{jpy}`: Bitpanda no longer offers JPY" in _logged(caplog)
+
+
+async def test_a_legacy_price_sensor_with_its_own_entity_id_keeps_it(
+    hass, legacy_api, price_api, caplog
+):
+    """An entity ID the user chose stays, and the adoption reports no
+    rename for it."""
+    entry = _v1_entry(hass, assets=["BTC"])
+    _legacy_entity(hass, entry, f"{entry.entry_id}_BTC_price_EUR", "my_bitcoin")
+    assert await async_migrate_entry(hass, entry)
+    await hass.async_block_till_done()
+    [tracker] = _price_trackers(hass)
+    adopted = er.async_get(hass).async_get("sensor.my_bitcoin")
+    assert (adopted.config_entry_id, adopted.unique_id) == (
+        tracker.entry_id, f"{tracker.entry_id}_{BTC_ID}_price_EUR"
+    )
+    # The adopted entity is the live EUR sensor: no twin beside it.
+    assert hass.states.get("sensor.bitpanda_bitcoin_btc_price_tracker_eur") is None
+    assert _issues(hass) == {}
+    assert "`sensor.my_bitcoin` →" not in _logged(caplog)
 
 
 def _adoption_preceded_by(prepare):

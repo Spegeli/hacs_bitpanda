@@ -337,7 +337,7 @@ async def test_a_later_page_that_fails_fails_the_whole_listing(response, kind, s
     assert mocker.call_count == 2
 
 
-# --- Malformed items (K1) -----------------------------------------------------
+# --- Malformed pages ----------------------------------------------------------
 
 
 @pytest.mark.parametrize(

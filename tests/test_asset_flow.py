@@ -185,8 +185,8 @@ async def test_listing_errors_map_to_form_errors(hass, failure, error):
 
 
 async def test_a_listing_of_the_wrong_shape_says_cannot_connect(hass):
-    """CB2: the real client against the test mocker, one level up from
-    api.py's own tests -- a wrong-shaped /assets body must not escape
+    """The real client against the test mocker, one level up from api.py's
+    own tests -- a wrong-shaped /assets body must not escape
     _paginate as AttributeError and leave the dialog showing "Unknown error
     occurred"; it is as unreadable as a malformed body, and cannot_connect
     the same way."""

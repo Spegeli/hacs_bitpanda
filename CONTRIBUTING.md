@@ -20,7 +20,7 @@ No build step and no dependencies beyond Home Assistant itself.
 3. Restart Home Assistant.
 4. Add the integration: **Settings → Devices & services → Add integration → Bitpanda**.
 
-The Portfolio needs a Bitpanda API key with all three required read scopes — **Balances**, **Transaction** and **Earn (Read)**, as Bitpanda's English key page names them ([create one](https://app.bitpanda.com/my-account/apikey)). The Price Tracker needs none.
+The Portfolio needs a Bitpanda API key with all three required read scopes — **Balances**, **Transaction** and **Earn (Read)**, as Bitpanda's English key page names them (create one at [app.bitpanda.com/my-account/apikey](https://app.bitpanda.com/my-account/apikey); the classic web.bitpanda.com has no Earn (Read)). The Price Tracker needs none.
 
 To see what the integration is doing, enable debug logging in `configuration.yaml`:
 

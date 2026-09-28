@@ -1487,6 +1487,83 @@ async def test_dropping_a_currency_removes_its_sensors_on_reload(hass, price_api
     assert hass.states.get("sensor.bitpanda_bitcoin_btc_price_tracker_eur") is not None
 
 
+async def test_renaming_the_price_tracker_asks_for_no_prices(hass, price_api):
+    """A new title changes nothing the Price Tracker tracks: no reload, so
+    no round of ticker requests either. The empty group its setup dropped
+    counts as no change: setup made it itself."""
+    ticker, _ = price_api
+    entry = _price_entry(hass, [], price_group("crypto", BTC, SOL), price_group("metal"))
+    await _setup(hass, entry)
+    assert [sub.unique_id for sub in entry.subentries.values()] == ["crypto"]
+    runtime = entry.runtime_data
+    calls = ticker.call_count
+
+    hass.config_entries.async_update_entry(entry, title="My prices")
+    await hass.async_block_till_done()
+
+    assert entry.title == "My prices"
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.runtime_data is runtime
+    assert ticker.call_count == calls
+
+
+async def test_toggling_polling_reloads_the_price_tracker_once(hass, price_api, hass_ws_client):
+    """"Enable polling for updates", a system option, is saved through Home
+    Assistant's own update, which reloads the entry itself. That is the one
+    reload, with its round of ticker requests: the update listener starts
+    none, neither before it nor besides it."""
+    ticker, _ = price_api
+    entry = _price_entry(hass, [], price_group("crypto", BTC, SOL))
+    await _setup(hass, entry)
+    runtime = entry.runtime_data
+    calls = ticker.call_count
+    assert await async_setup_component(hass, "config", {})
+    client = await hass_ws_client(hass)
+
+    with patch.object(
+        hass.config_entries, "async_reload", wraps=hass.config_entries.async_reload
+    ) as reload:
+        await client.send_json_auto_id(
+            {
+                "type": "config_entries/update",
+                "entry_id": entry.entry_id,
+                "pref_disable_polling": True,
+            }
+        )
+        response = await client.receive_json()
+        await hass.async_block_till_done()
+
+    assert response["success"]
+    # Home Assistant's answer shows the entry as the update left it, before
+    # Home Assistant's own reload: still loaded, so no reload had begun.
+    assert response["result"]["config_entry"]["state"] == ConfigEntryState.LOADED.value
+    assert entry.pref_disable_polling
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.runtime_data is not runtime
+    assert reload.call_count == 1
+    # The reload's first refresh: one request per tracked asset (BTC, SOL).
+    assert ticker.call_count == calls + 2
+
+
+async def test_renaming_a_price_group_does_not_reload_the_price_tracker(hass, price_api):
+    """A group's title is no part of what the Price Tracker tracks -- its
+    assets are. Newer Home Assistant versions let the user rename a group:
+    that asks for no prices."""
+    ticker, _ = price_api
+    entry = _price_entry(hass, [], price_group("crypto", BTC, SOL))
+    await _setup(hass, entry)
+    runtime = entry.runtime_data
+    calls = ticker.call_count
+
+    hass.config_entries.async_update_subentry(entry, _group(entry, "crypto"), title="My coins")
+    await hass.async_block_till_done()
+
+    assert _group(entry, "crypto").title == "My coins"
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.runtime_data is runtime
+    assert ticker.call_count == calls
+
+
 async def _refresh(hass) -> None:
     await hass.services.async_call(DOMAIN, "refresh", blocking=True)
     await hass.async_block_till_done()

@@ -1,6 +1,7 @@
 """The Bitpanda integration."""
 from __future__ import annotations
 
+from collections.abc import Callable, Coroutine
 from contextlib import suppress
 import logging
 from time import monotonic
@@ -110,10 +111,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> 
     # In the entry's own language (language.py), which changing under
     # Configure reloads the entry to apply.
     group_titles = await async_group_titles(hass, entry_language(entry))
-    # Before anything else, and before the update listener below: the Price
-    # Tracker's listener reloads on any change to the entry, subentries
-    # included, so retitling after it existed would reload the entry this
-    # same call is setting up.
+    # A title is no part of what either service's update listener (below)
+    # compares, so retitling reloads neither.
     await async_retitle_groups(
         hass,
         entry,
@@ -125,8 +124,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> 
         entry.runtime_data = await _async_start_price_tracker(
             hass, cast(PriceTrackerConfigEntry, entry)
         )
-        # Options, groups and data all change what it tracks: rebuild on any change.
-        reload_listener = _async_reload
+        # Made once the start has dropped empty groups and the list of legacy
+        # entities to adopt: those changes are setup's own, none to reload for.
+        reload_listener = _price_tracker_reload_listener(entry)
     else:
         entry.runtime_data = await _async_start_portfolio(
             hass, cast(PortfolioConfigEntry, entry), group_titles
@@ -244,8 +244,36 @@ async def _async_first_refresh(coordinator: DataUpdateCoordinator[Any]) -> None:
         ) from None
 
 
-async def _async_reload(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    await hass.config_entries.async_reload(entry.entry_id)
+def _price_tracker_config(entry: ConfigEntry) -> tuple[Any, ...]:
+    """What the Price Tracker tracks: its data, its options and its groups'
+    data -- neither a title nor a system option."""
+    return (
+        dict(entry.data),
+        dict(entry.options),
+        {sub_id: dict(sub.data) for sub_id, sub in entry.subentries.items()},
+    )
+
+
+def _price_tracker_reload_listener(
+    entry: ConfigEntry,
+) -> Callable[[HomeAssistant, ConfigEntry], Coroutine[Any, Any, None]]:
+    """The Price Tracker's update listener: it reloads the entry once what it
+    tracks (_price_tracker_config) differs from what it tracked when the
+    listener was made.
+
+    Home Assistant calls it on any change to the entry: a new title for the
+    entry or one of its groups, or a system option, too. None of those
+    changes what is tracked, and a reload would ask Bitpanda for every price
+    again. Switching polling on or off, Home Assistant reloads the entry
+    itself (its config_entries/update command, at 2025.5 as at 2026.9).
+    """
+    at_setup = _price_tracker_config(entry)
+
+    async def _async_reload_on_new_config(hass: HomeAssistant, changed: ConfigEntry) -> None:
+        if _price_tracker_config(changed) != at_setup:
+            await hass.config_entries.async_reload(changed.entry_id)
+
+    return _async_reload_on_new_config
 
 
 async def _async_reload_on_new_data_or_options(

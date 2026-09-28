@@ -252,7 +252,7 @@ For every version before 2.0.0: the date versions, 2026.06.04 and older. Version
 1. Create a new API key with **Guthaben (Balance)**, **Transaktion (Transaction)** and **Earn (Read)** at [app.bitpanda.com/my-account/apikey](https://app.bitpanda.com/my-account/apikey) — keys from the old key page never had Earn
 2. Update the integration through HACS and restart Home Assistant
    - HACS offers no update? From 2.0.0 on, versions are numbers instead of dates, and HACS can rank a date such as 2026.06.04 above them. Install the newest version once by hand: **HACS → Bitpanda → ⋮ → Redownload**, open **Need a different version?**, pick the newest version not marked as a pre-release and download it. Later updates show up as usual.
-   - No version choice in HACS? **Settings → Developer tools → Actions** → `update.install`, entity: the Bitpanda update entity, version: the newest release's tag (such as `v2.1.0`).
+   - No version choice in HACS? Open **Settings → Tools → Actions** (before Home Assistant 2026.8: **Developer tools → Actions**) and run `update.install` with the Bitpanda update entity and, as version, the newest release's tag (such as `v2.1.0`).
 3. **Reload the browser tab** (`Ctrl+F5` / `Cmd+Shift+R`) — otherwise the integration's dialogs can show raw text from your browser's cached translations
 4. Home Assistant shows **New Bitpanda API key needed** — paste the new key (or use **⋮ → Reconfigure** on the Bitpanda Portfolio entry)
 5. The upgrade details appear under **Settings → Repairs**, in your profile language: **every renamed entity ID (old → new)**, the entities that could not be migrated, the Portfolio's switch to EUR if your old currency is not available, and the assets to add to a Bitpanda Price Tracker you had already set up — its prices are not moved into one that existed before the upgrade. The Home Assistant log keeps the same list in English, with the reason for each entity that was not migrated. **Check your dashboards, automations and scripts** for the old IDs.
@@ -318,7 +318,7 @@ For every version before 2.0.0: the date versions, 2026.06.04 and older. Version
 3. Restart Home Assistant.
 4. Optional: delete the API key on [Bitpanda's key page](https://app.bitpanda.com/my-account/apikey) if nothing else uses it.
 
-The recorded history of the removed sensors stays in Home Assistant's database until the recorder purges it — after 10 days by default (the recorder's `purge_keep_days`). Their long-term statistics are not purged; delete them in the **Statistics** tab of the developer tools if you no longer want them.
+The recorded history of the removed sensors stays in Home Assistant's database until the recorder purges it — after 10 days by default (the recorder's `purge_keep_days`). Their long-term statistics are not purged; delete them in the **Statistics** tab under **Settings → Tools** (before Home Assistant 2026.8: **Developer tools**) if you no longer want them.
 
 ---
 

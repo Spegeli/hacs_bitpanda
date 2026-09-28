@@ -41,7 +41,7 @@ body:
     id: integration_version
     attributes:
       label: Integration version
-      description: Settings → Devices & Services → Bitpanda, or the `version` field in `manifest.json`.
+      description: Settings → Devices & services → Bitpanda, or the `version` field in `manifest.json`.
       placeholder: e.g. 2.0.0
     validations:
       required: true

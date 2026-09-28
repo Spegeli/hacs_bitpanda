@@ -649,6 +649,40 @@ def test_the_reconfigure_key_help_has_a_line_per_sentence():
     )
 
 
+def test_the_reauth_dialog_starts_what_to_do_on_a_line_of_its_own():
+    """The new-key dialog says what happened and why, then -- on a line of
+    its own -- where to create the new key and that the sensors are kept.
+    Under the field, what the new key needs, with Trading set off by a dash
+    as in the setup's guide. In the approved English and German wording."""
+    steps = {name: _load(name)["config"]["step"]["reauth_confirm"] for name in _FILES}
+    texts = {
+        name: (step["description"], step["data_description"]["api_key"])
+        for name, step in steps.items()
+    }
+    for name, (description, help_text) in texts.items():
+        happened, to_do = description.split("\n")
+        assert "{api_key_url}" not in happened and "[{api_key_url}]({api_key_url})" in to_do, name
+        chosen, left_out = help_text.split(" – ")
+        assert all(p in chosen for p in ("Guthaben", "Transaktion", "Earn (Read)")), name
+        assert "Trading" in left_out and "Trading" not in chosen, name
+    assert texts["strings.json"] == (
+        "Bitpanda rejected the stored API key. It may have expired, or it predates the"
+        " permissions this version needs.\n"
+        "Create a new key at [{api_key_url}]({api_key_url}) and paste it here. Your sensors"
+        " are kept.",
+        "The new key needs the permissions Guthaben (Balance), Transaktion (Transaction) and"
+        " Earn (Read) – not Trading.",
+    )
+    assert texts["translations/de.json"] == (
+        "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen,"
+        " oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht.\n"
+        "Erstelle unter [{api_key_url}]({api_key_url}) einen neuen Schlüssel und füge ihn hier"
+        " ein. Deine Sensoren bleiben erhalten.",
+        "Der neue Schlüssel braucht die Berechtigungen „Guthaben“, „Transaktion“ und"
+        " „Earn (Read)“ – kein „Trading“.",
+    )
+
+
 def test_german_texts_quote_the_permission_names():
     """Wherever a German text names the key's permissions, it quotes them,
     as Bitpanda's key page labels them: „Guthaben“, „Transaktion“,

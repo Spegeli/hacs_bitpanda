@@ -66,12 +66,12 @@
       },
       "reauth_confirm": {
         "title": "New Bitpanda API key needed",
-        "description": "Bitpanda rejected the stored API key. It may have expired, or it predates the permissions this version needs. Create a new key at [{api_key_url}]({api_key_url}) and paste it here. Your sensors are kept.",
+        "description": "Bitpanda rejected the stored API key. It may have expired, or it predates the permissions this version needs.\nCreate a new key at [{api_key_url}]({api_key_url}) and paste it here. Your sensors are kept.",
         "data": {
           "api_key": "API key"
         },
         "data_description": {
-          "api_key": "The new key needs the permissions Guthaben (Balance), Transaktion (Transaction) and Earn (Read)."
+          "api_key": "The new key needs the permissions Guthaben (Balance), Transaktion (Transaction) and Earn (Read) – not Trading."
         }
       },
       "reconfigure": {

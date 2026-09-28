@@ -66,12 +66,12 @@
       },
       "reauth_confirm": {
         "title": "Nieuwe Bitpanda API-sleutel nodig",
-        "description": "Bitpanda heeft de opgeslagen API-sleutel geweigerd. Misschien is hij verlopen, of hij dateert van vóór de rechten die deze versie nodig heeft. Maak op [{api_key_url}]({api_key_url}) een nieuwe sleutel aan en plak die hier. Je sensoren blijven behouden.",
+        "description": "Bitpanda heeft de opgeslagen API-sleutel geweigerd. Misschien is hij verlopen, of hij dateert van vóór de rechten die deze versie nodig heeft.\nMaak op [{api_key_url}]({api_key_url}) een nieuwe sleutel aan en plak die hier. Je sensoren blijven behouden.",
         "data": {
           "api_key": "API-sleutel"
         },
         "data_description": {
-          "api_key": "De nieuwe sleutel heeft de rechten Guthaben (Balance), Transaktion (Transaction) en Earn (Read) nodig."
+          "api_key": "De nieuwe sleutel heeft de rechten Guthaben (Balance), Transaktion (Transaction) en Earn (Read) nodig – niet Trading."
         }
       },
       "reconfigure": {

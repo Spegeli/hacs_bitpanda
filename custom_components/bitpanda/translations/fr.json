@@ -66,12 +66,12 @@
       },
       "reauth_confirm": {
         "title": "Nouvelle clé API Bitpanda requise",
-        "description": "Bitpanda a refusé la clé API enregistrée. Elle a peut-être expiré, ou elle est antérieure aux autorisations dont cette version a besoin. Créez une nouvelle clé sur [{api_key_url}]({api_key_url}), puis collez-la ici. Vos capteurs sont conservés.",
+        "description": "Bitpanda a refusé la clé API enregistrée. Elle a peut-être expiré, ou elle est antérieure aux autorisations dont cette version a besoin.\nCréez une nouvelle clé sur [{api_key_url}]({api_key_url}), puis collez-la ici. Vos capteurs sont conservés.",
         "data": {
           "api_key": "Clé API"
         },
         "data_description": {
-          "api_key": "La nouvelle clé doit avoir les autorisations Guthaben (Balance), Transaktion (Transaction) et Earn (Read)."
+          "api_key": "La nouvelle clé doit avoir les autorisations Guthaben (Balance), Transaktion (Transaction) et Earn (Read) – pas Trading."
         }
       },
       "reconfigure": {

@@ -66,12 +66,12 @@
       },
       "reauth_confirm": {
         "title": "Potrzebny nowy klucz API platformy Bitpanda",
-        "description": "Bitpanda odrzuciła zapisany klucz API. Mógł wygasnąć albo powstać przed wprowadzeniem uprawnień, których wymaga ta wersja. Utwórz nowy klucz na stronie [{api_key_url}]({api_key_url}) i wklej go tutaj. Twoje sensory zostaną zachowane.",
+        "description": "Bitpanda odrzuciła zapisany klucz API. Mógł wygasnąć albo powstać przed wprowadzeniem uprawnień, których wymaga ta wersja.\nUtwórz nowy klucz na stronie [{api_key_url}]({api_key_url}) i wklej go tutaj. Twoje sensory zostaną zachowane.",
         "data": {
           "api_key": "Klucz API"
         },
         "data_description": {
-          "api_key": "Nowy klucz potrzebuje uprawnień Guthaben (Balance), Transaktion (Transaction) i Earn (Read)."
+          "api_key": "Nowy klucz potrzebuje uprawnień Guthaben (Balance), Transaktion (Transaction) i Earn (Read) – bez uprawnienia Trading."
         }
       },
       "reconfigure": {

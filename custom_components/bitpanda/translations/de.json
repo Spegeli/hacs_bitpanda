@@ -66,12 +66,12 @@
       },
       "reauth_confirm": {
         "title": "Neuer Bitpanda API-Schlüssel nötig",
-        "description": "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen, oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht. Erstelle unter [{api_key_url}]({api_key_url}) einen neuen Schlüssel und füge ihn hier ein. Deine Sensoren bleiben erhalten.",
+        "description": "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen, oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht.\nErstelle unter [{api_key_url}]({api_key_url}) einen neuen Schlüssel und füge ihn hier ein. Deine Sensoren bleiben erhalten.",
         "data": {
           "api_key": "API-Schlüssel"
         },
         "data_description": {
-          "api_key": "Der neue Schlüssel braucht die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“."
+          "api_key": "Der neue Schlüssel braucht die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading“."
         }
       },
       "reconfigure": {

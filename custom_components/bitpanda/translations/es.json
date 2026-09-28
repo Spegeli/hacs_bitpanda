@@ -66,12 +66,12 @@
       },
       "reauth_confirm": {
         "title": "Se necesita una nueva clave API de Bitpanda",
-        "description": "Bitpanda ha rechazado la clave API guardada. Puede que haya caducado o que sea anterior a los permisos que necesita esta versión. Crea una nueva clave en [{api_key_url}]({api_key_url}) y pégala aquí. Tus sensores se conservan.",
+        "description": "Bitpanda ha rechazado la clave API guardada. Puede que haya caducado o que sea anterior a los permisos que necesita esta versión.\nCrea una nueva clave en [{api_key_url}]({api_key_url}) y pégala aquí. Tus sensores se conservan.",
         "data": {
           "api_key": "Clave API"
         },
         "data_description": {
-          "api_key": "La nueva clave necesita los permisos Guthaben (Balance), Transaktion (Transaction) y Earn (Read)."
+          "api_key": "La nueva clave necesita los permisos Guthaben (Balance), Transaktion (Transaction) y Earn (Read) – no Trading."
         }
       },
       "reconfigure": {

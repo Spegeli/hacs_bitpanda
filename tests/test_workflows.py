@@ -988,6 +988,8 @@ def test_only_a_release_refuses_a_plan_with_nothing_to_release(tmp_path):
     )
     assert refused.returncode != 0
     assert "release.py: Nothing to release: no commit since v2.1.0." in refused.stderr
+    # In the run's summary too, not only in this step's log.
+    assert "::error::Nothing to release: no commit since v2.1.0." in refused.stdout
     assert output.read_text(encoding="utf-8") == ""
 
     # Validate on the tagged version commit, the tag fetched by the step above.

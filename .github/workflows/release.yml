@@ -184,7 +184,8 @@ jobs:
       # re-run after its tag was pushed -- and, before the first SemVer
       # stable, any bump but major. Validate plans without the flag: its
       # check must pass on dev right after main is merged into it, with no
-      # commit since the stable's tag, and before 2.0.0 exists.
+      # commit since the stable's tag, and before 2.0.0 exists. A refusal is
+      # repeated as an error annotation, so the run's summary shows it.
       - name: Plan the version and the tag
         id: plan
         env:
@@ -192,7 +193,13 @@ jobs:
           BUMP: ${{ inputs.bump }}
         run: |
           git fetch --tags
-          PLAN=$(python3 .github/scripts/release.py plan --type "${RELEASE_TYPE}" --bump "${BUMP}" --for-release)
+          ERRORS=$(mktemp)
+          if ! PLAN=$(python3 .github/scripts/release.py plan --type "${RELEASE_TYPE}" --bump "${BUMP}" --for-release 2> "${ERRORS}"); then
+            cat "${ERRORS}" >&2
+            MESSAGE=$(head -n 1 "${ERRORS}")
+            echo "::error::${MESSAGE#release.py: }"
+            exit 1
+          fi
           echo "${PLAN}"
           echo "${PLAN}" >> "$GITHUB_OUTPUT"
 

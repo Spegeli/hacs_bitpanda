@@ -953,6 +953,59 @@ def test_a_release_refuses_a_stable_with_no_commit_since_the_last_one(repository
     assert str(refused.value) == _nothing_to_release("v2.1.0")
 
 
+@pytest.mark.parametrize("bump", ["auto", "major"])
+def test_a_release_refuses_a_second_start_of_the_first_semver_beta(repository, bump):
+    """2.0.0-beta.1, the next release, came from the date versions with
+    "Version bump" forced to major. Started a second time, on the same
+    commit, it has nothing to release -- and says so first, whatever the
+    bump: "auto" is not told to set major for a release it must not make.
+    With a commit since, the next beta goes out."""
+    _git_commit(repository, "feat: add the first feature", second=1)
+    _git(repository, "tag", "v2026.06.04")
+    _git_commit(repository, "feat: add the redesign", second=2)
+    _git(repository, "switch", "--quiet", "--detach")
+    _git_commit(repository, "chore: bump version to 2.0.0-beta.1", second=3)
+    _git(repository, "tag", "v2.0.0-beta.1")
+    _git(repository, "switch", "--quiet", "main")
+
+    with pytest.raises(release.ReleaseError) as refused:
+        release.plan("prerelease", bump, for_release=True)
+    assert str(refused.value) == _nothing_to_release("v2.0.0-beta.1")
+
+    _git_commit(repository, "fix: correct the redesign", second=4)
+    assert release.plan("prerelease", "major", for_release=True) == {
+        "version": "2.0.0-beta.2",
+        "tag": "v2.0.0-beta.2",
+        "previous": "v2.0.0-beta.1",
+    }
+
+
+@pytest.mark.parametrize(
+    ("previous", "change", "bump", "planned"),
+    [
+        ("v2.0.0_redesign", "feat: add a sensor", "auto",
+         {"version": "2.1.0", "tag": "v2.1.0", "previous": "v2.0.0_redesign"}),
+        ("v2026.06.04", "feat: add the redesign", "major",
+         {"version": "2.0.0", "tag": "v2.0.0_redesign", "previous": "v2026.06.04"}),
+    ],
+    ids=["a_later_stable", "the_first_semver_stable"],
+)
+def test_the_recovery_run_plans_the_release_main_holds_without_its_tag(
+    repository, previous, change, bump, planned
+):
+    """A stable's version commit reached main, its tag did not. The way out
+    is a new run on main with the same settings (CONTRIBUTING.md,
+    "Releases"): it has the change and the version commit since the
+    previous release, so it plans the same version -- the empty-release
+    guard does not stop it -- then commits nothing, tags and publishes."""
+    _git_commit(repository, "feat!: rework the integration", second=1)
+    _git(repository, "tag", previous)
+    _git_commit(repository, change, second=2)
+    _git_commit(repository, f"chore: bump version to {planned['version']}", second=3)
+
+    assert release.plan("stable", bump, for_release=True) == planned
+
+
 def test_validate_plans_where_a_release_finds_nothing_to_release(repository, capsys):
     """Validate's "Release script on Python 3.12" job plans a stable release
     of whatever it checks: on dev right after main is merged back, that is

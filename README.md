@@ -107,7 +107,8 @@ A new version can come out as a beta first, for testing before everyone gets it.
 
 ### Set up the Portfolio
 
-1. Go to your [Bitpanda API settings](https://app.bitpanda.com/my-account/apikey) and create a new API key
+1. Open [app.bitpanda.com/my-account/apikey](https://app.bitpanda.com/my-account/apikey) and create a new API key
+   - ⚠️ Use this address. The key page of Bitpanda's classic website, web.bitpanda.com, has no **Earn (Read)** permission.
 2. Under **Scope**, select all three required permissions:
    - **Balances**
    - **Transaction**
@@ -115,14 +116,14 @@ A new version can come out as a beta first, for testing before everyone gets it.
    - ℹ️ All three are read-only. The integration never calls a write endpoint and cannot place trades or move funds. **Trade (Read)** is not needed — it unlocks nothing the integration uses.
    - ⚠️ Scopes cannot be added to an existing key afterwards.
 3. Copy your API key — **you will only see it once!** Home Assistant stores it locally and sends it only to Bitpanda; the integration never logs it, and diagnostics leave it out.
-4. Go to **Settings → Devices & services → Add integration**, search for **Bitpanda** and choose **Bitpanda Portfolio** — the list only offers what is not set up yet
+4. Go to **Settings → Devices & services → Add integration**, search for **Bitpanda**, select it, and choose **Bitpanda Portfolio** in the dialog that follows. If the Price Tracker is already set up, **Add service** on the Bitpanda integration page opens the same dialog. It lists only what is not set up yet.
 5. Enter your API key — setup checks all three scopes and names any that is missing — then choose your currency and the language of group titles and messages (see [Languages](#languages))
 
-Bitpanda API keys expire after **one year** — see [Changing settings later](#changing-settings-later).
+Bitpanda API keys expire on the date you choose when you create them, **one year** later at most. Home Assistant then asks for a new one — see [Changing settings later](#changing-settings-later).
 
 ### Set up the Price Tracker
 
-1. Go to **Settings → Devices & services → Add integration**, search for **Bitpanda** and choose **Bitpanda Price Tracker**
+1. Go to **Settings → Devices & services → Add integration**, search for **Bitpanda**, select it, and choose **Bitpanda Price Tracker** in the dialog that follows. If the Portfolio is already set up, **Add service** on the Bitpanda integration page opens the same dialog.
 2. Choose additional currencies if you want them — every asset always gets its EUR sensor — and the language of group titles (see [Languages](#languages))
 
 #### Track prices
@@ -252,7 +253,7 @@ For every version before 2.0.0: the date versions, 2026.06.04 and older. Version
 
 ⚠️ **The upgrade is one-way.** The previous release cannot load the migrated entries, so going back to it afterwards does not work. Make a backup before you update if you may want to return.
 
-1. Create a new API key with **Balances**, **Transaction** and **Earn (Read)** at [app.bitpanda.com/my-account/apikey](https://app.bitpanda.com/my-account/apikey) — keys from the old key page never had Earn
+1. Create a new API key with **Balances**, **Transaction** and **Earn (Read)** at [app.bitpanda.com/my-account/apikey](https://app.bitpanda.com/my-account/apikey) — keys from the classic site, web.bitpanda.com, lack Earn
 2. Update the integration through HACS and restart Home Assistant
    - HACS offers no update? From 2.0.0 on, versions are numbers instead of dates, and HACS can rank a date such as 2026.06.04 above them. Install the newest version once by hand: **HACS → Bitpanda → ⋮ → Redownload**, open **Need a different version?**, pick the newest version not marked as a pre-release and download it. Later updates show up as usual.
    - No version choice in HACS? Open **Settings → Tools → Actions** (before Home Assistant 2026.8: **Developer tools → Actions**) and run `update.install` with the Bitpanda update entity and, as version, the newest release's tag (such as `v2.1.0`).
@@ -319,7 +320,7 @@ For every version before 2.0.0: the date versions, 2026.06.04 and older. Version
 1. Go to **Settings → Devices & services → Bitpanda** and delete each service entry — **Bitpanda Portfolio** and **Bitpanda Price Tracker** — with **⋮ → Delete**. Their devices and sensors go with them.
 2. Remove **Bitpanda** in HACS (its **⋮** menu → **Remove**). Installed manually: delete the `config/custom_components/bitpanda` folder.
 3. Restart Home Assistant.
-4. Optional: delete the API key on [Bitpanda's key page](https://app.bitpanda.com/my-account/apikey) if nothing else uses it.
+4. Optional: delete the API key at [app.bitpanda.com/my-account/apikey](https://app.bitpanda.com/my-account/apikey) if nothing else uses it.
 
 The recorded history of the removed sensors stays in Home Assistant's database until the recorder purges it — after 10 days by default (the recorder's `purge_keep_days`). Their long-term statistics are not purged; delete them in the **Statistics** tab under **Settings → Tools** (before Home Assistant 2026.8: **Developer tools**) if you no longer want them.
 

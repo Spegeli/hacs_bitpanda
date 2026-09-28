@@ -103,7 +103,7 @@
       "reconfigure_successful": "De API-sleutel is vervangen.",
       "currency_changed": "De valuta is gewijzigd. De Portfolio-sensoren worden opnieuw aangemaakt.",
       "no_changes": "Er is niets gewijzigd.",
-      "no_reconfigure": "Bij de Price Tracker valt niets te herconfigureren. Kies de valuta via \"Configureren\" (⚙) bij dezelfde invoer.",
+      "no_reconfigure": "Bij de Bitpanda Price Tracker valt momenteel niets te herconfigureren. Wijzig de extra valuta en de taal van groepstitels en meldingen via \"Configureren\" (⚙) bij dezelfde invoer.",
       "unload_failed": "Het Portfolio kon niet worden gestopt, dus de valuta is niet gewijzigd en er is niets verwijderd. Herstart Home Assistant en probeer het opnieuw."
     }
   },

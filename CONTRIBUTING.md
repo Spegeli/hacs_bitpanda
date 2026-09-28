@@ -22,7 +22,7 @@ No build step and no dependencies beyond Home Assistant itself.
 1. Fork and clone the repository.
 2. Copy `custom_components/bitpanda/` into your Home Assistant `config/custom_components/` directory — or symlink it, so edits apply without copying again.
 3. Restart Home Assistant.
-4. Add the integration: **Settings → Devices & Services → Add Integration → Bitpanda**.
+4. Add the integration: **Settings → Devices & services → Add integration → Bitpanda**.
 
 The Portfolio needs a Bitpanda API key with all three required read scopes — **Guthaben (Balance)**, **Transaktion (Transaction)** and **Earn (Read)** ([create one](https://app.bitpanda.com/my-account/apikey)). The Price Tracker needs none.
 

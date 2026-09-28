@@ -11,7 +11,7 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "The Bitpanda Portfolio shows your Bitpanda account in Home Assistant: its total value, your returns, and a wallet for every asset you hold. The integration creates the wallets itself and removes them when you no longer hold an asset – you do not need to add or delete any.\n\nFor this, the integration needs an API key. To create one:\n\n1. Open [{api_key_url}]({api_key_url}) and create a new key.\n2. Select only the permissions Guthaben (Balance), Transaktion (Transaction) and Earn (Read) – not Trading.\n3. Copy the key and paste it below. Bitpanda shows it only once.\n\nThe integration only reads with it: it cannot trade or move money.\nBitpanda keys are valid for one year; after that, Home Assistant asks for a new one.\nYou can replace the key at any time: open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page and choose \"Reconfigure\".",
+        "description": "The Bitpanda Portfolio shows your Bitpanda account in Home Assistant: its total value, your returns, and a wallet for every asset you hold. The integration creates the wallets itself and removes them when you no longer hold an asset – you do not need to add or delete any.\n\nFor this, the integration needs an API key. To create one:\n\n1. Open [{api_key_url}]({api_key_url}) and create a new key.\n2. Select only the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\".\n3. Copy the key and paste it below. Bitpanda shows it only once.\n\nThe integration only reads with it: it cannot trade or move money.\nBitpanda keys are valid for one year; after that, Home Assistant asks for a new one.\nYou can replace the key at any time: open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page and choose \"Reconfigure\".",
         "data": {
           "api_key": "API key"
         }
@@ -71,7 +71,7 @@
           "api_key": "API key"
         },
         "data_description": {
-          "api_key": "The new key needs the permissions Guthaben (Balance), Transaktion (Transaction) and Earn (Read) – not Trading."
+          "api_key": "The new key needs the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\"."
         }
       },
       "reconfigure": {
@@ -82,7 +82,7 @@
           "currency": "Currency"
         },
         "data_description": {
-          "api_key": "Leave empty to keep the current key.\nA new key from [{api_key_url}]({api_key_url}) needs the permissions Guthaben (Balance), Transaktion (Transaction) and Earn (Read) – not Trading.",
+          "api_key": "Leave empty to keep the current key.\nA new key from [{api_key_url}]({api_key_url}) needs the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\".",
           "currency": "Changing the currency deletes all Portfolio sensors including their history; you confirm this in the next step."
         }
       },

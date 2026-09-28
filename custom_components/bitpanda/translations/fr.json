@@ -11,7 +11,7 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Le Bitpanda Portfolio affiche votre compte Bitpanda dans Home Assistant : sa valeur totale, vos rendements et un wallet pour chaque actif que vous détenez. L'intégration crée elle-même les wallets et les retire lorsque vous ne détenez plus un actif – vous n'avez rien à ajouter ni à supprimer.\n\nPour cela, l'intégration a besoin d'une clé API. Voici comment la créer :\n\n1. Ouvrez [{api_key_url}]({api_key_url}) et créez une nouvelle clé.\n2. Sélectionnez uniquement les autorisations Guthaben (Balance), Transaktion (Transaction) et Earn (Read) – pas Trading.\n3. Copiez la clé et collez-la ci-dessous. Bitpanda ne l'affiche qu'une seule fois.\n\nL'intégration ne fait que lire avec cette clé : elle ne peut ni passer d'ordres ni déplacer d'argent.\nLes clés Bitpanda sont valables un an ; ensuite, Home Assistant en demande une nouvelle.\nVous pouvez remplacer la clé à tout moment : ouvrez le menu ⋮ de l'entrée « Bitpanda Portfolio » sur la page de l'intégration Bitpanda et choisissez « Reconfigurer ».",
+        "description": "Le Bitpanda Portfolio affiche votre compte Bitpanda dans Home Assistant : sa valeur totale, vos rendements et un wallet pour chaque actif que vous détenez. L'intégration crée elle-même les wallets et les retire lorsque vous ne détenez plus un actif – vous n'avez rien à ajouter ni à supprimer.\n\nPour cela, l'intégration a besoin d'une clé API. Voici comment la créer :\n\n1. Ouvrez [{api_key_url}]({api_key_url}) et créez une nouvelle clé.\n2. Sélectionnez uniquement les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) ».\n3. Copiez la clé et collez-la ci-dessous. Bitpanda ne l'affiche qu'une seule fois.\n\nL'intégration ne fait que lire avec cette clé : elle ne peut ni passer d'ordres ni déplacer d'argent.\nLes clés Bitpanda sont valables un an ; ensuite, Home Assistant en demande une nouvelle.\nVous pouvez remplacer la clé à tout moment : ouvrez le menu ⋮ de l'entrée « Bitpanda Portfolio » sur la page de l'intégration Bitpanda et choisissez « Reconfigurer ».",
         "data": {
           "api_key": "Clé API"
         }
@@ -71,7 +71,7 @@
           "api_key": "Clé API"
         },
         "data_description": {
-          "api_key": "La nouvelle clé doit avoir les autorisations Guthaben (Balance), Transaktion (Transaction) et Earn (Read) – pas Trading."
+          "api_key": "La nouvelle clé doit avoir les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) »."
         }
       },
       "reconfigure": {
@@ -82,7 +82,7 @@
           "currency": "Devise"
         },
         "data_description": {
-          "api_key": "Laissez le champ vide pour conserver la clé actuelle.\nUne nouvelle clé créée sur [{api_key_url}]({api_key_url}) doit avoir les autorisations Guthaben (Balance), Transaktion (Transaction) et Earn (Read) – pas Trading.",
+          "api_key": "Laissez le champ vide pour conserver la clé actuelle.\nUne nouvelle clé créée sur [{api_key_url}]({api_key_url}) doit avoir les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) ».",
           "currency": "Changer de devise supprime tous les capteurs du Portfolio, y compris leur historique ; vous le confirmerez à l'étape suivante."
         }
       },

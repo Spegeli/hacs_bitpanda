@@ -417,7 +417,7 @@ class BitpandaApiClient:
         whole-second cursors that it then ignores, which without the rewrite
         stalls or cycles on the first pages.
 
-        Needs the Transaktion (Transaction) scope; a key without it gets 401.
+        Needs the Transaction scope; a key without it gets 401.
         """
         params: dict[str, Any] = {}
         if from_ts:

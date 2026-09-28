@@ -283,7 +283,7 @@ class EarnCoordinator(DataUpdateCoordinator[EarnData]):
 class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]):
     """Aggregates Earn rewards from the operation history.
 
-    /operations needs the Transaktion (Transaction) scope. Setup already
+    /operations needs the Transaction scope. Setup already
     checks every required scope, so a 401 here means the key expired, was
     revoked, or predates that requirement (a migrated legacy key) -- each
     case is answered by a new key, so it raises ConfigEntryAuthFailed the

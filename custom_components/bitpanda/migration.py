@@ -623,8 +623,8 @@ def _log_text(
         )
     paragraphs += [note.log for note in notes]
     paragraphs.append(
-        "Bitpanda needs a new API key with the permissions Guthaben (Balance), "
-        f"Transaktion (Transaction) and Earn (Read). Create it at {API_KEY_URL} "
+        'Bitpanda needs a new API key with the permissions "Balances", "Transaction" and '
+        f'"Earn (Read)". Create it at {API_KEY_URL} '
         "and enter it when Home Assistant asks for it."
     )
     return "\n\n".join(paragraphs)

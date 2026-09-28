@@ -11,7 +11,7 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Das Bitpanda Portfolio zeigt dein Bitpanda-Konto in Home Assistant: den Gesamtwert, deine Renditen und für jedes Asset, das du besitzt, ein eigenes Wallet. Die Wallets legt die Integration selbst an und entfernt sie wieder, wenn du ein Asset nicht mehr besitzt – hinzufügen oder löschen musst du nichts.\n\nDafür braucht die Integration einen API-Schlüssel. So erstellst du ihn:\n\n1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen Schlüssel.\n2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading“.\n3. Kopiere den Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal an.\n\nDie Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\nBitpanda-Schlüssel gelten ein Jahr; danach fragt Home Assistant nach einem neuen.\nErsetzen kannst du den Schlüssel jederzeit: Öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“ und wähle „Neu konfigurieren“.",
+        "description": "Das Bitpanda Portfolio zeigt dein Bitpanda-Konto in Home Assistant: den Gesamtwert, deine Renditen und für jedes Asset, das du besitzt, ein eigenes Wallet. Die Wallets legt die Integration selbst an und entfernt sie wieder, wenn du ein Asset nicht mehr besitzt – hinzufügen oder löschen musst du nichts.\n\nDafür braucht die Integration einen API-Schlüssel. So erstellst du ihn:\n\n1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen Schlüssel.\n2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading (Read)“.\n3. Kopiere den Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal an.\n\nDie Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\nBitpanda-Schlüssel gelten ein Jahr; danach fragt Home Assistant nach einem neuen.\nErsetzen kannst du den Schlüssel jederzeit: Öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“ und wähle „Neu konfigurieren“.",
         "data": {
           "api_key": "API-Schlüssel"
         }
@@ -71,7 +71,7 @@
           "api_key": "API-Schlüssel"
         },
         "data_description": {
-          "api_key": "Der neue Schlüssel braucht die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading“."
+          "api_key": "Der neue Schlüssel braucht die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading (Read)“."
         }
       },
       "reconfigure": {
@@ -82,7 +82,7 @@
           "currency": "Währung"
         },
         "data_description": {
-          "api_key": "Lass das Feld leer, um den aktuellen Schlüssel zu behalten.\nEin neuer Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading“.",
+          "api_key": "Lass das Feld leer, um den aktuellen Schlüssel zu behalten.\nEin neuer Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading (Read)“.",
           "currency": "Eine Änderung der Währung löscht alle Portfolio-Sensoren samt Verlauf; das bestätigst du im nächsten Schritt."
         }
       },

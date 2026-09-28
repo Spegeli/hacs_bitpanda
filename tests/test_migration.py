@@ -1318,8 +1318,8 @@ async def test_the_full_mapping_is_logged_once_in_english(
         "A Bitpanda Price Tracker was already set up, so the prices tracked before the "
         "upgrade were not moved into it. Add these assets there to keep tracking them: "
         "Bitcoin (BTC).\n\n"
-        "Bitpanda needs a new API key with the permissions Guthaben (Balance), Transaktion "
-        "(Transaction) and Earn (Read). Create it at https://app.bitpanda.com/my-account/apikey "
+        'Bitpanda needs a new API key with the permissions "Balances", "Transaction" and '
+        '"Earn (Read)". Create it at https://app.bitpanda.com/my-account/apikey '
         "and enter it when Home Assistant asks for it."
     )
     assert "legacy-key" not in caplog.text

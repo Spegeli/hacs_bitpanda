@@ -579,8 +579,8 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
         assert open_page.startswith("1. ") and "[{api_key_url}]({api_key_url})" in open_page, name
         chosen, left_out = permissions.split(" \u2013 ")
         assert chosen.startswith("2. "), name
-        assert all(p in chosen for p in ("Guthaben", "Transaktion", "Earn (Read)")), name
-        assert "Trading" in left_out and "Trading" not in chosen, name
+        *required, trade = _PERMISSION_LABELS[_language(name)]
+        assert all(label in chosen for label in required) and trade in left_out, name
         assert paste.startswith("3. "), name
         assert len(key.split("\n")) == 3, name
     assert _load("strings.json")["config"]["step"]["portfolio"] == {
@@ -592,8 +592,8 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
             " \u2013 you do not need to add or delete any.\n\n"
             "For this, the integration needs an API key. To create one:\n\n"
             "1. Open [{api_key_url}]({api_key_url}) and create a new key.\n"
-            "2. Select only the permissions Guthaben (Balance), Transaktion (Transaction) and"
-            " Earn (Read) \u2013 not Trading.\n"
+            '2. Select only the permissions "Balances", "Transaction" and "Earn (Read)"'
+            ' \u2013 not "Trade (Read)".\n'
             "3. Copy the key and paste it below. Bitpanda shows it only once.\n\n"
             "The integration only reads with it: it cannot trade or move money.\n"
             "Bitpanda keys are valid for one year; after that, Home Assistant asks for a new"
@@ -613,7 +613,7 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
             "Dafür braucht die Integration einen API-Schlüssel. So erstellst du ihn:\n\n"
             "1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen Schlüssel.\n"
             "2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“"
-            " \u2013 kein „Trading“.\n"
+            " \u2013 kein „Trading (Read)“.\n"
             "3. Kopiere den Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal"
             " an.\n\n"
             "Die Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\n"
@@ -640,17 +640,17 @@ def test_the_reconfigure_key_help_has_a_line_per_sentence():
         keep, new_key = help_text.split("\n")
         assert "[{api_key_url}]({api_key_url})" in new_key, name
         chosen, left_out = new_key.split(" \u2013 ")
-        assert all(p in chosen for p in ("Guthaben", "Transaktion", "Earn (Read)")), name
-        assert "Trading" in left_out and "Trading" not in keep + chosen, name
+        *required, trade = _PERMISSION_LABELS[_language(name)]
+        assert all(label in chosen for label in required) and trade in left_out, name
     assert help_texts["strings.json"] == (
         "Leave empty to keep the current key.\n"
-        "A new key from [{api_key_url}]({api_key_url}) needs the permissions Guthaben (Balance),"
-        " Transaktion (Transaction) and Earn (Read) \u2013 not Trading."
+        'A new key from [{api_key_url}]({api_key_url}) needs the permissions "Balances",'
+        ' "Transaction" and "Earn (Read)" \u2013 not "Trade (Read)".'
     )
     assert help_texts["translations/de.json"] == (
         "Lass das Feld leer, um den aktuellen Schlüssel zu behalten.\n"
         "Ein neuer Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen"
-        " „Guthaben“, „Transaktion“ und „Earn (Read)“ \u2013 kein „Trading“."
+        " „Guthaben“, „Transaktion“ und „Earn (Read)“ \u2013 kein „Trading (Read)“."
     )
 
 
@@ -668,15 +668,15 @@ def test_the_reauth_dialog_starts_what_to_do_on_a_line_of_its_own():
         happened, to_do = description.split("\n")
         assert "{api_key_url}" not in happened and "[{api_key_url}]({api_key_url})" in to_do, name
         chosen, left_out = help_text.split(" \u2013 ")
-        assert all(p in chosen for p in ("Guthaben", "Transaktion", "Earn (Read)")), name
-        assert "Trading" in left_out and "Trading" not in chosen, name
+        *required, trade = _PERMISSION_LABELS[_language(name)]
+        assert all(label in chosen for label in required) and trade in left_out, name
     assert texts["strings.json"] == (
         "Bitpanda rejected the stored API key. It may have expired, or it predates the"
         " permissions this version needs.\n"
         "Create a new key at [{api_key_url}]({api_key_url}) and paste it here. Your sensors"
         " are kept.",
-        "The new key needs the permissions Guthaben (Balance), Transaktion (Transaction) and"
-        " Earn (Read) \u2013 not Trading.",
+        'The new key needs the permissions "Balances", "Transaction" and "Earn (Read)"'
+        ' \u2013 not "Trade (Read)".',
     )
     assert texts["translations/de.json"] == (
         "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen,"
@@ -684,7 +684,7 @@ def test_the_reauth_dialog_starts_what_to_do_on_a_line_of_its_own():
         "Erstelle unter [{api_key_url}]({api_key_url}) einen neuen Schlüssel und füge ihn hier"
         " ein. Deine Sensoren bleiben erhalten.",
         "Der neue Schlüssel braucht die Berechtigungen „Guthaben“, „Transaktion“ und"
-        " „Earn (Read)“ \u2013 kein „Trading“.",
+        " „Earn (Read)“ \u2013 kein „Trading (Read)“.",
     )
 
 
@@ -747,16 +747,28 @@ _PERMISSION_MARKERS = ("Berechtigung", "Transaktion", "Earn (Read)", "Trading")
 def test_german_texts_quote_the_permission_names():
     """Wherever a German text names the key's permissions, it quotes them,
     as Bitpanda's key page labels them: „Guthaben“, „Transaktion“,
-    „Earn (Read)“ and „Trading“ -- in the setup's guide, the reauth and
+    „Earn (Read)“ and „Trading (Read)“ -- in the setup's guide, the reauth and
     the reconfigure help as in the missing-permissions error."""
     unquoted = [
         (key, name)
         for key, text in _texts(_load("translations/de.json")).items()
         if any(marker in text for marker in _PERMISSION_MARKERS)
-        for name in ("Guthaben", "Transaktion", "Earn (Read)", "Trading")
+        for name in ("Guthaben", "Transaktion", "Earn (Read)", "Trading (Read)")
         if name in text.replace(f"„{name}“", "")
     ]
     assert unquoted == []
+
+
+def test_no_language_but_german_names_a_permission_in_german():
+    """Outside German every text names the key's permissions in its own
+    language (_PERMISSION_LABELS): none carries Guthaben or Transaktion."""
+    for name in _FILES:
+        if _language(name) != "de":
+            german = [
+                key for key, text in _texts(_load(name)).items()
+                if "Guthaben" in text or "Transaktion" in text
+            ]
+            assert german == [], name
 
 
 def test_the_refresh_action_says_what_it_does():

@@ -11,7 +11,7 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Il Bitpanda Portfolio mostra il tuo conto Bitpanda in Home Assistant: il valore totale, i tuoi rendimenti e un wallet per ogni asset che possiedi. L'integrazione crea da sé i wallet e li rimuove quando non possiedi più un asset – non devi aggiungere né eliminare nulla.\n\nPer questo l'integrazione ha bisogno di una chiave API. Ecco come crearla:\n\n1. Apri [{api_key_url}]({api_key_url}) e crea una nuova chiave.\n2. Seleziona solo le autorizzazioni Guthaben (Balance), Transaktion (Transaction) e Earn (Read) – non Trading.\n3. Copia la chiave e incollala qui sotto. Bitpanda la mostra una sola volta.\n\nCon la chiave l'integrazione legge soltanto: non può fare trading né spostare denaro.\nLe chiavi Bitpanda valgono un anno; dopo, Home Assistant ne chiede una nuova.\nPuoi sostituire la chiave in qualsiasi momento: apri il menu ⋮ della voce \"Bitpanda Portfolio\" nella pagina dell'integrazione Bitpanda e scegli \"Riconfigura\".",
+        "description": "Il Bitpanda Portfolio mostra il tuo conto Bitpanda in Home Assistant: il valore totale, i tuoi rendimenti e un wallet per ogni asset che possiedi. L'integrazione crea da sé i wallet e li rimuove quando non possiedi più un asset – non devi aggiungere né eliminare nulla.\n\nPer questo l'integrazione ha bisogno di una chiave API. Ecco come crearla:\n\n1. Apri [{api_key_url}]({api_key_url}) e crea una nuova chiave.\n2. Seleziona solo le autorizzazioni \"Saldi\", \"Transazione\" e \"Earn (Lettura)\" – non \"Trading (Lettura)\".\n3. Copia la chiave e incollala qui sotto. Bitpanda la mostra una sola volta.\n\nCon la chiave l'integrazione legge soltanto: non può fare trading né spostare denaro.\nLe chiavi Bitpanda valgono un anno; dopo, Home Assistant ne chiede una nuova.\nPuoi sostituire la chiave in qualsiasi momento: apri il menu ⋮ della voce \"Bitpanda Portfolio\" nella pagina dell'integrazione Bitpanda e scegli \"Riconfigura\".",
         "data": {
           "api_key": "Chiave API"
         }
@@ -71,7 +71,7 @@
           "api_key": "Chiave API"
         },
         "data_description": {
-          "api_key": "La nuova chiave deve avere le autorizzazioni Guthaben (Balance), Transaktion (Transaction) e Earn (Read) – non Trading."
+          "api_key": "La nuova chiave deve avere le autorizzazioni \"Saldi\", \"Transazione\" e \"Earn (Lettura)\" – non \"Trading (Lettura)\"."
         }
       },
       "reconfigure": {
@@ -82,7 +82,7 @@
           "currency": "Valuta"
         },
         "data_description": {
-          "api_key": "Lascia il campo vuoto per mantenere la chiave attuale.\nUna nuova chiave da [{api_key_url}]({api_key_url}) deve avere le autorizzazioni Guthaben (Balance), Transaktion (Transaction) e Earn (Read) – non Trading.",
+          "api_key": "Lascia il campo vuoto per mantenere la chiave attuale.\nUna nuova chiave da [{api_key_url}]({api_key_url}) deve avere le autorizzazioni \"Saldi\", \"Transazione\" e \"Earn (Lettura)\" – non \"Trading (Lettura)\".",
           "currency": "Cambiare la valuta elimina tutti i sensori del Portfolio, cronologia inclusa; lo confermerai nel passaggio successivo."
         }
       },

@@ -1327,14 +1327,15 @@ async def test_the_full_mapping_is_logged_once_in_english(
 
 def test_learn_more_leads_to_the_readmes_upgrade_section():
     """The anchor GitHub gives the upgrade heading -- an arrow emoji (U+2B06
-    U+FE0F), then "Upgrading from 2026.06.x" -- as read from the page GitHub
-    renders for this README: the variation selector U+FE0F kept, the arrow
-    and the dots dropped. Renaming the heading breaks the link -- and fails
-    this test first."""
+    U+FE0F), then "Upgrading from a date version" -- as GitHub renders it for
+    this README: the variation selector U+FE0F kept, the arrow dropped.
+    Released versions carry this link in their repair issues, so the heading
+    keeps its name once 2.0.0 is released; renaming it breaks the link -- and
+    fails this test first."""
     readme = (Path(__file__).parent.parent / "README.md").read_text(encoding="utf-8")
-    assert "\n## \u2b06\ufe0f Upgrading from 2026.06.x\n" in readme
+    assert "\n## \u2b06\ufe0f Upgrading from a date version\n" in readme
     assert UPGRADE_URL == (
-        "https://github.com/Spegeli/hacs_bitpanda#%EF%B8%8F-upgrading-from-202606x"
+        "https://github.com/Spegeli/hacs_bitpanda#%EF%B8%8F-upgrading-from-a-date-version"
     )
 
 

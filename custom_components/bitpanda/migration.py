@@ -138,12 +138,12 @@ def legacy_prefix(wallet_id: str) -> str | None:
 
 
 # "Learn more" on every repair issue of the upgrade: the README's upgrade
-# section, headed by an arrow emoji and "Upgrading from 2026.06.x". GitHub's
-# anchor for that heading keeps the emoji's variation selector (U+FE0F,
-# percent-encoded here) and drops the arrow and the dots -- read from the
-# page GitHub renders for the README. tests/test_migration.py ties it to
-# the heading.
-UPGRADE_URL = "https://github.com/Spegeli/hacs_bitpanda#%EF%B8%8F-upgrading-from-202606x"
+# section, headed by an arrow emoji and "Upgrading from a date version".
+# GitHub's anchor for that heading keeps the emoji's variation selector
+# (U+FE0F, percent-encoded here) and drops the arrow. Released versions
+# carry this link, so the heading keeps its name once 2.0.0 is released.
+# tests/test_migration.py ties it to the heading.
+UPGRADE_URL = "https://github.com/Spegeli/hacs_bitpanda#%EF%B8%8F-upgrading-from-a-date-version"
 
 # Why an entity was left alone, when another one already stands for its
 # asset. Like every reason, it goes to the English log only.

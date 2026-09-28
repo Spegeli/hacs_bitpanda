@@ -241,7 +241,7 @@ The same step works in a script, which you can start from anywhere — from a bu
 
 ---
 
-## ⬆️ Upgrading from 2026.06.x
+## ⬆️ Upgrading from a date version
 
 This release moves to Bitpanda's new Public API and splits the integration into two services. It needs Home Assistant **2025.5** or newer — on 2025.3 or 2025.4 the entry is left unmigrated, the integration does not load, and **Settings → Repairs** asks you to update Home Assistant; older versions cannot load the integration at all.
 
@@ -305,7 +305,7 @@ The recorded history of the removed sensors stays in Home Assistant's database u
 | Problem | Solution |
 |---|---|
 | Integration doesn't load | Restart Home Assistant and clear the HACS cache |
-| HACS offers no update while you are on a date version (2026.x) | Install the newest version once by hand — see [Upgrading from 2026.06.x](#%EF%B8%8F-upgrading-from-202606x), step 2 |
+| HACS offers no update while you are on a date version (2026.x) | Install the newest version once by hand — see [Upgrading from a date version](#%EF%B8%8F-upgrading-from-a-date-version), step 2 |
 | "New Bitpanda API key needed" | The key expired, was revoked, or lacks a scope — paste a new key with all three scopes |
 | Setup says permissions are missing | Create a new key with all three scopes — scopes cannot be added to an existing key |
 | Dialogs show raw text | Reload the browser tab (`Ctrl+F5` / `Cmd+Shift+R`) — your browser cached old translations |

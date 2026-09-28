@@ -529,6 +529,10 @@ def test_the_setup_menu_says_what_each_service_is_for():
         assert step["menu_options"]["portfolio"].startswith("Bitpanda Portfolio ("), name
         assert step["menu_options"]["price_tracker"].startswith("Bitpanda Price Tracker ("), name
         assert all(label.endswith(")") for label in step["menu_options"].values()), name
+    # French and Dutch say prices as their other Price Tracker texts do.
+    menu = {name: _load(name)["config"]["step"]["user"]["description"] for name in _FILES}
+    assert "les prix en direct" in menu["translations/fr.json"]
+    assert "actuele prijzen" in menu["translations/nl.json"]
     assert _load("strings.json")["config"]["step"]["user"] == {
         "title": "Bitpanda",
         "description": (

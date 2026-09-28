@@ -224,7 +224,7 @@ actions:
 
 For a push message to your phone, use its `notify.mobile_app_…` action instead.
 
-**Refresh on a schedule** — ask Bitpanda at a set time instead of waiting for the next regular update. With `continue_on_error: true`, a failed refresh (see [Manual Refresh](#manual-refresh)) does not stop the automation: steps you add after it still run.
+**Refresh on a schedule** — ask Bitpanda at a set time instead of waiting for the next regular update, then show the portfolio's total value. With `continue_on_error: true`, a failed refresh (see [Manual Refresh](#manual-refresh)) does not stop the automation: the notification still comes, with the last figures.
 
 ```yaml
 alias: Refresh Bitpanda every morning
@@ -234,10 +234,14 @@ triggers:
 actions:
   - action: bitpanda.refresh
     continue_on_error: true
-  # Steps added here run even when the refresh failed.
+  # Runs even when the refresh failed, then with the last figures.
+  - action: persistent_notification.create
+    data:
+      title: Bitpanda
+      message: "Portfolio: {{ states('sensor.bitpanda_portfolio_total') }}"
 ```
 
-The same step works in a script, which you can start from anywhere — from a button, for example.
+The same steps work in a script, which you can start from anywhere — from a button, for example.
 
 ---
 

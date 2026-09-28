@@ -34,8 +34,12 @@ def test_there_is_a_price_alert_and_a_refresh_that_goes_on_after_a_failure():
     alert, refresh = _examples()
     [trigger] = alert["triggers"]
     assert (trigger["trigger"], set(trigger) & {"above", "below"}) == ("numeric_state", {"above"})
-    [step] = refresh["actions"]
-    assert step == {"action": "bitpanda.refresh", "continue_on_error": True}
+    refreshed, notified = refresh["actions"]
+    assert refreshed == {"action": "bitpanda.refresh", "continue_on_error": True}
+    # The step the example exists for: it runs even when the refresh failed,
+    # and then shows the last figures.
+    assert notified["action"] == "persistent_notification.create"
+    assert "states('sensor.bitpanda_portfolio_total')" in notified["data"]["message"]
 
 
 def test_the_price_alert_watches_the_price_sensor_the_integration_creates():

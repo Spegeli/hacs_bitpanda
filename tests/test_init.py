@@ -43,7 +43,6 @@ from custom_components.bitpanda.api import (
     BitpandaRateLimitError,
 )
 from custom_components.bitpanda.assets import slim_asset
-from custom_components.bitpanda.groups import async_add_asset_to_group
 from custom_components.bitpanda.const import (
     DOMAIN,
     FIRST_LOAD_RETRY_INTERVAL,
@@ -52,6 +51,7 @@ from custom_components.bitpanda.const import (
 )
 from custom_components.bitpanda.devices import find_entry_device
 from custom_components.bitpanda.ecb import EcbError, EcbRates
+from custom_components.bitpanda.groups import async_add_asset_to_group
 from custom_components.bitpanda.naming import PORTFOLIO_KEYS, portfolio_unique_id
 
 from tests.conftest import device_names_in_subentry, load_fixture, price_group, wallet_group
@@ -1672,6 +1672,28 @@ async def test_an_asset_added_while_the_price_tracker_starts_gets_its_price(hass
 
     assert entry.state is ConfigEntryState.LOADED
     assert _value(hass, "sensor.bitpanda_solana_sol_price_tracker_eur") == 100.0
+
+
+async def test_a_start_that_adopts_legacy_prices_reloads_nothing_more(hass, price_api):
+    """The first start after an upgrade from a date version takes over the
+    legacy price entities and drops the list of them from the entry's data.
+    That is setup's own change, made before what the start tracks is read:
+    no second reload follows."""
+    ticker, _ = price_api
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=3, unique_id="price_tracker", title="Bitpanda Price Tracker",
+        data={"entry_type": "price_tracker", "legacy_adopt": {"entities": []}},
+        options={"extra_currencies": []},
+        subentries_data=[price_group("crypto", BTC)],
+    )
+    entry.add_to_hass(hass)
+    await _setup(hass, entry)
+    runtime = entry.runtime_data
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert "legacy_adopt" not in entry.data
+    assert entry.runtime_data is runtime
+    assert ticker.call_count == 1
 
 
 async def test_a_start_with_no_change_meanwhile_reloads_nothing_more(hass, price_api):

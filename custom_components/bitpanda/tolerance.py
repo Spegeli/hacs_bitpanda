@@ -27,16 +27,20 @@ _DataT = TypeVar("_DataT")
 _CoordinatorT = TypeVar("_CoordinatorT", bound="TolerantCoordinator[Any]")
 
 
-@dataclass(frozen=True)
+@dataclass
 class _Refresh(Generic[_DataT]):
-    """What a refresh noted as it began, for _async_refresh_finished: when
+    """What a refresh noted for _async_refresh_finished. As it began: when
     it was asked for, and the outcome and the data before it -- Home
     Assistant's own previous_update_success and previous_data, which it
-    keeps for each refresh."""
+    keeps for each refresh. And should its key be rejected, the outcome
+    Home Assistant holds as it catches that, which decides whether it logs
+    the rejection."""
 
     requested_at: datetime
     succeeded_before: bool
     data_before: _DataT | None
+    # None unless the key was rejected.
+    succeeded_at_rejection: bool | None = None
 
 
 class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
@@ -51,8 +55,9 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
     (FAILURE_TOLERANCE - 1) `regular_interval`s after the first at the
     least (streaks.CLOCK_GRACE aside), confirm the failure. A rejected API
     key confirms it at once: the key does not become valid again by itself.
-    Home Assistant logs a rejected key only when the refresh before
-    succeeded; rejected after a failed one, it is warned about here, once.
+    Home Assistant logs a rejected key only when the outcome it holds as it
+    catches the rejection is a success -- the refresh before succeeded,
+    unless refreshes overlap; otherwise it is warned about here, once.
     From then on they are unavailable until a refresh succeeds. Without
     data -- a failed first refresh -- there is nothing to show, and they
     are unavailable too. data_available says which applies; TolerantEntity
@@ -129,10 +134,17 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
         # this refresh alone. The streak cannot stand in for the outcome: a
         # refresh cancelled while under way never gets to the hook, yet Home
         # Assistant 2026.9 marks it failed.
-        self._refreshes[asyncio.current_task()] = _Refresh(
-            requested_at, self.last_update_success, self.data
-        )
-        return await self._async_fetch(requested_at)
+        refresh = _Refresh(requested_at, self.last_update_success, self.data)
+        self._refreshes[asyncio.current_task()] = refresh
+        try:
+            return await self._async_fetch(requested_at)
+        except ConfigEntryAuthFailed:
+            # The outcome Home Assistant's own except block reads next --
+            # nothing runs in between -- to decide whether it logs the
+            # rejection: overlapping refreshes may have changed it since this
+            # one began.
+            refresh.succeeded_at_rejection = self.last_update_success
+            raise
 
     async def _async_fetch(self, requested_at: datetime) -> _DataT:
         """This coordinator's refresh: the data, or an exception as
@@ -181,8 +193,9 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
         rejected = isinstance(self.last_exception, ConfigEntryAuthFailed)
         if rejected and not self._rejection_logged:
             self._rejection_logged = True
-            # Home Assistant logs a rejected key only after a success.
-            if not refresh.succeeded_before:
+            # Home Assistant logs a rejected key only when the outcome it
+            # held as it caught the rejection was a success.
+            if not refresh.succeeded_at_rejection:
                 self.logger.warning(
                     "%s: the API key was rejected; its sensors are unavailable "
                     "until a new key is entered",

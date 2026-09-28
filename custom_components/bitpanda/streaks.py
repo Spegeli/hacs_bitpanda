@@ -35,11 +35,13 @@ def streak_confirmed(
 class FailureStreak:
     """A run of failed refreshes in a row, counted from the first of them.
 
-    `add` records one more failure at the time it was asked for. `confirmed`
-    says whether the streak so far -- FAILURE_TOLERANCE of them, spread over
-    the regular pace at the least -- outweighs whatever a coordinator held
-    before; False while nothing has been added yet, rather than confirming
-    an empty streak.
+    `add` records one more failure at the time it was asked for. `first` and
+    `last` are the earliest and the latest of those times, whatever order
+    the failures come in: refreshes that overlap can end in any order.
+    `confirmed` says whether the streak so far -- FAILURE_TOLERANCE of them,
+    spread over the regular pace at the least -- outweighs whatever a
+    coordinator held before; False while nothing has been added yet, rather
+    than confirming an empty streak.
     """
 
     count: int = 0
@@ -47,9 +49,8 @@ class FailureStreak:
     last: datetime | None = None
 
     def add(self, at: datetime) -> None:
-        if self.first is None:
-            self.first = at
-        self.last = at
+        self.first = at if self.first is None else min(self.first, at)
+        self.last = at if self.last is None else max(self.last, at)
         self.count += 1
 
     def confirmed(self, interval: timedelta) -> bool:

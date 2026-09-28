@@ -384,6 +384,52 @@ async def test_a_key_rejected_after_a_success_is_left_to_home_assistant(
     ] == [logging.ERROR]
 
 
+def _key_lines(caplog) -> list[str]:
+    """Who logged each line about a rejected key, in order: Home Assistant's
+    "Authentication failed" ERROR, or the tolerance's WARNING."""
+    lines = []
+    for record in caplog.records:
+        if record.getMessage().startswith("Authentication failed"):
+            lines.append("home_assistant")
+        elif "the API key was rejected" in record.getMessage():
+            lines.append("tolerance")
+    return lines
+
+
+@pytest.mark.parametrize(
+    ("before", "logged_by"),
+    [("success", "tolerance"), ("failure", "home_assistant")],
+    ids=["other_refresh_failed", "other_refresh_succeeded"],
+)
+async def test_a_key_rejected_while_refreshes_overlap_is_logged_once(
+    hass, caplog, before, logged_by
+):
+    """Refreshes overlap on Home Assistant 2025.5, whose async_refresh is
+    _async_refresh without the lock. A and B begin after a `before` and
+    wait; B ends the other way -- it fails after a success, or succeeds
+    after a failure -- and then A's key is rejected. Home Assistant logs a
+    rejected key only when the outcome it holds as it catches the rejection
+    is a success: B's, not the one A began after. So the key is logged
+    once: by the tolerance when B failed, by Home Assistant when B
+    succeeded."""
+    held_a = _Held(ConfigEntryAuthFailed())
+    held_b = _Held(_down() if before == "success" else 2)
+    script = [1] if before == "success" else [1, _down()]
+    probe = _Probe(hass, *script, held_a, held_b)
+    for _ in script:
+        await probe.async_refresh()
+    refresh_a = asyncio.create_task(probe._async_refresh())
+    await held_a.entered.wait()
+    refresh_b = asyncio.create_task(probe._async_refresh())
+    await held_b.entered.wait()
+    with caplog.at_level(logging.WARNING):
+        held_b.release.set()
+        await refresh_b
+        held_a.release.set()
+        await refresh_a
+    assert _key_lines(caplog) == [logged_by]
+
+
 async def test_overlapping_refreshes_are_each_judged_by_their_own_state(
     hass, freezer, caplog
 ):
@@ -391,12 +437,14 @@ async def test_overlapping_refreshes_are_each_judged_by_their_own_state(
     overlap. Refresh A begins after a failure and waits. Meanwhile refresh C
     succeeds, then refresh B begins after that success and waits too. B
     fails, then A fails with a rejected key, which confirms the failure.
-    Each hook takes the state its own refresh noted as it began: B's request
-    time starts the streak and A's ends it, not the clock's. A, begun after
-    a failure, tells the listeners itself -- exactly once -- and warns about
-    the key; Home Assistant would do neither for it. Judged by B's state,
-    begun after a success, A would do neither too, and the sensors would go
-    on showing the last data."""
+    Each hook takes the state its own refresh noted as it began: the streak
+    spans A's request time to B's, though B's failure came first -- and the
+    clock's time is in neither. A, begun after a failure, tells the
+    listeners itself, exactly once: Home Assistant would not. Judged by B's
+    state, begun after a success, A would not either, and the sensors would
+    go on showing the last data. The key is warned about once: Home
+    Assistant, holding B's failure as it catches the rejection, logs
+    nothing."""
     held_a = _Held(ConfigEntryAuthFailed())
     held_b = _Held(_down())
     probe = _Probe(hass, 1, _down(), held_a, 2, held_b)
@@ -423,7 +471,7 @@ async def test_overlapping_refreshes_are_each_judged_by_their_own_state(
         await refresh_a
     assert seen == [False]
     assert (probe._streak.count, probe._streak.first, probe._streak.last) == (
-        2, asked_b, asked_a
+        2, asked_a, asked_b
     )
     assert [record.getMessage() for record in _rejection_records(caplog)] == [_KEY_REJECTED]
     assert probe._refreshes == {}

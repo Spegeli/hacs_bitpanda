@@ -528,6 +528,7 @@ def test_the_setup_menu_says_what_each_service_is_for():
         assert tracker.startswith("- **Bitpanda Price Tracker**"), name
         assert step["menu_options"]["portfolio"].startswith("Bitpanda Portfolio ("), name
         assert step["menu_options"]["price_tracker"].startswith("Bitpanda Price Tracker ("), name
+        assert all(label.endswith(")") for label in step["menu_options"].values()), name
     assert _load("strings.json")["config"]["step"]["user"] == {
         "title": "Bitpanda",
         "description": (
@@ -572,7 +573,7 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
         assert "\n" not in shows + needs, name
         open_page, permissions, paste = guide.split("\n")
         assert open_page.startswith("1. ") and "[{api_key_url}]({api_key_url})" in open_page, name
-        chosen, left_out = permissions.split(" – ")
+        chosen, left_out = permissions.split(" \u2013 ")
         assert chosen.startswith("2. "), name
         assert all(p in chosen for p in ("Guthaben", "Transaktion", "Earn (Read)")), name
         assert "Trading" in left_out and "Trading" not in chosen, name
@@ -584,11 +585,11 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
             "The Bitpanda Portfolio shows your Bitpanda account in Home Assistant: its total"
             " value, your returns, and a wallet for every asset you hold. The integration"
             " creates the wallets itself and removes them when you no longer hold an asset"
-            " – you do not need to add or delete any.\n\n"
+            " \u2013 you do not need to add or delete any.\n\n"
             "For this, the integration needs an API key. To create one:\n\n"
             "1. Open [{api_key_url}]({api_key_url}) and create a new key.\n"
             "2. Select only the permissions Guthaben (Balance), Transaktion (Transaction) and"
-            " Earn (Read) – not Trading.\n"
+            " Earn (Read) \u2013 not Trading.\n"
             "3. Copy the key and paste it below. Bitpanda shows it only once.\n\n"
             "The integration only reads with it: it cannot trade or move money.\n"
             "Bitpanda keys are valid for one year; after that, Home Assistant asks for a new"
@@ -604,11 +605,11 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
             "Das Bitpanda Portfolio zeigt dein Bitpanda-Konto in Home Assistant: den"
             " Gesamtwert, deine Renditen und für jedes Asset, das du besitzt, ein eigenes"
             " Wallet. Die Wallets legt die Integration selbst an und entfernt sie wieder, wenn"
-            " du ein Asset nicht mehr besitzt – hinzufügen oder löschen musst du nichts.\n\n"
+            " du ein Asset nicht mehr besitzt \u2013 hinzufügen oder löschen musst du nichts.\n\n"
             "Dafür braucht die Integration einen API-Schlüssel. So erstellst du ihn:\n\n"
             "1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen Schlüssel.\n"
             "2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“"
-            " – kein „Trading“.\n"
+            " \u2013 kein „Trading“.\n"
             "3. Kopiere den Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal"
             " an.\n\n"
             "Die Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\n"
@@ -634,18 +635,18 @@ def test_the_reconfigure_key_help_has_a_line_per_sentence():
     for name, help_text in help_texts.items():
         keep, new_key = help_text.split("\n")
         assert "[{api_key_url}]({api_key_url})" in new_key, name
-        chosen, left_out = new_key.split(" – ")
+        chosen, left_out = new_key.split(" \u2013 ")
         assert all(p in chosen for p in ("Guthaben", "Transaktion", "Earn (Read)")), name
         assert "Trading" in left_out and "Trading" not in keep + chosen, name
     assert help_texts["strings.json"] == (
         "Leave empty to keep the current key.\n"
         "A new key from [{api_key_url}]({api_key_url}) needs the permissions Guthaben (Balance),"
-        " Transaktion (Transaction) and Earn (Read) – not Trading."
+        " Transaktion (Transaction) and Earn (Read) \u2013 not Trading."
     )
     assert help_texts["translations/de.json"] == (
         "Lass das Feld leer, um den aktuellen Schlüssel zu behalten.\n"
         "Ein neuer Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen"
-        " „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading“."
+        " „Guthaben“, „Transaktion“ und „Earn (Read)“ \u2013 kein „Trading“."
     )
 
 
@@ -662,7 +663,7 @@ def test_the_reauth_dialog_starts_what_to_do_on_a_line_of_its_own():
     for name, (description, help_text) in texts.items():
         happened, to_do = description.split("\n")
         assert "{api_key_url}" not in happened and "[{api_key_url}]({api_key_url})" in to_do, name
-        chosen, left_out = help_text.split(" – ")
+        chosen, left_out = help_text.split(" \u2013 ")
         assert all(p in chosen for p in ("Guthaben", "Transaktion", "Earn (Read)")), name
         assert "Trading" in left_out and "Trading" not in chosen, name
     assert texts["strings.json"] == (
@@ -671,7 +672,7 @@ def test_the_reauth_dialog_starts_what_to_do_on_a_line_of_its_own():
         "Create a new key at [{api_key_url}]({api_key_url}) and paste it here. Your sensors"
         " are kept.",
         "The new key needs the permissions Guthaben (Balance), Transaktion (Transaction) and"
-        " Earn (Read) – not Trading.",
+        " Earn (Read) \u2013 not Trading.",
     )
     assert texts["translations/de.json"] == (
         "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen,"
@@ -679,8 +680,14 @@ def test_the_reauth_dialog_starts_what_to_do_on_a_line_of_its_own():
         "Erstelle unter [{api_key_url}]({api_key_url}) einen neuen Schlüssel und füge ihn hier"
         " ein. Deine Sensoren bleiben erhalten.",
         "Der neue Schlüssel braucht die Berechtigungen „Guthaben“, „Transaktion“ und"
-        " „Earn (Read)“ – kein „Trading“.",
+        " „Earn (Read)“ \u2013 kein „Trading“.",
     )
+
+
+# A German text names the key's permissions when it says Berechtigung or
+# names one of them -- but Guthaben alone, which is also the German name of
+# the balance sensors.
+_PERMISSION_MARKERS = ("Berechtigung", "Transaktion", "Earn (Read)", "Trading")
 
 
 def test_german_texts_quote_the_permission_names():
@@ -691,7 +698,7 @@ def test_german_texts_quote_the_permission_names():
     unquoted = [
         (key, name)
         for key, text in _texts(_load("translations/de.json")).items()
-        if "Berechtigung" in text
+        if any(marker in text for marker in _PERMISSION_MARKERS)
         for name in ("Guthaben", "Transaktion", "Earn (Read)", "Trading")
         if name in text.replace(f"„{name}“", "")
     ]
@@ -713,8 +720,8 @@ def test_the_refresh_action_says_what_it_does():
     )
 
 
-# The one field without a help text: the key in the Portfolio's setup, whose
-# step text above it is the guide to creating the key.
+# The one step whose field has no help text: the Portfolio's setup, whose step
+# text above its key field is the guide to creating the key.
 _WITHOUT_HELP_TEXT = {"config.portfolio"}
 
 

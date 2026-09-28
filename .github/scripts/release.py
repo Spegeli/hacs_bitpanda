@@ -61,8 +61,8 @@ class Version:
 #   - pre-release SemVer tags (v2.1.0-beta.2).
 # A legacy tag is checked first because its numbers would otherwise also
 # match the stable pattern (v2026.06.04 -> major 2026, minor 6, patch 4):
-# spec 12.4 requires that a date tag never becomes a SemVer base, since a
-# bump from it would compute nonsense like 2026.7.0 instead of 1.1.0.
+# a date tag must never become a SemVer base, since a bump from it would
+# compute nonsense like 2026.7.0 instead of 1.1.0.
 # --------------------------------------------------------------------------
 
 _LEGACY_TAG_RE = re.compile(
@@ -170,7 +170,7 @@ def next_prerelease_version(tags: Sequence[str], bump: Bump) -> tuple[Version, i
     number for that target -- one more than the *highest* existing
     "v<target>-beta.*" number, not simply how many exist: with beta.1 and
     beta.3 present (beta.2 perhaps deleted), the next beta must be beta.4,
-    never the already-existing beta.3 again (controller ruling R9). The
+    never the already-existing beta.3 again. The
     two agree whenever there is no gap."""
     target = next_stable_version(tags, bump)
     existing_numbers = [
@@ -186,7 +186,7 @@ def stable_tag(version: Version, tags: Sequence[str]) -> str:
     the very first one carries the one-time "_redesign" suffix: HACS
     cannot classify "v2.0.0_redesign" as a version and falls back to a text
     comparison, which shows the update to every installation still on a
-    legacy date tag (spec 12.4). Every later stable tag is plain."""
+    legacy date tag. Every later stable tag is plain."""
     if latest_stable_version(tags) is None:
         return f"v{version}_redesign"
     return f"v{version}"
@@ -203,8 +203,8 @@ def prerelease_tag(version: Version, n: int) -> str:
 def _semver_sort_key(
     version: Version, is_prerelease: bool, n: int
 ) -> tuple[int, int, int, int, int]:
-    """Sorts tags the way HACS/AwesomeVersion compares them (spec 12.4's
-    verified ordering): a stable X.Y.Z outranks every "-beta.N" of that same
+    """Sorts tags the way HACS/AwesomeVersion compares them (the verified
+    ordering): a stable X.Y.Z outranks every "-beta.N" of that same
     X.Y.Z, and among pre-releases the higher N wins."""
     return (
         version.major,
@@ -224,8 +224,8 @@ def previous_ref(tags: Sequence[str], release_type: ReleaseType) -> str | None:
     tag. Pre-release: the newest tag of either SemVer kind, or -- before
     any SemVer tag exists at all -- the same fallback as stable: a legacy
     date tag is itself a 1.x stable, so it counts as "either type" too
-    (spec 12.6 resolves this same gap, for a stable release's own range,
-    to "the newest date tag"). Only a repository with no tags of any kind
+    (a stable release's own range closes this same gap with "the newest
+    date tag"). Only a repository with no tags of any kind
     has no previous tag, and its notes cover the whole history.
     """
     stable = [(tag, version) for tag in tags if (version := parse_stable_tag(tag)) is not None]
@@ -279,7 +279,7 @@ _HEADER_RE = re.compile(
 # The Conventional Commits footer, anchored to the start of a line: a
 # mid-sentence mention -- "This is not a BREAKING CHANGE: ...", or a docs
 # commit explaining the convention itself -- must never be mistaken for
-# the real thing (review Important 2). Not anchored to the end: every
+# the real thing. Not anchored to the end: every
 # commit in this repository ends with a Co-Authored-By: trailer, which can
 # follow the footer in its own paragraph. "BREAKING-CHANGE" is
 # Conventional Commits' own hyphenated synonym.
@@ -305,7 +305,7 @@ def parse_commit(raw: RawCommit) -> Commit | None:
     )
 
 
-# The global section order (spec 12.6): heading "### <emoji> <name>". A
+# The global section order: heading "### <emoji> <name>". A
 # section with nothing to say is left out of the notes entirely.
 _SECTIONS: tuple[tuple[str, str], ...] = (
     ("\U0001F4A5", "Breaking Changes"),
@@ -328,7 +328,7 @@ def _section_for(commit: Commit) -> str | None:
     """Which section (by name, from `_SECTIONS`) `commit` belongs in, or
     None to leave it out of the notes entirely.
 
-    Ruling R13, in this order:
+    In this order:
     - A breaking commit of any type -- `ci`, `test`, `build` and `chore`
       included -- is filed under Breaking Changes, and only there: it makes
       the next version major (`compute_bump`), so the notes must say why.
@@ -355,7 +355,7 @@ def _section_for(commit: Commit) -> str | None:
     return None
 
 
-# The first words that rank an item (spec 12.6), as whole words in any of
+# The first words that rank an item, as whole words in any of
 # their forms -- a prefix would rank "address" as added and "dropdown" as
 # removed.
 _ADDED_WORDS = frozenset({"add", "adds", "added", "adding"})
@@ -371,7 +371,7 @@ _REMOVED_WORDS = frozenset(
 
 def _item_rank(description: str) -> int:
     """Where one item sorts within its section, by the description's first
-    word (spec 12.6): Added, then everything else (Moved / Optimized /
+    word: Added, then everything else (Moved / Optimized /
     Changed), then Fixed, then Removed. Equal ranks keep the order they
     were given in -- `build_notes` sorts with Python's stable sort."""
     words = description.split(maxsplit=1)
@@ -538,8 +538,8 @@ def plan(
 ) -> dict[str, str]:
     """The next version, its tag, and the tag its notes start after.
 
-    The bump always looks at commits since the latest *stable* tag (spec
-    12.4: a pre-release is "computed the same way, same bump" as a
+    The bump always looks at commits since the latest *stable* tag (a
+    pre-release is computed the same way, with the same bump, as a
     stable) -- never since the latest pre-release -- so a version target
     stays put across however many betas lead up to it.
 

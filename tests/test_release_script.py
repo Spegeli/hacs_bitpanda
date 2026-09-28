@@ -50,7 +50,7 @@ parse_stable_tag = release.parse_stable_tag
 parse_prerelease_tag = release.parse_prerelease_tag
 
 # A stand-in tag list once the redesign's own transition tag exists, used by
-# several scenarios below (spec 12.4's worked example).
+# several scenarios below.
 _AFTER_REDESIGN = ["v2026.05.17", "v2026.06.04", "v2.0.0_redesign"]
 
 
@@ -103,7 +103,7 @@ def test_parse_commit_reads_breaking_from_the_footer():
 
 def test_parse_commit_footer_detects_the_breaking_change_synonym():
     """Conventional Commits allows BREAKING-CHANGE: as a synonym for
-    BREAKING CHANGE:. Review Important 2."""
+    BREAKING CHANGE:."""
     commit = parse_commit(
         RawCommit(
             subject="feat: add a bulk endpoint",
@@ -200,7 +200,7 @@ def test_compute_bump_auto_is_patch_otherwise():
 
 def test_compute_bump_auto_is_major_for_a_breaking_commit_of_any_type():
     """A `!` or a footer is the author's own breaking signal, whatever the
-    type -- a CI or tooling change included (ruling R13)."""
+    type -- a CI or tooling change included."""
     assert compute_bump([_commit("fix"), _commit("ci", breaking=True)], "auto") == "major"
     assert compute_bump([_commit("chore", breaking=True)], "auto") == "major"
 
@@ -222,7 +222,7 @@ def test_parse_legacy_tag_reads_date_and_sequence():
 
 
 def test_parse_stable_tag_never_reads_a_legacy_date_as_semver():
-    """spec 12.4: v2026.06.04 must never become a SemVer base (it would
+    """v2026.06.04 must never become a SemVer base (it would
     otherwise compute a minor bump as 2026.7.0)."""
     assert parse_stable_tag("v2026.06.04") is None
     assert parse_stable_tag("v2026.09.28-1") is None
@@ -242,7 +242,7 @@ def test_parse_prerelease_tag_reads_target_and_beta_number():
 
 
 # --------------------------------------------------------------------------
-# next_stable_version -- spec 12.4's worked examples
+# next_stable_version -- worked examples
 # --------------------------------------------------------------------------
 
 def test_next_stable_version_bases_on_1_0_0_with_legacy_tags_only():
@@ -317,7 +317,7 @@ def test_prerelease_numbering_never_reuses_a_tag_after_a_gap():
     """N = 1 + the *highest* existing beta number of the target, not 1 +
     how many exist: with beta.1 and beta.3 present (beta.2 perhaps
     deleted), the next beta must be beta.4, never the already-existing
-    beta.3 again. Controller ruling R9 (review Minor 4)."""
+    beta.3 again."""
     tags = [*_AFTER_REDESIGN, "v2.1.0-beta.1", "v2.1.0-beta.3"]
     assert next_prerelease_version(tags, "minor") == (Version(2, 1, 0), 4)
 
@@ -360,8 +360,8 @@ def test_previous_ref_prerelease_is_the_newest_of_either_semver_kind():
 def test_previous_ref_prerelease_falls_back_to_the_newest_legacy_tag():
     """A pre-release cut before any SemVer tag exists still has a previous
     tag: a legacy date tag is itself a 1.x stable, so it counts as "either
-    type" too -- spec 12.6 resolves this same gap, for a stable release's
-    own range, to "the newest date tag". Review Important 1."""
+    type" too -- a stable release's own range closes this same gap with
+    "the newest date tag"."""
     assert previous_ref(["v2026.05.17", "v2026.06.04"], "prerelease") == "v2026.06.04"
 
 
@@ -371,8 +371,8 @@ def test_previous_ref_prerelease_with_no_tags_at_all_is_none():
 
 
 # --------------------------------------------------------------------------
-# Ordering is by version, not by `git tag --list`'s (lexical) order --
-# review Important 3: v2.10.0 sorts before v2.9.0 in `git tag --list`.
+# Ordering is by version, not by `git tag --list`'s (lexical) order:
+# v2.10.0 sorts before v2.9.0 in `git tag --list`.
 # --------------------------------------------------------------------------
 
 def test_stable_ordering_is_numeric_not_tag_list_order():
@@ -395,10 +395,9 @@ def test_build_notes_with_nothing_to_list():
 
 
 def test_build_notes_excludes_internal_types_merges_and_the_version_commit():
-    """Review focus: test/ci/chore/build, merge commits and the release's
-    own "chore: bump version to ..." commit are not listed -- unless a
-    tooling commit is breaking or has the security scope (ruling R13,
-    tested below)."""
+    """test/ci/chore/build, merge commits and the release's own "chore:
+    bump version to ..." commit are not listed -- unless a tooling commit
+    is breaking or has the security scope (tested below)."""
     commits = [
         RawCommit(subject="test: add a regression test", body=""),
         RawCommit(subject="ci: cache pip downloads", body=""),
@@ -456,7 +455,7 @@ def test_build_notes_footer_breaking_change_also_files_under_breaking_only():
 
 
 def test_build_notes_lists_a_breaking_commit_of_any_type():
-    """Ruling R13: a breaking commit is listed under Breaking Changes
+    """A breaking commit is listed under Breaking Changes
     whatever its type -- also ci, test, build and chore, which are left out
     otherwise: it makes the next version major, so the notes must say why."""
     commits = [
@@ -475,7 +474,7 @@ def test_build_notes_lists_a_breaking_commit_of_any_type():
 
 
 def test_build_notes_lists_the_security_scope_of_any_type():
-    """Ruling R13, spec 12.6: scope security, any type -- a chore or build
+    """Scope security, any type -- a chore or build
     change to security is listed too, under Security."""
     commits = [
         RawCommit(subject="chore(security): rotate the pinned action digests", body=""),
@@ -499,7 +498,7 @@ def test_build_notes_reads_the_security_scope_in_any_case():
 
 
 def test_build_notes_lists_a_breaking_security_commit_only_as_breaking():
-    """Both rules of R13 apply; a commit is never listed twice, and
+    """Both rules apply; a commit is never listed twice, and
     breaking comes first."""
     commits = [RawCommit(subject="fix(security)!: drop the old token format", body="")]
     assert build_notes(commits) == (
@@ -550,8 +549,7 @@ def test_build_notes_item_order_is_added_changed_fixed_removed():
 def test_build_notes_ranks_items_by_whole_words():
     """The rank comes from the description's first word as a whole word,
     in any of its forms and any case -- never from a prefix: "address" is
-    no "add", "dropdown" no "drop", and "removal", a noun, no "remove".
-    Task 7 review Minor 3."""
+    no "add", "dropdown" no "drop", and "removal", a noun, no "remove"."""
     commits = [
         RawCommit(subject="feat: dropdown for the currency", body=""),
         RawCommit(subject="feat: removes the old flag", body=""),
@@ -580,7 +578,7 @@ def test_build_notes_pins_the_global_section_order_and_exact_emojis():
     output order can only come from `_SECTIONS` itself -- catches a
     swapped pair of headings, Breaking Changes moved out of first place,
     or the Refactor & Code Quality emoji losing its U+FE0F variation
-    selector. Review Important 3."""
+    selector."""
     commits = [
         RawCommit(subject="docs: expand the FAQ", body=""),
         RawCommit(subject="style: reformat the config flow", body=""),
@@ -619,7 +617,7 @@ def test_plan_prerelease_with_only_date_tags_falls_back_to_the_newest_one(monkey
     """The real repository's first beta, cut before v2.0.0_redesign
     exists: previous must be the newest date tag, not empty -- an empty
     previous would republish everything already shipped under
-    v2026.05.29 and v2026.06.04 as if it were new. Review Important 1."""
+    v2026.05.29 and v2026.06.04 as if it were new."""
     monkeypatch.setattr(release, "git_tags", lambda: ["v2026.05.17", "v2026.06.04"])
     monkeypatch.setattr(release, "list_commits", lambda from_ref, to_ref: [])
     assert release.plan("prerelease", "major") == {
@@ -743,7 +741,7 @@ def test_the_git_layer_reads_a_real_repository(repository):
     lines comes through whole, a merge commit never does, the range starts
     after the tag it names -- or covers everything when `from` is empty --
     and the commits come oldest first. The notes and the plan follow from
-    them. Task 7 review Minor 6."""
+    them."""
     _git_commit(repository, "feat: add the first feature", second=1)
     _git(repository, "tag", "v2026.06.04")
     _git(repository, "switch", "--quiet", "--create", "topic")
@@ -784,7 +782,7 @@ def test_plan_and_notes_refuse_a_shallow_clone(monkeypatch, capsys):
     """A shallow clone -- what actions/checkout gives without fetch-depth:
     0 -- has no tags and a cut history, and the plan would still look
     plausible (1.0.1, v1.0.1_redesign) while being wrong. So plan and notes
-    refuse it, and say why and what to do. Task 7 review Minor 1."""
+    refuse it, and say why and what to do."""
     monkeypatch.setattr(release, "is_shallow_clone", lambda: True)
     monkeypatch.setattr(release, "git_tags", lambda: [])
     monkeypatch.setattr(release, "list_commits", lambda from_ref, to_ref: [])
@@ -820,7 +818,7 @@ def test_git_says_whether_a_clone_is_shallow(repository, tmp_path, monkeypatch):
 def test_a_git_failure_leaves_gits_own_message_in_the_log(repository):
     """git's own error -- here the unknown revision of a tag that does not
     exist -- reaches the log, rather than only an exit status 128 behind a
-    traceback. Task 7 review Minor 2."""
+    traceback."""
     _git_commit(repository, "feat: add one", second=1)
     failed = subprocess.run(
         [sys.executable, str(_SCRIPT), "notes", "--from", "no-such-tag", "--to", "HEAD"],

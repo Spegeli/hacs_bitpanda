@@ -27,16 +27,38 @@
         },
         "data_description": {
           "currency": "Bitpanda reports every value of your portfolio in this currency. To change it later, open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page and choose \"Reconfigure\"."
+        },
+        "sections": {
+          "language": {
+            "name": "Language",
+            "data": {
+              "language": "Language of group titles and messages"
+            },
+            "data_description": {
+              "language": "Group titles and the integration's own messages use this language. Sensor names follow Home Assistant's system language."
+            }
+          }
         }
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "The Bitpanda Price Tracker always creates a price sensor in EUR for every tracked asset. Optionally, select additional currencies here to also show the prices in them.\n\nYou can also choose or change the additional currencies later with \"Configure\" (⚙) on the \"Bitpanda Price Tracker\" entry of the Bitpanda integration page. Add assets after the setup with \"Add price tracker\" on the same entry.",
+        "description": "The Bitpanda Price Tracker always creates a price sensor in EUR for every tracked asset. Optionally, select additional currencies here to also show the prices in them.\n\nYou can also choose or change the additional currencies and the language later with \"Configure\" (⚙) on the \"Bitpanda Price Tracker\" entry of the Bitpanda integration page. Add assets after the setup with \"Add price tracker\" on the same entry.",
         "data": {
           "extra_currencies": "Additional currencies"
         },
         "data_description": {
           "extra_currencies": "Each currency selected here adds one more sensor per asset, converted with the daily reference rates of the European Central Bank."
+        },
+        "sections": {
+          "language": {
+            "name": "Language",
+            "data": {
+              "language": "Language of group titles and messages"
+            },
+            "data_description": {
+              "language": "Group titles and the integration's own messages use this language. Sensor names follow Home Assistant's system language."
+            }
+          }
         }
       },
       "reauth_confirm": {

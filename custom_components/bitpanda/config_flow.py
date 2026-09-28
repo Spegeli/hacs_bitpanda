@@ -58,7 +58,7 @@ from .const import (
     entry_type,
 )
 from .groups import async_group_titles, price_group_subentries
-from .language import async_shipped_languages, entry_language
+from .language import async_shipped_languages, entry_language, preselected_language
 from .migration import ISSUE_CURRENCY_DROPPED
 from .purge import async_purge_portfolio
 
@@ -131,8 +131,10 @@ def _language_field(languages: list[str], current: str) -> dict[vol.Required, Se
     """The language of an entry's own texts (language.py), one of `languages`,
     each labelled with its own name through `selector.language`.
 
-    `current` is the stored one; English stands in for a stored language no
-    longer among `languages`, which the form would refuse to save unchanged.
+    `current` is the one the form shows first: the stored one under
+    Configure, the preselected one at setup. English stands in for a stored
+    language no longer among `languages`, which the form would refuse to save
+    unchanged.
     """
     return {
         vol.Required(
@@ -143,6 +145,27 @@ def _language_field(languages: list[str], current: str) -> dict[vol.Required, Se
                 translation_key="language",
                 mode=SelectSelectorMode.DROPDOWN,
             )
+        )
+    }
+
+
+# The sections of the forms. Configure: the Price Tracker's two, in their
+# order, and the Portfolio's language, one of its own so that any later
+# option gets a section of its own too. Setup: the language, below the
+# service's own field. Their names and their fields' texts are
+# `<flow>.step.<step id>.sections`.
+_SECTION_CURRENCIES = "currencies"
+_SECTION_LANGUAGE = "language"
+# Every one open: a section is the only way a Home Assistant form sets fields
+# apart, not a place to hide them.
+_OPEN: SectionConfig = {"collapsed": False}
+
+
+def _language_section(languages: list[str], current: str) -> dict[vol.Required, section]:
+    """The language field (see _language_field) in its open section."""
+    return {
+        vol.Required(_SECTION_LANGUAGE): section(
+            vol.Schema(_language_field(languages, current)), _OPEN
         )
     }
 
@@ -201,6 +224,14 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if currency.get("symbol") in SUPPORTED_CURRENCIES and currency.get("id")
         }
 
+    async def _async_language_section(self) -> dict[vol.Required, section]:
+        """The new entry's language (language.py), in its open section below
+        the service's own field: Home Assistant's system language first,
+        where this integration ships it (language.preselected_language).
+        Stored flat in the entry's options, as Configure stores it."""
+        languages = await async_shipped_languages(self.hass)
+        return _language_section(languages, preselected_language(self.hass, languages))
+
     # --- Portfolio ------------------------------------------------------------
 
     async def async_step_portfolio(
@@ -252,6 +283,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_CURRENCY: currency,
                     CONF_CURRENCY_ID: self._currency_ids[currency],
                 },
+                options={CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE]},
             )
         options = [c for c in SUPPORTED_CURRENCIES if c in self._currency_ids]
         return self.async_show_form(
@@ -260,7 +292,8 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(
                         CONF_CURRENCY, default=DEFAULT_CURRENCY.lower()
-                    ): _currency_select(options)
+                    ): _currency_select(options),
+                    **await self._async_language_section(),
                 }
             ),
         )
@@ -279,11 +312,15 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 options={
                     CONF_EXTRA_CURRENCIES: extra_currencies(
                         user_input.get(CONF_EXTRA_CURRENCIES)
-                    )
+                    ),
+                    CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE],
                 },
             )
         return self.async_show_form(
-            step_id="price_tracker", data_schema=extra_currencies_schema([])
+            step_id="price_tracker",
+            data_schema=extra_currencies_schema([]).extend(
+                await self._async_language_section()
+            ),
         )
 
     async def async_step_import(self, import_data: dict[str, Any]) -> ConfigFlowResult:
@@ -499,17 +536,6 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return {SUBENTRY_TYPE_PRICE_GROUP: PriceTrackerSubentryFlow}
 
 
-# The sections of the Configure forms: the Price Tracker's two, in their
-# order, and the Portfolio's language, one of its own so that any later
-# option gets a section of its own too. Their names and their fields' texts
-# are `options.step.<step id>.sections`.
-_SECTION_CURRENCIES = "currencies"
-_SECTION_LANGUAGE = "language"
-# Every one open: a section is the only way a Home Assistant form sets fields
-# apart, not a place to hide them.
-_OPEN: SectionConfig = {"collapsed": False}
-
-
 class BitpandaOptionsFlow(config_entries.OptionsFlow):
     """Configure, for both services.
 
@@ -532,10 +558,9 @@ class BitpandaOptionsFlow(config_entries.OptionsFlow):
 
     async def _async_language_section(self) -> dict[vol.Required, section]:
         """The language of the entry's own texts, in its open section."""
-        field = _language_field(
+        return _language_section(
             await async_shipped_languages(self.hass), entry_language(self.config_entry)
         )
-        return {vol.Required(_SECTION_LANGUAGE): section(vol.Schema(field), _OPEN)}
 
     async def async_step_price_tracker(
         self, user_input: dict[str, Any] | None = None

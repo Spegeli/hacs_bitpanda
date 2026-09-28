@@ -376,6 +376,19 @@ def test_the_configure_currencies_field_says_what_comes_beside_eur():
     }
 
 
+def test_the_setup_names_the_language_as_configure_does():
+    """Both setup dialogs -- the Price Tracker's, the Portfolio's currency
+    step -- ask for the language in a section worded exactly like
+    Configure's: one setting, one wording, wherever it is set."""
+    for name in _FILES:
+        strings = _load(name)
+        configure = strings["options"]["step"]["price_tracker"]["sections"]["language"]
+        for step_id in ("price_tracker", "currency"):
+            assert strings["config"]["step"][step_id]["sections"] == {"language": configure}, (
+                name, step_id,
+            )
+
+
 def test_every_field_has_a_help_text():
     """Under every field of every dialog -- setup, reauth, reconfigure,
     Configure and "Add price tracker" -- a help text (`data_description`)
@@ -397,7 +410,7 @@ def test_every_field_has_a_help_text():
         for name, step in steps.items()
         for key, texts in step.get("sections", {}).items()
     }
-    assert len(labelled) == 10
+    assert len(labelled) == 12
     for name, step in labelled.items():
         assert set(step.get("data_description", {})) == set(step["data"]), name
 

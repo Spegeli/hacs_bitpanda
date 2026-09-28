@@ -27,16 +27,38 @@
         },
         "data_description": {
           "currency": "Bitpanda geeft alle waarden van je portfolio in deze valuta weer. Om de valuta later te wijzigen, open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies je \"Herconfigureer\"."
+        },
+        "sections": {
+          "language": {
+            "name": "Taal",
+            "data": {
+              "language": "Taal van groepstitels en meldingen"
+            },
+            "data_description": {
+              "language": "Groepstitels en de eigen meldingen van de integratie gebruiken deze taal. Sensornamen volgen de systeemtaal van Home Assistant."
+            }
+          }
         }
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "De Bitpanda Price Tracker maakt voor elke gevolgde asset altijd een prijssensor in EUR aan. Kies hier optioneel extra valuta waarin de prijzen ook worden getoond.\n\nJe kunt de extra valuta ook later kiezen of wijzigen via \"Configureren\" (⚙) bij de invoer \"Bitpanda Price Tracker\" op de integratiepagina van Bitpanda. Voeg na het instellen assets toe met \"Prijstracker toevoegen\" bij dezelfde invoer.",
+        "description": "De Bitpanda Price Tracker maakt voor elke gevolgde asset altijd een prijssensor in EUR aan. Kies hier optioneel extra valuta waarin de prijzen ook worden getoond.\n\nJe kunt de extra valuta en de taal ook later kiezen of wijzigen via \"Configureren\" (⚙) bij de invoer \"Bitpanda Price Tracker\" op de integratiepagina van Bitpanda. Voeg na het instellen assets toe met \"Prijstracker toevoegen\" bij dezelfde invoer.",
         "data": {
           "extra_currencies": "Extra valuta"
         },
         "data_description": {
           "extra_currencies": "Elke hier gekozen valuta voegt per asset nog een sensor toe, omgerekend met de dagelijkse referentiekoersen van de Europese Centrale Bank."
+        },
+        "sections": {
+          "language": {
+            "name": "Taal",
+            "data": {
+              "language": "Taal van groepstitels en meldingen"
+            },
+            "data_description": {
+              "language": "Groepstitels en de eigen meldingen van de integratie gebruiken deze taal. Sensornamen volgen de systeemtaal van Home Assistant."
+            }
+          }
         }
       },
       "reauth_confirm": {

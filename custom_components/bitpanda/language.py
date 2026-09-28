@@ -5,9 +5,11 @@ itself: dialogs, attribute names and repair issues follow each user's
 profile language, sensor names its system language. Two kinds of text the
 integration writes out itself, and Home Assistant shows as they are: the
 titles of its groups, and its refusals to delete a device. Those follow one
-setting per entry instead -- CONF_LANGUAGE under Configure, English by
-default, chosen among the languages this integration ships -- so in a
-household of several users nobody meets them in a language nobody chose.
+setting per entry instead -- CONF_LANGUAGE, chosen among the languages this
+integration ships when a service is set up (Home Assistant's system
+language offered first) and changed under Configure -- so in a household of
+several users nobody meets them in a language nobody chose. An entry that
+never had the choice, one upgraded from version 1, uses English.
 """
 from __future__ import annotations
 
@@ -28,9 +30,21 @@ _TRANSLATIONS_DIR = Path(__file__).parent / "translations"
 
 def entry_language(entry: ConfigEntry) -> str:
     """The language of `entry`'s own texts: its CONF_LANGUAGE option,
-    English until the user picks another."""
+    English for an entry that has none."""
     language: str = entry.options.get(CONF_LANGUAGE, DEFAULT_LANGUAGE)
     return language
+
+
+def preselected_language(hass: HomeAssistant, languages: list[str]) -> str:
+    """The language a setup dialog offers first, one of `languages`: Home
+    Assistant's system language -- a regional variant such as "en-GB" by
+    its base language -- or English where this integration does not ship
+    it."""
+    system = hass.config.language
+    for candidate in (system, system.split("-")[0]):
+        if candidate in languages:
+            return candidate
+    return DEFAULT_LANGUAGE
 
 
 def _shipped_languages() -> list[str]:

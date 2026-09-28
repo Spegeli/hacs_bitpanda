@@ -473,15 +473,15 @@ async def _async_refusal(
     Assistant renders a translated exception's message in English only
     (translation.async_get_exception_message, at 2025.5 as at 2026.9). So
     the message is written here, from the `exceptions` translations, in the
-    entry's own language (language.py: English unless chosen otherwise under
-    Configure) -- read when the refusal is written, its translations loaded
-    now if not cached yet; English stands in for a missing text, its
-    placeholders filled. The message keeps its trailing full stop: it is the
-    dialog's whole text, of several sentences, and Home Assistant's habit of
-    dropping it from a translated message would leave the last one
-    unfinished. The translation fields stay, for a frontend that translates
-    them itself. Without any text, Home Assistant renders its English
-    message as before.
+    entry's own language (language.py: chosen at setup or under Configure,
+    English for an entry without one) -- read when the refusal is written,
+    its translations loaded now if not cached yet; English stands in for a
+    missing text, its placeholders filled. The message keeps its trailing
+    full stop: it is the dialog's whole text, of several sentences, and Home
+    Assistant's habit of dropping it from a translated message would leave
+    the last one unfinished. The translation fields stay, for a frontend that
+    translates them itself. Without any text, Home Assistant renders its
+    English message as before.
     """
     translations = await async_get_translations(
         hass, entry_language(entry), "exceptions", {DOMAIN}

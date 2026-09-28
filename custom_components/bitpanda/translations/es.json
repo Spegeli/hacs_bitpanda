@@ -27,16 +27,38 @@
         },
         "data_description": {
           "currency": "Bitpanda expresa todos los valores de tu cartera en esta moneda. Para cambiarla más adelante, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda y elige \"Reconfigurar\"."
+        },
+        "sections": {
+          "language": {
+            "name": "Idioma",
+            "data": {
+              "language": "Idioma de los títulos de grupo y de los mensajes"
+            },
+            "data_description": {
+              "language": "Los títulos de los grupos y los mensajes propios de la integración usan este idioma. Los nombres de los sensores siguen el idioma del sistema de Home Assistant."
+            }
+          }
         }
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "El Bitpanda Price Tracker crea siempre un sensor de precio en EUR para cada activo con seguimiento. Opcionalmente, elige aquí monedas adicionales en las que también se mostrarán los precios.\n\nTambién puedes elegir o cambiar las monedas adicionales más adelante con \"Configurar\" (⚙) en la entrada \"Bitpanda Price Tracker\" de la página de la integración Bitpanda. Tras la configuración inicial, añade activos con \"Añadir seguimiento de precio\" en la misma entrada.",
+        "description": "El Bitpanda Price Tracker crea siempre un sensor de precio en EUR para cada activo con seguimiento. Opcionalmente, elige aquí monedas adicionales en las que también se mostrarán los precios.\n\nTambién puedes elegir o cambiar las monedas adicionales y el idioma más adelante con \"Configurar\" (⚙) en la entrada \"Bitpanda Price Tracker\" de la página de la integración Bitpanda. Tras la configuración inicial, añade activos con \"Añadir seguimiento de precio\" en la misma entrada.",
         "data": {
           "extra_currencies": "Monedas adicionales"
         },
         "data_description": {
           "extra_currencies": "Cada moneda seleccionada aquí añade un sensor más por activo, convertido con los tipos de cambio de referencia diarios del Banco Central Europeo."
+        },
+        "sections": {
+          "language": {
+            "name": "Idioma",
+            "data": {
+              "language": "Idioma de los títulos de grupo y de los mensajes"
+            },
+            "data_description": {
+              "language": "Los títulos de los grupos y los mensajes propios de la integración usan este idioma. Los nombres de los sensores siguen el idioma del sistema de Home Assistant."
+            }
+          }
         }
       },
       "reauth_confirm": {

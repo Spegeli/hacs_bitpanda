@@ -27,16 +27,38 @@
         },
         "data_description": {
           "currency": "Bitpanda meldet alle Werte deines Portfolios in dieser Währung. Um sie später zu ändern, öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“ und wähle „Neu konfigurieren“."
+        },
+        "sections": {
+          "language": {
+            "name": "Sprache",
+            "data": {
+              "language": "Sprache für Gruppentitel und Meldungen"
+            },
+            "data_description": {
+              "language": "Gruppentitel und die eigenen Meldungen der Integration verwenden diese Sprache. Sensornamen folgen der Systemsprache von Home Assistant."
+            }
+          }
         }
       },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
-        "description": "Der Bitpanda Price Tracker legt für jedes verfolgte Asset immer einen Preis-Sensor in EUR an. Optional wählst du hier zusätzliche Währungen, in denen die Preise ebenfalls angezeigt werden.\n\nDie zusätzlichen Währungen kannst du auch später mit „Konfigurieren“ (⚙) beim Eintrag „Bitpanda Price Tracker“ auf der Bitpanda-Integrationsseite wählen oder ändern. Assets fügst du nach der Einrichtung mit „Preis-Tracker hinzufügen“ beim selben Eintrag hinzu.",
+        "description": "Der Bitpanda Price Tracker legt für jedes verfolgte Asset immer einen Preis-Sensor in EUR an. Optional wählst du hier zusätzliche Währungen, in denen die Preise ebenfalls angezeigt werden.\n\nDie zusätzlichen Währungen und die Sprache kannst du auch später mit „Konfigurieren“ (⚙) beim Eintrag „Bitpanda Price Tracker“ auf der Bitpanda-Integrationsseite wählen oder ändern. Assets fügst du nach der Einrichtung mit „Preis-Tracker hinzufügen“ beim selben Eintrag hinzu.",
         "data": {
           "extra_currencies": "Zusätzliche Währungen"
         },
         "data_description": {
           "extra_currencies": "Jede hier gewählte Währung fügt pro Asset einen weiteren Sensor hinzu, umgerechnet mit den täglichen Referenzkursen der Europäischen Zentralbank."
+        },
+        "sections": {
+          "language": {
+            "name": "Sprache",
+            "data": {
+              "language": "Sprache für Gruppentitel und Meldungen"
+            },
+            "data_description": {
+              "language": "Gruppentitel und die eigenen Meldungen der Integration verwenden diese Sprache. Sensornamen folgen der Systemsprache von Home Assistant."
+            }
+          }
         }
       },
       "reauth_confirm": {

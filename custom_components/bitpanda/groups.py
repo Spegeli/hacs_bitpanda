@@ -4,8 +4,8 @@ Home Assistant shows every config subentry of an entry as a group on the
 integration page, with the subentry's devices inside. A group stands for one
 asset category (assets.asset_category) and carries it as its unique_id. Its
 title is set when the group is created, in the entry's own language
-(language.py: English unless chosen otherwise under Configure) -- never in
-Home Assistant's. At every setup, a group still titled one of this
+(language.py: chosen at setup or under Configure, English for an entry
+without one) -- never looked up in Home Assistant's. At every setup, a group still titled one of this
 integration's own default titles for its category -- in any language it
 ships -- but not the one for the entry's language, is retitled to it
 (async_retitle_groups); changing the language under Configure reloads the

@@ -52,7 +52,6 @@ from .const import (
     PORTFOLIO_TITLE,
     PRICE_TRACKER_TITLE,
     REQUIRED_SCOPES,
-    SCOPE_LABELS,
     SUBENTRY_TYPE_PRICE_GROUP,
     SUPPORTED_CURRENCIES,
     entry_type,
@@ -216,8 +215,10 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if len(missing) == len(REQUIRED_SCOPES):
             return {"base": "invalid_auth"}, {}
         if missing:
+            # A mark per scope; the texts name the permissions in their own
+            # language, so the placeholders carry no words.
             return {"base": "missing_scopes"}, {
-                "missing_scopes": ", ".join(SCOPE_LABELS[s] for s in missing)
+                scope: "✗" if scope in missing else "✓" for scope in REQUIRED_SCOPES
             }
         return {}, {}
 

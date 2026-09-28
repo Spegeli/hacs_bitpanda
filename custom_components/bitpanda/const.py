@@ -42,19 +42,12 @@ API_ERROR_KINDS: tuple[str, ...] = (
 
 API_KEY_URL = "https://app.bitpanda.com/my-account/apikey"
 
-# Measured 2026-09-24 with one key per scope: /portfolio needs Guthaben
-# (Balance), /operations Transaktion (Transaction), /earn/configs Earn (Read).
-# Trading (Read) unlocks nothing the integration calls, so it is not required.
+# Measured 2026-09-24 with one key per scope: /portfolio needs Balances,
+# /operations Transaction, /earn/configs Earn (Read) -- the names on Bitpanda's
+# English key page. Trade (Read) unlocks nothing the integration calls, so it
+# is not required. The texts name each scope as the key page does in their
+# language; the missing-permissions error takes one placeholder per scope.
 REQUIRED_SCOPES: tuple[str, ...] = ("balance", "transaction", "earn")
-
-# As Bitpanda's key page shows them. German label first because the German UI
-# is what the maintainer verified against; the English name follows so the
-# same string serves both translations.
-SCOPE_LABELS: dict[str, str] = {
-    "balance": "Guthaben (Balance)",
-    "transaction": "Transaktion (Transaction)",
-    "earn": "Earn (Read)",
-}
 
 # Stable and used in nearly every response. Verified 2026-09-24.
 EUR_CURRENCY_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"

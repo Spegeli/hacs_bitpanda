@@ -93,7 +93,7 @@
     },
     "error": {
       "invalid_auth": "Bitpanda rejected this API key. Check that it was copied completely and that it has at least one of the required permissions.",
-      "missing_scopes": "This API key is missing permissions: {missing_scopes}. Permissions cannot be added to an existing key. Create a new one with Guthaben (Balance), Transaktion (Transaction) and Earn (Read).",
+      "missing_scopes": "Permissions of this API key: \"Balances\" {balance}, \"Transaction\" {transaction}, \"Earn (Read)\" {earn}. Permissions cannot be added to an existing key. Create a new one with all three.",
       "rate_limited": "Too many requests. Wait a moment and try again.",
       "cannot_connect": "Could not reach Bitpanda. Try again later.",
       "unknown": "Unexpected error"

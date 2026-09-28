@@ -93,7 +93,7 @@
     },
     "error": {
       "invalid_auth": "Bitpanda heeft deze API-sleutel geweigerd. Controleer of hij volledig is gekopieerd en minstens één van de vereiste rechten heeft.",
-      "missing_scopes": "Deze API-sleutel mist rechten: {missing_scopes}. Aan een bestaande sleutel kunnen geen rechten worden toegevoegd. Maak een nieuwe aan met Guthaben (Balance), Transaktion (Transaction) en Earn (Read).",
+      "missing_scopes": "Rechten van deze API-sleutel: \"Saldi\" {balance}, \"Transactie\" {transaction}, \"Earn (Lezen)\" {earn}. Aan een bestaande sleutel kunnen geen rechten worden toegevoegd. Maak een nieuwe aan met alle drie.",
       "rate_limited": "Te veel verzoeken. Wacht even en probeer het opnieuw.",
       "cannot_connect": "Bitpanda is niet bereikbaar. Probeer het later opnieuw.",
       "unknown": "Onverwachte fout"

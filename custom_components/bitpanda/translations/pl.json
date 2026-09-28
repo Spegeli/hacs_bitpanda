@@ -93,7 +93,7 @@
     },
     "error": {
       "invalid_auth": "Bitpanda odrzuciła ten klucz API. Sprawdź, czy został skopiowany w całości i czy ma co najmniej jedno z wymaganych uprawnień.",
-      "missing_scopes": "Temu kluczowi API brakuje uprawnień: {missing_scopes}. Do istniejącego klucza nie można dodać uprawnień. Utwórz nowy z uprawnieniami Guthaben (Balance), Transaktion (Transaction) i Earn (Read).",
+      "missing_scopes": "Uprawnienia tego klucza API: „Salda” {balance}, „Transakcja” {transaction}, „Earn (Odczytaj)” {earn}. Do istniejącego klucza nie można dodać uprawnień. Utwórz nowy klucz ze wszystkimi trzema uprawnieniami.",
       "rate_limited": "Zbyt wiele żądań. Poczekaj chwilę i spróbuj ponownie.",
       "cannot_connect": "Nie można połączyć się z platformą Bitpanda. Spróbuj ponownie później.",
       "unknown": "Nieoczekiwany błąd"

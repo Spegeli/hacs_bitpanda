@@ -8,7 +8,7 @@ import string
 from custom_components.bitpanda import migration
 from custom_components.bitpanda.api import BitpandaApiError
 from custom_components.bitpanda.assets import ASSET_CATEGORY_FILTERS, CATEGORY_OTHER
-from custom_components.bitpanda.const import API_ERROR_KINDS
+from custom_components.bitpanda.const import API_ERROR_KINDS, REQUIRED_SCOPES
 from custom_components.bitpanda.ecb import EcbError, EcbRates
 from custom_components.bitpanda.portfolio_coordinator import _update_failed
 from custom_components.bitpanda.portfolio_model import (
@@ -685,6 +685,56 @@ def test_the_reauth_dialog_starts_what_to_do_on_a_line_of_its_own():
         " ein. Deine Sensoren bleiben erhalten.",
         "Der neue Schlüssel braucht die Berechtigungen „Guthaben“, „Transaktion“ und"
         " „Earn (Read)“ \u2013 kein „Trading“.",
+    )
+
+
+# Bitpanda's permission names as its key page shows them in each language
+# (read by the maintainer on 2026-09-29), in that language's quotation marks:
+# Balances, Transaction, Earn (Read), Trade (Read). A language Bitpanda's
+# website does not offer takes the English names.
+_PERMISSION_LABELS = {
+    "de": ("„Guthaben“", "„Transaktion“", "„Earn (Read)“", "„Trading (Read)“"),
+    "en": ('"Balances"', '"Transaction"', '"Earn (Read)"', '"Trade (Read)"'),
+    "es": ('"Créditos"', '"Transacción"', '"Earn (Lectura)"', '"Trading (Lectura)"'),
+    "fr": (
+        "« Soldes »",
+        "« Transactions »",
+        "« Earn (Lecture) »",
+        "« Trader (Lecture) »",
+    ),
+    "it": ('"Saldi"', '"Transazione"', '"Earn (Lettura)"', '"Trading (Lettura)"'),
+    "nl": ('"Saldi"', '"Transactie"', '"Earn (Lezen)"', '"Traden (Lezen)"'),
+    "pl": ("„Salda”", "„Transakcja”", "„Earn (Odczytaj)”", "„Trade (Odczytaj)”"),
+}
+
+
+def _language(name: str) -> str:
+    """The language of a string file: strings.json is English."""
+    return "en" if name == "strings.json" else Path(name).stem
+
+
+def test_the_missing_permissions_error_marks_each_permission():
+    """The error names the key's three permissions as Bitpanda's key page
+    does in each language, each followed by the mark the code fills in --
+    ✓ or ✗, never a word -- and asks for a new key with all three. In the
+    approved English and German wording."""
+    assert sorted(_PERMISSION_LABELS) == _LANGUAGES
+    for name in _FILES:
+        error = _load(name)["config"]["error"]["missing_scopes"]
+        *required, trade = _PERMISSION_LABELS[_language(name)]
+        assert _placeholders(error) == set(REQUIRED_SCOPES), name
+        for label, scope in zip(required, REQUIRED_SCOPES):
+            assert f"{label} {{{scope}}}" in error, name
+        assert trade not in error, name
+    assert _load("strings.json")["config"]["error"]["missing_scopes"] == (
+        'Permissions of this API key: "Balances" {balance}, "Transaction" {transaction},'
+        ' "Earn (Read)" {earn}. Permissions cannot be added to an existing key. Create a new'
+        " one with all three."
+    )
+    assert _load("translations/de.json")["config"]["error"]["missing_scopes"] == (
+        "Berechtigungen dieses API-Schlüssels: „Guthaben“ {balance}, „Transaktion“"
+        " {transaction}, „Earn (Read)“ {earn}. Einem bestehenden Schlüssel lassen sich"
+        " keine Berechtigungen hinzufügen. Erstelle einen neuen mit allen dreien."
     )
 
 

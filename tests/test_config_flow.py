@@ -176,14 +176,17 @@ async def test_portfolio_rejects_a_key_with_no_scope(hass):
 
 
 async def test_portfolio_names_missing_scopes(hass):
+    """The error marks each permission -- ✓ for one the key has, ✗ for one
+    it lacks; the permissions' names stay in the translated texts."""
     result = await _submit_key(
         hass, await _portfolio_form(hass), "partial", missing=("transaction", "earn")
     )
     assert result["errors"]["base"] == "missing_scopes"
-    assert (
-        result["description_placeholders"]["missing_scopes"]
-        == "Transaktion (Transaction), Earn (Read)"
-    )
+    placeholders = result["description_placeholders"]
+    assert {scope: placeholders[scope] for scope in ("balance", "transaction", "earn")} == {
+        "balance": "✓", "transaction": "✗", "earn": "✗"
+    }
+    assert "missing_scopes" not in placeholders
     await _finish_portfolio_setup(hass, result)
 
 
@@ -460,7 +463,10 @@ async def test_reauth_missing_scopes_keeps_the_stored_key_and_leaks_nothing(hass
     with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=["earn"])):
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {"api_key": secret})
     assert result["errors"]["base"] == "missing_scopes"
-    assert result["description_placeholders"]["missing_scopes"] == "Earn (Read)"
+    placeholders = result["description_placeholders"]
+    assert {scope: placeholders[scope] for scope in ("balance", "transaction", "earn")} == {
+        "balance": "✓", "transaction": "✓", "earn": "✗"
+    }
     assert entry.data["api_key"] == "key"
     assert secret not in repr(result["description_placeholders"])
     assert secret not in caplog.text
@@ -621,7 +627,10 @@ async def test_reconfigure_missing_scopes_reshows_form_without_leaking_key(hass,
     assert result["step_id"] == "reconfigure"
     assert result["errors"]["base"] == "missing_scopes"
     assert result["description_placeholders"]["api_key_url"] == API_KEY_URL
-    assert result["description_placeholders"]["missing_scopes"] == "Earn (Read)"
+    placeholders = result["description_placeholders"]
+    assert {scope: placeholders[scope] for scope in ("balance", "transaction", "earn")} == {
+        "balance": "✓", "transaction": "✓", "earn": "✗"
+    }
     assert entry.data["api_key"] == "key"
     assert secret not in repr(result["description_placeholders"])
     assert secret not in caplog.text

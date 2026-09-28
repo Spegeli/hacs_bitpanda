@@ -93,7 +93,7 @@
     },
     "error": {
       "invalid_auth": "Bitpanda ha rifiutato questa chiave API. Verifica che sia stata copiata per intero e che abbia almeno una delle autorizzazioni richieste.",
-      "missing_scopes": "A questa chiave API mancano delle autorizzazioni: {missing_scopes}. Non è possibile aggiungere autorizzazioni a una chiave esistente. Creane una nuova con Guthaben (Balance), Transaktion (Transaction) e Earn (Read).",
+      "missing_scopes": "Autorizzazioni di questa chiave API: \"Saldi\" {balance}, \"Transazione\" {transaction}, \"Earn (Lettura)\" {earn}. Non è possibile aggiungere autorizzazioni a una chiave esistente. Creane una nuova con tutte e tre.",
       "rate_limited": "Troppe richieste. Attendi un momento e riprova.",
       "cannot_connect": "Impossibile raggiungere Bitpanda. Riprova più tardi.",
       "unknown": "Errore imprevisto"

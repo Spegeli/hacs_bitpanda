@@ -93,7 +93,7 @@
     },
     "error": {
       "invalid_auth": "Bitpanda a refusé cette clé API. Vérifiez qu'elle a été copiée en entier et qu'elle possède au moins une des autorisations requises.",
-      "missing_scopes": "Il manque des autorisations à cette clé API : {missing_scopes}. Il est impossible d'ajouter des autorisations à une clé existante. Créez-en une nouvelle avec Guthaben (Balance), Transaktion (Transaction) et Earn (Read).",
+      "missing_scopes": "Autorisations de cette clé API : « Soldes » {balance}, « Transactions » {transaction}, « Earn (Lecture) » {earn}. Il est impossible d'ajouter des autorisations à une clé existante. Créez-en une nouvelle avec les trois.",
       "rate_limited": "Trop de requêtes. Patientez un instant, puis réessayez.",
       "cannot_connect": "Impossible de joindre Bitpanda. Réessayez plus tard.",
       "unknown": "Erreur inattendue"

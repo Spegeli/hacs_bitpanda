@@ -15,17 +15,18 @@ from custom_components.bitpanda.api import (
     BitpandaRateLimitError,
     _SCOPE_PROBES,
 )
-from custom_components.bitpanda.const import API_BASE_URL, REQUIRED_SCOPES, SCOPE_LABELS
+from custom_components.bitpanda.const import API_BASE_URL, REQUIRED_SCOPES
 
 
 def test_scope_constants_stay_in_sync():
-    """REQUIRED_SCOPES, SCOPE_LABELS (both in const.py) and _SCOPE_PROBES
-    (api.py) list the same scopes by hand in three separate places. A drift
-    between them would surface as a KeyError at setup time --
-    SCOPE_LABELS[s] in BitpandaConfigFlow._async_validate_key, or
-    _SCOPE_PROBES[scope] in async_missing_scopes -- rather than fail a test.
+    """REQUIRED_SCOPES (const.py) and _SCOPE_PROBES (api.py) list the same
+    scopes by hand in two places. A drift between them would surface as a
+    KeyError at setup time -- _SCOPE_PROBES[scope] in async_missing_scopes --
+    rather than fail a test. The missing-permissions error's placeholders are
+    named after REQUIRED_SCOPES; tests/test_strings.py checks every text uses
+    exactly those.
     """
-    assert set(REQUIRED_SCOPES) == set(SCOPE_LABELS) == set(_SCOPE_PROBES)
+    assert set(REQUIRED_SCOPES) == set(_SCOPE_PROBES)
 
 
 async def test_all_scopes_present_returns_empty_list():

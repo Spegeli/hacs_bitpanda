@@ -106,7 +106,7 @@
       "reconfigure_successful": "The API key was replaced.",
       "currency_changed": "The currency was changed. The Portfolio sensors are being recreated.",
       "no_changes": "Nothing was changed.",
-      "no_reconfigure": "There is currently nothing to reconfigure for the Bitpanda Price Tracker. Change its additional currencies and the language of group titles and messages with \"Configure\" (⚙) on the same entry.",
+      "no_reconfigure": "There is currently nothing to reconfigure for the Bitpanda Price Tracker. Change its additional currencies and the language of group titles with \"Configure\" (⚙) on the same entry.",
       "unload_failed": "The Portfolio could not be stopped, so the currency was not changed and nothing was deleted. Restart Home Assistant and try again."
     }
   },

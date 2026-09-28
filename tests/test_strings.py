@@ -420,6 +420,20 @@ def test_the_setup_names_the_language_as_configure_does():
         ), name
 
 
+def test_the_price_tracker_names_its_language_by_its_own_field():
+    """Where a Price Tracker text sends the user to its language setting --
+    the answer to its "Reconfigure" -- it names it as the Price Tracker's own
+    field does, group titles alone: never as the Portfolio's, which also
+    covers messages the Price Tracker does not write."""
+    for name in _FILES:
+        strings = _load(name)
+        steps = strings["options"]["step"]
+        tracker = steps["price_tracker"]["sections"]["language"]["data"]["language"].casefold()
+        portfolio = steps["portfolio"]["sections"]["language"]["data"]["language"].casefold()
+        text = strings["config"]["abort"]["no_reconfigure"].casefold()
+        assert tracker in text and portfolio not in text, name
+
+
 def test_the_language_field_says_what_it_sets_for_each_service():
     """Each service's language field names what follows it: the Price
     Tracker's its group titles alone -- it writes no messages of its own --

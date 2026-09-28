@@ -200,6 +200,7 @@ jobs:
             echo "::error::${MESSAGE#release.py: }"
             exit 1
           fi
+          cat "${ERRORS}" >&2
           echo "${PLAN}"
           echo "${PLAN}" >> "$GITHUB_OUTPUT"
 

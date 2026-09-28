@@ -43,13 +43,16 @@
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
         "description": "Bitpanda Price Tracker zawsze tworzy sensor ceny w EUR dla każdego śledzonego aktywa. Opcjonalnie wybierz tutaj dodatkowe waluty, w których ceny będą również wyświetlane.\n\nDodatkowe waluty i język możesz też wybrać lub zmienić później, klikając „Konfiguruj” (⚙) przy wpisie „Bitpanda Price Tracker” na stronie integracji Bitpanda. Po wstępnej konfiguracji dodasz aktywa za pomocą „Dodaj śledzenie ceny” przy tym samym wpisie.",
-        "data": {
-          "extra_currencies": "Dodatkowe waluty"
-        },
-        "data_description": {
-          "extra_currencies": "Każda wybrana tutaj waluta dodaje jeszcze jeden sensor na aktywo, przeliczany według dziennych kursów referencyjnych Europejskiego Banku Centralnego."
-        },
         "sections": {
+          "currencies": {
+            "name": "Waluty",
+            "data": {
+              "extra_currencies": "Oprócz EUR"
+            },
+            "data_description": {
+              "extra_currencies": "Każda wybrana waluta dodaje jeszcze jeden sensor na aktywo, przeliczany według dziennych kursów referencyjnych Europejskiego Banku Centralnego."
+            }
+          },
           "language": {
             "name": "Język",
             "data": {
@@ -118,7 +121,7 @@
               "extra_currencies": "Oprócz EUR"
             },
             "data_description": {
-              "extra_currencies": "Każda wybrana waluta dodaje jeden sensor na aktywo. Usunięcie waluty usuwa te sensory; ich historia zostaje zachowana i wraca, gdy ponownie wybierzesz tę walutę."
+              "extra_currencies": "Każda wybrana waluta dodaje jeszcze jeden sensor na aktywo, przeliczany według dziennych kursów referencyjnych Europejskiego Banku Centralnego. Usunięcie waluty usuwa te sensory; ich historia zostaje zachowana i wraca, gdy ponownie wybierzesz tę walutę."
             }
           },
           "language": {

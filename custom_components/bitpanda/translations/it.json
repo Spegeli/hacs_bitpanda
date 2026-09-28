@@ -43,13 +43,16 @@
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
         "description": "Il Bitpanda Price Tracker crea sempre un sensore di prezzo in EUR per ogni asset monitorato. Facoltativamente, scegli qui valute aggiuntive in cui mostrare anche i prezzi.\n\nPuoi scegliere o modificare le valute aggiuntive e la lingua anche in seguito con \"Configura\" (⚙) sulla voce \"Bitpanda Price Tracker\" nella pagina dell'integrazione Bitpanda. Dopo la configurazione iniziale, aggiungi gli asset con \"Aggiungi monitoraggio prezzo\" sulla stessa voce.",
-        "data": {
-          "extra_currencies": "Valute aggiuntive"
-        },
-        "data_description": {
-          "extra_currencies": "Ogni valuta selezionata qui aggiunge un sensore in più per asset, convertito con i tassi di cambio di riferimento giornalieri della Banca centrale europea."
-        },
         "sections": {
+          "currencies": {
+            "name": "Valute",
+            "data": {
+              "extra_currencies": "Oltre a EUR"
+            },
+            "data_description": {
+              "extra_currencies": "Ogni valuta selezionata aggiunge un sensore in più per asset, convertito con i tassi di cambio di riferimento giornalieri della Banca centrale europea."
+            }
+          },
           "language": {
             "name": "Lingua",
             "data": {
@@ -118,7 +121,7 @@
               "extra_currencies": "Oltre a EUR"
             },
             "data_description": {
-              "extra_currencies": "Ogni valuta selezionata aggiunge un sensore per asset. Togliere una valuta rimuove quei sensori; la loro cronologia viene conservata e torna quando selezioni di nuovo la valuta."
+              "extra_currencies": "Ogni valuta selezionata aggiunge un sensore in più per asset, convertito con i tassi di cambio di riferimento giornalieri della Banca centrale europea. Togliere una valuta rimuove quei sensori; la loro cronologia viene conservata e torna quando selezioni di nuovo la valuta."
             }
           },
           "language": {

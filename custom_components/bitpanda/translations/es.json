@@ -43,13 +43,16 @@
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
         "description": "El Bitpanda Price Tracker crea siempre un sensor de precio en EUR para cada activo con seguimiento. Opcionalmente, elige aquí monedas adicionales en las que también se mostrarán los precios.\n\nTambién puedes elegir o cambiar las monedas adicionales y el idioma más adelante con \"Configurar\" (⚙) en la entrada \"Bitpanda Price Tracker\" de la página de la integración Bitpanda. Tras la configuración inicial, añade activos con \"Añadir seguimiento de precio\" en la misma entrada.",
-        "data": {
-          "extra_currencies": "Monedas adicionales"
-        },
-        "data_description": {
-          "extra_currencies": "Cada moneda seleccionada aquí añade un sensor más por activo, convertido con los tipos de cambio de referencia diarios del Banco Central Europeo."
-        },
         "sections": {
+          "currencies": {
+            "name": "Monedas",
+            "data": {
+              "extra_currencies": "Además de EUR"
+            },
+            "data_description": {
+              "extra_currencies": "Cada moneda seleccionada añade un sensor más por activo, convertido con los tipos de cambio de referencia diarios del Banco Central Europeo."
+            }
+          },
           "language": {
             "name": "Idioma",
             "data": {
@@ -118,7 +121,7 @@
               "extra_currencies": "Además de EUR"
             },
             "data_description": {
-              "extra_currencies": "Cada moneda seleccionada añade un sensor por activo. Al quitar una moneda se retiran esos sensores; su historial se conserva y vuelve cuando seleccionas de nuevo la moneda."
+              "extra_currencies": "Cada moneda seleccionada añade un sensor más por activo, convertido con los tipos de cambio de referencia diarios del Banco Central Europeo. Al quitar una moneda se retiran esos sensores; su historial se conserva y vuelve cuando seleccionas de nuevo la moneda."
             }
           },
           "language": {

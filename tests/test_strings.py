@@ -353,8 +353,9 @@ _IN_ADDITION_TO_EUR = {
 
 def test_the_configure_currencies_field_says_what_comes_beside_eur():
     """So its help text no longer says that EUR always stays -- none does,
-    in any language; it keeps what choosing and removing a currency do, and
-    that a removed currency's sensors keep their history."""
+    in any language; it keeps what choosing a currency does and how its
+    prices are converted, what removing one does, and that a removed
+    currency's sensors keep their history."""
     assert sorted(_IN_ADDITION_TO_EUR) == _LANGUAGES
     for language, label in _IN_ADDITION_TO_EUR.items():
         currencies = _load(f"translations/{language}.json")["options"]["step"]["price_tracker"][
@@ -369,13 +370,31 @@ def test_the_configure_currencies_field_says_what_comes_beside_eur():
         for language in ("en", "de")
     }
     assert help_texts == {
-        "en": "Each selected currency adds one sensor per asset. Removing a currency removes "
-        "those sensors; their history is kept and comes back when you select the currency "
-        "again.",
-        "de": "Jede gewählte Währung fügt pro Asset einen Sensor hinzu. Wird eine Währung "
+        "en": "Each selected currency adds one more sensor per asset, converted with the daily "
+        "reference rates of the European Central Bank. Removing a currency removes those "
+        "sensors; their history is kept and comes back when you select the currency again.",
+        "de": "Jede gewählte Währung fügt pro Asset einen weiteren Sensor hinzu, umgerechnet mit "
+        "den täglichen Referenzkursen der Europäischen Zentralbank. Wird eine Währung "
         "abgewählt, werden diese Sensoren entfernt; ihr Verlauf bleibt erhalten und ist wieder "
         "da, wenn du die Währung erneut wählst.",
     }
+
+
+def test_the_setup_words_the_currencies_as_configure_does():
+    """The Price Tracker's setup shows its currencies as Configure does: in a
+    section of the same name, the field under the same label, and the same
+    first sentence under it -- what a currency adds and how it is
+    converted. Configure goes on to say what removing one does; at setup
+    there is nothing to remove."""
+    for name in _FILES:
+        strings = _load(name)
+        step = strings["config"]["step"]["price_tracker"]
+        assert "data" not in step and "data_description" not in step, name
+        setup = step["sections"]["currencies"]
+        configure = strings["options"]["step"]["price_tracker"]["sections"]["currencies"]
+        assert (setup["name"], setup["data"]) == (configure["name"], configure["data"]), name
+        first = setup["data_description"]["extra_currencies"]
+        assert configure["data_description"]["extra_currencies"].startswith(first + " "), name
 
 
 def test_the_setup_names_the_language_as_configure_does():
@@ -388,7 +407,7 @@ def test_the_setup_names_the_language_as_configure_does():
         strings = _load(name)
         configure = strings["options"]["step"]["price_tracker"]["sections"]["language"]
         steps = strings["config"]["step"]
-        assert steps["price_tracker"]["sections"] == {"language": configure}, name
+        assert steps["price_tracker"]["sections"]["language"] == configure, name
         portfolio = steps["currency"]["sections"]["language"]
         assert (portfolio["name"], portfolio["data"]) == (configure["name"], configure["data"]), name
         assert portfolio["data_description"]["language"].startswith(

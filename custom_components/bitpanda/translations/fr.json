@@ -43,13 +43,16 @@
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
         "description": "Le Bitpanda Price Tracker crée toujours un capteur de prix en EUR pour chaque actif suivi. En option, choisissez ici des devises supplémentaires dans lesquelles les prix seront aussi affichés.\n\nVous pourrez aussi choisir ou modifier les devises supplémentaires et la langue plus tard avec « Configurer » (⚙) sur l'entrée « Bitpanda Price Tracker » de la page de l'intégration Bitpanda. Après la configuration initiale, ajoutez des actifs avec « Ajouter un suivi de prix » sur la même entrée.",
-        "data": {
-          "extra_currencies": "Devises supplémentaires"
-        },
-        "data_description": {
-          "extra_currencies": "Chaque devise sélectionnée ici ajoute un capteur de plus par actif, converti avec les taux de référence quotidiens de la Banque centrale européenne."
-        },
         "sections": {
+          "currencies": {
+            "name": "Devises",
+            "data": {
+              "extra_currencies": "En plus de l'EUR"
+            },
+            "data_description": {
+              "extra_currencies": "Chaque devise sélectionnée ajoute un capteur de plus par actif, converti avec les taux de référence quotidiens de la Banque centrale européenne."
+            }
+          },
           "language": {
             "name": "Langue",
             "data": {
@@ -118,7 +121,7 @@
               "extra_currencies": "En plus de l'EUR"
             },
             "data_description": {
-              "extra_currencies": "Chaque devise sélectionnée ajoute un capteur par actif. Retirer une devise retire ces capteurs ; leur historique est conservé et revient lorsque vous sélectionnez à nouveau la devise."
+              "extra_currencies": "Chaque devise sélectionnée ajoute un capteur de plus par actif, converti avec les taux de référence quotidiens de la Banque centrale européenne. Retirer une devise retire ces capteurs ; leur historique est conservé et revient lorsque vous sélectionnez à nouveau la devise."
             }
           },
           "language": {

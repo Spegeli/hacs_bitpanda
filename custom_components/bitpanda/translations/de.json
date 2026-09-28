@@ -43,13 +43,16 @@
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
         "description": "Der Bitpanda Price Tracker legt für jedes verfolgte Asset immer einen Preis-Sensor in EUR an. Optional wählst du hier zusätzliche Währungen, in denen die Preise ebenfalls angezeigt werden.\n\nDie zusätzlichen Währungen und die Sprache kannst du auch später mit „Konfigurieren“ (⚙) beim Eintrag „Bitpanda Price Tracker“ auf der Bitpanda-Integrationsseite wählen oder ändern. Assets fügst du nach der Einrichtung mit „Preis-Tracker hinzufügen“ beim selben Eintrag hinzu.",
-        "data": {
-          "extra_currencies": "Zusätzliche Währungen"
-        },
-        "data_description": {
-          "extra_currencies": "Jede hier gewählte Währung fügt pro Asset einen weiteren Sensor hinzu, umgerechnet mit den täglichen Referenzkursen der Europäischen Zentralbank."
-        },
         "sections": {
+          "currencies": {
+            "name": "Währungen",
+            "data": {
+              "extra_currencies": "Zusätzlich zu EUR"
+            },
+            "data_description": {
+              "extra_currencies": "Jede gewählte Währung fügt pro Asset einen weiteren Sensor hinzu, umgerechnet mit den täglichen Referenzkursen der Europäischen Zentralbank."
+            }
+          },
           "language": {
             "name": "Sprache",
             "data": {
@@ -118,7 +121,7 @@
               "extra_currencies": "Zusätzlich zu EUR"
             },
             "data_description": {
-              "extra_currencies": "Jede gewählte Währung fügt pro Asset einen Sensor hinzu. Wird eine Währung abgewählt, werden diese Sensoren entfernt; ihr Verlauf bleibt erhalten und ist wieder da, wenn du die Währung erneut wählst."
+              "extra_currencies": "Jede gewählte Währung fügt pro Asset einen weiteren Sensor hinzu, umgerechnet mit den täglichen Referenzkursen der Europäischen Zentralbank. Wird eine Währung abgewählt, werden diese Sensoren entfernt; ihr Verlauf bleibt erhalten und ist wieder da, wenn du die Währung erneut wählst."
             }
           },
           "language": {

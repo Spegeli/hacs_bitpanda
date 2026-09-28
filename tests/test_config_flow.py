@@ -291,7 +291,7 @@ async def test_price_tracker_form_offers_the_extra_currencies(hass):
         result["flow_id"], {"next_step_id": "price_tracker"}
     )
     assert result["step_id"] == "price_tracker"
-    config = _selector_config(result["data_schema"], "extra_currencies")
+    config = _selector_config(_section_schema(result["data_schema"], "currencies"), "extra_currencies")
     # Lowercase: hassfest's translation-key validator rejects uppercase
     # selector option keys.
     assert "eur" not in config["options"]
@@ -306,7 +306,8 @@ async def test_price_tracker_creates_a_keyless_entry(hass):
         result["flow_id"], {"next_step_id": "price_tracker"}
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"extra_currencies": ["usd", "chf"], **_setup_language("nl")}
+        result["flow_id"],
+        {"currencies": {"extra_currencies": ["usd", "chf"]}, **_setup_language("nl")},
     )
     entry = result["result"]
     assert entry.title == "Bitpanda Price Tracker"
@@ -327,7 +328,7 @@ async def test_a_second_price_tracker_aborts_even_from_an_open_dialog(hass):
     assert result["step_id"] == "price_tracker"
     _price_tracker_entry().add_to_hass(hass)
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"extra_currencies": [], **_setup_language("en")}
+        result["flow_id"], {"currencies": {"extra_currencies": []}, **_setup_language("en")}
     )
     assert result["type"] == _FLOW.ABORT
     assert result["reason"] == "already_configured"
@@ -1138,7 +1139,7 @@ def _preselected(result) -> str:
 
 
 @pytest.mark.parametrize(
-    ("service", "own_field"), [("price_tracker", "extra_currencies"), ("portfolio", "currency")]
+    ("service", "own_field"), [("price_tracker", "currencies"), ("portfolio", "currency")]
 )
 async def test_the_setup_asks_for_the_language_in_an_open_section_below(
     hass, service, own_field
@@ -1156,6 +1157,15 @@ async def test_the_setup_asks_for_the_language_in_an_open_section_below(
     assert config.get("multiple", False) is False
 
 
+async def test_the_price_tracker_setup_shows_its_currencies_as_configure_does(hass):
+    """Under a heading of their own, open, in the section Configure shows
+    them in -- none chosen yet."""
+    schema = (await _setup_form(hass, "price_tracker"))["data_schema"]
+    assert dict(schema.schema)["currencies"].options == {"collapsed": False}
+    assert list(_section_schema(schema, "currencies").schema) == ["extra_currencies"]
+    assert _section_schema(schema, "currencies")({}) == {"extra_currencies": []}
+
+
 @pytest.mark.parametrize("service", ["price_tracker", "portfolio"])
 @pytest.mark.parametrize(
     ("system", "shown"),
@@ -1170,8 +1180,9 @@ async def test_the_setup_offers_home_assistants_language_first(hass, service, sy
 
 async def test_the_frontend_gets_the_setup_language_open_and_preselected(hass, hass_client):
     """What the Price Tracker's setup dialog receives, through Home
-    Assistant's own flow API: the currencies as before, then the language
-    section, expanded, with the system language as its default."""
+    Assistant's own flow API: two expandable sections, expanded -- the
+    currencies with none chosen, then the language with the system language
+    as its default."""
     hass.config.language = "de"
     assert await async_setup_component(hass, "config", {})
     client = await hass_client()
@@ -1183,14 +1194,13 @@ async def test_the_frontend_gets_the_setup_language_open_and_preselected(hass, h
     )
     shown = await response.json()
     assert shown["step_id"] == "price_tracker"
-    currencies, language = shown["data_schema"]
-    assert currencies["name"] == "extra_currencies"
-    assert (language["name"], language["type"], language["expanded"]) == (
-        "language", "expandable", True,
-    )
-    assert [(inner["name"], inner["default"]) for inner in language["schema"]] == [
-        ("language", "de")
-    ]
+    assert [
+        (field["name"], field["type"], field["expanded"]) for field in shown["data_schema"]
+    ] == [("currencies", "expandable", True), ("language", "expandable", True)]
+    assert [
+        [(inner["name"], inner["default"]) for inner in field["schema"]]
+        for field in shown["data_schema"]
+    ] == [[("extra_currencies", [])], [("language", "de")]]
 
 
 # --- Every field has a label and a help text ------------------------------------------
@@ -1275,7 +1285,7 @@ async def test_stored_currency_round_trips_through_the_options_form(hass):
         result["flow_id"], {"next_step_id": "price_tracker"}
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"extra_currencies": ["usd"], **_setup_language("en")}
+        result["flow_id"], {"currencies": {"extra_currencies": ["usd"]}, **_setup_language("en")}
     )
     entry = result["result"]
     assert dict(entry.options) == {"extra_currencies": ["USD"], "language": "en"}

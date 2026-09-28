@@ -149,16 +149,21 @@ def _language_field(languages: list[str], current: str) -> dict[vol.Required, Se
     }
 
 
-# The sections of the forms. Configure: the Price Tracker's two, in their
-# order, and the Portfolio's language, one of its own so that any later
-# option gets a section of its own too. Setup: the language, below the
-# service's own field. Their names and their fields' texts are
+# The sections of the forms. The Price Tracker's two, in their order, at
+# setup as under Configure; the Portfolio's language, one of its own so that
+# any later option gets a section of its own too -- at setup below its
+# currency. Their names and their fields' texts are
 # `<flow>.step.<step id>.sections`.
 _SECTION_CURRENCIES = "currencies"
 _SECTION_LANGUAGE = "language"
 # Every one open: a section is the only way a Home Assistant form sets fields
 # apart, not a place to hide them.
 _OPEN: SectionConfig = {"collapsed": False}
+
+
+def _currencies_section(selected: list[str]) -> dict[vol.Required, section]:
+    """The extra currencies (extra_currencies_schema) in their open section."""
+    return {vol.Required(_SECTION_CURRENCIES): section(extra_currencies_schema(selected), _OPEN)}
 
 
 def _language_section(languages: list[str], current: str) -> dict[vol.Required, section]:
@@ -311,15 +316,15 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data={ENTRY_TYPE: ENTRY_TYPE_PRICE_TRACKER},
                 options={
                     CONF_EXTRA_CURRENCIES: extra_currencies(
-                        user_input.get(CONF_EXTRA_CURRENCIES)
+                        user_input[_SECTION_CURRENCIES].get(CONF_EXTRA_CURRENCIES)
                     ),
                     CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE],
                 },
             )
         return self.async_show_form(
             step_id="price_tracker",
-            data_schema=extra_currencies_schema([]).extend(
-                await self._async_language_section()
+            data_schema=vol.Schema(
+                {**_currencies_section([]), **await self._async_language_section()}
             ),
         )
 
@@ -581,11 +586,8 @@ class BitpandaOptionsFlow(config_entries.OptionsFlow):
             step_id="price_tracker",
             data_schema=vol.Schema(
                 {
-                    vol.Required(_SECTION_CURRENCIES): section(
-                        extra_currencies_schema(
-                            self.config_entry.options.get(CONF_EXTRA_CURRENCIES, [])
-                        ),
-                        _OPEN,
+                    **_currencies_section(
+                        self.config_entry.options.get(CONF_EXTRA_CURRENCIES, [])
                     ),
                     **await self._async_language_section(),
                 }

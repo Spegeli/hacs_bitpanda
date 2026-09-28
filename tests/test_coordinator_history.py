@@ -1,5 +1,6 @@
 """Tests for the portfolio history coordinator."""
 import asyncio
+from contextlib import contextmanager
 from datetime import timedelta
 
 import pytest
@@ -287,6 +288,20 @@ async def _refresh(coordinator, freezer, pace=PORTFOLIO_UPDATE_INTERVAL) -> None
     await coordinator.async_refresh()
 
 
+@contextmanager
+def _listening(coordinator):
+    """The data the coordinator's listeners found each time it told them,
+    while the block runs. A listener makes the coordinator schedule its next
+    refresh; leaving the block removes the listener, and with it that timer,
+    which Home Assistant's test harness would fail the test for."""
+    seen: list[PortfolioReturns] = []
+    unsubscribe = coordinator.async_add_listener(lambda: seen.append(coordinator.data))
+    try:
+        yield seen
+    finally:
+        unsubscribe()
+
+
 async def test_the_coordinator_carries_a_failing_timeframe(hass, freezer):
     """The week answers, then its own requests fail while the others answer:
     its last return stays through two refreshes at the regular pace, and
@@ -324,6 +339,58 @@ async def test_a_history_refresh_failing_as_a_whole_counts_for_every_timeframe(
     assert coordinator.last_update_success is True
     assert "WEEK" in coordinator.data.failed
     assert "WEEK" not in coordinator.data.values
+
+
+async def test_a_refresh_failing_as_a_whole_counts_once_for_each_timeframe(hass, freezer):
+    """Two refreshes fail as a whole, ten minutes apart -- a refresh was
+    missed between them. Each counts once for every timeframe, and two
+    failures confirm nothing, however far apart: the returns are still
+    carried."""
+    scripts = {timeframe: [1.0, _DOWN, _DOWN] for timeframe in PORTFOLIO_TIMEFRAMES}
+    coordinator = _scripted_history(hass, **scripts)
+    await coordinator.async_refresh()
+    carried = coordinator.data
+    await _refresh(coordinator, freezer)
+    await _refresh(coordinator, freezer, pace=2 * PORTFOLIO_UPDATE_INTERVAL)
+    assert coordinator.data is carried
+
+
+async def test_a_first_refresh_failing_as_a_whole_leaves_nothing_to_show(hass):
+    """No last return to carry: no data, nothing available -- yet the
+    refresh counts for every timeframe."""
+    coordinator = _scripted_history(
+        hass, **{timeframe: [_DOWN] for timeframe in PORTFOLIO_TIMEFRAMES}
+    )
+    await coordinator.async_refresh()
+    assert (coordinator.data, coordinator.data_available) == (None, False)
+    assert coordinator.failing_timeframes == set(PORTFOLIO_TIMEFRAMES)
+
+
+async def test_a_whole_failure_that_confirms_a_carried_timeframe_fails_it_at_once(
+    hass, freezer
+):
+    """The week's own request fails while the others answer: its last return
+    is carried. Then two refreshes fail as a whole, and count for the week
+    too: the second confirms its failure, ten minutes after its first, while
+    the whole update's failure is not confirmed yet. The week is failed in
+    that very refresh, the others still carried, and the listeners are told
+    -- after a failure Home Assistant would not tell them."""
+    scripts = {timeframe: [1.0, 1.0, _DOWN, _DOWN] for timeframe in PORTFOLIO_TIMEFRAMES}
+    scripts["WEEK"] = [2.0, _DOWN, _DOWN, _DOWN]
+    coordinator = _scripted_history(hass, **scripts)
+    carried = PortfolioReturns(
+        values={"DAY": 1.0, "WEEK": 2.0, "MONTH": 1.0, "SIX_MONTH": 1.0, "YEAR": 1.0}
+    )
+    week_failed = PortfolioReturns(
+        values={"DAY": 1.0, "MONTH": 1.0, "SIX_MONTH": 1.0, "YEAR": 1.0},
+        failed=frozenset({"WEEK"}),
+    )
+    with _listening(coordinator) as seen:
+        await coordinator.async_refresh()
+        for _ in range(3):
+            await _refresh(coordinator, freezer)
+    assert (coordinator.data, coordinator.data_available) == (week_failed, True)
+    assert seen == [carried] * 3 + [week_failed]
 
 
 async def test_a_timeframe_still_failing_after_a_confirmed_outage_is_unavailable_at_once(

@@ -53,6 +53,8 @@ class FailureStreak:
         self.count += 1
 
     def confirmed(self, interval: timedelta) -> bool:
+        # add() sets first and last together, so they are None together:
+        # checking both only narrows their types.
         if self.first is None or self.last is None:
             return False
         return streak_confirmed(

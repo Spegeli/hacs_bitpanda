@@ -225,15 +225,16 @@ class PortfolioData:
 
 @dataclass(frozen=True)
 class PortfolioReturns:
-    """The portfolio's return per /portfolio-history timeframe, from one
-    refresh, in percent.
+    """The portfolio's return per /portfolio-history timeframe, in percent.
 
-    `values` holds every timeframe with a usable figure, `failed` every
-    timeframe whose own request failed and whose failure is confirmed or
-    that has no last return (tolerate_failed_timeframes): until then a
-    failing timeframe keeps the return it had. A timeframe in neither was
-    last answered without a usable figure: its return is unknown, where a
-    failed one is unavailable.
+    `values` holds every timeframe with a usable figure. `failed` means one
+    of two things. Raw, as collect_returns returns it: every timeframe whose
+    own request failed in this refresh. Narrowed by
+    tolerate_failed_timeframes, as the sensors see it: only a failing
+    timeframe whose failure is confirmed or that has no last return -- until
+    then it keeps the return it had. A timeframe in neither was last
+    answered without a usable figure: its return is unknown, where a failed
+    one is unavailable.
     """
 
     values: dict[str, float]
@@ -251,15 +252,15 @@ def tolerate_failed_timeframes(
     return from `previous` until its streak is confirmed.
 
     `streaks` holds each timeframe's refreshes in a row without a fresh
-    return; the caller adds those that failed as a whole, which never get
-    here (HistoryCoordinator). Each failed timeframe adds a failure, asked
-    for `at`, to its streak, which FailureStreak's rule confirms at the
-    regular pace `interval`. Not confirmed yet, and not failed in `previous`
-    either, it leaves `failed` and takes its figure from `previous` --
-    unless it was answered there without one: then it stays unknown.
-    Confirmed, or without a last return -- no `previous`, or failed there
-    too -- it stays in `failed`. A timeframe that answered ends its streak.
-    `streaks` is updated in place.
+    return, a refresh that failed as a whole included: HistoryCoordinator
+    hands that one in as a raw `result` in which every timeframe failed.
+    Each failed timeframe adds a failure, asked for `at`, to its streak,
+    which FailureStreak's rule confirms at the regular pace `interval`. Not
+    confirmed yet, and not failed in `previous` either, it leaves `failed`
+    and takes its figure from `previous` -- unless it was answered there
+    without one: then it stays unknown. Confirmed, or without a last return
+    -- no `previous`, or failed there too -- it stays in `failed`. A
+    timeframe that answered ends its streak. `streaks` is updated in place.
     """
     for timeframe in streaks.keys() - result.failed:
         del streaks[timeframe]

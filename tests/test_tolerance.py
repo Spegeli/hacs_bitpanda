@@ -1,8 +1,11 @@
 """Tests for the coordinators whose sensors keep their last data through
 short outages, and the entities that follow them (tolerance.py)."""
+import asyncio
+from dataclasses import dataclass
 from datetime import timedelta
 import logging
 
+import pytest
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -15,13 +18,32 @@ _REGULAR = timedelta(minutes=5)
 _BY_HAND = timedelta(seconds=20)
 # How long a slow answer takes to arrive.
 _LATE = timedelta(seconds=50)
+# A refresh that hangs until it is cancelled.
+_HANG = "hang"
+
+
+def _down() -> UpdateFailed:
+    """A failed refresh for a script, its own instance: one instance raised
+    again and again keeps a growing traceback, and with it the frames of
+    every test that raised it, alive."""
+    return UpdateFailed("down")
+
+
+@dataclass
+class _Replaced:
+    """A failed refresh that replaces the data with `data` first, as a
+    subclass does that leaves out an item whose own failure the refresh
+    confirms."""
+
+    data: int
 
 
 class _Probe(TolerantCoordinator[int]):
-    """Answers from a script: an int is the data, an exception is raised. A
-    callable is called first and answers with what it returns -- time can
-    pass in it while the answer is on its way. Every fetch records the time
-    its refresh was asked for."""
+    """Answers from a script: an int is the data, an exception is raised, a
+    _Replaced replaces the data and fails, and _HANG hangs until the refresh
+    is cancelled. A callable is called first and answers with what it
+    returns -- time can pass in it while the answer is on its way. Every
+    fetch records the time its refresh was asked for."""
 
     def __init__(self, hass, *script):
         super().__init__(
@@ -36,6 +58,11 @@ class _Probe(TolerantCoordinator[int]):
         item = self.script.pop(0)
         if callable(item):
             item = item()
+        if item == _HANG:
+            await asyncio.Event().wait()
+        if isinstance(item, _Replaced):
+            self.data = item.data
+            raise _down()
         if isinstance(item, Exception):
             raise item
         return item
@@ -78,6 +105,26 @@ def _tolerance_records(caplog) -> list[logging.LogRecord]:
         record for record in caplog.records
         if "refreshes in a row failed" in record.getMessage()
     ]
+
+
+def _rejection_records(caplog) -> list[logging.LogRecord]:
+    """The records of the tolerance's warning about a rejected key."""
+    return [
+        record for record in caplog.records
+        if "the API key was rejected" in record.getMessage()
+    ]
+
+
+async def _cancel_a_refresh(probe) -> None:
+    """Start a refresh of the probe, whose script hangs, and cancel it while
+    it is under way."""
+    asked = len(probe.asked)
+    refresh = asyncio.create_task(probe.async_refresh())
+    while len(probe.asked) == asked:
+        await asyncio.sleep(0)
+    refresh.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await refresh
 
 
 async def test_the_first_two_failures_keep_the_last_data_available(hass, freezer):
@@ -141,6 +188,50 @@ async def test_a_rejected_key_after_failures_tells_the_listeners(hass, freezer):
     assert seen[-1] is False
 
 
+async def test_a_rejected_key_after_a_cancelled_refresh_tells_the_listeners(hass, freezer):
+    """Home Assistant 2026.9 takes a refresh cancelled while under way for a
+    failed one, though it never gets to the tolerance -- and after a failure
+    it tells the listeners of no failure. So when the key is rejected at the
+    next refresh, the tolerance tells them itself: the entities are
+    unavailable."""
+    probe = _Probe(hass, 1, _HANG, ConfigEntryAuthFailed())
+    entity = TolerantEntity(probe)
+    seen = _listen(probe)
+    await probe.async_refresh()
+    await _cancel_a_refresh(probe)
+    await _refresh(probe, freezer)
+    assert entity.available is False
+    assert seen == [True, False]
+
+
+async def test_a_failed_refresh_that_replaces_the_data_tells_the_listeners(hass, freezer):
+    """A subclass may replace the data in a refresh that fails, to leave out
+    an item whose own failure the refresh confirms. After a failure Home
+    Assistant tells the listeners nothing, so the tolerance tells them."""
+    probe = _Probe(hass, 1, _down(), _Replaced(0))
+    seen = _listen(probe)
+    await _run(probe, freezer)
+    assert probe.data == 0
+    assert seen == [True, True, True]
+
+
+@pytest.mark.parametrize(
+    ("failure", "told"),
+    [(_Replaced(0), [True, True]), (ConfigEntryAuthFailed(), [True, False])],
+    ids=["data_replaced", "key_rejected"],
+)
+async def test_a_failure_right_after_a_success_is_told_to_the_listeners_once(
+    hass, freezer, failure, told
+):
+    """Home Assistant tells the listeners of a failure that follows a success
+    itself -- the data replaced, or the failure confirmed at once by a
+    rejected key: the tolerance does not tell them again."""
+    probe = _Probe(hass, 1, failure)
+    seen = _listen(probe)
+    await _run(probe, freezer)
+    assert seen == told
+
+
 async def test_without_data_nothing_is_available(hass, freezer):
     """A failed first refresh leaves nothing to show."""
     probe = _Probe(hass, F)
@@ -173,6 +264,61 @@ async def test_no_tolerance_warning_for_a_rejected_key(hass, freezer, caplog):
     with caplog.at_level(logging.WARNING):
         await _run(probe, freezer)
     assert _tolerance_records(caplog) == []
+
+
+_KEY_REJECTED = (
+    "probe: the API key was rejected; its sensors are unavailable until a new key is entered"
+)
+
+
+@pytest.mark.parametrize("failures", [1, 3], ids=["within_the_tolerance", "after_its_end"])
+async def test_a_key_rejected_after_a_failure_is_warned_about_once(
+    hass, freezer, caplog, failures
+):
+    """Home Assistant logs a rejected key only when the refresh before it
+    succeeded. Rejected after a failure -- the outage confirmed or not --
+    the key is warned about by the tolerance, once: not again when it is
+    rejected at a later refresh. Nothing of the key, no traceback."""
+    probe = _Probe(
+        hass, 1, *[_down() for _ in range(failures)],
+        ConfigEntryAuthFailed(), _down(), ConfigEntryAuthFailed(),
+    )
+    with caplog.at_level(logging.WARNING):
+        await _run(probe, freezer)
+    [record] = _rejection_records(caplog)
+    assert (record.levelno, record.getMessage(), record.exc_info) == (
+        logging.WARNING, _KEY_REJECTED, None
+    )
+
+
+async def test_a_key_rejected_in_a_later_outage_is_warned_about_again(
+    hass, freezer, caplog
+):
+    """A success in between ends the first outage: the key rejected in the
+    next one is warned about again."""
+    probe = _Probe(
+        hass, 1, _down(), ConfigEntryAuthFailed(), 2, _down(), ConfigEntryAuthFailed()
+    )
+    with caplog.at_level(logging.WARNING):
+        await _run(probe, freezer)
+    assert [record.getMessage() for record in _rejection_records(caplog)] == [
+        _KEY_REJECTED
+    ] * 2
+
+
+async def test_a_key_rejected_after_a_success_is_left_to_home_assistant(
+    hass, freezer, caplog
+):
+    """Home Assistant logs it itself, at ERROR -- and nobody logs it again
+    when the key is rejected at the next refresh."""
+    probe = _Probe(hass, 1, ConfigEntryAuthFailed(), ConfigEntryAuthFailed())
+    with caplog.at_level(logging.WARNING):
+        await _run(probe, freezer)
+    assert _rejection_records(caplog) == []
+    assert [
+        record.levelno for record in caplog.records
+        if record.getMessage().startswith("Authentication failed while fetching probe data")
+    ] == [logging.ERROR]
 
 
 async def test_a_slow_first_failure_does_not_prolong_it(hass, freezer):

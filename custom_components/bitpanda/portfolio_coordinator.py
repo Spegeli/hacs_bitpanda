@@ -412,7 +412,9 @@ class HistoryCoordinator(TolerantCoordinator[PortfolioReturns]):
     refresh without a fresh return counts for a timeframe, one that fails as
     a whole included: so a return from before a confirmed outage never
     comes back after it, and a timeframe still failing then is unavailable
-    at once.
+    at once. A refresh that fails as a whole and confirms a carried
+    timeframe's own failure fails it at once, as one that returns data
+    would.
     """
 
     config_entry: PortfolioConfigEntry
@@ -452,12 +454,21 @@ class HistoryCoordinator(TolerantCoordinator[PortfolioReturns]):
             raise _auth_failed() from None
         except UpdateFailed:
             # Every request failed: no timeframe has a fresh return, and the
-            # refresh counts for each of them.
-            for timeframe in PORTFOLIO_TIMEFRAMES:
-                self._streaks.setdefault(timeframe, FailureStreak()).add(requested_at)
+            # refresh counts for each of them. A last return whose own
+            # failure this confirms is shown no longer -- the data loses it,
+            # and tolerance.py tells the listeners.
+            shown = tolerate_failed_timeframes(
+                PortfolioReturns(values={}, failed=frozenset(PORTFOLIO_TIMEFRAMES)),
+                self.data,
+                self._streaks,
+                requested_at,
+                self._regular_interval,
+            )
+            if self.data is not None and shown != self.data:
+                self.data = shown
             raise
         return tolerate_failed_timeframes(
-            result, self.data, self._streaks, requested_at, PORTFOLIO_UPDATE_INTERVAL
+            result, self.data, self._streaks, requested_at, self._regular_interval
         )
 
 

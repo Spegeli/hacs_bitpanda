@@ -1,4 +1,5 @@
 """Tests for the keyless ticker coordinator and the ECB coordinator."""
+from contextlib import contextmanager
 from datetime import timedelta
 import logging
 from unittest.mock import AsyncMock, patch
@@ -76,18 +77,33 @@ _PACE = timedelta(seconds=60)
 
 
 class _Client:
-    def __init__(self, prices=None, failing=(), rate_limited=False):
+    """Answers each asset's /tickers request with its price in `prices`, or
+    "n/a" -- no usable price -- without one. While `rate_limited` every
+    request gets a 429; an asset in `errors` fails with a BitpandaApiError of
+    that kind (const.API_ERROR_KINDS) -- "timeout" and "connection" get no
+    answer at all --, and one in `failing` with an HTTP 404. `calls` records
+    the requests in order."""
+
+    def __init__(self, prices=None, failing=(), rate_limited=False, errors=None):
         self.prices = prices or {}
         self.failing = set(failing)
         self.rate_limited = rate_limited
+        self.errors = dict(errors or {})
         self.calls: list[str] = []
 
     async def async_get_ticker(self, asset_id):
         self.calls.append(asset_id)
+        path = f"/tickers/{asset_id}"
         if self.rate_limited:
-            raise BitpandaRateLimitError(f"Rate limited on /tickers/{asset_id}")
+            raise BitpandaRateLimitError(f"Rate limited on {path}")
+        if asset_id in self.errors:
+            raise BitpandaApiError(
+                f"Request to {path} failed", kind=self.errors[asset_id], path=path
+            )
         if asset_id in self.failing:
-            raise BitpandaApiError(f"HTTP 404 from /tickers/{asset_id}")
+            raise BitpandaApiError(
+                f"HTTP 404 from {path}", kind="http_status", path=path, status=404
+            )
         return {"price": self.prices.get(asset_id, "n/a")}
 
 
@@ -334,6 +350,20 @@ async def test_every_request_failing_fails_the_round_even_with_prices_to_carry()
     assert _translation(excinfo.value) == ("bitpanda", "no_prices", None)
 
 
+async def test_a_round_failing_as_a_whole_counts_once_for_each_asset(freezer):
+    """Two rounds fail as a whole, two minutes apart -- a round was missed
+    between them. Each counts once for every asset, and two failures
+    confirm nothing, however far apart: the prices are still carried."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
+    coordinator = _coordinator(client)
+    await _round(coordinator)
+    client.failing = {BTC, SOL}
+    for pace in (_PACE, 2 * _PACE):
+        with pytest.raises(UpdateFailed):
+            await _next_round(coordinator, freezer, pace)
+    assert coordinator.data == {BTC: 1.0, SOL: 2.0}
+
+
 async def test_an_asset_still_failing_after_a_confirmed_outage_is_left_out_at_once(
     caplog, freezer
 ):
@@ -428,6 +458,196 @@ async def test_a_rate_limited_round_counts_for_every_asset(caplog, freezer):
         client.rate_limited = False
         assert await _next_round(coordinator, freezer) == {SOL: 2.0}
     assert len(_lines(caplog, logging.WARNING, "Bitcoin (BTC)")) == 1
+
+
+# --- A round without an answer -------------------------------------------------------
+#
+# Every request waits for its own timeout (api.py): a round that went on
+# through a hanging connection would take one timeout per tracked asset, and
+# stretch the tolerance with their number.
+
+# Five tracked assets, asked for in this order while each has a fresh price.
+_FIVE = {f"asset-{number}": f"Asset {number}" for number in range(5)}
+
+
+async def _asked_for(coordinator, client, freezer) -> list[str]:
+    """The assets the next round asks for, in order."""
+    client.calls.clear()
+    await _next_round(coordinator, freezer)
+    return list(client.calls)
+
+
+@pytest.mark.parametrize(
+    "kinds",
+    [("timeout", "timeout"), ("connection", "connection"), ("timeout", "connection")],
+    ids=["timeouts", "no_connection", "mixed"],
+)
+async def test_two_unanswered_requests_before_any_price_stop_the_round(kinds):
+    """The first two requests get no answer -- a timeout, or no connection
+    at all: the round stops, the other assets unasked. It fails as a whole,
+    like a round without a fresh price, and counts for every asset."""
+    first, second, *_ = _FIVE
+    client = _Client(
+        dict.fromkeys(_FIVE, "1.00000000"), errors={first: kinds[0], second: kinds[1]}
+    )
+    coordinator = _coordinator(client, _FIVE)
+    with pytest.raises(UpdateFailed) as excinfo:
+        await coordinator._async_update_data()
+    assert _translation(excinfo.value) == ("bitpanda", "no_prices", None)
+    assert client.calls == [first, second]
+    assert coordinator.failing_assets == set(_FIVE)
+    # A first round: no last price to show.
+    assert coordinator.data is None
+
+
+async def test_unanswered_requests_after_a_fresh_price_never_stop_the_round():
+    """A timeout, a price, then two timeouts in a row: a fresh price has
+    shown that Bitpanda answers, so the round goes on to the end."""
+    first, second, third, fourth, fifth = _FIVE
+    client = _Client(
+        dict.fromkeys(_FIVE, "1.00000000"),
+        errors={first: "timeout", third: "timeout", fourth: "timeout"},
+    )
+    coordinator = _coordinator(client, _FIVE)
+    assert await coordinator._async_update_data() == {second: 1.0, fifth: 1.0}
+    assert client.calls == list(_FIVE)
+
+
+@pytest.mark.parametrize("answer", ["http_404", "unreadable", "no_usable_price"])
+async def test_an_answered_request_breaks_a_run_of_unanswered_ones(answer):
+    """A timeout, then a request that is answered, if uselessly -- with an
+    HTTP 404, an unreadable body, no usable price --, then a timeout: not
+    two in a row, so the round goes on to the end."""
+    first, second, third, fourth, fifth = _FIVE
+    client = _Client(
+        dict.fromkeys(_FIVE, "1.00000000"), errors={first: "timeout", third: "timeout"}
+    )
+    if answer == "http_404":
+        client.failing = {second}
+    elif answer == "unreadable":
+        client.errors[second] = "unreadable"
+    else:
+        del client.prices[second]
+    coordinator = _coordinator(client, _FIVE)
+    assert await coordinator._async_update_data() == {fourth: 1.0, fifth: 1.0}
+    assert client.calls == list(_FIVE)
+
+
+async def test_the_assets_without_a_fresh_price_are_asked_for_last(freezer):
+    """The first and the third asset fail: from the next round on they are
+    asked for after the others, each group in tracked order -- and all in
+    tracked order again once their prices are back."""
+    first, second, third, fourth, fifth = _FIVE
+    client = _Client(dict.fromkeys(_FIVE, "1.00000000"))
+    coordinator = _coordinator(client, _FIVE)
+    asked = []
+    for failing in ({first, third}, {first, third}, set(), set()):
+        client.failing = failing
+        asked.append(await _asked_for(coordinator, client, freezer))
+    late = [second, fourth, fifth, first, third]
+    assert asked == [list(_FIVE), late, late, list(_FIVE)]
+
+
+async def test_an_asset_that_never_answers_cannot_stop_the_rounds(freezer):
+    """Tracked first, one asset's requests always time out. From the second
+    round on it is asked for last, so its timeout never follows another one
+    before a price: in the fourth round Bitcoin's request times out too, and
+    Solana's price comes in between. No round fails as a whole, and the
+    other assets keep their prices -- Bitcoin's carried in the fourth."""
+    tracked = {"hanging": "Hanging (HNG)", **_TRACKED}
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
+    coordinator = _coordinator(client, tracked)
+    asked, shown = [], []
+    for errors in ({}, {}, {}, {BTC: "timeout"}):
+        client.errors = {"hanging": "timeout", **errors}
+        asked.append(await _asked_for(coordinator, client, freezer))
+        shown.append(coordinator.data)
+    assert asked == [["hanging", BTC, SOL]] + [[BTC, SOL, "hanging"]] * 3
+    assert shown == [{BTC: 1.0, SOL: 2.0}] * 4
+
+
+# --- TickerCoordinator through Home Assistant's refresh -----------------------------
+#
+# With `hass` a failed round keeps the data it leaves, and Home Assistant
+# tells the listeners as it does for every coordinator (tolerance.py).
+
+
+async def _refresh(coordinator, freezer, pace=_PACE) -> None:
+    """One refresh through Home Assistant, `pace` after the one before."""
+    freezer.tick(pace)
+    await coordinator.async_refresh()
+
+
+@contextmanager
+def _listening(coordinator):
+    """The data the coordinator's listeners found each time it told them,
+    while the block runs. A listener makes the coordinator schedule its next
+    round; leaving the block removes the listener, and with it that timer,
+    which Home Assistant's test harness would fail the test for."""
+    seen: list[dict] = []
+    unsubscribe = coordinator.async_add_listener(lambda: seen.append(dict(coordinator.data)))
+    try:
+        yield seen
+    finally:
+        unsubscribe()
+
+
+async def test_a_whole_failure_that_confirms_a_carried_price_leaves_it_out_at_once(
+    hass, freezer, caplog
+):
+    """Bitcoin's own request fails while Solana's answers: its last price is
+    carried. Then two rounds fail as a whole, and count for Bitcoin too: the
+    second confirms its failure, two minutes after its first, while the
+    whole update's failure is not confirmed yet. Bitcoin leaves the data in
+    that very round, and the listeners are told -- after a failure Home
+    Assistant would not tell them. Those rounds log nothing per asset: the
+    warning comes with the next round that returns data, Bitcoin still
+    failing."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
+    coordinator = TickerCoordinator(hass, None, client, _TRACKED)
+    with _listening(coordinator) as seen:
+        await coordinator.async_refresh()
+        client.failing = {BTC}
+        await _refresh(coordinator, freezer)
+        client.failing = {BTC, SOL}
+        caplog.clear()
+        with caplog.at_level(logging.DEBUG):
+            for _ in range(2):
+                await _refresh(coordinator, freezer)
+        assert _lines(caplog, logging.DEBUG, "No price for") == []
+        assert _lines(caplog, logging.WARNING, "No price for") == []
+        assert (coordinator.data, coordinator.data_available) == ({SOL: 2.0}, True)
+        assert seen == [{BTC: 1.0, SOL: 2.0}] * 3 + [{SOL: 2.0}]
+
+        client.failing = {BTC}
+        with caplog.at_level(logging.WARNING):
+            await _refresh(coordinator, freezer)
+    assert coordinator.data == {SOL: 2.0}
+    assert _lines(caplog, logging.WARNING, "No price for") == [
+        "No price for Bitcoin (BTC); its price sensors are unavailable until it returns"
+    ]
+
+
+async def test_a_rate_limit_that_confirms_a_carried_price_leaves_it_out_at_once(
+    hass, freezer
+):
+    """Likewise under a rate limit's back-off: Bitcoin is carried, then two
+    rounds are rate-limited, the second after the doubled interval. It
+    confirms Bitcoin's failure -- three rounds without a fresh price, three
+    minutes from the first -- while the whole update's is not confirmed:
+    Bitcoin leaves the data at once, and the listeners are told."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
+    coordinator = TickerCoordinator(hass, None, client, _TRACKED)
+    with _listening(coordinator) as seen:
+        await coordinator.async_refresh()
+        client.failing = {BTC}
+        await _refresh(coordinator, freezer)
+        client.rate_limited = True
+        for _ in range(2):
+            await _refresh(coordinator, freezer, coordinator.update_interval)
+    assert coordinator.update_interval == 4 * _PACE
+    assert (coordinator.data, coordinator.data_available) == ({SOL: 2.0}, True)
+    assert seen == [{BTC: 1.0, SOL: 2.0}] * 3 + [{SOL: 2.0}]
 
 
 def test_a_slow_interval_is_announced_at_construction(caplog):

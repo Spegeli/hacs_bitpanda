@@ -43,6 +43,14 @@ ISSUE_SLOW_PRICE_INTERVAL = "slow_price_interval"
 # success returns to the budgeted interval.
 _MAX_BACKOFF = 16
 
+# The kinds of failed request (const.API_ERROR_KINDS) that got no answer at
+# all: a timeout, or no connection.
+_UNANSWERED = frozenset({ERROR_TIMEOUT, ERROR_CONNECTION})
+
+# Unanswered requests in a row, before any fresh price arrived, that stop a
+# round as a whole (TickerCoordinator).
+_UNANSWERED_IN_A_ROW = 2
+
 # Retry for ECB rates that were never loaded: until then the other
 # currencies have no value at all.
 _ECB_RETRY = timedelta(minutes=15)
@@ -166,9 +174,22 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
     only its own sensors go unavailable -- a delisted asset's after three
     rounds, and at once when there is no last price. Every round without a
     fresh price counts for an asset, one that fails as a whole included: so
-    a price from before a confirmed outage never comes back after it. An
-    asset is warned about once its failure is confirmed, in a round that
-    returns data, and its return is logged once at INFO.
+    a price from before a confirmed outage never comes back after it, and a
+    round that fails as a whole leaves out at once a last price whose own
+    failure it confirms. An asset is warned about once its failure is
+    confirmed, in a round that returns data, and its return is logged once
+    at INFO.
+
+    Every request waits for its own timeout, so a hanging connection would
+    stretch the tolerance with the number of tracked assets. A round
+    therefore stops as a whole -- it fails, as when no request brings a
+    fresh price -- once _UNANSWERED_IN_A_ROW requests in a row get no
+    answer at all (a timeout, or no connection) before any fresh price
+    arrived. An answer of any kind, an HTTP error status or an unreadable
+    body too, breaks such a run, and after a fresh price nothing stops the
+    round. The assets without a fresh price in the round before are asked
+    for last, so one that keeps failing -- hanging, say -- cannot stop a
+    round.
     """
 
     config_entry: PriceTrackerConfigEntry
@@ -215,7 +236,12 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
 
     async def _async_fetch(self, requested_at: datetime) -> dict[str, float]:
         prices: dict[str, float] = {}
-        for asset_id in self._tracked:
+        # Requests in a row that got no answer at all.
+        unanswered = 0
+        # The assets with a fresh price in the round before come first, then
+        # those without one, each in tracked order (a stable sort).
+        order = sorted(self._tracked, key=lambda asset: asset in self._streaks)
+        for asset_id in order:
             try:
                 ticker = await self._client.async_get_ticker(asset_id)
             except BitpandaRateLimitError:
@@ -230,8 +256,15 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
                 raise UpdateFailed(
                     translation_domain=DOMAIN, translation_key="prices_rate_limited"
                 ) from None
-            except BitpandaApiError:
+            except BitpandaApiError as err:
+                unanswered = unanswered + 1 if err.kind in _UNANSWERED else 0
+                if not prices and unanswered >= _UNANSWERED_IN_A_ROW:
+                    # Bitpanda is out of reach, and every further request
+                    # would wait for its own timeout: the round fails as a
+                    # whole, below.
+                    break
                 continue
+            unanswered = 0
             price = convert_price(ticker.get("price"), None)
             if price is not None:
                 prices[asset_id] = price
@@ -254,26 +287,32 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
     def _count_for_every_asset(self, requested_at: datetime) -> None:
         """Add a round that fails as a whole to every asset's streak,
         creating the missing ones: it brought no fresh price for any of
-        them. It warns about no asset -- the whole update's outage is warned
-        about once confirmed (tolerance.py) -- so the next round that returns
-        data warns about each asset still failing whose streak is confirmed.
+        them. A last price whose own failure this confirms is shown no
+        longer -- the data loses it, and tolerance.py tells the listeners.
+        It warns about no asset -- the whole update's outage is warned about
+        once confirmed (tolerance.py) -- so the next round that returns data
+        warns about each asset still failing whose streak is confirmed.
         """
-        for asset_id in self._tracked:
-            self._streaks.setdefault(asset_id, FailureStreak()).add(requested_at)
+        shown = self._tolerate_failed_assets({}, requested_at, announce=False)
+        if self.data is not None and shown != self.data:
+            self.data = shown
 
     def _tolerate_failed_assets(
-        self, prices: dict[str, float], requested_at: datetime
+        self, prices: dict[str, float], requested_at: datetime, *, announce: bool = True
     ) -> dict[str, float]:
         """The round's data: the fresh `prices`, and the last price of each
         asset whose failure is not confirmed yet.
 
-        Every tracked asset was asked for in this round: one missing from
-        `prices` failed -- its request, or its price was unusable -- and adds
-        a failure, asked for at `requested_at`, to its streak. Until
-        FailureStreak's rule confirms the streak at the regular pace, the
-        asset keeps the price `data` still holds for it, if any. Once
-        confirmed, it is left out and warned about once. A fresh price ends
-        the streak, and the return of an asset warned about is logged once.
+        A tracked asset missing from `prices` had no fresh price in this
+        round -- its request failed, its price was unusable, or the round
+        failed as a whole -- and adds a failure, asked for at `requested_at`,
+        to its streak. Until FailureStreak's rule confirms the streak at the
+        regular pace, the asset keeps the price `data` still holds for it,
+        if any. Once confirmed, it is left out and warned about once. A
+        fresh price ends the streak, and the return of an asset warned about
+        is logged once. With `announce` False -- a round that fails as a
+        whole -- nothing is logged per asset, and none is marked as warned
+        about.
         """
         data: dict[str, float] = {}
         last = self.data or {}
@@ -293,12 +332,13 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
             if not streak.confirmed(self._regular_interval):
                 if asset_id in last:
                     data[asset_id] = last[asset_id]
-                _LOGGER.debug(
-                    "No price for %s: failure %s in a row, not confirmed yet",
-                    label,
-                    streak.count,
-                )
-            elif asset_id not in self._announced:
+                if announce:
+                    _LOGGER.debug(
+                        "No price for %s: failure %s in a row, not confirmed yet",
+                        label,
+                        streak.count,
+                    )
+            elif announce and asset_id not in self._announced:
                 self._announced.add(asset_id)
                 _LOGGER.warning(
                     "No price for %s; its price sensors are unavailable until it "

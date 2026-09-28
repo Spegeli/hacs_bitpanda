@@ -890,8 +890,9 @@ def test_publish_releases_the_tag_with_the_generated_notes():
 
     # When the release cannot be created, the tag is pushed already. The
     # way out is "Re-run failed jobs", which repeats this job alone with the
-    # same outputs; "Re-run all jobs" or a new run would plan past the tag
-    # and release the next version, so the error says not to.
+    # same outputs; "Re-run all jobs", or a new run, stops at the plan with
+    # nothing to release -- and once more was merged, a new run releases the
+    # next version -- so the error says not to.
     assert explain["if"] in ("failure()", "${{ failure() }}")
     assert explain["env"] == {"TAG": "${{ needs.commit.outputs.tag }}"}
     explained = _run_step(explain, {"needs.commit.outputs.tag": "v2.0.0_redesign"})

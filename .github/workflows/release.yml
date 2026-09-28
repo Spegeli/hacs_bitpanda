@@ -362,4 +362,4 @@ jobs:
         env:
           TAG: ${{ needs.commit.outputs.tag }}
         run: |
-          echo "::error::The tag ${TAG} is pushed, but its GitHub release was not created. Use Re-run failed jobs: only this job runs again, with the same tag, title and notes. Do not use Re-run all jobs, and do not start another run: they stop at the plan with nothing to release, or -- once more was merged -- release the next version. If it fails again, create the release for the tag by hand (see Releases in CONTRIBUTING.md)."
+          echo "::error::The tag ${TAG} is pushed, but its GitHub release was not created. Use Re-run failed jobs: only this job runs again, with the same tag, title and notes. Do not use Re-run all jobs, and do not start another run: both stop at the plan with nothing to release, and once more was merged, a new run releases the next version. If it fails again, create the release for the tag by hand (see Releases in CONTRIBUTING.md)."

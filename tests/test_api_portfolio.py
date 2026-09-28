@@ -159,6 +159,7 @@ async def test_request_failures_are_logged_at_debug_only(caplog):
         ({"status": 500}, BitpandaApiError, "http_status", 500),
         ({"status": 302}, BitpandaApiError, "http_status", 302),
         ({"status": 401}, BitpandaAuthError, "http_status", 401),
+        ({"status": 403}, BitpandaAuthError, "http_status", 403),
         ({"status": 429}, BitpandaRateLimitError, "rate_limited", 429),
         ({"exc": aiohttp.ClientConnectionError("details")}, BitpandaApiError, "connection", None),
         ({"exc": asyncio.TimeoutError()}, BitpandaApiError, "timeout", None),
@@ -168,7 +169,7 @@ async def test_request_failures_are_logged_at_debug_only(caplog):
         ({"text": '"maintenance"'}, BitpandaApiError, "unreadable", None),
     ],
     ids=[
-        "http", "redirect", "unauthorized", "rate_limited", "connection", "timeout",
+        "http", "redirect", "unauthorized", "forbidden", "rate_limited", "connection", "timeout",
         "unreadable", "json_null", "json_list", "json_string",
     ],
 )

@@ -41,6 +41,25 @@ async def test_collect_returns_one_entry_per_timeframe():
     )
 
 
+async def test_collect_returns_asks_in_the_portfolio_currency():
+    """A Portfolio kept in USD gets its returns measured in USD: every
+    timeframe's request names the Portfolio currency."""
+    with mock_aiohttp_client() as mocker:
+        for timeframe in PORTFOLIO_TIMEFRAMES:
+            mocker.get(
+                f"{API_BASE_URL}/portfolio-history?timeframe={timeframe}"
+                "&equivalent_currency_id=uuid-usd",
+                json={"data": {"return_percentage": 1.0}},
+            )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            await collect_returns(client, "uuid-usd")
+    assert [call[1].query_string for call in mocker.mock_calls] == [
+        f"timeframe={timeframe}&equivalent_currency_id=uuid-usd"
+        for timeframe in PORTFOLIO_TIMEFRAMES
+    ]
+
+
 async def test_collect_returns_skips_a_failing_timeframe():
     """One bad window must not lose the other four -- and is told apart from
     a timeframe answered without a figure: its own request failed."""
@@ -246,6 +265,27 @@ async def test_history_coordinator_raises_config_entry_auth_failed_on_401():
     assert (excinfo.value.translation_domain, excinfo.value.translation_key) == (
         "bitpanda", "api_key_rejected"
     )
+
+
+class _Recording:
+    """Fake API client that answers every timeframe and records the currency
+    each request asked in."""
+
+    def __init__(self):
+        self.currency_ids = []
+
+    async def async_get_portfolio_history(self, *, timeframe, equivalent_currency_id=None):
+        self.currency_ids.append(equivalent_currency_id)
+        return {"return_percentage": 1.0}
+
+
+async def test_history_refresh_asks_in_the_portfolio_currency():
+    client = _Recording()
+    coordinator = HistoryCoordinator(
+        hass=None, entry=None, client=client, currency_id="uuid-usd"
+    )
+    await coordinator._async_update_data()
+    assert client.currency_ids == ["uuid-usd"] * len(PORTFOLIO_TIMEFRAMES)
 
 
 # ---------------------------------------------------------------------------

@@ -3,10 +3,10 @@
     "step": {
       "user": {
         "title": "Bitpanda",
-        "description": "Welke dienst wil je instellen? Elke dienst kan maar één keer worden toegevoegd.",
+        "description": "Welke dienst wil je instellen? Elke dienst kan maar één keer worden toegevoegd.\n\n- Bitpanda Portfolio: je account – alles wat je bij Bitpanda bezit.\n- Bitpanda Price Tracker: actuele koersen van de assets die je kiest – ook zonder ze te bezitten.",
         "menu_options": {
-          "portfolio": "Bitpanda Portfolio: je bezittingen (API-sleutel nodig)",
-          "price_tracker": "Bitpanda Price Tracker: koersen van elke asset (geen API-sleutel nodig)"
+          "portfolio": "Bitpanda Portfolio (API-sleutel nodig)",
+          "price_tracker": "Bitpanda Price Tracker (geen API-sleutel nodig)"
         }
       },
       "portfolio": {

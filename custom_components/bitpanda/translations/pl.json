@@ -3,10 +3,10 @@
     "step": {
       "user": {
         "title": "Bitpanda",
-        "description": "Którą usługę chcesz skonfigurować? Każdą można dodać tylko raz.",
+        "description": "Którą usługę chcesz skonfigurować? Każdą można dodać tylko raz.\n\n- Bitpanda Portfolio: Twoje konto – wszystko, co masz na platformie Bitpanda.\n- Bitpanda Price Tracker: bieżące ceny wybranych przez Ciebie aktywów – nawet jeśli ich nie posiadasz.",
         "menu_options": {
-          "portfolio": "Bitpanda Portfolio: Twoje aktywa (wymaga klucza API)",
-          "price_tracker": "Bitpanda Price Tracker: ceny dowolnych aktywów (bez klucza API)"
+          "portfolio": "Bitpanda Portfolio (wymaga klucza API)",
+          "price_tracker": "Bitpanda Price Tracker (nie wymaga klucza API)"
         }
       },
       "portfolio": {

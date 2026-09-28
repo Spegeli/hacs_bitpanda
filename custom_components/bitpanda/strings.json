@@ -3,10 +3,10 @@
     "step": {
       "user": {
         "title": "Bitpanda",
-        "description": "Which service do you want to set up? Each one can be added once.",
+        "description": "Which service do you want to set up? Each one can be added once.\n\n- Bitpanda Portfolio: your account – everything you hold at Bitpanda.\n- Bitpanda Price Tracker: live prices of the assets you choose – whether you hold them or not.",
         "menu_options": {
-          "portfolio": "Bitpanda Portfolio: your holdings (needs an API key)",
-          "price_tracker": "Bitpanda Price Tracker: prices of any asset (no API key)"
+          "portfolio": "Bitpanda Portfolio (API key required)",
+          "price_tracker": "Bitpanda Price Tracker (no API key required)"
         }
       },
       "portfolio": {

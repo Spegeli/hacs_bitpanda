@@ -513,6 +513,49 @@ def test_the_language_field_says_what_it_sets_for_each_service():
     }
 
 
+def test_the_setup_menu_says_what_each_service_is_for():
+    """The setup menu names each service with nothing but whether it needs an
+    API key. The text above it says what each one is for, as a list of its
+    own after a blank line -- which Home Assistant 2025.5 renders as 2026.9
+    does, unlike descriptions under each menu item. In the approved English
+    and German wording."""
+    for name in _FILES:
+        step = _load(name)["config"]["step"]["user"]
+        question, services = step["description"].split("\n\n")
+        assert "\n" not in question, name
+        portfolio, tracker = services.split("\n")
+        assert portfolio.startswith("- Bitpanda Portfolio"), name
+        assert tracker.startswith("- Bitpanda Price Tracker"), name
+        assert step["menu_options"]["portfolio"].startswith("Bitpanda Portfolio ("), name
+        assert step["menu_options"]["price_tracker"].startswith("Bitpanda Price Tracker ("), name
+    assert _load("strings.json")["config"]["step"]["user"] == {
+        "title": "Bitpanda",
+        "description": (
+            "Which service do you want to set up? Each one can be added once.\n\n"
+            "- Bitpanda Portfolio: your account \u2013 everything you hold at Bitpanda.\n"
+            "- Bitpanda Price Tracker: live prices of the assets you choose \u2013 whether"
+            " you hold them or not."
+        ),
+        "menu_options": {
+            "portfolio": "Bitpanda Portfolio (API key required)",
+            "price_tracker": "Bitpanda Price Tracker (no API key required)",
+        },
+    }
+    assert _load("translations/de.json")["config"]["step"]["user"] == {
+        "title": "Bitpanda",
+        "description": (
+            "Welchen Dienst möchtest du einrichten? Jeder lässt sich einmal hinzufügen.\n\n"
+            "- Bitpanda Portfolio: dein Konto \u2013 alles, was du bei Bitpanda hältst.\n"
+            "- Bitpanda Price Tracker: Live-Preise der Assets, die du auswählst \u2013 auch"
+            " ohne sie zu besitzen."
+        ),
+        "menu_options": {
+            "portfolio": "Bitpanda Portfolio (API-Schlüssel benötigt)",
+            "price_tracker": "Bitpanda Price Tracker (kein API-Schlüssel benötigt)",
+        },
+    }
+
+
 def test_german_texts_quote_the_permission_names():
     """Wherever a German text names the key's permissions, it quotes them,
     as Bitpanda's key page labels them: „Guthaben“, „Transaktion“,

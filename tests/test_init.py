@@ -2009,9 +2009,10 @@ async def test_the_device_page_deletes_a_price_device(hass, price_api, hass_ws_c
 # What the device page's dialog shows for each refusal: the `message` of the
 # websocket error, in the entry's language (language.py) -- chosen at setup
 # or under Configure, English for an entry without one, whatever language
-# Home Assistant runs in. The trailing "." of strings.json stays: the message is the dialog's
-# whole text, of several sentences, so the last one must not look cut off
-# (Home Assistant would drop it, translation.async_get_exception_message).
+# Home Assistant runs in. The trailing "." of strings.json stays: the
+# message is the dialog's whole text, of several sentences, so the last one
+# must not look cut off (Home Assistant would drop it,
+# translation.async_get_exception_message).
 _REFUSALS = {
     "en": {
         "portfolio": (

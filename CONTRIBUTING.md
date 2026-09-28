@@ -60,7 +60,7 @@ Everything lives in `custom_components/bitpanda/`:
 
 | File | Responsibility |
 |---|---|
-| `__init__.py` | Setup and unload per service, deleting devices from their device page, the `bitpanda.refresh` service (registered once, in `async_setup`) |
+| `__init__.py` | Setup and unload per service, deleting devices from their device page, the `bitpanda.refresh` action (registered once, in `async_setup`) |
 | `api.py` | `BitpandaApiClient` — all HTTP calls; keyless for public endpoints |
 | `assets.py` | Asset categories (`asset_category`), legacy symbol resolution (`pick_legacy`), `AssetDirectory` for holding metadata, list labels |
 | `asset_flow.py` | The "Add price tracker" subentry flow and the cached catalogue listings |
@@ -70,7 +70,7 @@ Everything lives in `custom_components/bitpanda/`:
 | `diagnostics.py` | Diagnostics per service, API key redacted |
 | `ecb.py` | ECB daily reference rates |
 | `groups.py` | Groups by asset type (config subentries): titles, lookups, the Price Tracker's tracked assets, the Portfolio's wallet groups |
-| `icons.json` | Every sensor's icon, by its translation key, and the `bitpanda.refresh` service's icon — never set an icon in code |
+| `icons.json` | Every sensor's icon, by its translation key, and the `bitpanda.refresh` action's icon — never set an icon in code |
 | `language.py` | The language of the integration's own texts: each entry's language option, the shipped languages |
 | `migration.py` | Migration of version 1 (legacy API) entries to version 3; tells the user what changed, and what keeps an entry from being upgraded, as repair issues |
 | `naming.py` | Labels, device names, entity IDs, unique_ids, device identifiers |

@@ -14,7 +14,7 @@ body:
     attributes:
       label: Before you start
       options:
-        - label: I read the [Troubleshooting](https://github.com/Spegeli/hacs_bitpanda#-troubleshooting) and [FAQ](https://github.com/Spegeli/hacs_bitpanda#-faq) sections.
+        - label: I read the [Troubleshooting](https://github.com/Spegeli/hacs_bitpanda#-troubleshooting) section.
           required: true
         - label: I searched [existing issues](https://github.com/Spegeli/hacs_bitpanda/issues?q=is%3Aissue) and this is not a duplicate.
           required: true

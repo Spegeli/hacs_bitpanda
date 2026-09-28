@@ -141,6 +141,16 @@ def test_parse_keeps_a_holding_without_currency_balance_as_no_value():
     assert data.holdings[VSN].value is None
 
 
+def test_a_non_finite_amount_is_no_amount():
+    """"NaN" or "Infinity" is no amount Home Assistant could show as a
+    sensor's state: read like any amount that is no number."""
+    units = parse_portfolio([_asset_entry(VSN, "NaN", "1.0")])
+    assert (units.holdings, units.unparsed_assets) == ({}, {VSN})
+    value = parse_portfolio([_asset_entry(VSN, "1.0", "1.0", value="Infinity")])
+    assert value.holdings[VSN].value is None
+    assert parse_portfolio([_fiat_entry("NaN")]).cash is None
+
+
 def test_an_unparsable_holding_makes_total_and_cash_plus_unknown():
     data = parse_portfolio(
         [

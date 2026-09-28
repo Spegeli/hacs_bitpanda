@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import logging
+import math
 from typing import Any, cast
 
 from .const import CASH_PLUS_GROUP, PORTFOLIO_UPDATE_INTERVAL, WALLET_REMOVAL_MISSES
@@ -32,13 +33,16 @@ def confirmed(count: int, since: datetime, now: datetime) -> bool:
 
 
 def to_float(container: dict[str, Any] | None, key: str = "value") -> float | None:
-    """Read a numeric string out of an API value object."""
+    """Read a numeric string out of an API value object. "NaN" and
+    "Infinity" read as no number: Home Assistant refuses them as a sensor's
+    state."""
     if not isinstance(container, dict):
         return None
     try:
-        return float(container[key])
+        number = float(container[key])
     except (KeyError, TypeError, ValueError):
         return None
+    return number if math.isfinite(number) else None
 
 
 def _cash_plus_currency_code(symbol: str) -> str:

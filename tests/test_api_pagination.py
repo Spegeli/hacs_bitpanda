@@ -308,6 +308,35 @@ async def test_paginate_raises_when_another_page_is_announced_without_a_cursor()
     assert mocker.call_count == 1
 
 
+# --- A later page whose request fails -----------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("response", "kind", "status"),
+    [
+        ({"status": 500}, "http_status", 500),
+        ({"status": 429}, "rate_limited", 429),
+        ({"exc": asyncio.TimeoutError()}, "timeout", None),
+    ],
+    ids=["http", "rate_limited", "timeout"],
+)
+async def test_a_later_page_that_fails_fails_the_whole_listing(response, kind, status):
+    """The pages before a failed request are never returned as the whole
+    listing: a partial reward history once published a net reward of
+    751.49 instead of 1765.53."""
+    page_one = _ops_page(["o1"], next_cursor=_b64(_MILLIS))
+    with mock_aiohttp_client() as mocker:
+        mocker.get(f"{API_BASE_URL}/operations?cursor={_b64(_MILLIS)}", **response)
+        mocker.get(f"{API_BASE_URL}/operations", json=page_one)
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            with pytest.raises(BitpandaApiError, match="/operations") as excinfo:
+                await client.async_get_operations()
+
+    assert _incomplete(excinfo.value) == (kind, "/operations", status)
+    assert mocker.call_count == 2
+
+
 # --- Malformed items (K1) -----------------------------------------------------
 
 

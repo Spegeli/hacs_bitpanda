@@ -299,6 +299,25 @@ def test_cash_plus_amounts_is_unknown_with_an_unparsed_entry():
     assert data.cash_plus_amounts is None
 
 
+def test_a_cash_plus_holding_without_a_value_makes_cash_plus_unknown():
+    """A holding may come without `currency_balance`: its value is unknown.
+    For Cash Plus that makes the sum unknown, and the amounts with it -- never
+    one without the other. The wallets are unaffected."""
+    data = parse_portfolio(
+        [
+            _asset_entry(BCPEUR, "50.0", "50.0", value=None),
+            _asset_entry(VSN, "1.0", "1.0", "5.00"),
+        ]
+    )
+    data.assets = {
+        BCPEUR: _cash_plus_asset(BCPEUR, "BCPEUR"),
+        VSN: {"id": VSN, "group": "token"},
+    }
+    assert data.cash_plus is None
+    assert data.cash_plus_amounts is None
+    assert data.wallet_ids == [VSN]
+
+
 # --- Returns: a timeframe whose own request fails ----------------------------------
 
 _I = timedelta(minutes=5)

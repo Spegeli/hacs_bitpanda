@@ -292,7 +292,8 @@ jobs:
       # included. A pre-release pushes no branch at all: only its tag, which
       # takes the version commit along -- dev stays as it is.
       # Every error names the way out, and never one that would release the
-      # next version -- as a new run does once this version's tag is pushed.
+      # next version -- as a new run does once this version's tag is pushed
+      # and more was merged.
       - name: Push the version commit and the tag
         if: ${{ !inputs.dry_run }}
         env:
@@ -346,12 +347,12 @@ jobs:
 
       # Only when the release could not be created: its tag is pushed
       # already. "Re-run failed jobs" repeats this job alone, with the same
-      # outputs; "Re-run all jobs", or a new run, would plan past the pushed
-      # tag and release the next version, leaving this one without a
-      # release.
+      # outputs; "Re-run all jobs", or a new run, stops at the plan with
+      # nothing to release -- and once more was merged, a new run releases
+      # the next version, leaving this one without a release.
       - name: Explain how to finish the release
         if: failure()
         env:
           TAG: ${{ needs.commit.outputs.tag }}
         run: |
-          echo "::error::The tag ${TAG} is pushed, but its GitHub release was not created. Use Re-run failed jobs: only this job runs again, with the same tag, title and notes. Do not use Re-run all jobs, and do not start another run: either plans past the pushed tag and releases the next version. If it fails again, create the release for the tag by hand (see Releases in CONTRIBUTING.md)."
+          echo "::error::The tag ${TAG} is pushed, but its GitHub release was not created. Use Re-run failed jobs: only this job runs again, with the same tag, title and notes. Do not use Re-run all jobs, and do not start another run: they stop at the plan with nothing to release, or -- once more was merged -- release the next version. If it fails again, create the release for the tag by hand (see Releases in CONTRIBUTING.md)."

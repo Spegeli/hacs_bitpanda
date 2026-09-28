@@ -10,6 +10,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaAuthError
 from custom_components.bitpanda.const import (
     DOMAIN,
+    EARN_UPDATE_INTERVAL,
+    FIRST_LOAD_RETRY_INTERVAL,
     PORTFOLIO_UPDATE_INTERVAL,
     WALLET_REMOVAL_MISSES,
 )
@@ -434,3 +436,24 @@ async def test_earn_error_fails_the_update():
     assert _translation(excinfo.value) == (
         "bitpanda", "update_failed_http_status", {"path": "/earn/configs", "status": "503"}
     )
+
+
+async def test_earn_is_retried_sooner_until_it_first_loads():
+    """Until the Earn catalogue first loads, no Staking sensor shows its APR,
+    so a failure then is retried after 15 minutes, not after a day. Once it
+    loaded, a failure keeps the daily interval: the last catalogue stays."""
+    error = BitpandaApiError(
+        "HTTP 503 from /earn/configs", kind="http_status", path="/earn/configs", status=503
+    )
+    client = _EarnClient(error=error)
+    coordinator = EarnCoordinator(None, None, client)
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+    assert coordinator.update_interval == FIRST_LOAD_RETRY_INTERVAL
+    client.error = None
+    coordinator.data = await coordinator._async_update_data()
+    assert coordinator.update_interval == EARN_UPDATE_INTERVAL
+    client.error = error
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+    assert coordinator.update_interval == EARN_UPDATE_INTERVAL

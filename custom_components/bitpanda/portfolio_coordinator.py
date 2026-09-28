@@ -34,6 +34,7 @@ from .const import (
     ERROR_RATE_LIMITED,
     ERROR_TIMEOUT,
     ERROR_UNREADABLE,
+    FIRST_LOAD_RETRY_INTERVAL,
     PORTFOLIO_TIMEFRAMES,
     PORTFOLIO_UPDATE_INTERVAL,
     REWARDS_UPDATE_INTERVAL,
@@ -245,7 +246,12 @@ class PortfolioCoordinator(TolerantCoordinator[PortfolioData]):
 
 
 class EarnCoordinator(DataUpdateCoordinator[EarnData]):
-    """Polls the Earn product catalogue once a day."""
+    """Polls the Earn product catalogue once a day.
+
+    A failed fetch leaves `data` at the last catalogue. While no catalogue
+    was ever loaded, no Staking sensor shows its APR, so a failure then is
+    retried after FIRST_LOAD_RETRY_INTERVAL instead of a day.
+    """
 
     config_entry: PortfolioConfigEntry
 
@@ -263,11 +269,15 @@ class EarnCoordinator(DataUpdateCoordinator[EarnData]):
 
     async def _async_update_data(self) -> EarnData:
         try:
-            return parse_earn_configs(await self._client.async_get_earn_configs())
+            configs = await self._client.async_get_earn_configs()
         except BitpandaAuthError:
             raise _auth_failed() from None
         except BitpandaApiError as err:
+            if self.data is None:
+                self.update_interval = FIRST_LOAD_RETRY_INTERVAL
             raise _update_failed(err) from None
+        self.update_interval = EARN_UPDATE_INTERVAL
+        return parse_earn_configs(configs)
 
 
 class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]):

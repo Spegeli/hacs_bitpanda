@@ -21,6 +21,7 @@ from .const import (
     ERROR_HTTP_STATUS,
     ERROR_TIMEOUT,
     ERROR_UNREADABLE,
+    FIRST_LOAD_RETRY_INTERVAL,
     PRICE_UPDATE_INTERVAL_BASE,
     TICKER_HOURLY_BUDGET,
 )
@@ -50,10 +51,6 @@ _UNANSWERED = frozenset({ERROR_TIMEOUT, ERROR_CONNECTION})
 # Unanswered requests in a row, before any fresh price arrived, that stop a
 # round as a whole (TickerCoordinator).
 _UNANSWERED_IN_A_ROW = 2
-
-# Retry for ECB rates that were never loaded: until then the other
-# currencies have no value at all.
-_ECB_RETRY = timedelta(minutes=15)
 
 # The text of each kind of failed ECB fetch (const.API_ERROR_KINDS). The ECB
 # answers no listing and has no rate limit of its own -- a 429 from it is an
@@ -385,8 +382,8 @@ class EcbCoordinator(DataUpdateCoordinator[EcbRates]):
     A failed fetch leaves `data` at the last rates -- DataUpdateCoordinator
     keeps them -- and the price sensors keep converting with those, showing
     their `rate_date`. While no rates were ever loaded, the other currencies
-    show nothing, so a failure then is retried after _ECB_RETRY instead of
-    the 6 hours the rates themselves need.
+    show nothing, so a failure then is retried after FIRST_LOAD_RETRY_INTERVAL
+    instead of the 6 hours the rates themselves need.
     """
 
     config_entry: PriceTrackerConfigEntry
@@ -411,7 +408,7 @@ class EcbCoordinator(DataUpdateCoordinator[EcbRates]):
             rates = await async_fetch_ecb_rates(self._session)
         except EcbError as err:
             if self.data is None:
-                self.update_interval = _ECB_RETRY
+                self.update_interval = FIRST_LOAD_RETRY_INTERVAL
             raise _ecb_failed(err) from None
         self.update_interval = ECB_UPDATE_INTERVAL
         return rates

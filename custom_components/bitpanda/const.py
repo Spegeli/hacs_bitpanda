@@ -65,6 +65,10 @@ EARN_UPDATE_INTERVAL = timedelta(hours=24)
 REWARDS_UPDATE_INTERVAL = timedelta(hours=1)
 CHANGE_24H_UPDATE_INTERVAL = timedelta(minutes=15)
 
+# Retry for the Earn offers and the ECB rates while they never loaded: until
+# then the APRs and the other currencies have no value at all.
+FIRST_LOAD_RETRY_INTERVAL = timedelta(minutes=15)
+
 # Floor for the bitpanda.refresh cooldown, which otherwise follows the price
 # interval (see __init__.py's _refresh_cooldown).
 REFRESH_MIN_COOLDOWN = timedelta(seconds=10)

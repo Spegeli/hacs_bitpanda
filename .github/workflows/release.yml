@@ -67,7 +67,8 @@ on:
         type: boolean
         default: false
 
-# One release at a time, of either type. Another run waits; a run is never
+# One release at a time, of either type. Another run waits, and stops at the
+# plan if the run before it already released everything; a run is never
 # cancelled halfway through its pushes.
 concurrency:
   group: release
@@ -177,7 +178,13 @@ jobs:
       # carries the stable it leads to. The first SemVer stable after the
       # date versions carries the suffix _redesign, once: v2.0.0_redesign
       # with the bump set to major (CONTRIBUTING.md, "Releases"). The script
-      # refuses a shallow clone, whose tags and history are incomplete.
+      # refuses a shallow clone, whose tags and history are incomplete, and,
+      # with --for-release, what a release must not publish: a run with no
+      # commit since the previous release -- started a second time, or
+      # re-run after its tag was pushed -- and, before the first SemVer
+      # stable, any bump but major. Validate plans without the flag: its
+      # check must pass on dev right after main is merged into it, with no
+      # commit since the stable's tag, and before 2.0.0 exists.
       - name: Plan the version and the tag
         id: plan
         env:
@@ -185,7 +192,7 @@ jobs:
           BUMP: ${{ inputs.bump }}
         run: |
           git fetch --tags
-          PLAN=$(python3 .github/scripts/release.py plan --type "${RELEASE_TYPE}" --bump "${BUMP}")
+          PLAN=$(python3 .github/scripts/release.py plan --type "${RELEASE_TYPE}" --bump "${BUMP}" --for-release)
           echo "${PLAN}"
           echo "${PLAN}" >> "$GITHUB_OUTPUT"
 
@@ -294,7 +301,7 @@ jobs:
         run: |
           if [ "${RELEASE_TYPE}" = stable ]; then
             if ! git push origin HEAD:main; then
-              echo "::error::main refused the version commit; nothing was tagged or released. If main moved since this run started -- a pull request merged meanwhile -- start a new run (Actions, Create Release, Run workflow); re-running this one repeats its commit and is refused again. If the deploy key cannot push to main, check its write access and the ruleset's bypass list, then start a new run. But if this run re-ran all jobs of a release that had already pushed its tag, do not start a new run, which would release the next version: create the release for that tag by hand (see Releases in CONTRIBUTING.md)."
+              echo "::error::main refused the version commit; nothing was tagged or released. If main moved since this run started -- a pull request merged meanwhile -- start a new run (Actions, Create Release, Run workflow); re-running this one repeats its commit and is refused again. If the deploy key cannot push to main, check its write access and the ruleset's bypass list, then start a new run. A new run right after a stable release finds nothing to release and stops at its plan (see Releases in CONTRIBUTING.md)."
               exit 1
             fi
           fi

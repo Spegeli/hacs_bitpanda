@@ -4,14 +4,15 @@
 third-party action -- see CONTRIBUTING.md, "Releases") calls this script
 through the shell, never imports it:
 
-    python3 .github/scripts/release.py plan --type stable --bump auto
+    python3 .github/scripts/release.py plan --type stable --bump auto --for-release
     python3 .github/scripts/release.py notes --from v2.0.0_redesign --to HEAD
 
 `plan` reads the current checkout's tags and commit log and prints
-`version`, `tag` and `previous` as `key=value` lines for `$GITHUB_OUTPUT`.
-`notes` prints the Markdown release notes for a commit range. Both are thin
-wrappers around the pure functions below (spec section 12: "Release types,
-versioning and changelog").
+`version`, `tag` and `previous` as `key=value` lines for `$GITHUB_OUTPUT`;
+`--for-release`, which only the release passes, makes it refuse a plan the
+release must not publish (see `plan`). `notes` prints the Markdown release
+notes for a commit range. Both are thin wrappers around the pure functions
+below (spec section 12: "Release types, versioning and changelog").
 
 Standard library only, and 3.12-compatible: `actions/setup-python` is
 GitHub's own action, but the key job goes without it -- spec section 11
@@ -503,13 +504,51 @@ def list_commits(from_ref: str, to_ref: str) -> list[RawCommit]:
     return commits
 
 
-def plan(release_type: ReleaseType, bump_override: str) -> dict[str, str]:
+def _refuse_what_a_release_must_not_publish(
+    tags: Sequence[str], previous: str, bump: Bump, version: str
+) -> None:
+    """Raise a ReleaseError for a plan a release must not publish:
+
+    - No commit since `previous` -- merges aside, as in the notes: a second
+      start, "Re-run all jobs" after the tag was pushed, a new run right
+      after a stable release. It would publish the same changes again as
+      the next beta, or an empty stable. With no previous release at all,
+      the range is the whole history, which is never empty.
+    - Any bump but major while no SemVer stable exists: "auto" would make
+      the redesign 1.1.0, under the one-time tag v1.1.0_redesign, and spend
+      the suffix. The first SemVer stable is 2.0.0, a major bump, and so are
+      its betas, 2.0.0-beta.N.
+    """
+    if not list_commits(previous, "HEAD"):
+        raise ReleaseError(
+            f"Nothing to release: no commit since {previous}. If {previous} was released"
+            " a moment ago, there is nothing to do; if it has no GitHub release yet, create"
+            " it by hand from the tag (see Releases in CONTRIBUTING.md)."
+        )
+    if latest_stable_version(tags) is None and bump != "major":
+        raise ReleaseError(
+            "No Semantic Versioning release exists yet: the first one, 2.0.0 (tag"
+            " v2.0.0_redesign), and every beta of it need 'Version bump' set to major;"
+            f" this run planned {version}."
+        )
+
+
+def plan(
+    release_type: ReleaseType, bump_override: str, *, for_release: bool = False
+) -> dict[str, str]:
     """The next version, its tag, and the tag its notes start after.
 
     The bump always looks at commits since the latest *stable* tag (spec
     12.4: a pre-release is "computed the same way, same bump" as a
     stable) -- never since the latest pre-release -- so a version target
     stays put across however many betas lead up to it.
+
+    `for_release` (--for-release, which release.yml's plan step passes)
+    refuses what a release must not publish
+    (`_refuse_what_a_release_must_not_publish`). Validate's release-script
+    job plans without it, and must pass: on dev right after main is merged
+    back there is no commit since the stable's tag, and before the first
+    SemVer stable "auto" plans 1.1.0.
     """
     _require_the_whole_history()
     tags = git_tags()
@@ -530,8 +569,10 @@ def plan(release_type: ReleaseType, bump_override: str) -> dict[str, str]:
         tag = prerelease_tag(target, n)
         version_str = f"{target}-beta.{n}"
 
-    previous = previous_ref(tags, release_type)
-    return {"version": version_str, "tag": tag, "previous": previous or ""}
+    previous = previous_ref(tags, release_type) or ""
+    if for_release:
+        _refuse_what_a_release_must_not_publish(tags, previous, bump, version_str)
+    return {"version": version_str, "tag": tag, "previous": previous}
 
 
 def notes_command(from_ref: str, to_ref: str) -> str:
@@ -552,6 +593,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     plan_parser.add_argument("--type", choices=["stable", "prerelease"], required=True)
     plan_parser.add_argument("--bump", choices=["auto", "major", "minor", "patch"], default="auto")
+    plan_parser.add_argument(
+        "--for-release",
+        action="store_true",
+        help="Refuse a plan a release must not publish: no commit since the previous "
+        "release, or a first Semantic Versioning release that is not a major.",
+    )
 
     notes_parser = subcommands.add_parser(
         "notes", help="Print the Markdown release notes for a commit range."
@@ -571,7 +618,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     try:
         if args.command == "plan":
-            result = plan(args.type, args.bump)
+            result = plan(args.type, args.bump, for_release=args.for_release)
             for key, value in result.items():
                 print(f"{key}={value}")
         else:

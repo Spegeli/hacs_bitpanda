@@ -797,12 +797,11 @@ def test_a_stable_release_pushes_main_without_force_then_its_tag(tmp_path):
     assert refused.returncode != 0
     assert "::error::" in refused.stdout
     assert _refs(origin) == before
-    # The error names the ways out: a new run where main moved or the key
-    # was the cause -- but no new run where this was "Re-run all jobs" of a
-    # release that had pushed its tag already: that would release the next
-    # version, so the release is made from that tag by hand.
+    # The error names the way out, where main moved or the key was the
+    # cause: a new run. It releases nothing twice: right after a stable
+    # release, a new run finds nothing to release and stops at its plan.
     assert "start a new run" in refused.stdout
-    assert "by hand" in refused.stdout
+    assert "finds nothing to release" in refused.stdout
 
     # The tag's push fails after main took the commit: main keeps it, the
     # error says so, and the way out is a new run on main -- which finds
@@ -950,6 +949,54 @@ def test_release_plans_its_version_with_the_release_script(tmp_path):
     }
 
 
+def test_only_a_release_refuses_a_plan_with_nothing_to_release(tmp_path):
+    """The release's plan passes --for-release, so a run with no commit since
+    the previous release stops there, before the notes, the version commit
+    and the pushes -- here a stable release started a second time, on the
+    commit the first one released. Validate's release-script job plans
+    without the flag: on dev right after main is merged back, the stable's
+    own version commit, there is no commit since its tag either, and that
+    check must stay green."""
+    [plan] = [
+        step
+        for step in _workflow(_RELEASE)["jobs"]["commit"]["steps"]
+        if step.get("id") == "plan"
+    ]
+    [validate_plan] = [
+        step
+        for step in _jobs_by_name(_workflow("_validate.yml"))["Release script on Python 3.12"][
+            "steps"
+        ]
+        if "release.py plan" in step.get("run", "")
+    ]
+    assert re.search(r"release\.py plan .*--for-release", plan["run"])
+    assert "--for-release" not in validate_plan["run"]
+
+    # The first run pushed its version commit to main and tagged it.
+    origin, clone = _release_clone(tmp_path, validated="feat: add the validated change")
+    _git(clone, "push", "--quiet", "origin", "HEAD:main")
+    _git(origin, "tag", "v2.1.0", "main")
+    _git(clone, "switch", "--quiet", "--detach", "HEAD~1")
+    _with_the_release_script(clone)
+    output = tmp_path / "plan.out"
+    output.write_text("", encoding="utf-8")
+    refused = _run_step(
+        plan,
+        {"inputs.release_type": "stable", "inputs.bump": "auto"},
+        cwd=clone,
+        env={"GITHUB_OUTPUT": str(output)},
+    )
+    assert refused.returncode != 0
+    assert "release.py: Nothing to release: no commit since v2.1.0." in refused.stderr
+    assert output.read_text(encoding="utf-8") == ""
+
+    # Validate on the tagged version commit, the tag fetched by the step above.
+    _git(clone, "switch", "--quiet", "--detach", "v2.1.0")
+    planned = _run_step(validate_plan, cwd=clone)
+    assert planned.returncode == 0, planned.stderr
+    assert planned.stdout == "version=2.1.1\ntag=v2.1.1\nprevious=v2.1.0\n"
+
+
 def test_release_notes_reach_the_publish_job_between_random_delimiters(tmp_path):
     """The notes come from the same script, over the commits after the
     previous release, and leave the key job as an output of several lines.
@@ -1074,6 +1121,35 @@ def test_release_writes_the_version_into_the_manifest_and_checks_it(tmp_path):
     assert _git(repository, "rev-parse", "HEAD~1") == validated
     assert _git(repository, "show", "--name-only", "--format=", "HEAD") == _MANIFEST
     assert json.loads(_git(repository, "show", f"HEAD:{_MANIFEST}"))["version"] == "2.0.0"
+
+
+def test_a_run_whose_manifest_carries_the_version_commits_nothing(tmp_path):
+    """The way out that the push step's error and CONTRIBUTING.md give when
+    main took a stable's version commit but its tag was not pushed, and
+    after a withdrawn draft: a new run on main plans the same version, finds
+    it in manifest.json already and commits nothing, then tags and publishes.
+    So the commit step passes with nothing to commit and leaves HEAD where
+    it is; a plain git commit would stop the run there."""
+    steps = _workflow(_RELEASE)["jobs"]["commit"]["steps"]
+    [commit] = [step for step in steps if "git commit" in step.get("run", "")]
+    shipped = json.loads((Path(__file__).parents[1] / _MANIFEST).read_text(encoding="utf-8"))
+    repository = tmp_path / "repository"
+    (repository / _MANIFEST).parent.mkdir(parents=True)
+    (repository / _MANIFEST).write_text(
+        _as_jq_writes({**shipped, "version": "2.0.0"}), encoding="utf-8"
+    )
+    _git(tmp_path, "init", "--quiet", "--initial-branch=main", str(repository))
+    _git(repository, "add", _MANIFEST)
+    version_commit = _commit(repository, "chore: bump version to 2.0.0")
+
+    committed = _run_step(
+        commit,
+        {"steps.plan.outputs.version": "2.0.0"},
+        cwd=repository,
+        env={"MANIFEST": _MANIFEST},
+    )
+    assert committed.returncode == 0, committed.stderr
+    assert _git(repository, "rev-parse", "HEAD") == version_commit
 
 
 def test_a_dry_run_shows_the_release_and_pushes_nothing(tmp_path):

@@ -877,3 +877,165 @@ def test_a_byte_that_is_not_utf_8_does_not_stop_a_release(repository, tmp_path):
     assert release.notes_command("", "HEAD") == (
         "### \U0001F4DD Documentation\n\n- Describe the caf� menu"
     )
+
+
+# --------------------------------------------------------------------------
+# What a release refuses: plan(..., for_release=True), the --for-release
+# that release.yml's plan step passes and Validate's job does not -- on real
+# repositories
+# --------------------------------------------------------------------------
+
+def _nothing_to_release(previous: str) -> str:
+    """The refusal of a release with no commit since `previous`."""
+    return (
+        f"Nothing to release: no commit since {previous}. If {previous} was released"
+        " a moment ago, there is nothing to do; if it has no GitHub release yet, create"
+        " it by hand from the tag (see Releases in CONTRIBUTING.md)."
+    )
+
+
+def _not_a_major(planned: str) -> str:
+    """The refusal of a first SemVer release, or a beta of it, that is not
+    a major."""
+    return (
+        "No Semantic Versioning release exists yet: the first one, 2.0.0 (tag"
+        " v2.0.0_redesign), and every beta of it need 'Version bump' set to major;"
+        f" this run planned {planned}."
+    )
+
+
+def test_a_release_refuses_a_beta_with_no_commit_since_the_last_one(repository):
+    """A beta's version commit lives only in its tag, on top of the commit
+    it was released from. A pre-release started twice, or "Re-run all jobs"
+    after its tag was pushed, runs on that same commit: nothing came after
+    the tag, and it would publish the same changes again as the next beta,
+    which HACS offers every installation that takes betas. With a commit
+    since, the next beta goes out."""
+    _git_commit(repository, "feat!: rework the integration", second=1)
+    _git(repository, "tag", "v2.0.0_redesign")
+    _git_commit(repository, "feat: add a sensor", second=2)
+    _git(repository, "switch", "--quiet", "--detach")
+    _git_commit(repository, "chore: bump version to 2.1.0-beta.1", second=3)
+    _git(repository, "tag", "v2.1.0-beta.1")
+    _git(repository, "switch", "--quiet", "main")
+
+    with pytest.raises(release.ReleaseError) as refused:
+        release.plan("prerelease", "auto", for_release=True)
+    assert str(refused.value) == _nothing_to_release("v2.1.0-beta.1")
+
+    _git_commit(repository, "fix: correct the sensor", second=4)
+    assert release.plan("prerelease", "auto", for_release=True) == {
+        "version": "2.1.0-beta.2",
+        "tag": "v2.1.0-beta.2",
+        "previous": "v2.1.0-beta.1",
+    }
+
+
+def test_a_release_refuses_a_stable_with_no_commit_since_the_last_one(repository):
+    """A new run right after a stable release, on main, runs on the tagged
+    version commit; a stable release started twice, or "Re-run all jobs"
+    after its tag was pushed, on the commit that version commit went on top
+    of. Neither has a commit since the tag, whatever the bump: each would
+    publish an empty next version."""
+    _git_commit(repository, "feat!: rework the integration", second=1)
+    _git(repository, "tag", "v2.0.0_redesign")
+    _git_commit(repository, "feat: add a sensor", second=2)
+    _git_commit(repository, "chore: bump version to 2.1.0", second=3)
+    _git(repository, "tag", "v2.1.0")
+
+    with pytest.raises(release.ReleaseError) as refused:
+        release.plan("stable", "auto", for_release=True)
+    assert str(refused.value) == _nothing_to_release("v2.1.0")
+
+    _git(repository, "switch", "--quiet", "--detach", "HEAD~1")
+    with pytest.raises(release.ReleaseError) as refused:
+        release.plan("stable", "patch", for_release=True)
+    assert str(refused.value) == _nothing_to_release("v2.1.0")
+
+
+def test_validate_plans_where_a_release_finds_nothing_to_release(repository, capsys):
+    """Validate's "Release script on Python 3.12" job plans a stable release
+    of whatever it checks: on dev right after main is merged back, that is
+    the stable's own version commit, with no commit since its tag. The job
+    passes no --for-release, so the plan goes through and the check stays
+    green; with the flag, as the release passes it, the same plan is
+    refused."""
+    _git_commit(repository, "feat!: rework the integration", second=1)
+    _git(repository, "tag", "v2.0.0_redesign")
+    _git_commit(repository, "feat: add a sensor", second=2)
+    _git_commit(repository, "chore: bump version to 2.1.0", second=3)
+    _git(repository, "tag", "v2.1.0")
+
+    assert release.main(["plan", "--type", "stable", "--bump", "auto"]) == 0
+    assert capsys.readouterr().out == "version=2.1.1\ntag=v2.1.1\nprevious=v2.1.0\n"
+    assert release.main(["plan", "--type", "stable", "--bump", "auto", "--for-release"]) == 1
+    printed = capsys.readouterr()
+    assert printed.out == ""
+    assert printed.err == f"release.py: {_nothing_to_release('v2.1.0')}\n"
+
+
+@pytest.mark.parametrize(
+    ("release_type", "bump", "planned"),
+    [
+        ("stable", "auto", "1.1.0"),
+        ("stable", "minor", "1.1.0"),
+        ("stable", "patch", "1.0.1"),
+        ("prerelease", "auto", "1.1.0-beta.1"),
+        ("prerelease", "minor", "1.1.0-beta.1"),
+        ("prerelease", "patch", "1.0.1-beta.1"),
+    ],
+)
+def test_a_release_refuses_a_first_semver_release_that_is_not_a_major(
+    repository, release_type, bump, planned
+):
+    """Until the first SemVer stable exists, a version counts on from the
+    date versions' 1.0.0: without a breaking commit, "auto" plans 1.1.0,
+    tagged v1.1.0_redesign -- which HACS offers every installation on a date
+    version, and the one-time suffix is spent. So a release insists on a
+    major, for the first stable and for every beta of it. Validate's plan,
+    without the flag, goes through as before."""
+    _git_commit(repository, "feat: add the first feature", second=1)
+    _git(repository, "tag", "v2026.06.04")
+    _git_commit(repository, "feat: add the redesign", second=2)
+
+    assert release.plan(release_type, bump)["version"] == planned
+    with pytest.raises(release.ReleaseError) as refused:
+        release.plan(release_type, bump, for_release=True)
+    assert str(refused.value) == _not_a_major(planned)
+
+
+def test_a_release_plans_the_first_semver_release_as_a_major(repository):
+    """Forced to major -- or on "auto" once a breaking commit came after the
+    date versions -- the first release is 2.0.0, tagged v2.0.0_redesign, and
+    a beta of it 2.0.0-beta.1."""
+    _git_commit(repository, "feat: add the first feature", second=1)
+    _git(repository, "tag", "v2026.06.04")
+    _git_commit(repository, "feat: add the redesign", second=2)
+    stable = {"version": "2.0.0", "tag": "v2.0.0_redesign", "previous": "v2026.06.04"}
+    beta = {"version": "2.0.0-beta.1", "tag": "v2.0.0-beta.1", "previous": "v2026.06.04"}
+    assert release.plan("stable", "major", for_release=True) == stable
+    assert release.plan("prerelease", "major", for_release=True) == beta
+
+    _git_commit(repository, "refactor!: rework the sensors", second=3)
+    assert release.plan("stable", "auto", for_release=True) == stable
+    assert release.plan("prerelease", "auto", for_release=True) == beta
+
+
+def test_a_release_after_the_first_semver_stable_takes_any_bump(repository):
+    """Once a SemVer stable exists, a minor release, or a beta of one, goes
+    out."""
+    _git_commit(repository, "feat: add the first feature", second=1)
+    _git(repository, "tag", "v2026.06.04")
+    _git_commit(repository, "feat!: rework the integration", second=2)
+    _git(repository, "tag", "v2.0.0_redesign")
+    _git_commit(repository, "fix: correct a sensor", second=3)
+    assert release.plan("stable", "minor", for_release=True) == {
+        "version": "2.1.0",
+        "tag": "v2.1.0",
+        "previous": "v2.0.0_redesign",
+    }
+    assert release.plan("prerelease", "minor", for_release=True) == {
+        "version": "2.1.0-beta.1",
+        "tag": "v2.1.0-beta.1",
+        "previous": "v2.0.0_redesign",
+    }

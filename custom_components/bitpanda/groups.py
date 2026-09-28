@@ -85,11 +85,10 @@ async def async_retitle_groups(
     title the user chose, one that is not a shipped default for the group's
     category, is never touched.
 
-    Call this once at every setup of the Price Tracker and the Portfolio,
-    before the entry's update listener is registered: the Price Tracker
-    reloads on any change to the entry, subentries included, so retitling
-    after that listener exists would reload the entry it just finished
-    setting up.
+    Call this once at every setup of the Price Tracker and the Portfolio. A
+    new title reloads neither: their update listeners compare only what setup
+    read -- data and options, and the Price Tracker's group data too
+    (__init__.py).
 
     Accepted edge case: a user who renamed a group to exactly a shipped
     default title of the same category, in another language, ends up

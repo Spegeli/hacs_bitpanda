@@ -520,7 +520,7 @@
   "services": {
     "refresh": {
       "name": "Refresh",
-      "description": "Manually trigger an immediate refresh of all Bitpanda price and wallet data."
+      "description": "Fetches the portfolio and the prices from Bitpanda now and waits until both are done. Ignored within the cooldown of the last call; fails when a refresh fails."
     }
   }
 }

@@ -520,7 +520,7 @@
   "services": {
     "refresh": {
       "name": "Aktualisieren",
-      "description": "Aktualisiert sofort alle Preis- und Wallet-Daten von Bitpanda."
+      "description": "Holt Portfolio und Preise sofort und wartet, bis beides fertig ist. Innerhalb der Sperrzeit ignoriert; schlägt fehl, wenn eine Aktualisierung fehlschlägt."
     }
   }
 }

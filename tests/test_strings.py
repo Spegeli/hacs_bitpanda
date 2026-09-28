@@ -513,6 +513,21 @@ def test_the_language_field_says_what_it_sets_for_each_service():
     }
 
 
+def test_the_refresh_action_says_what_it_does():
+    """The action picker shows this text alone. It says what the action
+    fetches, that the call waits for it, that a call within the cooldown is
+    ignored and that a failed refresh fails the call -- in the approved
+    English and German wording."""
+    assert _load("strings.json")["services"]["refresh"]["description"] == (
+        "Fetches the portfolio and the prices from Bitpanda now and waits until both are "
+        "done. Ignored within the cooldown of the last call; fails when a refresh fails."
+    )
+    assert _load("translations/de.json")["services"]["refresh"]["description"] == (
+        "Holt Portfolio und Preise sofort und wartet, bis beides fertig ist. Innerhalb der "
+        "Sperrzeit ignoriert; schlägt fehl, wenn eine Aktualisierung fehlschlägt."
+    )
+
+
 def test_every_field_has_a_help_text():
     """Under every field of every dialog -- setup, reauth, reconfigure,
     Configure and "Add price tracker" -- a help text (`data_description`)

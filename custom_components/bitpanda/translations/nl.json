@@ -520,7 +520,7 @@
   "services": {
     "refresh": {
       "name": "Vernieuwen",
-      "description": "Vernieuwt direct alle prijs- en walletgegevens van Bitpanda."
+      "description": "Haalt je portfolio en de prijzen nu op bij Bitpanda en wacht tot beide klaar zijn. Genegeerd binnen de wachttijd na de vorige aanroep; mislukt als een vernieuwing mislukt."
     }
   }
 }

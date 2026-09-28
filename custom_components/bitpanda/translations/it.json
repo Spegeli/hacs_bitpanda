@@ -520,7 +520,7 @@
   "services": {
     "refresh": {
       "name": "Aggiorna",
-      "description": "Avvia subito un aggiornamento di tutti i dati di prezzi e wallet di Bitpanda."
+      "description": "Recupera subito il portafoglio e i prezzi da Bitpanda e attende che entrambi siano completati. Ignorata durante il tempo di attesa dopo l'ultima chiamata; non riesce se un aggiornamento non riesce."
     }
   }
 }

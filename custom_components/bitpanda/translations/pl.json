@@ -520,7 +520,7 @@
   "services": {
     "refresh": {
       "name": "Odśwież",
-      "description": "Natychmiast odświeża wszystkie dane o cenach i portfelach z platformy Bitpanda."
+      "description": "Pobiera teraz portfolio i ceny z platformy Bitpanda i czeka na zakończenie obu operacji. Ignorowana w czasie blokady po ostatnim wywołaniu; kończy się błędem, gdy odświeżenie się nie powiedzie."
     }
   }
 }

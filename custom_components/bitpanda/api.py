@@ -111,6 +111,25 @@ def _unreadable(path: str) -> BitpandaApiError:
     )
 
 
+def _listing(body: dict[str, Any], path: str) -> list[dict[str, Any]]:
+    """The `data` of an answer that lists records: a list of objects. An
+    absent or empty `data` is an empty listing; any other shape is
+    unreadable."""
+    data = body.get("data") or []
+    if not isinstance(data, list) or not all(isinstance(item, dict) for item in data):
+        raise _unreadable(path)
+    return data
+
+
+def _object(body: dict[str, Any], path: str) -> dict[str, Any]:
+    """The `data` of an answer that holds one record: an object. An absent or
+    empty `data` is an empty record; any other shape is unreadable."""
+    data = body.get("data") or {}
+    if not isinstance(data, dict):
+        raise _unreadable(path)
+    return data
+
+
 # One cheap, read-only endpoint per required scope, used only to probe which
 # scopes a key carries during setup. `/portfolio` needs no params; the other
 # two accept `page_size` and 1 is the smallest page the API allows.
@@ -138,14 +157,16 @@ class BitpandaApiClient:
         self._session = session
         self._headers = {"x-api-key": api_key} if api_key else {}
 
-    async def _request(self, path: str, params: dict[str, Any] | None = None) -> Any:
+    async def _request(
+        self, path: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Perform one GET and return the decoded body, always a dict.
 
         A 200 whose JSON is not an object -- null, a list, a bare string or
-        number -- is as unreadable as a body that fails to parse at all: every
-        caller does `.get` on what comes back, so a wrong top-level shape
-        would otherwise escape as an unlogged AttributeError instead of the
-        outage it is.
+        number -- is as unreadable as a body that fails to parse at all: it
+        holds none of the fields an answer carries. Read on, a wrong top-level
+        shape would escape as an unlogged AttributeError instead of the outage
+        it is, and a scope probe would count it as a granted scope.
 
         Failures are logged at DEBUG only: every caller either reports an
         outage once itself (the coordinators) or turns it into a form error,
@@ -254,12 +275,7 @@ class BitpandaApiClient:
 
         for _ in range(_MAX_PAGES):
             body = await self._request(path, params)
-            data = body.get("data") or []
-            if not isinstance(data, list):
-                raise _unreadable(path)
-            for item in data:
-                if not isinstance(item, dict):
-                    raise _unreadable(path)
+            for item in _listing(body, path):
                 key = item.get("id")
                 if key is None:
                     key = item.get("operation_id")
@@ -295,10 +311,7 @@ class BitpandaApiClient:
         """List all fiat currencies. Not paginated."""
         path = "/currencies"
         body = await self._request(path)
-        data = body.get("data") or []
-        if not isinstance(data, list) or not all(isinstance(item, dict) for item in data):
-            raise _unreadable(path)
-        return data
+        return _listing(body, path)
 
     async def async_get_assets(
         self,
@@ -343,10 +356,7 @@ class BitpandaApiClient:
         """
         path = f"/tickers/{asset_id}"
         body = await self._request(path)
-        data = body.get("data") or {}
-        if not isinstance(data, dict):
-            raise _unreadable(path)
-        return data
+        return _object(body, path)
 
     async def async_get_portfolio(
         self, *, equivalent_currency_id: str | None = None
@@ -362,10 +372,7 @@ class BitpandaApiClient:
             params["equivalent_currency_id"] = equivalent_currency_id
         path = "/portfolio"
         body = await self._request(path, params or None)
-        data = body.get("data") or []
-        if not isinstance(data, list) or not all(isinstance(item, dict) for item in data):
-            raise _unreadable(path)
-        return data
+        return _listing(body, path)
 
     async def async_get_portfolio_history(
         self,
@@ -384,10 +391,7 @@ class BitpandaApiClient:
             params["equivalent_currency_id"] = equivalent_currency_id
         path = "/portfolio-history"
         body = await self._request(path, params)
-        data = body.get("data") or {}
-        if not isinstance(data, dict):
-            raise _unreadable(path)
-        return data
+        return _object(body, path)
 
     async def async_get_earn_configs(self) -> list[dict[str, Any]]:
         """Available Earn products and their rates.

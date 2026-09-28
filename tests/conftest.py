@@ -2,8 +2,15 @@
 import json
 from pathlib import Path
 import string
+from unittest.mock import patch
 
-from homeassistant.config_entries import ConfigSubentryData
+from homeassistant.config_entries import (
+    ConfigEntriesFlowManager,
+    ConfigSubentryData,
+    ConfigSubentryFlowManager,
+    OptionsFlowManager,
+)
+from homeassistant.data_entry_flow import FlowManager, FlowResultType
 from homeassistant.helpers import device_registry as dr, issue_registry as ir
 import pytest
 
@@ -94,6 +101,77 @@ def _placeholders(template: str) -> frozenset[str]:
     return frozenset(
         field for _, field, _, _ in string.Formatter().parse(template) if field is not None
     )
+
+
+@pytest.fixture(autouse=True)
+def check_flow_texts():
+    """Every form and abort a Bitpanda flow shows has its texts, and every
+    placeholder of a text it shows is supplied.
+
+    Home Assistant core checks this with its check_translations fixture,
+    which pytest-homeassistant-custom-component does not ship. Without the
+    check, a dropped text or a renamed placeholder shows the user a raw key
+    or a literal {placeholder}. Checked for the config, options and subentry
+    flows: the step's texts, its errors and sections, and the abort reason.
+    Read from translations/en.json, which equals strings.json (test_strings).
+    """
+    english = json.loads(
+        (_INTEGRATION / "translations" / "en.json").read_text(encoding="utf-8")
+    )
+    problems: list[tuple] = []
+    original = FlowManager._async_handle_step
+
+    def _texts(manager, flow) -> dict | None:
+        """The texts of the kind of flow `flow` is; None for a flow of
+        another integration."""
+        if isinstance(manager, OptionsFlowManager):
+            entry = manager.hass.config_entries.async_get_entry(flow.handler)
+            return english["options"] if entry and entry.domain == "bitpanda" else None
+        if isinstance(manager, ConfigSubentryFlowManager):
+            entry_id, subentry_type = flow.handler
+            entry = manager.hass.config_entries.async_get_entry(entry_id)
+            if entry is None or entry.domain != "bitpanda":
+                return None
+            return english["config_subentries"][subentry_type]
+        if isinstance(manager, ConfigEntriesFlowManager) and flow.handler == "bitpanda":
+            return english["config"]
+        return None
+
+    async def _checked(self, flow, *args, **kwargs):
+        result = await original(self, flow, *args, **kwargs)
+        texts = _texts(self, flow)
+        if texts is None:
+            return result
+        shown: list[str] = []
+        if result["type"] == FlowResultType.FORM:
+            step = texts.get("step", {}).get(result["step_id"])
+            if step is None:
+                problems.append(("no step texts", result["step_id"]))
+                return result
+            shown += [step.get("description", ""), *step.get("data_description", {}).values()]
+            for part in step.get("sections", {}).values():
+                shown += [part.get("description", ""), *part.get("data_description", {}).values()]
+            for error in (result.get("errors") or {}).values():
+                if error in texts.get("error", {}):
+                    shown.append(texts["error"][error])
+                else:
+                    problems.append(("no error text", result["step_id"], error))
+        elif result["type"] == FlowResultType.ABORT:
+            if result["reason"] in texts.get("abort", {}):
+                shown.append(texts["abort"][result["reason"]])
+            else:
+                problems.append(("no abort text", result["reason"]))
+        supplied = set(result.get("description_placeholders") or {})
+        problems.extend(
+            ("placeholder not supplied", result.get("step_id") or result["reason"], missing)
+            for text in shown
+            if (missing := _placeholders(text) - supplied)
+        )
+        return result
+
+    with patch.object(FlowManager, "_async_handle_step", _checked):
+        yield
+    assert problems == []
 
 
 def assert_issue_texts_render(raised: dict[str, dict[str, str] | None]) -> None:

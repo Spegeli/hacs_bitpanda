@@ -216,10 +216,7 @@ class PriceSensor(TolerantEntity[TickerCoordinator], SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        attrs: dict[str, Any] = {
-            **asset_attributes(self._asset),
-            "trading_pair": f"{self._asset.get('symbol')}/{self._currency}",
-        }
+        attrs: dict[str, Any] = {**asset_attributes(self._asset)}
         if self._currency != "EUR":
             rate = self._rate
             if rate is None:

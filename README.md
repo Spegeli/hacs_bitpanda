@@ -179,7 +179,7 @@ Home Assistant lists these in the entity's Details view (older versions: the Att
 | Balance (total) — every wallet | `asset`, `asset_name`, `asset_isin`, `units` (whole position), and the position performance: `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
 | Balance (staking) — while something is staked or an Earn product is offered | `asset`, `asset_name`, `asset_isin`, `units` (staked), `apr_percent`, `rewards_gross`, `rewards_fee`, `rewards_net`, `rewards_net_value`, `rewards_count`, `rewards_last_at` |
 | Portfolio Cash Plus | `eur`, `usd`, `gbp` — the amount of each held Cash Plus product in its own currency |
-| Price (EUR) | `asset`, `asset_name`, `asset_isin`, `trading_pair`, `change_24h_pct`, `price_24h_ago` |
+| Price (EUR) | `asset`, `asset_name`, `asset_isin`, `change_24h_pct`, `price_24h_ago` |
 | Price (other currencies) | as EUR, plus `conversion` (status `no_rate` until the first ECB rate is loaded), `conversion_rate`, `rate_date`, `rate_source` (`ECB`) |
 
 `asset_isin`, the ISIN, is there for stocks, ETFs and ETCs only.
@@ -272,7 +272,7 @@ For every version before 2.0.0: the date versions, 2026.06.04 and older. Version
 - **Prices in other currencies are converted with ECB daily rates** instead of being quoted by Bitpanda.
 - **Long-term statistics.** Every value sensor now keeps them, from the upgrade on (see [Long-term statistics](#long-term-statistics)).
 - **A failed `bitpanda.refresh` now fails the call**, and stops a script or automation at that step unless the step sets `continue_on_error: true` (see [Refreshing by hand](#refreshing-by-hand)).
-- **Attributes:** `balance` is now `units` (on Balance (available) the unstaked units, as before); the position performance is on Balance (total), APR and rewards on Balance (staking), and prices in other currencies carry `conversion_rate`, `rate_date` and `rate_source`. `breakdown`, `wallet_count`, `all_prices`, the wallet `price` and the `icon` attribute are gone.
+- **Attributes:** `balance` is now `units` (on Balance (available) the unstaked units, as before); the position performance is on Balance (total), APR and rewards on Balance (staking), and prices in other currencies carry `conversion_rate`, `rate_date` and `rate_source`. `breakdown`, `wallet_count`, `all_prices`, `trading_pair`, the wallet `price` and the `icon` attribute are gone.
 
 ---
 

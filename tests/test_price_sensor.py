@@ -62,7 +62,7 @@ def test_eur_is_the_ticker_price():
     sensor = _sensor("EUR", ecb=False)
     assert sensor.native_value == 73188.51648958
     assert sensor.extra_state_attributes == {
-        "asset": "BTC", "asset_name": "Bitcoin", "trading_pair": "BTC/EUR",
+        "asset": "BTC", "asset_name": "Bitcoin",
     }
 
 
@@ -75,7 +75,7 @@ def test_a_stock_etf_or_etc_shows_its_isin():
     sensor = PriceSensor(_Coordinator({etf["id"]: 540.5}), None, "eid", etf, "EUR")
     assert sensor.extra_state_attributes == {
         "asset": "LYY1", "asset_name": "Amundi PEA S&P 500 UCITS ETF",
-        "asset_isin": "FR0011871136", "trading_pair": "LYY1/EUR",
+        "asset_isin": "FR0011871136",
     }
 
 
@@ -83,7 +83,7 @@ def test_other_currencies_are_converted_with_the_ecb_rate():
     sensor = _sensor("USD")
     assert sensor.native_value == round(73188.51648958 * 1.1367, 8)
     assert sensor.extra_state_attributes == {
-        "asset": "BTC", "asset_name": "Bitcoin", "trading_pair": "BTC/USD",
+        "asset": "BTC", "asset_name": "Bitcoin",
         "conversion_rate": 1.1367, "rate_date": "2026-09-24", "rate_source": "ECB",
     }
 

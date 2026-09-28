@@ -394,9 +394,6 @@
           "asset_isin": {
             "name": "Aktywo: ISIN"
           },
-          "trading_pair": {
-            "name": "Aktywo: para handlowa"
-          },
           "change_24h_pct": {
             "name": "24 h: zmiana %"
           },

@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Bitpanda",
-        "description": "Quel service voulez-vous configurer ? Chacun ne peut être ajouté qu'une seule fois.\n\n- Bitpanda Portfolio : votre compte – tout ce que vous détenez chez Bitpanda.\n- Bitpanda Price Tracker : les cours en direct des actifs que vous choisissez – même sans les détenir.",
+        "description": "Quel service voulez-vous configurer ? Chacun ne peut être ajouté qu'une seule fois.\n\n- **Bitpanda Portfolio** : votre compte – tout ce que vous détenez chez Bitpanda.\n- **Bitpanda Price Tracker** : les cours en direct des actifs que vous choisissez – même sans les détenir.",
         "menu_options": {
           "portfolio": "Bitpanda Portfolio (clé API requise)",
           "price_tracker": "Bitpanda Price Tracker (aucune clé API requise)"

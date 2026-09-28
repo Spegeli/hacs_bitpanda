@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Bitpanda",
-        "description": "Welchen Dienst möchtest du einrichten? Jeder lässt sich einmal hinzufügen.\n\n- Bitpanda Portfolio: dein Konto – alles, was du bei Bitpanda hältst.\n- Bitpanda Price Tracker: Live-Preise der Assets, die du auswählst – auch ohne sie zu besitzen.",
+        "description": "Welchen Dienst möchtest du einrichten? Jeder lässt sich einmal hinzufügen.\n\n- **Bitpanda Portfolio**: dein Konto – alles, was du bei Bitpanda hältst.\n- **Bitpanda Price Tracker**: Live-Preise der Assets, die du auswählst – auch ohne sie zu besitzen.",
         "menu_options": {
           "portfolio": "Bitpanda Portfolio (API-Schlüssel benötigt)",
           "price_tracker": "Bitpanda Price Tracker (kein API-Schlüssel benötigt)"

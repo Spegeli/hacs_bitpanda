@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
 from custom_components.bitpanda.ecb import EcbError, EcbRates
@@ -648,6 +649,34 @@ async def test_a_rate_limit_that_confirms_a_carried_price_leaves_it_out_at_once(
     assert coordinator.update_interval == 4 * _PACE
     assert (coordinator.data, coordinator.data_available) == ({SOL: 2.0}, True)
     assert seen == [{BTC: 1.0, SOL: 2.0}] * 3 + [{SOL: 2.0}]
+
+
+async def test_rate_limited_rounds_end_the_tolerance_after_about_seven_minutes(
+    hass, freezer, caplog
+):
+    """Every round is rate-limited, each after the backed-off interval: the
+    429s at +1 and +3 minutes keep the prices available, the one at +7
+    ends the tolerance -- warned about once, not again at +15."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
+    coordinator = TickerCoordinator(hass, None, client, _TRACKED)
+    await coordinator.async_refresh()
+    start = dt_util.utcnow()
+    client.rate_limited = True
+    available = {}
+    with caplog.at_level(logging.WARNING):
+        for _ in range(4):
+            await _refresh(coordinator, freezer, coordinator.update_interval)
+            available[dt_util.utcnow() - start] = coordinator.data_available
+    assert available == {
+        timedelta(minutes=1): True,
+        timedelta(minutes=3): True,
+        timedelta(minutes=7): False,
+        timedelta(minutes=15): False,
+    }
+    assert _lines(caplog, logging.WARNING, "refreshes in a row failed") == [
+        "bitpanda_tickers: 3 refreshes in a row failed; its sensors are unavailable "
+        "until one succeeds"
+    ]
 
 
 def test_a_slow_interval_is_announced_at_construction(caplog):

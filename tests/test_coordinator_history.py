@@ -305,8 +305,8 @@ def _listening(coordinator):
 async def test_the_coordinator_carries_a_failing_timeframe(hass, freezer):
     """The week answers, then its own requests fail while the others answer:
     its last return stays through two refreshes at the regular pace, and
-    the third confirms the failure."""
-    coordinator = _scripted_history(hass, WEEK=[2.0, _DOWN, _DOWN, _DOWN])
+    the third confirms the failure. Its next answer brings it back."""
+    coordinator = _scripted_history(hass, WEEK=[2.0, _DOWN, _DOWN, _DOWN, 3.0])
     await coordinator.async_refresh()
     for _ in range(2):
         await _refresh(coordinator, freezer)
@@ -315,6 +315,9 @@ async def test_the_coordinator_carries_a_failing_timeframe(hass, freezer):
     await _refresh(coordinator, freezer)
     assert "WEEK" in coordinator.data.failed
     assert "WEEK" not in coordinator.data.values
+    await _refresh(coordinator, freezer)
+    assert coordinator.data.values["WEEK"] == 3.0
+    assert "WEEK" not in coordinator.data.failed
 
 
 async def test_a_history_refresh_failing_as_a_whole_counts_for_every_timeframe(

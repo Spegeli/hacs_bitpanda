@@ -12,7 +12,6 @@ from homeassistant.util import dt as dt_util
 
 from custom_components.bitpanda.tolerance import TolerantCoordinator, TolerantEntity
 
-F = UpdateFailed("down")
 _REGULAR = timedelta(minutes=5)
 # Refreshes by hand (bitpanda.refresh) come a cooldown apart.
 _BY_HAND = timedelta(seconds=20)
@@ -128,7 +127,7 @@ async def _cancel_a_refresh(probe) -> None:
 
 
 async def test_the_first_two_failures_keep_the_last_data_available(hass, freezer):
-    probe = _Probe(hass, 1, F, F)
+    probe = _Probe(hass, 1, _down(), _down())
     await probe.async_refresh()
     while probe.script:
         await _refresh(probe, freezer)
@@ -144,7 +143,7 @@ async def test_the_third_failure_at_the_regular_pace_ends_it_and_tells_the_liste
     first failure, which follows a success -- never at a failure after a
     failure. So the tolerance tells them at the third; nobody does at the
     second."""
-    probe = _Probe(hass, 1, F, F, F)
+    probe = _Probe(hass, 1, _down(), _down(), _down())
     seen = _listen(probe)
     await _run(probe, freezer)
     assert probe.data_available is False
@@ -154,13 +153,13 @@ async def test_the_third_failure_at_the_regular_pace_ends_it_and_tells_the_liste
 async def test_failures_by_hand_never_end_it_sooner(hass, freezer):
     """Six failures, but all within two minutes of the first: the regular
     pace would have brought only one of them."""
-    probe = _Probe(hass, 1, F, F, F, F, F, F)
+    probe = _Probe(hass, 1, _down(), _down(), _down(), _down(), _down(), _down())
     await _run(probe, freezer, pace=_BY_HAND)
     assert probe.data_available is True
 
 
 async def test_a_success_starts_the_count_again(hass, freezer):
-    probe = _Probe(hass, 1, F, F, 2, F, F)
+    probe = _Probe(hass, 1, _down(), _down(), 2, _down(), _down())
     await _run(probe, freezer)
     assert probe.data_available is True
     assert probe.data == 2
@@ -176,13 +175,13 @@ async def test_a_rejected_key_ends_it_at_once(hass, freezer):
 async def test_a_failure_after_a_rejected_key_keeps_it_ended(hass, freezer):
     """A failure after a rejected key -- a refresh by hand while the
     connection is down, say -- does not bring the last data back."""
-    probe = _Probe(hass, 1, ConfigEntryAuthFailed(), F)
+    probe = _Probe(hass, 1, ConfigEntryAuthFailed(), _down())
     await _run(probe, freezer)
     assert probe.data_available is False
 
 
 async def test_a_rejected_key_after_failures_tells_the_listeners(hass, freezer):
-    probe = _Probe(hass, 1, F, ConfigEntryAuthFailed())
+    probe = _Probe(hass, 1, _down(), ConfigEntryAuthFailed())
     seen = _listen(probe)
     await _run(probe, freezer)
     assert seen[-1] is False
@@ -234,7 +233,7 @@ async def test_a_failure_right_after_a_success_is_told_to_the_listeners_once(
 
 async def test_without_data_nothing_is_available(hass, freezer):
     """A failed first refresh leaves nothing to show."""
-    probe = _Probe(hass, F)
+    probe = _Probe(hass, _down())
     await _run(probe, freezer)
     assert probe.data is None
     assert probe.data_available is False
@@ -244,7 +243,10 @@ async def test_one_warning_and_one_notice_per_outage(hass, freezer, caplog):
     """Failures go on after the confirmation: each outage is warned about,
     and told to the listeners, once -- and a new outage after a success
     again."""
-    probe = _Probe(hass, 1, F, F, F, F, F, 2, F, F, F)
+    probe = _Probe(
+        hass, 1, _down(), _down(), _down(), _down(), _down(),
+        2, _down(), _down(), _down(),
+    )
     seen = _listen(probe)
     with caplog.at_level(logging.WARNING):
         await _run(probe, freezer)
@@ -254,7 +256,7 @@ async def test_one_warning_and_one_notice_per_outage(hass, freezer, caplog):
         record.getMessage().startswith("probe: 3 refreshes in a row failed")
         for record in warned
     )
-    assert seen.count(False) == 2
+    assert seen == [True, True, False, True, True, False]
 
 
 async def test_no_tolerance_warning_for_a_rejected_key(hass, freezer, caplog):
@@ -326,7 +328,7 @@ async def test_a_slow_first_failure_does_not_prolong_it(hass, freezer):
     its answer arrived. Asked for at R, R + 5 min and R + 10 min, three
     failures confirm the outage; timed by their answers -- the first one
     50 s late -- they would span 9 min 10 s, and confirm nothing."""
-    probe = _Probe(hass, 1, _late(freezer, F), F, F)
+    probe = _Probe(hass, 1, _late(freezer, _down()), _down(), _down())
     await probe.async_refresh()
     await _refresh(probe, freezer)  # asked for at R, answered at R + 50 s
     await _refresh(probe, freezer, _REGULAR - _LATE)  # R + 5 min
@@ -344,7 +346,7 @@ async def test_the_fetch_is_handed_the_time_its_refresh_was_asked_for(hass, free
 async def test_an_entity_follows_its_coordinator(hass, freezer):
     """Not the outcome of the last refresh, which CoordinatorEntity follows:
     after two failures the entity is still available."""
-    probe = _Probe(hass, 1, F, F, F)
+    probe = _Probe(hass, 1, _down(), _down(), _down())
     entity = TolerantEntity(probe)
     for _ in range(3):
         await _refresh(probe, freezer)

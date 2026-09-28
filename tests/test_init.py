@@ -458,10 +458,12 @@ async def test_a_staking_sensor_added_with_current_rewards_asks_for_nothing(
     assert operations.await_count == 1
 
 
-# The Internet connection at home is down: no request reaches Bitpanda.
-_NO_CONNECTION = BitpandaApiError(
-    "Cannot connect to /portfolio", kind="connection", path="/portfolio"
-)
+def _no_connection(*, equivalent_currency_id=None):
+    """/portfolio while the Internet connection at home is down: no request
+    reaches Bitpanda. A side effect raising a fresh error at each call: one
+    instance raised again and again keeps a growing traceback, and with it
+    the frames of every test that raised it, alive."""
+    raise BitpandaApiError("Cannot connect to /portfolio", kind="connection", path="/portfolio")
 
 
 async def test_the_portfolio_keeps_its_figures_through_two_failed_refreshes(
@@ -473,7 +475,7 @@ async def test_the_portfolio_keeps_its_figures_through_two_failed_refreshes(
     registered throughout: a failed refresh counts no miss."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
-    portfolio_api.side_effect = _NO_CONNECTION
+    portfolio_api.side_effect = _no_connection
     ent_reg = er.async_get(hass)
 
     for _ in range(2):
@@ -534,7 +536,7 @@ async def test_an_empty_portfolio_mixed_with_a_timeout(hass, portfolio_api, free
 
     await _next_refresh(hass, freezer)
     assert _value(hass, "sensor.bitpanda_portfolio_total") == 210.0
-    portfolio_api.side_effect = _NO_CONNECTION
+    portfolio_api.side_effect = _no_connection
     await _next_refresh(hass, freezer)
     assert _value(hass, "sensor.bitpanda_portfolio_total") == 210.0
     portfolio_api.side_effect = None
@@ -1114,6 +1116,37 @@ async def test_prices_keep_their_value_through_two_failed_rounds(hass, price_api
     assert [_value(hass, entity_id) for entity_id in prices] == [100.0, 200.0]
 
 
+async def test_one_failing_asset_keeps_its_price_through_two_rounds(hass, price_api, freezer):
+    """Only Bitcoin's requests fail, while Solana's answer: Bitcoin keeps its
+    last price through two rounds, and the third, two minutes after the
+    first, makes it unavailable -- Solana's price is shown throughout.
+    Bitcoin's first answer brings it back."""
+    ticker, _ = price_api
+    await _setup(hass, _price_entry(hass, [], price_group("crypto", BTC, SOL)))
+    bitcoin = "sensor.bitpanda_bitcoin_btc_price_tracker_eur"
+    solana = "sensor.bitpanda_solana_sol_price_tracker_eur"
+
+    async def _ticker(asset_id):
+        if asset_id == BTC["id"]:
+            raise BitpandaApiError(
+                "HTTP 404 from /tickers", kind="http_status", path="/tickers", status=404
+            )
+        return {"price": "100.00000000"}
+
+    ticker.side_effect = _ticker
+    for _ in range(2):
+        await _next_price_round(hass, freezer)
+        assert [_value(hass, bitcoin), _value(hass, solana)] == [100.0, 100.0]
+
+    await _next_price_round(hass, freezer)
+    assert hass.states.get(bitcoin).state == "unavailable"
+    assert _value(hass, solana) == 100.0
+
+    ticker.side_effect = None
+    await _next_price_round(hass, freezer)
+    assert [_value(hass, bitcoin), _value(hass, solana)] == [100.0, 100.0]
+
+
 async def test_a_price_sensor_registered_before_keeps_its_id_and_takes_the_new_names(
     hass, price_api
 ):
@@ -1381,9 +1414,12 @@ async def test_the_refresh_action_returns_with_the_new_figures_in_place(hass, po
     assert _value(hass, "sensor.bitpanda_portfolio_total") == 310.0
 
 
-_PORTFOLIO_DOWN = BitpandaApiError(
-    "HTTP 503 from /portfolio", kind="http_status", path="/portfolio", status=503
-)
+def _portfolio_down(*, equivalent_currency_id=None):
+    """/portfolio answering HTTP 503. A side effect raising a fresh error at
+    each call, for the reason _no_connection gives."""
+    raise BitpandaApiError(
+        "HTTP 503 from /portfolio", kind="http_status", path="/portfolio", status=503
+    )
 
 
 async def test_a_failed_refresh_fails_the_action_and_names_the_service(
@@ -1399,7 +1435,7 @@ async def test_a_failed_refresh_fails_the_action_and_names_the_service(
     # The first setup of the domain sets up both entries.
     await _setup(hass, portfolio)
     ticker_calls = ticker.call_count
-    portfolio_api.side_effect = _PORTFOLIO_DOWN
+    portfolio_api.side_effect = _portfolio_down
 
     with pytest.raises(HomeAssistantError) as excinfo:
         await _refresh(hass)
@@ -1429,7 +1465,7 @@ async def test_continue_on_error_carries_a_script_past_a_failed_refresh(hass, po
     script at that step, unless the step says `continue_on_error: true`."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
-    portfolio_api.side_effect = _PORTFOLIO_DOWN
+    portfolio_api.side_effect = _portfolio_down
     after = async_capture_events(hass, "bitpanda_test_after_refresh")
     step_after = {"event": "bitpanda_test_after_refresh"}
     assert await async_setup_component(

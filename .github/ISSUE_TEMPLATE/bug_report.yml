@@ -29,7 +29,7 @@ body:
         - Price Tracker (price sensors, currencies, Add price tracker)
         - Portfolio (wallet, staking and total sensors)
         - Portfolio (total value, cash, Cash Plus, returns)
-        - Setup / Configure dialogs
+        - Dialogs (setup, Configure, Reconfigure, new API key)
         - Refresh action (bitpanda.refresh)
         - Upgrade from a date version
         - Documentation
@@ -60,6 +60,7 @@ body:
     id: ha_version
     attributes:
       label: Home Assistant version
+      description: Settings → About.
       placeholder: e.g. 2025.9.1
     validations:
       required: true
@@ -78,7 +79,7 @@ body:
     attributes:
       label: Affected asset or wallet
       description: Which symbol shows the problem? Leave empty if it affects everything.
-      placeholder: e.g. BCI5, BTC, XAU, EUR
+      placeholder: e.g. BTC, BCI5, XAU, or an ISIN such as FR0011871136
     validations:
       required: false
 
@@ -115,7 +116,8 @@ body:
       label: Relevant log output
       description: |
         Settings → System → Logs → filter for `bitpanda`.
-        For more detail, add this to `configuration.yaml`, restart, and reproduce:
+        For more detail: on the Bitpanda integration page, ⋮ → **Enable debug logging**, reproduce the problem, then disable it — the log downloads.
+        Or add this to `configuration.yaml`, restart, and reproduce:
 
         ```yaml
         logger:

@@ -29,6 +29,7 @@ Wallet value bugs are easy to miss — state the numbers you verified.
 
 - [ ] Tested on a real Home Assistant instance, if the change affects the running integration
 - [ ] Tests and `mypy --strict` pass locally, unless the change is documentation only (see CONTRIBUTING → Tests and typing)
+- [ ] Uses only Home Assistant APIs that exist in 2025.5, the supported floor (CONTRIBUTING → Things that are easy to get wrong)
 - [ ] Commit messages follow Conventional Commits — the release notes are built from them
 - [ ] Translations updated and in sync, if UI strings changed: `strings.json` and all seven `translations/*.json` (`en`, `de`, `fr`, `nl`, `it`, `es`, `pl`)
 - [ ] No API key or other secret is logged, committed or included in diagnostics

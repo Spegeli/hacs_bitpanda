@@ -81,7 +81,7 @@ async def async_purge_recorded(hass: HomeAssistant, entity_ids: list[str]) -> No
     if not entity_ids or _RECORDER not in hass.config.components:
         return
     _LOGGER.info(
-        "Deleting the history and long-term statistics of %d Portfolio sensors",
+        "Deleting the history and long-term statistics of Portfolio sensors: %d",
         len(entity_ids),
     )
     await hass.services.async_call(

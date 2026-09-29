@@ -212,7 +212,7 @@ async def test_the_recorded_purge_says_in_the_log_how_many_sensors_it_clears(has
         await async_purge_recorded(hass, ["sensor.b", "sensor.a"])
     [record] = [r for r in caplog.records if r.name == "custom_components.bitpanda.purge"]
     assert (record.levelname, record.getMessage()) == (
-        "INFO", "Deleting the history and long-term statistics of 2 Portfolio sensors"
+        "INFO", "Deleting the history and long-term statistics of Portfolio sensors: 2"
     )
 
 

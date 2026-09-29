@@ -348,6 +348,7 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
    - the assets to add to a Bitpanda Price Tracker you had already set up — its prices are not moved into one that existed before the upgrade.
 
    The Home Assistant log keeps the same list in English, with the reason for each entity that was not migrated. **Check your dashboards, automations and scripts** for the old IDs.
+6. Optional: once the Portfolio works with the new key, delete the old key on the classic site, web.bitpanda.com, if nothing else uses it.
 
 **What is kept:** the history of every migrated sensor (it moves with the rename), your price trackers (now in the Bitpanda Price Tracker, in EUR and in your old currency) and the wallets of assets you still hold. Entity IDs you renamed yourself are left as they are.
 
@@ -409,12 +410,14 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 
 ## 🗑️ Removal
 
-1. Go to **Settings → Devices & services → Bitpanda** and delete each service entry — **Bitpanda Portfolio** and **Bitpanda Price Tracker** — with **⋮ → Delete**. Their devices and sensors go with them.
+1. Go to **Settings → Devices & services → Bitpanda** and delete each service entry — **Bitpanda Portfolio** and **Bitpanda Price Tracker** — with **⋮ → Delete**. Their devices, their sensors and the API key stored in Home Assistant go with them.
 2. Remove **Bitpanda** in HACS (its **⋮** menu → **Remove**). Installed manually: delete the `config/custom_components/bitpanda` folder.
 3. Restart Home Assistant.
 4. Optional: delete the API key at [app.bitpanda.com/my-account/apikey](https://app.bitpanda.com/my-account/apikey) if nothing else uses it.
 
-The recorded history of the removed sensors stays in Home Assistant's database until the recorder purges it — after 10 days by default (the recorder's `purge_keep_days`). Their long-term statistics are not purged; delete them in the **Statistics** tab under **Settings → Tools** (before Home Assistant 2026.8: **Developer tools**) if you no longer want them.
+**History:** the recorded history of the removed sensors stays in Home Assistant's database until the recorder purges it — after 10 days by default (the recorder's `purge_keep_days`).
+
+**Long-term statistics** are not purged: delete them under **Settings → Tools → Statistics** (before Home Assistant 2026.8: **Developer tools → Statistics**) if you no longer want them.
 
 ---
 

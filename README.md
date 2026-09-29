@@ -130,25 +130,39 @@ Bitpanda API keys expire on the date you choose when you create them, **one year
 
 The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stocks, ETFs, ETCs, Crypto indices, Precious metals — with one device per asset inside.
 
-1. On the **Bitpanda Price Tracker** entry, click **Add price tracker** (older versions: **⋮ → Add price tracker**)
-   - ⚠️ On versions up to 2026.9 that show an **Add price tracker** button at the top of the integration page, it opens a dialog listing both Bitpanda entries instead, and picking **Bitpanda Portfolio** there fails. Pick **Bitpanda Price Tracker** in that dialog, or avoid it entirely with the **Bitpanda Price Tracker** row's own **⋮ → Add price tracker**, which opens the asset types directly.
-2. Pick a category (Crypto, Stocks, ETFs, ETCs, Crypto indices, Precious metals), then type to search by name, symbol or ISIN and pick one asset. Entries read `Name / SYMBOL / ISIN` (ISIN only for stocks, ETFs and ETCs)
-3. The asset joins the group of its type; the first asset of a type creates that group
-4. The first time you open the Stocks list it takes about ten seconds; it is then cached for 24 hours
-5. To stop tracking one asset, open its device and use **⋮ → Delete**. **⋮ → Delete** on a group stops tracking all of its assets. Tracking an asset again later brings its sensors back under the entity IDs the integration gives them, with their history (your own changes: see [Resetting names and entity IDs](#resetting-names-and-entity-ids))
+1. Select **Add price tracker** at the top of the Bitpanda integration page. With the Portfolio set up as well, a dialog first asks for the entry: pick **Bitpanda Price Tracker** (up to Home Assistant 2026.9, picking **Bitpanda Portfolio** there fails).
+   - Before Home Assistant 2025.7 there is no such button: use **⋮ → Add price tracker** on the **Bitpanda Price Tracker** entry. That menu item works on every version and skips the dialog.
+2. Choose the **Asset type**: Crypto, Stocks, ETFs, ETCs, Crypto indices or Precious metals.
+3. Choose the asset. Type a name or a symbol to search the list — for stocks, ETFs and ETCs also an ISIN. Each entry reads `Name / SYMBOL`, for stocks, ETFs and ETCs `Name / SYMBOL / ISIN`.
+
+The asset gets its own device in the group of its type; the first asset of a type creates the group. The integration keeps each list for 24 hours; loading a large one such as Stocks the first time takes about ten seconds.
+
+#### Stop tracking
+
+- **One asset:** open its device and select **⋮ → Delete**.
+- **A whole group:** select **⋮ → Delete** on the group, under the **Bitpanda Price Tracker** entry of the integration page.
+
+Tracking an asset again later brings its sensors back under the entity IDs the integration gives them, with their history (your own changes: see [Resetting names and entity IDs](#resetting-names-and-entity-ids)).
 
 ### Changing settings later
 
-- **Configure** (the ⚙ on each service's entry) changes the language of group titles — for the Portfolio, of group titles and messages (see [Languages](#languages)) — and the Price Tracker's extra currencies: removing a currency deletes its sensors; adding it back brings them back under the entity IDs the integration gives them, with their history.
-- **⋮ → Reconfigure** on the Portfolio entry replaces the key at any time (leave the key field empty to keep the current one) and changes the currency.
-- When Bitpanda rejects the stored key — it expired, was revoked, or lacks a scope — Home Assistant asks for a new one (**New Bitpanda API key needed**). Paste it there; every sensor is kept.
-- ⚠️ **Changing the currency deletes all Portfolio sensors including their history and long-term statistics** and recreates them in the new currency, under the entity IDs the integration gives them (your own changes: see [Resetting names and entity IDs](#resetting-names-and-entity-ids)). You are asked to confirm first.
+**Configure** — the ⚙ on each service's entry (before Home Assistant 2025.7 a button labelled **Configure**):
+
+- **Price Tracker:** the extra currencies and the language of group titles. Removing a currency deletes its sensors; adding it back brings them back under the entity IDs the integration gives them, with their history.
+- **Portfolio:** the language of group titles and messages (see [Languages](#languages)).
+
+**⋮ → Reconfigure** on the Portfolio entry:
+
+- **Replace the API key** at any time. Leave the key field empty to keep the current one.
+- **Change the currency.** ⚠️ This deletes all Portfolio sensors including their history and long-term statistics and recreates them in the new currency, under the entity IDs the integration gives them (your own changes: see [Resetting names and entity IDs](#resetting-names-and-entity-ids)). You are asked to confirm first.
+
+**New Bitpanda API key needed:** when Bitpanda rejects the stored key — it expired, was revoked, or lacks a permission — Home Assistant asks for a new one. Paste it there; every sensor is kept.
 
 ---
 
 ## 📊 Using the sensors
 
-The Portfolio's wallets and groups come and go by themselves. Deleting a group (**⋮ → Delete**) only hides it until the next update while you still hold its assets. The wallet of an asset you no longer hold can be deleted from its device page instead of waiting for it to go; the Portfolio device and the wallets of assets you hold cannot be deleted — they would come straight back, and the dialog explains why. On the Price Tracker, deleting a device or a group stops tracking (see [Track prices](#track-prices)).
+The Portfolio's wallets and groups come and go by themselves. Deleting a group (**⋮ → Delete**) only hides it until the next update while you still hold its assets. The wallet of an asset you no longer hold can be deleted from its device page instead of waiting for it to go; the Portfolio device and the wallets of assets you hold cannot be deleted — they would come straight back, and the dialog explains why. On the Price Tracker, deleting a device or a group stops tracking (see [Stop tracking](#stop-tracking)).
 
 ### Entity IDs
 
@@ -171,11 +185,11 @@ To go back to the names and entity IDs the integration gives, reset them in Home
 
 1. **Device name:** on the device page, select the pencil, clear the name and save. The device shows its default name again.
 2. **Sensor name and icon:** in the sensor's settings, clear **Name** or **Icon** and save.
-3. **Entity ID:** in the sensor's settings, select **Restore entity ID** (Home Assistant 2025.6 and newer). Clear a name you gave the sensor first (step 2): a name of your own takes precedence over the integration's entity ID.
+3. **Entity ID:** in the sensor's settings, select ↺ (**Restore entity ID**) next to the entity ID — Home Assistant 2026.7 and newer. From 2025.6 to 2026.6, use **⋮ → Recreate entity IDs** on the device page instead; it resets all of the device's sensors at once. On 2025.5, enter the entity ID by hand (see [Entity IDs](#entity-ids)). Clear a name you gave the sensor first (step 2): a name of your own takes precedence over the integration's entity ID.
 
 ### Attributes
 
-Home Assistant lists these in the entity's Details view (older versions: the Attributes section) under translated names grouped by prefix (e.g. "Asset: quantity", "Position: invested"); the keys in the table below are what templates use.
+Home Assistant lists these in the entity's Details view (before Home Assistant 2026.3: **Attributes**) under translated names grouped by prefix (e.g. "Asset: quantity", "Position: invested"); the keys in the table below are what templates use.
 
 | Sensor | Attributes |
 |---|---|

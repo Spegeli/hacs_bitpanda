@@ -408,7 +408,7 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 | One asset's price sensors are `unavailable` | Bitpanda returned no price for it three rounds in a row; see the warning in the log |
 | Prices update less often than every minute | Above 30 tracked assets the interval stretches so that the integration stays under 1,800 price requests an hour; **Settings → Repairs** says so once it passes 30 minutes (see [Features](#-features)) |
 | 24-hour price change missing | A newly tracked price shows it after a day, and only while the recorder records the sensor (see [Known limitations](#%EF%B8%8F-known-limitations)) |
-| A Portfolio sensor keeps no statistics after you set the Portfolio up again in another currency | Home Assistant still holds its statistics in the old currency — if setup offered to delete them, you kept them. Delete them under **Settings → Tools → Statistics** (before Home Assistant 2026.8: **Developer tools → Statistics**), where the sensor is listed with the changed unit |
+| A Portfolio sensor keeps no statistics after you set the Portfolio up again in another currency, and **Settings → Repairs** reports "The unit of sensor.bitpanda_… has changed" | Home Assistant still holds its statistics in the old currency — if setup offered to delete them, you kept them. Delete them under **Settings → Tools → Statistics** (before Home Assistant 2026.8: **Developer tools → Statistics**), where the sensor is listed with the changed unit |
 
 **Still stuck?** Open an [issue](https://github.com/Spegeli/hacs_bitpanda/issues) with the diagnostics (**⋮ → Download diagnostics** on the entry; the API key is left out) and a debug log (**⋮ → Enable debug logging**).
 

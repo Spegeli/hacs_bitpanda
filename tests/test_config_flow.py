@@ -337,7 +337,7 @@ async def test_the_setup_looks_for_old_statistics_in_the_chosen_currency(hass):
 async def test_old_statistics_in_another_currency_are_asked_about_first(hass):
     result, _ = await _submit_currency(hass, _FOUND)
     assert (result["type"], result["step_id"]) == (_FLOW.MENU, "old_statistics")
-    assert result["menu_options"] == ["delete_statistics", "keep_statistics"]
+    assert result["menu_options"] == ["delete_statistics", "keep_statistics", "cancel_setup"]
     assert result["description_placeholders"] == {
         "old": "CHF, EUR", "new": "USD", "troubleshooting_url": TROUBLESHOOTING_URL,
     }
@@ -378,6 +378,17 @@ async def test_keep_and_set_up_creates_the_entry_and_deletes_nothing(hass):
         )
     purge.assert_not_awaited()
     _assert_portfolio_created(result)
+
+
+async def test_cancel_sets_up_and_deletes_nothing(hass):
+    result, _ = await _submit_currency(hass, _FOUND)
+    with patch(_PURGE_RECORDED, AsyncMock()) as purge:
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "cancel_setup"}
+        )
+    assert (result["type"], result["reason"]) == (_FLOW.ABORT, "setup_cancelled")
+    purge.assert_not_awaited()
+    assert hass.config_entries.async_entries(DOMAIN) == []
 
 
 async def test_closing_the_question_creates_and_deletes_nothing(hass):
@@ -705,10 +716,13 @@ async def _finish_currency_change(hass, entry, result, user_input) -> None:
     ):
         result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
     assert result["step_id"] == "confirm_currency"
+    change = "change_key_and_currency" if user_input.get("api_key") else "change_currency"
     with patch(_PURGE, AsyncMock(return_value=True)), patch(
         "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
     ):
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": change}
+        )
     assert (result["type"], result["reason"]) == (_FLOW.ABORT, "currency_changed")
     assert (entry.data["currency"], entry.data["currency_id"]) == ("USD", _USD_ID)
 
@@ -848,14 +862,62 @@ async def test_reconfigure_bad_key_stays_on_the_form_with_the_currency_kept(hass
 
 
 async def test_currency_change_asks_for_confirmation_first(hass):
+    """Without a new API key the choice is to change the currency or not."""
     entry = _portfolio_entry()
     entry.add_to_hass(hass)
     with patch(_PURGE, AsyncMock()) as purge:
         result = await _reconfigure(hass, entry, {"currency": "usd"})
-    assert result["step_id"] == "confirm_currency"
+    assert (result["type"], result["step_id"]) == (_FLOW.MENU, "confirm_currency")
+    assert result["menu_options"] == ["change_currency", "cancel_currency_change"]
     assert result["description_placeholders"] == {"old": "EUR", "new": "USD"}
     purge.assert_not_called()
     assert entry.data["currency"] == "EUR"
+
+
+async def test_a_currency_change_with_a_new_key_offers_to_save_only_the_key(hass):
+    """A new API key entered together with another currency can be kept
+    without the currency change, which would delete every Portfolio sensor."""
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    result = await _reconfigure(hass, entry, {"api_key": "new", "currency": "usd"})
+    assert (result["type"], result["step_id"]) == (_FLOW.MENU, "confirm_currency")
+    assert result["menu_options"] == [
+        "change_key_and_currency", "save_key_only", "cancel_currency_change"
+    ]
+
+
+async def test_saving_only_the_new_key_keeps_the_currency_and_deletes_nothing(hass):
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    with patch(_PURGE, AsyncMock()) as purge, patch(
+        "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
+    ) as reload:
+        result = await _reconfigure(hass, entry, {"api_key": "new", "currency": "usd"})
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "save_key_only"}
+        )
+    assert (result["type"], result["reason"]) == (_FLOW.ABORT, "reconfigure_successful")
+    purge.assert_not_called()
+    reload.assert_called_once()
+    assert (entry.data["api_key"], entry.data["currency"]) == ("new", "EUR")
+
+
+@pytest.mark.parametrize(
+    "user_input", [{"currency": "usd"}, {"api_key": "new", "currency": "usd"}],
+    ids=["currency_only", "with_a_new_key"],
+)
+async def test_cancelling_the_currency_change_changes_nothing(hass, user_input):
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    before = dict(entry.data)
+    with patch(_PURGE, AsyncMock()) as purge:
+        result = await _reconfigure(hass, entry, user_input)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "cancel_currency_change"}
+        )
+    assert (result["type"], result["reason"]) == (_FLOW.ABORT, "no_changes")
+    purge.assert_not_called()
+    assert dict(entry.data) == before
 
 
 async def test_confirmed_currency_change_purges_then_stores_and_reloads(hass):
@@ -865,7 +927,9 @@ async def test_confirmed_currency_change_purges_then_stores_and_reloads(hass):
         "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
     ) as reload:
         result = await _reconfigure(hass, entry, {"api_key": "new", "currency": "usd"})
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "change_key_and_currency"}
+        )
     assert result["reason"] == "currency_changed"
     purge.assert_awaited_once_with(hass, entry)
     reload.assert_called_once()
@@ -881,7 +945,9 @@ async def test_confirmed_currency_change_without_a_new_key_keeps_the_old_one(has
         "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
     ):
         result = await _reconfigure(hass, entry, {"currency": "chf"})
-        await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "change_currency"}
+        )
     assert entry.data["api_key"] == "key"
     assert entry.data["currency"] == "CHF"
 
@@ -896,7 +962,9 @@ async def test_a_currency_change_whose_unload_fails_changes_nothing(hass):
         "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
     ) as reload:
         result = await _reconfigure(hass, entry, {"api_key": "new", "currency": "usd"})
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "change_key_and_currency"}
+        )
     assert result["type"] == _FLOW.ABORT
     assert result["reason"] == "unload_failed"
     purge.assert_awaited_once_with(hass, entry)
@@ -958,7 +1026,9 @@ async def test_a_currency_change_resolves_the_switch_to_eur_issue(hass):
         "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
     ):
         result = await _reconfigure(hass, entry, {"currency": "usd"})
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "change_currency"}
+        )
     assert result["reason"] == "currency_changed"
     assert _switch_to_eur_issue(hass) is None
 
@@ -980,7 +1050,9 @@ async def test_a_currency_change_that_could_not_be_made_leaves_the_issue(hass):
     _raise_switch_to_eur_issue(hass)
     with patch(_PURGE, AsyncMock(return_value=False)):
         result = await _reconfigure(hass, entry, {"currency": "usd"})
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "change_currency"}
+        )
     assert result["reason"] == "unload_failed"
     assert _switch_to_eur_issue(hass) is not None
 

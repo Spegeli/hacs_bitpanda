@@ -11,7 +11,7 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Le Bitpanda Portfolio affiche votre compte Bitpanda dans Home Assistant : sa valeur totale, vos rendements et un wallet pour chaque actif que vous détenez. L'intégration crée elle-même les wallets et les retire lorsque vous ne détenez plus un actif – vous n'avez rien à ajouter ni à supprimer.\n\nPour cela, l'intégration a besoin d'une clé API. Voici comment la créer :\n\n1. Ouvrez [{api_key_url}]({api_key_url}) et créez une nouvelle clé.\n2. Sélectionnez uniquement les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) ».\n3. Copiez la clé et collez-la ci-dessous. Bitpanda ne l'affiche qu'une seule fois.\n\nL'intégration ne fait que lire avec cette clé : elle ne peut ni passer d'ordres ni déplacer d'argent.\nLes clés Bitpanda sont valables jusqu'à la date choisie lors de leur création, un an au plus ; ensuite, Home Assistant en demande une nouvelle.\nVous pouvez remplacer la clé à tout moment : ouvrez le menu ⋮ de l'entrée « Bitpanda Portfolio » sur la page de l'intégration Bitpanda et choisissez « Reconfigurer ».",
+        "description": "Le Bitpanda Portfolio affiche votre compte Bitpanda dans Home Assistant : sa valeur totale, vos rendements et un wallet pour chaque actif que vous détenez. L'intégration crée elle-même les wallets et les retire lorsque vous ne détenez plus un actif – vous n'avez rien à ajouter ni à supprimer.\n\nPour cela, l'intégration a besoin d'une clé API. Voici comment la créer :\n\n1. Ouvrez [{api_key_url}]({api_key_url}) et créez une nouvelle clé API.\n2. Sélectionnez uniquement les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) ».\n3. Copiez la clé API et collez-la ci-dessous. Bitpanda ne l'affiche qu'une seule fois.\n\nL'intégration ne fait que lire avec cette clé API : elle ne peut ni passer d'ordres ni déplacer d'argent.\nLes clés API Bitpanda sont valables jusqu'à la date choisie lors de leur création, un an au plus ; ensuite, Home Assistant en demande une nouvelle.\nVous pouvez remplacer la clé API à tout moment : ouvrez le menu ⋮ de l'entrée « Bitpanda Portfolio » sur la page de l'intégration Bitpanda et choisissez « Reconfigurer ».",
         "data": {
           "api_key": "Clé API"
         }
@@ -42,10 +42,11 @@
       },
       "old_statistics": {
         "title": "Anciennes statistiques dans une autre devise",
-        "description": "Home Assistant conserve encore des statistiques à long terme d'un ancien Bitpanda Portfolio en {old}. Vous avez choisi {new} pour cette configuration. Un capteur dont les statistiques sont dans une autre devise n'enregistre aucune nouvelle statistique tant que les anciennes existent.\n\n- **Supprimer et configurer :** supprime l'historique et les statistiques à long terme de tous les anciens capteurs du Portfolio – valeurs, rendements et wallets – et configure le Portfolio en {new}. Ses statistiques repartent alors de zéro. Les données supprimées ne peuvent pas être restaurées.\n- **Conserver et configurer :** configure le Portfolio en {new} et ne supprime rien. Les capteurs ayant d'anciennes statistiques n'enregistrent alors plus aucune statistique, pas même en {new}, tant que vous ne supprimez pas vous-même ces anciennes statistiques ; la section [Troubleshooting]({troubleshooting_url}) du README explique comment.\n\nPour choisir une autre devise, fermez plutôt cette boîte de dialogue avec le « X » : rien n'est alors configuré ni supprimé, et vous pouvez recommencer la configuration.",
+        "description": "Home Assistant conserve encore des statistiques à long terme d'un ancien Bitpanda Portfolio en {old}. Vous avez choisi {new} pour cette configuration. Un capteur dont les statistiques sont dans une autre devise n'enregistre aucune nouvelle statistique tant que les anciennes existent.\n\n- **Supprimer et configurer :** supprime l'historique et les statistiques à long terme de tous les anciens capteurs du Portfolio – valeurs, rendements et wallets – et configure le Portfolio en {new}. Ses statistiques repartent alors de zéro. Les données supprimées ne peuvent pas être restaurées.\n- **Conserver et configurer :** configure le Portfolio en {new} et ne supprime rien. Les capteurs ayant d'anciennes statistiques n'enregistrent alors plus aucune statistique, pas même en {new}, tant que vous ne supprimez pas vous-même ces anciennes statistiques ; la section [Troubleshooting]({troubleshooting_url}) du README explique comment.\n- **Annuler :** ne configure rien et ne supprime rien, par exemple pour choisir une autre devise.",
         "menu_options": {
           "delete_statistics": "Supprimer et configurer",
-          "keep_statistics": "Conserver et configurer"
+          "keep_statistics": "Conserver et configurer",
+          "cancel_setup": "Annuler"
         }
       },
       "price_tracker": {
@@ -74,12 +75,12 @@
       },
       "reauth_confirm": {
         "title": "Nouvelle clé API Bitpanda requise",
-        "description": "Bitpanda a refusé la clé API enregistrée. Elle a peut-être expiré, ou elle est antérieure aux autorisations dont cette version a besoin.\nCréez une nouvelle clé sur [{api_key_url}]({api_key_url}), puis collez-la ici. Vos capteurs sont conservés.",
+        "description": "Bitpanda a refusé la clé API enregistrée. Elle a peut-être expiré, ou elle est antérieure aux autorisations dont cette version a besoin.\nCréez une nouvelle clé API sur [{api_key_url}]({api_key_url}), puis collez-la ici. Vos capteurs sont conservés.",
         "data": {
           "api_key": "Clé API"
         },
         "data_description": {
-          "api_key": "La nouvelle clé doit avoir les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) »."
+          "api_key": "La nouvelle clé API doit avoir les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) »."
         }
       },
       "reconfigure": {
@@ -90,18 +91,24 @@
           "currency": "Devise"
         },
         "data_description": {
-          "api_key": "Laissez le champ vide pour conserver la clé actuelle.\nUne nouvelle clé créée sur [{api_key_url}]({api_key_url}) doit avoir les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) ».",
+          "api_key": "Laissez le champ vide pour conserver la clé API actuelle.\nUne nouvelle clé API créée sur [{api_key_url}]({api_key_url}) doit avoir les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) ».",
           "currency": "Changer de devise supprime tous les capteurs du Portfolio, y compris leur historique ; vous le confirmerez à l'étape suivante."
         }
       },
       "confirm_currency": {
         "title": "Changer de devise ?",
-        "description": "Passer de {old} à {new} supprime tous les capteurs du Portfolio, y compris leur historique, puis les recrée dans la nouvelle devise. L'historique supprimé ne peut pas être restauré ; la devise elle-même peut être modifiée à nouveau à tout moment.\n\nCliquez sur « Valider » pour changer de devise. Pour conserver {old}, fermez plutôt cette boîte de dialogue avec le « X » : rien ne change alors, et une nouvelle clé API saisie n'est pas enregistrée non plus."
+        "description": "Passer de {old} à {new} supprime tous les capteurs du Portfolio, y compris leur historique, puis les recrée dans la nouvelle devise. L'historique supprimé ne peut pas être restauré ; la devise elle-même peut être modifiée à nouveau à tout moment.",
+        "menu_options": {
+          "change_currency": "Changer de devise",
+          "change_key_and_currency": "Enregistrer la nouvelle clé API et changer de devise",
+          "save_key_only": "Enregistrer uniquement la nouvelle clé API",
+          "cancel_currency_change": "Annuler"
+        }
       }
     },
     "error": {
-      "invalid_auth": "Bitpanda a refusé cette clé API. Elle est peut-être incomplète, supprimée de votre compte Bitpanda ou expirée, ou elle ne possède aucune des autorisations « Soldes », « Transactions » et « Earn (Lecture) ». Vérifiez la clé ou créez-en une nouvelle avec les trois.",
-      "missing_scopes": "Autorisations de cette clé API : « Soldes » {balance}, « Transactions » {transaction}, « Earn (Lecture) » {earn}. Il est impossible d'ajouter des autorisations à une clé existante. Créez-en une nouvelle avec les trois.",
+      "invalid_auth": "Bitpanda a refusé cette clé API. Elle est peut-être incomplète, supprimée de votre compte Bitpanda ou expirée, ou elle ne possède aucune des autorisations « Soldes », « Transactions » et « Earn (Lecture) ». Vérifiez la clé API ou créez-en une nouvelle avec les trois.",
+      "missing_scopes": "Autorisations de cette clé API : « Soldes » {balance}, « Transactions » {transaction}, « Earn (Lecture) » {earn}. Il est impossible d'ajouter des autorisations à une clé API existante. Créez-en une nouvelle avec les trois.",
       "rate_limited": "Trop de requêtes. Patientez un instant, puis réessayez.",
       "cannot_connect": "Impossible de joindre Bitpanda. Réessayez plus tard.",
       "unknown": "Erreur inattendue"
@@ -115,7 +122,8 @@
       "currency_changed": "La devise a été changée. Les capteurs du Portfolio sont recréés.",
       "no_changes": "Rien n'a été modifié.",
       "no_reconfigure": "Le Bitpanda Price Tracker n'a pour l'instant rien à reconfigurer. Modifiez ses devises supplémentaires et la langue des titres de groupe avec « Configurer » (⚙) sur la même entrée.",
-      "unload_failed": "Le Portfolio n'a pas pu être arrêté : la devise n'a donc pas été changée et rien n'a été supprimé. Redémarrez Home Assistant et réessayez."
+      "unload_failed": "Le Portfolio n'a pas pu être arrêté : la devise n'a donc pas été changée et rien n'a été supprimé. Redémarrez Home Assistant et réessayez.",
+      "setup_cancelled": "Le Portfolio n'a pas été configuré, et rien n'a été supprimé."
     }
   },
   "options": {

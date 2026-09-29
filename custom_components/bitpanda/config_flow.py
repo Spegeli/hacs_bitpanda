@@ -323,11 +323,11 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Ask about the statistics an earlier Portfolio left in another
         currency: under them, the new sensors would record none
-        (purge.async_find_old_statistics). Closing the dialog changes
-        nothing."""
+        (purge.async_find_old_statistics). Cancel, or closing the dialog,
+        changes nothing."""
         return self.async_show_menu(
             step_id="old_statistics",
-            menu_options=["delete_statistics", "keep_statistics"],
+            menu_options=["delete_statistics", "keep_statistics", "cancel_setup"],
             description_placeholders={
                 "old": ", ".join(self._old_statistics.currencies),
                 "new": self._portfolio_data[CONF_CURRENCY],
@@ -352,6 +352,13 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         to delete the old statistics by hand."""
         await self._async_abort_if_portfolio_set_up()
         return self._async_create_portfolio()
+
+    async def async_step_cancel_setup(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Set up nothing and delete nothing -- for example to choose another
+        currency in a new setup."""
+        return self.async_abort(reason="setup_cancelled")
 
     async def _async_abort_if_portfolio_set_up(self) -> None:
         """Checked again before anything is created or deleted. Home
@@ -549,26 +556,40 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_confirm_currency(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Warn, then delete every Portfolio sensor with its history.
+        """Warn before every Portfolio sensor is deleted with its history.
 
-        Closing the dialog is the way back: nothing has changed until this
-        step is submitted -- nor after it, when the Portfolio cannot be
-        unloaded first (see async_purge_portfolio). A change made resolves
-        the upgrade's repair issue about the switch to EUR, if there is one:
-        it asked for exactly this, so it goes.
+        The choices: change the currency, or cancel -- and with a new API
+        key entered, save only that key instead, since a user may want the
+        key without the change. Nothing has changed until a choice is made;
+        closing the dialog changes nothing either.
         """
         entry = self._get_reconfigure_entry()
         # Set by async_step_reconfigure, the only step that leads here.
         currency = cast(str, self._pending_currency)
-        if user_input is None:
-            return self.async_show_form(
-                step_id="confirm_currency",
-                data_schema=vol.Schema({}),
-                description_placeholders={
-                    "old": entry.data[CONF_CURRENCY],
-                    "new": currency,
-                },
-            )
+        options = (
+            ["change_key_and_currency", "save_key_only", "cancel_currency_change"]
+            if self._api_key
+            else ["change_currency", "cancel_currency_change"]
+        )
+        return self.async_show_menu(
+            step_id="confirm_currency",
+            menu_options=options,
+            description_placeholders={"old": entry.data[CONF_CURRENCY], "new": currency},
+        )
+
+    async def async_step_change_currency(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Delete every Portfolio sensor with its history, then store the new
+        currency -- and the new API key, if one was entered -- and reload.
+
+        Nothing changes when the Portfolio cannot be unloaded first (see
+        async_purge_portfolio). A change made resolves the upgrade's repair
+        issue about the switch to EUR, if there is one: it asked for exactly
+        this, so it goes.
+        """
+        entry = self._get_reconfigure_entry()
+        currency = cast(str, self._pending_currency)
         updates: dict[str, Any] = {
             CONF_CURRENCY: currency,
             CONF_CURRENCY_ID: self._currency_ids[currency],
@@ -583,6 +604,27 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_update_reload_and_abort(
             entry, data_updates=updates, reason="currency_changed"
         )
+
+    async def async_step_change_key_and_currency(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The currency change of async_step_change_currency, offered under
+        this label when a new API key was entered: it stores both."""
+        return await self.async_step_change_currency()
+
+    async def async_step_save_key_only(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Store the new API key; the currency and every sensor stay."""
+        return self._async_replace_key(
+            self._get_reconfigure_entry(), cast(str, self._api_key), "reconfigure_successful"
+        )
+
+    async def async_step_cancel_currency_change(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Change nothing: the currency, the API key and every sensor stay."""
+        return self.async_abort(reason="no_changes")
 
     # --- Options and subentries --------------------------------------------------------
 

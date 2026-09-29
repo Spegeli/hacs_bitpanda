@@ -199,7 +199,6 @@ _LABEL_REFERENCES = {
         ("config", "abort", "no_reconfigure"),
     ],
     "submit": [
-        ("config", "step", "confirm_currency", "description"),
         ("config_subentries", "price_group", "step", "asset", "data_description", "asset"),
         ("config_subentries", "price_group", "step", "security", "data_description", "asset"),
     ],
@@ -609,14 +608,14 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
             " creates the wallets itself and removes them when you no longer hold an asset"
             " \u2013 you do not need to add or delete any.\n\n"
             "For this, the integration needs an API key. To create one:\n\n"
-            "1. Open [{api_key_url}]({api_key_url}) and create a new key.\n"
+            "1. Open [{api_key_url}]({api_key_url}) and create a new API key.\n"
             '2. Select only the permissions "Balances", "Transaction" and "Earn (Read)"'
             ' \u2013 not "Trade (Read)".\n'
-            "3. Copy the key and paste it below. Bitpanda shows it only once.\n\n"
+            "3. Copy the API key and paste it below. Bitpanda shows it only once.\n\n"
             "The integration only reads with it: it cannot trade or move money.\n"
-            "Bitpanda keys are valid until the date you choose when creating them, one year at"
+            "Bitpanda API keys are valid until the date you choose when creating them, one year at"
             " most; after that, Home Assistant asks for a new one.\n"
-            'You can replace the key at any time: open the ⋮ menu of the "Bitpanda Portfolio"'
+            'You can replace the API key at any time: open the ⋮ menu of the "Bitpanda Portfolio"'
             ' entry on the Bitpanda integration page and choose "Reconfigure".'
         ),
         "data": {"api_key": "API key"},
@@ -629,15 +628,15 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
             " Wallet. Die Wallets legt die Integration selbst an und entfernt sie wieder, wenn"
             " du ein Asset nicht mehr besitzt \u2013 hinzufügen oder löschen musst du nichts.\n\n"
             "Dafür braucht die Integration einen API-Schlüssel. So erstellst du ihn:\n\n"
-            "1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen Schlüssel.\n"
+            "1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen API-Schlüssel.\n"
             "2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“"
             " \u2013 kein „Trading (Read)“.\n"
-            "3. Kopiere den Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal"
+            "3. Kopiere den API-Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal"
             " an.\n\n"
             "Die Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\n"
-            "Bitpanda-Schlüssel gelten bis zu dem Datum, das du beim Erstellen wählst,"
+            "Bitpanda-API-Schlüssel gelten bis zu dem Datum, das du beim Erstellen wählst,"
             " höchstens ein Jahr; danach fragt Home Assistant nach einem neuen.\n"
-            "Ersetzen kannst du den Schlüssel jederzeit: Öffne auf der"
+            "Ersetzen kannst du den API-Schlüssel jederzeit: Öffne auf der"
             " Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“ und"
             " wähle „Neu konfigurieren“."
         ),
@@ -662,13 +661,13 @@ def test_the_reconfigure_key_help_has_a_line_per_sentence():
         assert all(label in chosen for label in required) and trade in left_out, name
         assert trade not in keep + chosen, name
     assert help_texts["strings.json"] == (
-        "Leave empty to keep the current key.\n"
-        'A new key from [{api_key_url}]({api_key_url}) needs the permissions "Balances",'
+        "Leave empty to keep the current API key.\n"
+        'A new API key from [{api_key_url}]({api_key_url}) needs the permissions "Balances",'
         ' "Transaction" and "Earn (Read)" \u2013 not "Trade (Read)".'
     )
     assert help_texts["translations/de.json"] == (
-        "Lass das Feld leer, um den aktuellen Schlüssel zu behalten.\n"
-        "Ein neuer Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen"
+        "Lass das Feld leer, um den aktuellen API-Schlüssel zu behalten.\n"
+        "Ein neuer API-Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen"
         " „Guthaben“, „Transaktion“ und „Earn (Read)“ \u2013 kein „Trading (Read)“."
     )
 
@@ -693,53 +692,54 @@ def test_the_reauth_dialog_starts_what_to_do_on_a_line_of_its_own():
     assert texts["strings.json"] == (
         "Bitpanda rejected the stored API key. It may have expired, or it predates the"
         " permissions this version needs.\n"
-        "Create a new key at [{api_key_url}]({api_key_url}) and paste it here. Your sensors"
+        "Create a new API key at [{api_key_url}]({api_key_url}) and paste it here. Your sensors"
         " are kept.",
-        'The new key needs the permissions "Balances", "Transaction" and "Earn (Read)"'
+        'The new API key needs the permissions "Balances", "Transaction" and "Earn (Read)"'
         ' \u2013 not "Trade (Read)".',
     )
     assert texts["translations/de.json"] == (
         "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen,"
         " oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht.\n"
-        "Erstelle unter [{api_key_url}]({api_key_url}) einen neuen Schlüssel und füge ihn hier"
+        "Erstelle unter [{api_key_url}]({api_key_url}) einen neuen API-Schlüssel und füge ihn hier"
         " ein. Deine Sensoren bleiben erhalten.",
-        "Der neue Schlüssel braucht die Berechtigungen „Guthaben“, „Transaktion“ und"
+        "Der neue API-Schlüssel braucht die Berechtigungen „Guthaben“, „Transaktion“ und"
         " „Earn (Read)“ \u2013 kein „Trading (Read)“.",
     )
 
 
-def test_the_old_statistics_step_explains_both_choices():
+def test_the_old_statistics_step_explains_its_three_choices():
     """The setup's question about old statistics: what happened, in one
     paragraph with both currencies; then a list item per button, led by the
-    button's own label in bold, each saying it sets up the Portfolio in the
-    new currency; the second links Troubleshooting through a placeholder, as
-    hassfest allows no URL in a text. Last, in a paragraph of its own, the
-    way out: closing the dialog sets up and deletes nothing, to choose another
-    currency. In the approved English and German wording."""
+    button's own label in bold -- the first two set up the Portfolio in the
+    new currency, the second links Troubleshooting through a placeholder, as
+    hassfest allows no URL in a text, and the third, Cancel, sets up and
+    deletes nothing. Cancelling ends with a text of its own. In the approved
+    English and German wording."""
     for name in _FILES:
-        step = _load(name)["config"]["step"]["old_statistics"]
+        config = _load(name)["config"]
+        step = config["step"]["old_statistics"]
         assert set(step) == {"title", "description", "menu_options"}, name
-        assert set(step["menu_options"]) == {"delete_statistics", "keep_statistics"}, name
-        intro, choices, way_back = step["description"].split("\n\n")
+        assert set(step["menu_options"]) == {
+            "delete_statistics", "keep_statistics", "cancel_setup"
+        }, name
+        intro, choices = step["description"].split("\n\n")
         assert "\n" not in intro and _placeholders(intro) == {"old", "new"}, name
-        delete, keep = choices.split("\n")
+        delete, keep, cancel = choices.split("\n")
         for item, option, placeholders in (
             (delete, "delete_statistics", {"new"}),
             (keep, "keep_statistics", {"new", "troubleshooting_url"}),
+            (cancel, "cancel_setup", set()),
         ):
             label = re.escape(step["menu_options"][option])
             assert re.match(rf"- \*\*{label}\s?:\*\* ", item), (name, option)
             assert _placeholders(item) == placeholders, (name, option)
-        assert _LINK_TARGET.findall(intro + delete + way_back) == [], name
-        assert "\n" not in way_back and _placeholders(way_back) == set(), name
-        assert "X" in way_back, name
-        # One sentence: with old statistics in several currencies, no advice
-        # on which currency to choose would hold.
-        assert ". " not in way_back and way_back.endswith("."), name
+        assert _LINK_TARGET.findall(intro + delete + cancel) == [], name
         assert _LINK_TARGET.findall(keep) == ["{troubleshooting_url}"], name
         # The link text is the README's heading, in English in every file.
         assert "[Troubleshooting]({troubleshooting_url})" in keep, name
-    assert _load("strings.json")["config"]["step"]["old_statistics"] == {
+        assert _placeholders(config["abort"]["setup_cancelled"]) == set(), name
+    english = _load("strings.json")["config"]
+    assert english["step"]["old_statistics"] == {
         "title": "Old statistics in another currency",
         "description": (
             "Home Assistant still holds long-term statistics of an earlier Bitpanda Portfolio"
@@ -752,16 +752,20 @@ def test_the_old_statistics_step_explains_both_choices():
             "- **Keep and set up:** sets up the Portfolio in {new} and deletes nothing. The"
             " sensors with old statistics then record no statistics at all, not even in {new},"
             " until you delete the old statistics yourself;"
-            " [Troubleshooting]({troubleshooting_url}) in the README explains how.\n\n"
-            'To choose another currency, close this dialog with the "X" instead: nothing is set'
-            " up or deleted then, and you can start the setup again."
+            " [Troubleshooting]({troubleshooting_url}) in the README explains how.\n"
+            "- **Cancel:** sets up and deletes nothing, for example to choose another currency."
         ),
         "menu_options": {
             "delete_statistics": "Delete and set up",
             "keep_statistics": "Keep and set up",
+            "cancel_setup": "Cancel",
         },
     }
-    assert _load("translations/de.json")["config"]["step"]["old_statistics"] == {
+    assert english["abort"]["setup_cancelled"] == (
+        "The Portfolio was not set up, and nothing was deleted."
+    )
+    german = _load("translations/de.json")["config"]
+    assert german["step"]["old_statistics"] == {
         "title": "Alte Statistiken in anderer Währung",
         "description": (
             "Home Assistant hat noch Langzeitstatistiken eines früheren Bitpanda Portfolios in"
@@ -775,16 +779,81 @@ def test_the_old_statistics_step_explains_both_choices():
             "- **Behalten und einrichten:** richtet das Portfolio in {new} ein und löscht"
             " nichts. Die Sensoren mit alter Statistik zeichnen dann gar keine Statistik mehr"
             " auf, auch nicht in {new}, bis du die alte Statistik selbst löschst;"
-            " [Troubleshooting]({troubleshooting_url}) in der README erklärt, wie.\n\n"
-            "Möchtest du eine andere Währung wählen, schließe den Dialog stattdessen über das"
-            " „X“: Dann wird nichts eingerichtet oder gelöscht, und du kannst die Einrichtung"
-            " neu starten."
+            " [Troubleshooting]({troubleshooting_url}) in der README erklärt, wie.\n"
+            "- **Abbrechen:** richtet nichts ein und löscht nichts, zum Beispiel um eine andere"
+            " Währung zu wählen."
         ),
         "menu_options": {
             "delete_statistics": "Löschen und einrichten",
             "keep_statistics": "Behalten und einrichten",
+            "cancel_setup": "Abbrechen",
         },
     }
+    assert german["abort"]["setup_cancelled"] == (
+        "Das Portfolio wurde nicht eingerichtet, und es wurde nichts gelöscht."
+    )
+
+
+def test_the_currency_change_offers_its_choices():
+    """Reconfigure's currency change asks before it deletes anything: the
+    text says what the change does, and the buttons offer the change, the
+    new API key alone when one was entered, and Cancel. In the approved
+    English and German wording."""
+    for name in _FILES:
+        step = _load(name)["config"]["step"]["confirm_currency"]
+        assert set(step) == {"title", "description", "menu_options"}, name
+        assert set(step["menu_options"]) == {
+            "change_currency", "change_key_and_currency", "save_key_only",
+            "cancel_currency_change",
+        }, name
+        assert "\n" not in step["description"], name
+        assert _placeholders(step["description"]) == {"old", "new"}, name
+    english = _load("strings.json")["config"]["step"]["confirm_currency"]
+    assert english["description"] == (
+        "Changing the currency from {old} to {new} deletes all Portfolio sensors including"
+        " their history and recreates them in the new currency. The deleted history cannot be"
+        " restored; the currency itself can be changed again at any time."
+    )
+    assert english["menu_options"] == {
+        "change_currency": "Change currency",
+        "change_key_and_currency": "Save the new API key and change the currency",
+        "save_key_only": "Save only the new API key",
+        "cancel_currency_change": "Cancel",
+    }
+    german = _load("translations/de.json")["config"]["step"]["confirm_currency"]
+    assert german["description"] == (
+        "Wenn du die Währung von {old} auf {new} änderst, werden alle Portfolio-Sensoren"
+        " samt Verlauf gelöscht und in der neuen Währung neu angelegt. Der gelöschte Verlauf"
+        " lässt sich nicht wiederherstellen; die Währung selbst kannst du später jederzeit"
+        " wieder ändern."
+    )
+    assert german["menu_options"] == {
+        "change_currency": "Währung ändern",
+        "change_key_and_currency": "Neuen API-Schlüssel speichern und Währung ändern",
+        "save_key_only": "Nur den neuen API-Schlüssel speichern",
+        "cancel_currency_change": "Abbrechen",
+    }
+
+
+# The key Bitpanda issues is called the API key everywhere -- never just the
+# key -- so that no text leaves open which key is meant.
+_BARE_KEY = {
+    "de": r"(?<!API-)Schlüssel",
+    "en": r"(?<!API )\bkeys?\b",
+    "es": r"\bclaves?\b(?! API)",
+    "fr": r"\bclés?\b(?! API)",
+    "it": r"\bchiav[ei]\b(?! API)",
+    "nl": r"(?<!API-)sleutel",
+    "pl": r"\bklucz\w*\b(?! API)",
+}
+
+
+def test_every_text_calls_the_key_an_api_key():
+    assert sorted(_BARE_KEY) == _LANGUAGES
+    for name in _FILES:
+        pattern = re.compile(_BARE_KEY[_language(name)], re.IGNORECASE)
+        for key, text in _texts(_load(name)).items():
+            assert not pattern.search(text), (name, key, text)
 
 
 # Bitpanda's permission names as its key page shows them in each language
@@ -827,12 +896,12 @@ def test_the_missing_permissions_error_marks_each_permission():
         assert trade not in error, name
     assert _load("strings.json")["config"]["error"]["missing_scopes"] == (
         'Permissions of this API key: "Balances" {balance}, "Transaction" {transaction},'
-        ' "Earn (Read)" {earn}. Permissions cannot be added to an existing key. Create a new'
+        ' "Earn (Read)" {earn}. Permissions cannot be added to an existing API key. Create a new'
         " one with all three."
     )
     assert _load("translations/de.json")["config"]["error"]["missing_scopes"] == (
         "Berechtigungen dieses API-Schlüssels: „Guthaben“ {balance}, „Transaktion“"
-        " {transaction}, „Earn (Read)“ {earn}. Einem bestehenden Schlüssel lassen sich"
+        " {transaction}, „Earn (Read)“ {earn}. Einem bestehenden API-Schlüssel lassen sich"
         " keine Berechtigungen hinzufügen. Erstelle einen neuen mit allen dreien."
     )
 
@@ -852,13 +921,13 @@ def test_the_rejected_key_error_names_the_likely_causes_and_the_permissions():
     assert _load("strings.json")["config"]["error"]["invalid_auth"] == (
         "Bitpanda rejected this API key. It may be copied incompletely, deleted in your"
         " Bitpanda account or expired, or it has none of the permissions \"Balances\","
-        " \"Transaction\" and \"Earn (Read)\". Check the key, or create a new one with all"
+        " \"Transaction\" and \"Earn (Read)\". Check the API key, or create a new one with all"
         " three."
     )
     assert _load("translations/de.json")["config"]["error"]["invalid_auth"] == (
         "Bitpanda hat diesen API-Schlüssel abgelehnt. Vielleicht ist er unvollständig"
         " kopiert, in deinem Bitpanda-Konto gelöscht oder abgelaufen, oder er hat keine der"
-        " Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“. Prüfe den Schlüssel"
+        " Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“. Prüfe den API-Schlüssel"
         " oder erstelle einen neuen mit allen dreien."
     )
 

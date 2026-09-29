@@ -105,7 +105,9 @@ async def _change_currency_to_usd(hass, entry) -> None:
     result = await entry.start_reconfigure_flow(hass)
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"currency": "usd"})
     assert result["step_id"] == "confirm_currency"
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "change_currency"}
+    )
     assert result["reason"] == "currency_changed"
     await async_wait_purge_done(hass)
 

@@ -11,7 +11,7 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "The Bitpanda Portfolio shows your Bitpanda account in Home Assistant: its total value, your returns, and a wallet for every asset you hold. The integration creates the wallets itself and removes them when you no longer hold an asset – you do not need to add or delete any.\n\nFor this, the integration needs an API key. To create one:\n\n1. Open [{api_key_url}]({api_key_url}) and create a new key.\n2. Select only the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\".\n3. Copy the key and paste it below. Bitpanda shows it only once.\n\nThe integration only reads with it: it cannot trade or move money.\nBitpanda keys are valid until the date you choose when creating them, one year at most; after that, Home Assistant asks for a new one.\nYou can replace the key at any time: open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page and choose \"Reconfigure\".",
+        "description": "The Bitpanda Portfolio shows your Bitpanda account in Home Assistant: its total value, your returns, and a wallet for every asset you hold. The integration creates the wallets itself and removes them when you no longer hold an asset – you do not need to add or delete any.\n\nFor this, the integration needs an API key. To create one:\n\n1. Open [{api_key_url}]({api_key_url}) and create a new API key.\n2. Select only the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\".\n3. Copy the API key and paste it below. Bitpanda shows it only once.\n\nThe integration only reads with it: it cannot trade or move money.\nBitpanda API keys are valid until the date you choose when creating them, one year at most; after that, Home Assistant asks for a new one.\nYou can replace the API key at any time: open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page and choose \"Reconfigure\".",
         "data": {
           "api_key": "API key"
         }
@@ -42,10 +42,11 @@
       },
       "old_statistics": {
         "title": "Old statistics in another currency",
-        "description": "Home Assistant still holds long-term statistics of an earlier Bitpanda Portfolio in {old}. You chose {new} for this setup. A sensor whose statistics are in another currency records no new statistics until the old ones are gone.\n\n- **Delete and set up:** deletes the history and long-term statistics of every earlier Portfolio sensor – figures, returns and wallets – and sets up the Portfolio in {new}. Its statistics then start afresh. The deleted data cannot be restored.\n- **Keep and set up:** sets up the Portfolio in {new} and deletes nothing. The sensors with old statistics then record no statistics at all, not even in {new}, until you delete the old statistics yourself; [Troubleshooting]({troubleshooting_url}) in the README explains how.\n\nTo choose another currency, close this dialog with the \"X\" instead: nothing is set up or deleted then, and you can start the setup again.",
+        "description": "Home Assistant still holds long-term statistics of an earlier Bitpanda Portfolio in {old}. You chose {new} for this setup. A sensor whose statistics are in another currency records no new statistics until the old ones are gone.\n\n- **Delete and set up:** deletes the history and long-term statistics of every earlier Portfolio sensor – figures, returns and wallets – and sets up the Portfolio in {new}. Its statistics then start afresh. The deleted data cannot be restored.\n- **Keep and set up:** sets up the Portfolio in {new} and deletes nothing. The sensors with old statistics then record no statistics at all, not even in {new}, until you delete the old statistics yourself; [Troubleshooting]({troubleshooting_url}) in the README explains how.\n- **Cancel:** sets up and deletes nothing, for example to choose another currency.",
         "menu_options": {
           "delete_statistics": "Delete and set up",
-          "keep_statistics": "Keep and set up"
+          "keep_statistics": "Keep and set up",
+          "cancel_setup": "Cancel"
         }
       },
       "price_tracker": {
@@ -74,12 +75,12 @@
       },
       "reauth_confirm": {
         "title": "New Bitpanda API key needed",
-        "description": "Bitpanda rejected the stored API key. It may have expired, or it predates the permissions this version needs.\nCreate a new key at [{api_key_url}]({api_key_url}) and paste it here. Your sensors are kept.",
+        "description": "Bitpanda rejected the stored API key. It may have expired, or it predates the permissions this version needs.\nCreate a new API key at [{api_key_url}]({api_key_url}) and paste it here. Your sensors are kept.",
         "data": {
           "api_key": "API key"
         },
         "data_description": {
-          "api_key": "The new key needs the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\"."
+          "api_key": "The new API key needs the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\"."
         }
       },
       "reconfigure": {
@@ -90,18 +91,24 @@
           "currency": "Currency"
         },
         "data_description": {
-          "api_key": "Leave empty to keep the current key.\nA new key from [{api_key_url}]({api_key_url}) needs the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\".",
+          "api_key": "Leave empty to keep the current API key.\nA new API key from [{api_key_url}]({api_key_url}) needs the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\".",
           "currency": "Changing the currency deletes all Portfolio sensors including their history; you confirm this in the next step."
         }
       },
       "confirm_currency": {
         "title": "Change the currency?",
-        "description": "Changing the currency from {old} to {new} deletes all Portfolio sensors including their history and recreates them in the new currency. The deleted history cannot be restored; the currency itself can be changed again at any time.\n\nSelect \"Submit\" to change the currency. To keep {old}, close this dialog with the \"X\" instead: nothing changes then, and a new API key you entered is not saved either."
+        "description": "Changing the currency from {old} to {new} deletes all Portfolio sensors including their history and recreates them in the new currency. The deleted history cannot be restored; the currency itself can be changed again at any time.",
+        "menu_options": {
+          "change_currency": "Change currency",
+          "change_key_and_currency": "Save the new API key and change the currency",
+          "save_key_only": "Save only the new API key",
+          "cancel_currency_change": "Cancel"
+        }
       }
     },
     "error": {
-      "invalid_auth": "Bitpanda rejected this API key. It may be copied incompletely, deleted in your Bitpanda account or expired, or it has none of the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\". Check the key, or create a new one with all three.",
-      "missing_scopes": "Permissions of this API key: \"Balances\" {balance}, \"Transaction\" {transaction}, \"Earn (Read)\" {earn}. Permissions cannot be added to an existing key. Create a new one with all three.",
+      "invalid_auth": "Bitpanda rejected this API key. It may be copied incompletely, deleted in your Bitpanda account or expired, or it has none of the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\". Check the API key, or create a new one with all three.",
+      "missing_scopes": "Permissions of this API key: \"Balances\" {balance}, \"Transaction\" {transaction}, \"Earn (Read)\" {earn}. Permissions cannot be added to an existing API key. Create a new one with all three.",
       "rate_limited": "Too many requests. Wait a moment and try again.",
       "cannot_connect": "Could not reach Bitpanda. Try again later.",
       "unknown": "Unexpected error"
@@ -115,7 +122,8 @@
       "currency_changed": "The currency was changed. The Portfolio sensors are being recreated.",
       "no_changes": "Nothing was changed.",
       "no_reconfigure": "There is currently nothing to reconfigure for the Bitpanda Price Tracker. Change its additional currencies and the language of group titles with \"Configure\" (⚙) on the same entry.",
-      "unload_failed": "The Portfolio could not be stopped, so the currency was not changed and nothing was deleted. Restart Home Assistant and try again."
+      "unload_failed": "The Portfolio could not be stopped, so the currency was not changed and nothing was deleted. Restart Home Assistant and try again.",
+      "setup_cancelled": "The Portfolio was not set up, and nothing was deleted."
     }
   },
   "options": {

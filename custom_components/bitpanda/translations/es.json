@@ -11,7 +11,7 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "El Bitpanda Portfolio muestra tu cuenta de Bitpanda en Home Assistant: el valor total, tus rendimientos y un wallet por cada activo que tienes. La integración crea los wallets por sí sola y los retira cuando dejas de tener un activo – no tienes que añadir ni eliminar nada.\n\nPara ello, la integración necesita una clave API. Así puedes crearla:\n\n1. Abre [{api_key_url}]({api_key_url}) y crea una clave nueva.\n2. Selecciona solo los permisos \"Créditos\", \"Transacción\" y \"Earn (Lectura)\" – no \"Trading (Lectura)\".\n3. Copia la clave y pégala abajo. Bitpanda solo la muestra una vez.\n\nCon la clave, la integración solo lee: no puede operar ni mover dinero.\nLas claves de Bitpanda son válidas hasta la fecha que eliges al crearlas, como máximo un año; después, Home Assistant pide una nueva.\nPuedes sustituir la clave en cualquier momento: abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda y elige \"Reconfigurar\".",
+        "description": "El Bitpanda Portfolio muestra tu cuenta de Bitpanda en Home Assistant: el valor total, tus rendimientos y un wallet por cada activo que tienes. La integración crea los wallets por sí sola y los retira cuando dejas de tener un activo – no tienes que añadir ni eliminar nada.\n\nPara ello, la integración necesita una clave API. Así puedes crearla:\n\n1. Abre [{api_key_url}]({api_key_url}) y crea una clave API nueva.\n2. Selecciona solo los permisos \"Créditos\", \"Transacción\" y \"Earn (Lectura)\" – no \"Trading (Lectura)\".\n3. Copia la clave API y pégala abajo. Bitpanda solo la muestra una vez.\n\nCon la clave API, la integración solo lee: no puede operar ni mover dinero.\nLas claves API de Bitpanda son válidas hasta la fecha que eliges al crearlas, como máximo un año; después, Home Assistant pide una nueva.\nPuedes sustituir la clave API en cualquier momento: abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda y elige \"Reconfigurar\".",
         "data": {
           "api_key": "Clave API"
         }
@@ -42,10 +42,11 @@
       },
       "old_statistics": {
         "title": "Estadísticas antiguas en otra moneda",
-        "description": "Home Assistant aún conserva estadísticas a largo plazo de un Bitpanda Portfolio anterior en {old}. Has elegido {new} para esta configuración. Un sensor cuyas estadísticas están en otra moneda no registra estadísticas nuevas mientras existan las antiguas.\n\n- **Eliminar y configurar:** elimina el historial y las estadísticas a largo plazo de todos los sensores anteriores del Portfolio – valores, rendimientos y wallets – y configura el Portfolio en {new}. Sus estadísticas empiezan entonces de cero. Los datos eliminados no se pueden recuperar.\n- **Conservar y configurar:** configura el Portfolio en {new} y no elimina nada. Los sensores con estadísticas antiguas ya no registran ninguna estadística, ni siquiera en {new}, hasta que elimines por tu cuenta las estadísticas antiguas; la sección [Troubleshooting]({troubleshooting_url}) del README explica cómo.\n\nPara elegir otra moneda, cierra este cuadro de diálogo con la \"X\": así no se configura ni se elimina nada y puedes volver a empezar la configuración.",
+        "description": "Home Assistant aún conserva estadísticas a largo plazo de un Bitpanda Portfolio anterior en {old}. Has elegido {new} para esta configuración. Un sensor cuyas estadísticas están en otra moneda no registra estadísticas nuevas mientras existan las antiguas.\n\n- **Eliminar y configurar:** elimina el historial y las estadísticas a largo plazo de todos los sensores anteriores del Portfolio – valores, rendimientos y wallets – y configura el Portfolio en {new}. Sus estadísticas empiezan entonces de cero. Los datos eliminados no se pueden recuperar.\n- **Conservar y configurar:** configura el Portfolio en {new} y no elimina nada. Los sensores con estadísticas antiguas ya no registran ninguna estadística, ni siquiera en {new}, hasta que elimines por tu cuenta las estadísticas antiguas; la sección [Troubleshooting]({troubleshooting_url}) del README explica cómo.\n- **Cancelar:** no configura nada ni elimina nada, por ejemplo para elegir otra moneda.",
         "menu_options": {
           "delete_statistics": "Eliminar y configurar",
-          "keep_statistics": "Conservar y configurar"
+          "keep_statistics": "Conservar y configurar",
+          "cancel_setup": "Cancelar"
         }
       },
       "price_tracker": {
@@ -74,12 +75,12 @@
       },
       "reauth_confirm": {
         "title": "Se necesita una nueva clave API de Bitpanda",
-        "description": "Bitpanda ha rechazado la clave API guardada. Puede que haya caducado o que sea anterior a los permisos que necesita esta versión.\nCrea una nueva clave en [{api_key_url}]({api_key_url}) y pégala aquí. Tus sensores se conservan.",
+        "description": "Bitpanda ha rechazado la clave API guardada. Puede que haya caducado o que sea anterior a los permisos que necesita esta versión.\nCrea una nueva clave API en [{api_key_url}]({api_key_url}) y pégala aquí. Tus sensores se conservan.",
         "data": {
           "api_key": "Clave API"
         },
         "data_description": {
-          "api_key": "La nueva clave necesita los permisos \"Créditos\", \"Transacción\" y \"Earn (Lectura)\" – no \"Trading (Lectura)\"."
+          "api_key": "La nueva clave API necesita los permisos \"Créditos\", \"Transacción\" y \"Earn (Lectura)\" – no \"Trading (Lectura)\"."
         }
       },
       "reconfigure": {
@@ -90,18 +91,24 @@
           "currency": "Moneda"
         },
         "data_description": {
-          "api_key": "Deja el campo vacío para conservar la clave actual.\nUna clave nueva de [{api_key_url}]({api_key_url}) necesita los permisos \"Créditos\", \"Transacción\" y \"Earn (Lectura)\" – no \"Trading (Lectura)\".",
+          "api_key": "Deja el campo vacío para conservar la clave API actual.\nUna clave API nueva de [{api_key_url}]({api_key_url}) necesita los permisos \"Créditos\", \"Transacción\" y \"Earn (Lectura)\" – no \"Trading (Lectura)\".",
           "currency": "Cambiar la moneda elimina todos los sensores del Portfolio, incluido su historial; lo confirmarás en el siguiente paso."
         }
       },
       "confirm_currency": {
         "title": "¿Cambiar la moneda?",
-        "description": "Cambiar la moneda de {old} a {new} elimina todos los sensores del Portfolio, incluido su historial, y los vuelve a crear en la nueva moneda. El historial eliminado no se puede recuperar; la moneda en sí se puede volver a cambiar en cualquier momento.\n\nPulsa \"Enviar\" para cambiar la moneda. Para conservar {old}, cierra este cuadro de diálogo con la \"X\": así no cambia nada y tampoco se guarda una nueva clave API que hayas introducido."
+        "description": "Cambiar la moneda de {old} a {new} elimina todos los sensores del Portfolio, incluido su historial, y los vuelve a crear en la nueva moneda. El historial eliminado no se puede recuperar; la moneda en sí se puede volver a cambiar en cualquier momento.",
+        "menu_options": {
+          "change_currency": "Cambiar la moneda",
+          "change_key_and_currency": "Guardar la nueva clave API y cambiar la moneda",
+          "save_key_only": "Guardar solo la nueva clave API",
+          "cancel_currency_change": "Cancelar"
+        }
       }
     },
     "error": {
-      "invalid_auth": "Bitpanda ha rechazado esta clave API. Puede que se haya copiado incompleta, que se haya eliminado de tu cuenta de Bitpanda o que haya caducado, o que no tenga ninguno de los permisos \"Créditos\", \"Transacción\" y \"Earn (Lectura)\". Comprueba la clave o crea una nueva con los tres.",
-      "missing_scopes": "Permisos de esta clave API: \"Créditos\" {balance}, \"Transacción\" {transaction}, \"Earn (Lectura)\" {earn}. A una clave existente no se le pueden añadir permisos. Crea una nueva con los tres.",
+      "invalid_auth": "Bitpanda ha rechazado esta clave API. Puede que se haya copiado incompleta, que se haya eliminado de tu cuenta de Bitpanda o que haya caducado, o que no tenga ninguno de los permisos \"Créditos\", \"Transacción\" y \"Earn (Lectura)\". Comprueba la clave API o crea una nueva con los tres.",
+      "missing_scopes": "Permisos de esta clave API: \"Créditos\" {balance}, \"Transacción\" {transaction}, \"Earn (Lectura)\" {earn}. A una clave API existente no se le pueden añadir permisos. Crea una nueva con los tres.",
       "rate_limited": "Demasiadas solicitudes. Espera un momento y vuelve a intentarlo.",
       "cannot_connect": "No se ha podido conectar con Bitpanda. Inténtalo de nuevo más tarde.",
       "unknown": "Error inesperado"
@@ -115,7 +122,8 @@
       "currency_changed": "La moneda se ha cambiado. Los sensores del Portfolio se están volviendo a crear.",
       "no_changes": "No se ha cambiado nada.",
       "no_reconfigure": "El Bitpanda Price Tracker por ahora no tiene nada que reconfigurar. Cambia sus monedas adicionales y el idioma de los títulos de grupo con \"Configurar\" (⚙) en la misma entrada.",
-      "unload_failed": "No se ha podido detener el Portfolio, así que no se ha cambiado la moneda ni se ha eliminado nada. Reinicia Home Assistant e inténtalo de nuevo."
+      "unload_failed": "No se ha podido detener el Portfolio, así que no se ha cambiado la moneda ni se ha eliminado nada. Reinicia Home Assistant e inténtalo de nuevo.",
+      "setup_cancelled": "El Portfolio no se ha configurado y no se ha eliminado nada."
     }
   },
   "options": {

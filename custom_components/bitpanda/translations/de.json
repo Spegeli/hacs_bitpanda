@@ -11,7 +11,7 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Das Bitpanda Portfolio zeigt dein Bitpanda-Konto in Home Assistant: den Gesamtwert, deine Renditen und für jedes Asset, das du besitzt, ein eigenes Wallet. Die Wallets legt die Integration selbst an und entfernt sie wieder, wenn du ein Asset nicht mehr besitzt – hinzufügen oder löschen musst du nichts.\n\nDafür braucht die Integration einen API-Schlüssel. So erstellst du ihn:\n\n1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen Schlüssel.\n2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading (Read)“.\n3. Kopiere den Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal an.\n\nDie Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\nBitpanda-Schlüssel gelten bis zu dem Datum, das du beim Erstellen wählst, höchstens ein Jahr; danach fragt Home Assistant nach einem neuen.\nErsetzen kannst du den Schlüssel jederzeit: Öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“ und wähle „Neu konfigurieren“.",
+        "description": "Das Bitpanda Portfolio zeigt dein Bitpanda-Konto in Home Assistant: den Gesamtwert, deine Renditen und für jedes Asset, das du besitzt, ein eigenes Wallet. Die Wallets legt die Integration selbst an und entfernt sie wieder, wenn du ein Asset nicht mehr besitzt – hinzufügen oder löschen musst du nichts.\n\nDafür braucht die Integration einen API-Schlüssel. So erstellst du ihn:\n\n1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen API-Schlüssel.\n2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading (Read)“.\n3. Kopiere den API-Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal an.\n\nDie Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\nBitpanda-API-Schlüssel gelten bis zu dem Datum, das du beim Erstellen wählst, höchstens ein Jahr; danach fragt Home Assistant nach einem neuen.\nErsetzen kannst du den API-Schlüssel jederzeit: Öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“ und wähle „Neu konfigurieren“.",
         "data": {
           "api_key": "API-Schlüssel"
         }
@@ -42,10 +42,11 @@
       },
       "old_statistics": {
         "title": "Alte Statistiken in anderer Währung",
-        "description": "Home Assistant hat noch Langzeitstatistiken eines früheren Bitpanda Portfolios in {old}. Du hast bei dieser Einrichtung {new} ausgewählt. Ein Sensor, dessen Statistik in einer anderen Währung vorliegt, zeichnet keine neue Statistik auf, bis die alte weg ist.\n\n- **Löschen und einrichten:** löscht Verlauf und Langzeitstatistiken aller früheren Portfolio-Sensoren – Kennzahlen, Renditen und Wallets – und richtet das Portfolio in {new} ein. Seine Statistik beginnt dann neu. Die gelöschten Daten lassen sich nicht wiederherstellen.\n- **Behalten und einrichten:** richtet das Portfolio in {new} ein und löscht nichts. Die Sensoren mit alter Statistik zeichnen dann gar keine Statistik mehr auf, auch nicht in {new}, bis du die alte Statistik selbst löschst; [Troubleshooting]({troubleshooting_url}) in der README erklärt, wie.\n\nMöchtest du eine andere Währung wählen, schließe den Dialog stattdessen über das „X“: Dann wird nichts eingerichtet oder gelöscht, und du kannst die Einrichtung neu starten.",
+        "description": "Home Assistant hat noch Langzeitstatistiken eines früheren Bitpanda Portfolios in {old}. Du hast bei dieser Einrichtung {new} ausgewählt. Ein Sensor, dessen Statistik in einer anderen Währung vorliegt, zeichnet keine neue Statistik auf, bis die alte weg ist.\n\n- **Löschen und einrichten:** löscht Verlauf und Langzeitstatistiken aller früheren Portfolio-Sensoren – Kennzahlen, Renditen und Wallets – und richtet das Portfolio in {new} ein. Seine Statistik beginnt dann neu. Die gelöschten Daten lassen sich nicht wiederherstellen.\n- **Behalten und einrichten:** richtet das Portfolio in {new} ein und löscht nichts. Die Sensoren mit alter Statistik zeichnen dann gar keine Statistik mehr auf, auch nicht in {new}, bis du die alte Statistik selbst löschst; [Troubleshooting]({troubleshooting_url}) in der README erklärt, wie.\n- **Abbrechen:** richtet nichts ein und löscht nichts, zum Beispiel um eine andere Währung zu wählen.",
         "menu_options": {
           "delete_statistics": "Löschen und einrichten",
-          "keep_statistics": "Behalten und einrichten"
+          "keep_statistics": "Behalten und einrichten",
+          "cancel_setup": "Abbrechen"
         }
       },
       "price_tracker": {
@@ -74,12 +75,12 @@
       },
       "reauth_confirm": {
         "title": "Neuer Bitpanda API-Schlüssel nötig",
-        "description": "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen, oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht.\nErstelle unter [{api_key_url}]({api_key_url}) einen neuen Schlüssel und füge ihn hier ein. Deine Sensoren bleiben erhalten.",
+        "description": "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen, oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht.\nErstelle unter [{api_key_url}]({api_key_url}) einen neuen API-Schlüssel und füge ihn hier ein. Deine Sensoren bleiben erhalten.",
         "data": {
           "api_key": "API-Schlüssel"
         },
         "data_description": {
-          "api_key": "Der neue Schlüssel braucht die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading (Read)“."
+          "api_key": "Der neue API-Schlüssel braucht die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading (Read)“."
         }
       },
       "reconfigure": {
@@ -90,18 +91,24 @@
           "currency": "Währung"
         },
         "data_description": {
-          "api_key": "Lass das Feld leer, um den aktuellen Schlüssel zu behalten.\nEin neuer Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading (Read)“.",
+          "api_key": "Lass das Feld leer, um den aktuellen API-Schlüssel zu behalten.\nEin neuer API-Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading (Read)“.",
           "currency": "Eine Änderung der Währung löscht alle Portfolio-Sensoren samt Verlauf; das bestätigst du im nächsten Schritt."
         }
       },
       "confirm_currency": {
         "title": "Währung ändern?",
-        "description": "Wenn du die Währung von {old} auf {new} änderst, werden alle Portfolio-Sensoren samt Verlauf gelöscht und in der neuen Währung neu angelegt. Der gelöschte Verlauf lässt sich nicht wiederherstellen; die Währung selbst kannst du später jederzeit wieder ändern.\n\nKlicke auf „OK“, um die Währung zu ändern. Möchtest du doch bei {old} bleiben, schließe den Dialog über das „X“. Dann ändert sich nichts, auch ein neu eingegebener API-Schlüssel wird nicht gespeichert."
+        "description": "Wenn du die Währung von {old} auf {new} änderst, werden alle Portfolio-Sensoren samt Verlauf gelöscht und in der neuen Währung neu angelegt. Der gelöschte Verlauf lässt sich nicht wiederherstellen; die Währung selbst kannst du später jederzeit wieder ändern.",
+        "menu_options": {
+          "change_currency": "Währung ändern",
+          "change_key_and_currency": "Neuen API-Schlüssel speichern und Währung ändern",
+          "save_key_only": "Nur den neuen API-Schlüssel speichern",
+          "cancel_currency_change": "Abbrechen"
+        }
       }
     },
     "error": {
-      "invalid_auth": "Bitpanda hat diesen API-Schlüssel abgelehnt. Vielleicht ist er unvollständig kopiert, in deinem Bitpanda-Konto gelöscht oder abgelaufen, oder er hat keine der Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“. Prüfe den Schlüssel oder erstelle einen neuen mit allen dreien.",
-      "missing_scopes": "Berechtigungen dieses API-Schlüssels: „Guthaben“ {balance}, „Transaktion“ {transaction}, „Earn (Read)“ {earn}. Einem bestehenden Schlüssel lassen sich keine Berechtigungen hinzufügen. Erstelle einen neuen mit allen dreien.",
+      "invalid_auth": "Bitpanda hat diesen API-Schlüssel abgelehnt. Vielleicht ist er unvollständig kopiert, in deinem Bitpanda-Konto gelöscht oder abgelaufen, oder er hat keine der Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“. Prüfe den API-Schlüssel oder erstelle einen neuen mit allen dreien.",
+      "missing_scopes": "Berechtigungen dieses API-Schlüssels: „Guthaben“ {balance}, „Transaktion“ {transaction}, „Earn (Read)“ {earn}. Einem bestehenden API-Schlüssel lassen sich keine Berechtigungen hinzufügen. Erstelle einen neuen mit allen dreien.",
       "rate_limited": "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
       "cannot_connect": "Bitpanda ist nicht erreichbar. Versuche es später erneut.",
       "unknown": "Unerwarteter Fehler"
@@ -115,7 +122,8 @@
       "currency_changed": "Die Währung wurde geändert. Die Portfolio-Sensoren werden neu angelegt.",
       "no_changes": "Es wurde nichts geändert.",
       "no_reconfigure": "Beim Bitpanda Price Tracker gibt es derzeit nichts neu zu konfigurieren. Zusätzliche Währungen und die Sprache der Gruppentitel änderst du mit „Konfigurieren“ (⚙) beim selben Eintrag.",
-      "unload_failed": "Das Portfolio ließ sich nicht anhalten, daher wurde die Währung nicht geändert und nichts gelöscht. Starte Home Assistant neu und versuche es erneut."
+      "unload_failed": "Das Portfolio ließ sich nicht anhalten, daher wurde die Währung nicht geändert und nichts gelöscht. Starte Home Assistant neu und versuche es erneut.",
+      "setup_cancelled": "Das Portfolio wurde nicht eingerichtet, und es wurde nichts gelöscht."
     }
   },
   "options": {

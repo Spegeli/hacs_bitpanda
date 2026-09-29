@@ -150,6 +150,7 @@ These tests guard the files (`tests/test_strings.py` unless noted):
 | `test_every_string_has_the_placeholders_of_its_english_original` | the same placeholders as English |
 | `test_no_apostrophe_directly_precedes_a_placeholder` | no `'{` |
 | `test_every_link_keeps_its_english_target` | unchanged Markdown link targets |
+| `test_no_string_contains_a_url` | no URL in any text — hassfest refuses one; a link target comes in as a placeholder the code fills in, such as `{api_key_url}` |
 | `test_no_language_is_an_untranslated_copy_of_english` | no sentence left in English, and most strings translated |
 | `test_every_language_titles_each_group_differently` | distinct group titles |
 | `test_every_shipped_language_is_offered_by_its_own_name` | the language option lists every shipped language by its own name, the same in every file (`_ENDONYMS`) |

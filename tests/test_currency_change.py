@@ -5,6 +5,9 @@ its long-term statistics, then recreates them in the new currency under the
 same entity IDs -- with exactly one reload, and without the update listener
 Home Assistant warns about. What the version 1 migration left in place keeps
 its entity and its history.
+
+A new Portfolio after a deleted one takes the integration's entity IDs
+again, where the deleted one's statistics may wait in another currency.
 """
 from datetime import timedelta
 from unittest.mock import AsyncMock, patch
@@ -32,6 +35,7 @@ _CLIENT = "custom_components.bitpanda.api.BitpandaApiClient."
 _EUR_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
 _USD_ID = "b88b8879-efe3-11eb-b56f-0691764446a7"
 _TOTAL = "sensor.bitpanda_portfolio_total"
+_CASH = "sensor.bitpanda_portfolio_cash"
 _WALLET = "sensor.bitpanda_vision_vsn_wallet_available"
 # A fiat wallet the version 1 migration left in place: Portfolio Cash covers
 # every fiat balance now.
@@ -194,3 +198,27 @@ async def test_an_empty_answer_right_after_a_currency_change_waits_for_confirmat
         assert hass.states.get(_TOTAL).state == "unavailable"
         await _next_refresh(hass, freezer)
     assert float(hass.states.get(_TOTAL).state) == 0.0
+
+
+# --- A new Portfolio after a deleted one -------------------------------------------
+
+
+async def test_a_new_portfolio_takes_the_integrations_entity_ids_again(hass, portfolio_api):
+    """A deleted Portfolio keeps its statistics under its sensors' IDs. A new
+    setup is a new entry with new unique_ids, so Home Assistant restores none
+    of the deleted entry's IDs -- not even one the user gave: the new sensors
+    take the integration's own IDs, where async_find_old_statistics looks."""
+    old = _portfolio(hass)
+    assert await hass.config_entries.async_setup(old.entry_id)
+    await hass.async_block_till_done()
+    er.async_get(hass).async_update_entity(_CASH, new_entity_id="sensor.my_cash")
+    ids = _entity_ids(hass, old)
+    await hass.config_entries.async_remove(old.entry_id)
+
+    new = _portfolio(hass)
+    assert await hass.config_entries.async_setup(new.entry_id)
+    await hass.async_block_till_done()
+
+    assert _entity_ids(hass, new) == sorted(
+        _CASH if entity_id == "sensor.my_cash" else entity_id for entity_id in ids
+    )

@@ -14,6 +14,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
 from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.const import API_KEY_URL, DOMAIN
+from custom_components.bitpanda.purge import OldStatistics
 
 from tests.conftest import load_fixture
 
@@ -296,6 +297,99 @@ async def test_portfolio_creates_the_entry(hass):
     # Flat, as Configure stores it.
     assert dict(entry.options) == {"language": "it"}
     assert "good" not in entry.title
+
+
+# --- Old statistics at setup ---------------------------------------------------------
+
+_FIND = "custom_components.bitpanda.config_flow.async_find_old_statistics"
+_PURGE_RECORDED = "custom_components.bitpanda.config_flow.async_purge_recorded"
+_FOUND = OldStatistics(
+    entity_ids=["sensor.bitpanda_portfolio_cash", "sensor.bitpanda_vision_vsn_wallet_available"],
+    currencies=["CHF", "EUR"],
+)
+
+
+async def _submit_currency(hass, found: OldStatistics):
+    """The Portfolio's setup, with a valid key, up to what follows the
+    currency step: USD chosen, `found` what the detection reports."""
+    result = await _submit_key(hass, await _portfolio_form(hass), "good")
+    with patch(_FIND, AsyncMock(return_value=found)) as find:
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"currency": {"currency": "usd"}, **_setup_language("en")}
+        )
+    return result, find
+
+
+def _assert_portfolio_created(result) -> None:
+    assert result["type"] == _FLOW.CREATE_ENTRY
+    assert dict(result["result"].data) == {
+        "entry_type": "portfolio", "api_key": "good", "currency": "USD", "currency_id": _USD_ID,
+    }
+    assert dict(result["result"].options) == {"language": "en"}
+
+
+async def test_the_setup_looks_for_old_statistics_in_the_chosen_currency(hass):
+    result, find = await _submit_currency(hass, OldStatistics(entity_ids=[], currencies=[]))
+    find.assert_awaited_once_with(hass, "USD")
+    _assert_portfolio_created(result)
+
+
+async def test_old_statistics_in_another_currency_are_asked_about_first(hass):
+    result, _ = await _submit_currency(hass, _FOUND)
+    assert (result["type"], result["step_id"]) == (_FLOW.MENU, "old_statistics")
+    assert result["menu_options"] == ["delete_statistics", "keep_statistics"]
+    assert result["description_placeholders"] == {"old": "CHF, EUR", "new": "USD"}
+    assert hass.config_entries.async_entries(DOMAIN) == []
+
+
+async def test_delete_and_set_up_deletes_first_then_creates_the_entry(hass):
+    result, _ = await _submit_currency(hass, _FOUND)
+    entries_while_deleting: list = []
+    purge = AsyncMock(
+        side_effect=lambda hass_, ids: entries_while_deleting.append(
+            hass_.config_entries.async_entries(DOMAIN)
+        )
+    )
+    with patch(_PURGE_RECORDED, purge):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "delete_statistics"}
+        )
+    purge.assert_awaited_once_with(hass, _FOUND.entity_ids)
+    assert entries_while_deleting == [[]]
+    _assert_portfolio_created(result)
+
+
+async def test_keep_and_set_up_creates_the_entry_and_deletes_nothing(hass):
+    result, _ = await _submit_currency(hass, _FOUND)
+    with patch(_PURGE_RECORDED, AsyncMock()) as purge:
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "keep_statistics"}
+        )
+    purge.assert_not_awaited()
+    _assert_portfolio_created(result)
+
+
+async def test_closing_the_question_creates_and_deletes_nothing(hass):
+    result, _ = await _submit_currency(hass, _FOUND)
+    with patch(_PURGE_RECORDED, AsyncMock()) as purge:
+        hass.config_entries.flow.async_abort(result["flow_id"])
+        await hass.async_block_till_done()
+    purge.assert_not_awaited()
+    assert hass.config_entries.async_entries(DOMAIN) == []
+
+
+@pytest.mark.parametrize("choice", ["delete_statistics", "keep_statistics"])
+async def test_a_portfolio_set_up_meanwhile_stops_either_choice(hass, choice):
+    """Deleting now would delete what the other dialog's Portfolio records
+    under the same IDs: the check comes before anything is deleted."""
+    result, _ = await _submit_currency(hass, _FOUND)
+    _portfolio_entry().add_to_hass(hass)
+    with patch(_PURGE_RECORDED, AsyncMock()) as purge:
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": choice}
+        )
+    assert (result["type"], result["reason"]) == (_FLOW.ABORT, "already_configured")
+    purge.assert_not_awaited()
 
 
 # --- Price Tracker setup ------------------------------------------------------------

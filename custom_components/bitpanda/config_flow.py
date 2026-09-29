@@ -59,7 +59,12 @@ from .const import (
 from .groups import async_group_titles, price_group_subentries
 from .language import async_shipped_languages, entry_language, preselected_language
 from .migration import ISSUE_CURRENCY_DROPPED
-from .purge import async_purge_portfolio
+from .purge import (
+    OldStatistics,
+    async_find_old_statistics,
+    async_purge_portfolio,
+    async_purge_recorded,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -184,6 +189,11 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._api_key: str | None = None
         self._currency_ids: dict[str, str] = {}
         self._pending_currency: str | None = None
+        # The Portfolio entry to create, kept while setup asks about old
+        # statistics (async_step_old_statistics).
+        self._portfolio_data: dict[str, Any] = {}
+        self._portfolio_options: dict[str, Any] = {}
+        self._old_statistics = OldStatistics(entity_ids=[], currencies=[])
 
     # --- Service menu -----------------------------------------------------
 
@@ -277,21 +287,22 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
-            # Re-checked here: a second dialog may have finished in between.
-            await self.async_set_unique_id(ENTRY_TYPE_PORTFOLIO)
-            self._abort_if_unique_id_configured()
+            await self._async_abort_if_portfolio_set_up()
             # The form value travels lowercase (hassfest); stored upper again.
             currency = user_input[_SECTION_CURRENCY][CONF_CURRENCY].upper()
-            return self.async_create_entry(
-                title=PORTFOLIO_TITLE,
-                data={
-                    ENTRY_TYPE: ENTRY_TYPE_PORTFOLIO,
-                    CONF_API_KEY: self._api_key,
-                    CONF_CURRENCY: currency,
-                    CONF_CURRENCY_ID: self._currency_ids[currency],
-                },
-                options={CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE]},
-            )
+            self._portfolio_data = {
+                ENTRY_TYPE: ENTRY_TYPE_PORTFOLIO,
+                CONF_API_KEY: self._api_key,
+                CONF_CURRENCY: currency,
+                CONF_CURRENCY_ID: self._currency_ids[currency],
+            }
+            self._portfolio_options = {
+                CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE]
+            }
+            self._old_statistics = await async_find_old_statistics(self.hass, currency)
+            if self._old_statistics.entity_ids:
+                return await self.async_step_old_statistics()
+            return self._async_create_portfolio()
         options = [c for c in SUPPORTED_CURRENCIES if c in self._currency_ids]
         currency = vol.Schema(
             {vol.Required(CONF_CURRENCY, default=DEFAULT_CURRENCY.lower()): _currency_select(options)}
@@ -304,6 +315,55 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     **await self._async_language_section(),
                 }
             ),
+        )
+
+    async def async_step_old_statistics(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask about the statistics an earlier Portfolio left in another
+        currency: under them, the new sensors would record none
+        (purge.async_find_old_statistics). Closing the dialog changes
+        nothing."""
+        return self.async_show_menu(
+            step_id="old_statistics",
+            menu_options=["delete_statistics", "keep_statistics"],
+            description_placeholders={
+                "old": ", ".join(self._old_statistics.currencies),
+                "new": self._portfolio_data[CONF_CURRENCY],
+            },
+        )
+
+    async def async_step_delete_statistics(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Delete their history and statistics, then set up. Checked first:
+        a Portfolio another dialog set up meanwhile records under the same
+        IDs, and its data must stay."""
+        await self._async_abort_if_portfolio_set_up()
+        await async_purge_recorded(self.hass, self._old_statistics.entity_ids)
+        return self._async_create_portfolio()
+
+    async def async_step_keep_statistics(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Set up and delete nothing: the README's Troubleshooting says how
+        to delete the old statistics by hand."""
+        await self._async_abort_if_portfolio_set_up()
+        return self._async_create_portfolio()
+
+    async def _async_abort_if_portfolio_set_up(self) -> None:
+        """Re-checked before anything is created or deleted: a second dialog
+        may have finished a Portfolio setup in between."""
+        await self.async_set_unique_id(ENTRY_TYPE_PORTFOLIO)
+        self._abort_if_unique_id_configured()
+
+    @callback
+    def _async_create_portfolio(self) -> ConfigFlowResult:
+        """The Portfolio entry, from what the currency step stored."""
+        return self.async_create_entry(
+            title=PORTFOLIO_TITLE,
+            data=self._portfolio_data,
+            options=self._portfolio_options,
         )
 
     # --- Price Tracker ------------------------------------------------------------

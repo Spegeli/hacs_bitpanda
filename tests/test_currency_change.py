@@ -7,13 +7,16 @@ Home Assistant warns about. What the version 1 migration left in place keeps
 its entity and its history.
 
 A new Portfolio after a deleted one takes the integration's entity IDs
-again, where the deleted one's statistics may wait in another currency.
+again, where the deleted one's statistics may wait in another currency:
+setup offers to delete them, and deleting them lets the new sensors record
+statistics in the new currency.
 """
 from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from homeassistant.config_entries import ConfigEntryState
+from homeassistant.config_entries import SOURCE_USER, ConfigEntryState
+from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
@@ -222,3 +225,53 @@ async def test_a_new_portfolio_takes_the_integrations_entity_ids_again(hass, por
     assert _entity_ids(hass, new) == sorted(
         _CASH if entity_id == "sensor.my_cash" else entity_id for entity_id in ids
     )
+
+
+async def _set_up_portfolio(hass, currency: str):
+    """The Portfolio's setup dialog, up to what follows its currency step."""
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "portfolio"}
+    )
+    with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=[])):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": "key"}
+        )
+    return await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"currency": {"currency": currency}, "language": {"language": "en"}}
+    )
+
+
+async def test_a_new_setup_in_another_currency_deletes_the_old_statistics_when_asked(
+    hass, portfolio_api
+):
+    old = _portfolio(hass)
+    assert await hass.config_entries.async_setup(old.entry_id)
+    await async_wait_recording_done(hass)
+    sensors = _entity_ids(hass, old)
+    start = get_start_time(dt_util.utcnow())
+    do_adhoc_statistics(hass, start=start)
+    await async_wait_recording_done(hass)
+    await hass.config_entries.async_remove(old.entry_id)
+    await async_wait_recording_done(hass)
+
+    result = await _set_up_portfolio(hass, "usd")
+    assert (result["type"], result["step_id"]) == (FlowResultType.MENU, "old_statistics")
+    assert result["description_placeholders"] == {"old": "EUR", "new": "USD"}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "delete_statistics"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    await async_wait_purge_done(hass)
+    await async_wait_recording_done(hass)
+
+    assert _entity_ids(hass, result["result"]) == sensors
+    # The old history is gone; what the new Portfolio wrote since is kept.
+    assert await recorded_history(hass, _WALLET) == [("50.0", "USD")]
+    # A later period: the first one counts as compiled.
+    do_adhoc_statistics(hass, start=start + timedelta(minutes=5))
+    await async_wait_recording_done(hass)
+    assert await statistics_units(hass, sensors) == {
+        entity_id: "%" if "_return_" in entity_id else "USD" for entity_id in sensors
+    }

@@ -714,8 +714,8 @@ def test_the_old_statistics_step_explains_both_choices():
     button's own label in bold, each saying it sets up the Portfolio in the
     new currency; the second links Troubleshooting through a placeholder, as
     hassfest allows no URL in a text. Last, in a paragraph of its own, the
-    way back: closing the dialog keeps the old statistics. In the approved
-    English and German wording."""
+    way out: closing the dialog sets up and deletes nothing, to choose another
+    currency. In the approved English and German wording."""
     for name in _FILES:
         step = _load(name)["config"]["step"]["old_statistics"]
         assert set(step) == {"title", "description", "menu_options"}, name
@@ -743,17 +743,18 @@ def test_the_old_statistics_step_explains_both_choices():
         "title": "Old statistics in another currency",
         "description": (
             "Home Assistant still holds long-term statistics of an earlier Bitpanda Portfolio"
-            " in {old}. You chose {new}. A sensor whose statistics are in another currency"
-            " records no new statistics until the old ones are gone.\n\n"
+            " in {old}. You chose {new} for this setup. A sensor whose statistics are in another"
+            " currency records no new statistics until the old ones are gone.\n\n"
             "- **Delete and set up:** deletes the history and long-term statistics of every"
             " earlier Portfolio sensor – figures, returns and wallets – and sets up the"
             " Portfolio in {new}. Its statistics then start afresh. The deleted data cannot be"
             " restored.\n"
             "- **Keep and set up:** sets up the Portfolio in {new} and deletes nothing. The"
-            " sensors with old statistics record none until you delete the old statistics"
-            " yourself; [Troubleshooting]({troubleshooting_url}) in the README explains how.\n\n"
-            'To keep the old statistics, close this dialog with the "X" instead: nothing is set'
-            " up or deleted then."
+            " sensors with old statistics then record no statistics at all, not even in {new},"
+            " until you delete the old statistics yourself;"
+            " [Troubleshooting]({troubleshooting_url}) in the README explains how.\n\n"
+            'To choose another currency, close this dialog with the "X" instead: nothing is set'
+            " up or deleted then, and you can start the setup again."
         ),
         "menu_options": {
             "delete_statistics": "Delete and set up",
@@ -764,18 +765,20 @@ def test_the_old_statistics_step_explains_both_choices():
         "title": "Alte Statistiken in anderer Währung",
         "description": (
             "Home Assistant hat noch Langzeitstatistiken eines früheren Bitpanda Portfolios in"
-            " {old}. Du hast {new} gewählt. Ein Sensor, dessen Statistik in einer anderen"
-            " Währung vorliegt, zeichnet keine neue Statistik auf, bis die alte weg ist.\n\n"
+            " {old}. Du hast bei dieser Einrichtung {new} ausgewählt. Ein Sensor, dessen"
+            " Statistik in einer anderen Währung vorliegt, zeichnet keine neue Statistik auf,"
+            " bis die alte weg ist.\n\n"
             "- **Löschen und einrichten:** löscht Verlauf und Langzeitstatistiken aller"
             " früheren Portfolio-Sensoren – Kennzahlen, Renditen und Wallets – und richtet"
             " das Portfolio in {new} ein. Seine Statistik beginnt dann neu. Die gelöschten"
             " Daten lassen sich nicht wiederherstellen.\n"
             "- **Behalten und einrichten:** richtet das Portfolio in {new} ein und löscht"
-            " nichts. Die Sensoren mit alter Statistik zeichnen keine auf, bis du die alte"
-            " Statistik selbst löschst; [Troubleshooting]({troubleshooting_url}) in der README"
-            " erklärt, wie.\n\n"
-            "Möchtest du die alte Statistik behalten, schließe den Dialog stattdessen über das"
-            " „X“: Dann wird nichts eingerichtet oder gelöscht."
+            " nichts. Die Sensoren mit alter Statistik zeichnen dann gar keine Statistik mehr"
+            " auf, auch nicht in {new}, bis du die alte Statistik selbst löschst;"
+            " [Troubleshooting]({troubleshooting_url}) in der README erklärt, wie.\n\n"
+            "Möchtest du eine andere Währung wählen, schließe den Dialog stattdessen über das"
+            " „X“: Dann wird nichts eingerichtet oder gelöscht, und du kannst die Einrichtung"
+            " neu starten."
         ),
         "menu_options": {
             "delete_statistics": "Löschen und einrichten",

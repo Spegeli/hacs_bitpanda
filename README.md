@@ -135,7 +135,7 @@ The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stock
 2. Choose the **Asset type**: Crypto, Stocks, ETFs, ETCs, Crypto indices or Precious metals.
 3. Choose the asset. Type a name or a symbol to search the list — for stocks, ETFs and ETCs also an ISIN. Each entry reads `Name / SYMBOL`, for stocks, ETFs and ETCs `Name / SYMBOL / ISIN`.
 
-The asset gets its own device in the group of its type; the first asset of a type creates the group. The integration keeps each list for 24 hours; loading a large one such as Stocks the first time takes about ten seconds.
+The asset gets its own device in the group of its type; the first asset of a type creates the group. The integration keeps each list for 24 hours; the first time, loading a large one such as Stocks can take a few seconds.
 
 #### Stop tracking
 
@@ -225,7 +225,7 @@ The action `bitpanda.refresh` fetches the portfolio and the prices right away an
 
 - **Cooldown:** a call within the cooldown of the last accepted one is ignored. The cooldown is the price interval — 60 seconds, longer with many tracked assets — or 10 seconds with the Portfolio alone.
 - **Failures:** when a refresh fails — Bitpanda cannot be reached, answers with an error, or reports an empty portfolio that is not confirmed yet — the action fails with an error naming the service; the other service is refreshed all the same. The action also fails while neither service is loaded.
-- **In automations:** a failed action stops a script or automation at that step, unless the step sets `continue_on_error: true` (see the [second example](#-automation-examples)).
+- **In automations:** a failed action stops a script or automation at that step, unless the step sets `continue_on_error: true` (see the [Morning report](#-automation-examples) example).
 
 ---
 

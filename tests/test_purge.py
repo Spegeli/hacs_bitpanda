@@ -16,7 +16,7 @@ from custom_components.bitpanda.naming import (
     wallet_device_identifier,
     wallet_unique_id,
 )
-from custom_components.bitpanda.purge import async_purge_portfolio
+from custom_components.bitpanda.purge import async_purge_portfolio, async_purge_recorded
 
 VSN = "1f051b7c-5980-6dda-9d3d-cf107d8d4bfb"
 
@@ -184,3 +184,24 @@ async def test_an_entry_home_assistant_cannot_reload_changes_nothing(hass, state
 
     unload.assert_not_called()
     assert _registered(hass, entry) == (managed, 2)
+
+
+async def test_the_recorded_purge_deletes_history_then_statistics_of_the_given_ids(hass):
+    calls: list = []
+    instance = _fake_recorder(hass, calls)
+    with patch("custom_components.bitpanda.purge.get_instance", return_value=instance):
+        await async_purge_recorded(hass, ["sensor.b", "sensor.a"])
+    assert calls == [("purge", ["sensor.a", "sensor.b"], 0), ("clear", ["sensor.a", "sensor.b"])]
+
+
+async def test_the_recorded_purge_without_ids_does_nothing(hass):
+    calls: list = []
+    instance = _fake_recorder(hass, calls)
+    with patch("custom_components.bitpanda.purge.get_instance", return_value=instance):
+        await async_purge_recorded(hass, [])
+    assert calls == []
+
+
+async def test_the_recorded_purge_without_a_recorder_does_nothing(hass):
+    # No recorder.purge_entities service: a call would raise ServiceNotFound.
+    await async_purge_recorded(hass, ["sensor.a"])

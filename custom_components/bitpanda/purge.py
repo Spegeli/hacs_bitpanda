@@ -41,14 +41,36 @@ def _is_managed_device(entry_id: str, device: dr.DeviceEntry) -> bool:
     )
 
 
+async def async_purge_recorded(hass: HomeAssistant, entity_ids: list[str]) -> None:
+    """Delete the recorded history and the long-term statistics of `entity_ids`.
+
+    Order matters. purge_entities fixes its cut-off when it is called
+    (keep_days 0: now) and removes only what was recorded before it, so the
+    states the recreated sensors write afterwards -- after the caller's
+    reload or setup -- are never touched, however long the recorder takes to
+    work its queue. The statistics clear is queued right behind it, before
+    any of those sensors compiles statistics.
+
+    Does nothing without entity IDs or without the recorder.
+    """
+    if not entity_ids or _RECORDER not in hass.config.components:
+        return
+    await hass.services.async_call(
+        _RECORDER,
+        "purge_entities",
+        {"entity_id": entity_ids, "keep_days": 0},
+        blocking=True,
+    )
+    get_instance(hass).async_clear_statistics(entity_ids)
+
+
 async def async_purge_portfolio(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Remove what the Portfolio manages (see above), with history and statistics.
 
     Order matters. The entry is unloaded first, so no sensor writes a state
-    while its history is purged. purge_entities fixes its cut-off when it is
-    called (keep_days 0: now) and removes only what was recorded before it,
-    so the states the recreated sensors write after the caller's reload are
-    never touched -- however long the recorder takes to work its queue.
+    while its history is purged; history and statistics go last, through
+    async_purge_recorded, whose cut-off spares what the recreated sensors
+    write after the caller's reload.
 
     Returns False, with nothing changed, when the entry cannot be unloaded
     -- its unload fails now, or it is in a state Home Assistant can neither
@@ -78,13 +100,5 @@ async def async_purge_portfolio(hass: HomeAssistant, entry: ConfigEntry) -> bool
         if _is_managed_device(entry_id, device):
             dev_reg.async_remove_device(device.id)
 
-    if not entity_ids or _RECORDER not in hass.config.components:
-        return True
-    await hass.services.async_call(
-        _RECORDER,
-        "purge_entities",
-        {"entity_id": entity_ids, "keep_days": 0},
-        blocking=True,
-    )
-    get_instance(hass).async_clear_statistics(entity_ids)
+    await async_purge_recorded(hass, entity_ids)
     return True

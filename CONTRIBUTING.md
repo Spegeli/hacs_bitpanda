@@ -75,7 +75,7 @@ Everything lives in `custom_components/bitpanda/`:
 | `portfolio_sensor.py` | Portfolio sensors and the wallet lifecycle manager, which also keeps the wallet groups |
 | `price_coordinator.py` | Keyless ticker coordinator with its request budget, and the repair issue while that stretches its interval past 30 minutes; ECB coordinator |
 | `price_sensor.py` | Price sensors per asset and currency |
-| `purge.py` | Deletes Portfolio sensors' history and long-term statistics: on a currency change the entry's own, and at setup those an earlier Portfolio left in another currency |
+| `purge.py` | On a currency change, deletes the Portfolio's sensors and devices with their history and long-term statistics; at setup, the history and statistics an earlier Portfolio left in another currency |
 | `sensor.py` | Dispatches the sensor platform to the service |
 | `streaks.py` | The rule for things in a row — failed refreshes, empty answers, missing holdings — confirmed by count and time |
 | `strings.json`, `translations/` | UI strings, seven languages (see [Translations](#translations)) |

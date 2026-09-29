@@ -165,7 +165,7 @@ Tracking an asset again later brings its sensors back under the entity IDs the i
 The Portfolio keeps its wallets and groups up to date by itself:
 
 - **A new asset** gets its wallet, in the group of its type, at the next update — every five minutes.
-- **An asset you no longer hold** loses its wallet about ten minutes after Bitpanda stops listing it. To remove the wallet sooner, delete it on its device page (**⋮ → Delete**).
+- **An asset you no longer hold** loses its wallet about 15 minutes after you sell it. To remove the wallet sooner, delete it on its device page (**⋮ → Delete**).
 - **What you cannot delete:** the Portfolio device and the wallet of an asset you hold — they would come straight back, and the dialog says why. A group you delete (**⋮ → Delete**) while you still hold its assets comes back at the next update.
 
 On the Price Tracker, deleting a device or a group stops tracking (see [Stop tracking](#stop-tracking)).
@@ -371,10 +371,11 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 ## ⚠️ Known limitations
 
 - **One Bitpanda account per Home Assistant.** Each service can be set up once, and Bitpanda's API does not tell which account a key belongs to: a key of another account — entered under **Reconfigure** or when Home Assistant asks for a new key — switches the Portfolio to that account. Its figures then follow the new account, and the wallets of assets the new account does not hold are removed after three refreshes.
-- **Cloud polling only.** Bitpanda sends no updates by itself: the integration asks at the intervals under [Features](#-features), and `bitpanda.refresh` asks at once (see [Refreshing by hand](#refreshing-by-hand)).
-- **Short outages are bridged, longer ones show.** When Bitpanda cannot be reached — while your Internet connection is down, say — the sensors keep their last value through two failed refreshes. The third failed refresh in a row, at least two regular intervals after the first, makes them `unavailable`: after about 15 minutes for the Portfolio and its returns, about 3 minutes for prices (longer above 30 tracked assets, or while Bitpanda rate-limits the requests). A rejected API key makes them `unavailable` at once, and after a restart of Home Assistant during an outage there is no last value to show.
+- **Cloud polling only.** Bitpanda sends no updates by itself: the integration asks at the intervals under [Features](#-features), and `bitpanda.refresh` asks right away (see [Refreshing by hand](#refreshing-by-hand)).
+- **Short outages are bridged, longer ones show.** When Bitpanda cannot be reached — while your Internet connection is down, say — the sensors keep their last value through two failed refreshes. The third failed refresh in a row, at least two regular intervals after the first, makes them `unavailable`: for the Portfolio and its returns after about 15 minutes, for prices after about 3 minutes (longer above 30 tracked assets, or while Bitpanda rate-limits the requests). A rejected API key makes them `unavailable` at once. After a restart of Home Assistant during an outage, there is no last value to show.
 - **A sudden empty portfolio is held back.** If Bitpanda suddenly reports a completely empty portfolio, nothing is removed and the last figures stay until three empty answers in a row, at least ten minutes apart from first to last, confirm it.
 - **Prices in other currencies are converted, not quoted.** Bitpanda's price endpoint answers in EUR only; every other currency is the EUR price × the ECB's daily reference rate, which can differ from the price Bitpanda itself shows in that currency. The ECB publishes its rates once per working day around 16:00 CET; at weekends and on holidays the last rate stays in use, and the `rate_date` attribute shows which day's rate a price uses.
+- **The 24-hour change needs a day of history.** `change_24h_pct` and `price_24h_ago` compare the price with its own value from 24 hours ago in Home Assistant's recorder: a newly tracked price shows them only after a day, and never while the recorder does not record the sensor.
 
 ---
 

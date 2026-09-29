@@ -565,8 +565,8 @@ def test_the_setup_menu_says_what_each_service_is_for():
 def test_the_portfolio_setup_walks_through_creating_the_key():
     """The Portfolio's setup step says what the service shows, then walks
     through creating the key as a numbered list of its own between blank
-    lines -- open the key page, choose the permissions with Trading set off
-    by a dash, paste the key -- and ends with a line each on what the key
+    lines -- open the key page, choose the permissions with the trading
+    permission set off by a dash, paste the key -- and ends with a line each on what the key
     allows, how long it is valid and where to replace it. Its field has no
     help text: the step text is the guide, and a key that lacks a
     permission gets the error that says so. In the approved English and
@@ -582,6 +582,7 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
         assert chosen.startswith("2. "), name
         *required, trade = _PERMISSION_LABELS[_language(name)]
         assert all(label in chosen for label in required) and trade in left_out, name
+        assert trade not in chosen, name
         assert paste.startswith("3. "), name
         assert len(key.split("\n")) == 3, name
     assert _load("strings.json")["config"]["step"]["portfolio"] == {
@@ -630,8 +631,8 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
 
 def test_the_reconfigure_key_help_has_a_line_per_sentence():
     """Under Reconfigure's key field: that an empty field keeps the key, and
-    on a line of its own what a new key needs -- with Trading set off by a
-    dash, as in the setup's guide. In the approved English and German
+    on a line of its own what a new key needs -- with the trading permission
+    set off by a dash, as in the setup's guide. In the approved English and German
     wording."""
     help_texts = {
         name: _load(name)["config"]["step"]["reconfigure"]["data_description"]["api_key"]
@@ -643,6 +644,7 @@ def test_the_reconfigure_key_help_has_a_line_per_sentence():
         chosen, left_out = new_key.split(" \u2013 ")
         *required, trade = _PERMISSION_LABELS[_language(name)]
         assert all(label in chosen for label in required) and trade in left_out, name
+        assert trade not in keep + chosen, name
     assert help_texts["strings.json"] == (
         "Leave empty to keep the current key.\n"
         'A new key from [{api_key_url}]({api_key_url}) needs the permissions "Balances",'
@@ -658,8 +660,8 @@ def test_the_reconfigure_key_help_has_a_line_per_sentence():
 def test_the_reauth_dialog_starts_what_to_do_on_a_line_of_its_own():
     """The new-key dialog says what happened and why, then -- on a line of
     its own -- where to create the new key and that the sensors are kept.
-    Under the field, what the new key needs, with Trading set off by a dash
-    as in the setup's guide. In the approved English and German wording."""
+    Under the field, what the new key needs, with the trading permission set
+    off by a dash as in the setup's guide. In the approved English and German wording."""
     steps = {name: _load(name)["config"]["step"]["reauth_confirm"] for name in _FILES}
     texts = {
         name: (step["description"], step["data_description"]["api_key"])
@@ -671,6 +673,7 @@ def test_the_reauth_dialog_starts_what_to_do_on_a_line_of_its_own():
         chosen, left_out = help_text.split(" \u2013 ")
         *required, trade = _PERMISSION_LABELS[_language(name)]
         assert all(label in chosen for label in required) and trade in left_out, name
+        assert trade not in chosen, name
     assert texts["strings.json"] == (
         "Bitpanda rejected the stored API key. It may have expired, or it predates the"
         " permissions this version needs.\n"

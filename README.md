@@ -114,10 +114,10 @@ A new version can come out as a beta first, for testing before everyone gets it.
    - **Transaction**
    - **Earn (Read)**
    - ℹ️ All three are read-only. The integration never calls a write endpoint and cannot place trades or move funds. **Trade (Read)** is not needed — it unlocks nothing the integration uses.
-   - ⚠️ Scopes cannot be added to an existing key afterwards.
+   - ⚠️ Permissions cannot be added to an existing key afterwards.
 3. Copy your API key — **you will only see it once!** Home Assistant stores it locally and sends it only to Bitpanda; the integration never logs it, and diagnostics leave it out.
 4. Go to **Settings → Devices & services → Add integration**, search for **Bitpanda**, select it, and choose **Bitpanda Portfolio** in the dialog that follows. If the Price Tracker is already set up, **Add service** on the Bitpanda integration page opens the same dialog. It lists only what is not set up yet.
-5. Enter your API key — setup checks all three scopes and names any that is missing — then choose your currency and the language of group titles and messages (see [Languages](#languages))
+5. Enter your API key — setup checks all three permissions and marks any that is missing — then choose your currency and the language of group titles and messages (see [Languages](#languages))
 
 Bitpanda API keys expire on the date you choose when you create them, **one year** later at most. Home Assistant then asks for a new one — see [Changing settings later](#changing-settings-later).
 
@@ -383,10 +383,11 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 
 | Problem | Solution |
 |---|---|
-| Integration doesn't load | The entry on the Bitpanda integration page says why its setup failed or is being retried; **Settings → Repairs** says what blocks an upgrade from a date version. If Bitpanda could not be reached while Home Assistant started, the upgrade runs again at the next restart. |
+| The integration does not load | The entry on the Bitpanda integration page says why its setup failed or is being retried; **Settings → Repairs** says what blocks an upgrade from a date version. If Bitpanda could not be reached while Home Assistant started, the upgrade runs again at the next restart. |
 | HACS offers no update while you are on a date version (2026.06.04 or older) | Install the newest version once by hand — see [Upgrading from a date version](#%EF%B8%8F-upgrading-from-a-date-version), step 2 |
-| "New Bitpanda API key needed" | The key expired, was revoked, or lacks a scope — paste a new key with all three scopes |
-| Setup says permissions are missing | Create a new key with all three scopes — scopes cannot be added to an existing key |
+| "New Bitpanda API key needed" | The key expired, was revoked, or lacks a permission — paste a new key with all three permissions (see [Set up the Portfolio](#set-up-the-portfolio)) |
+| Setup says permissions are missing | Create a new key with all three — permissions cannot be added to an existing key |
+| **Add price tracker** fails after choosing **Bitpanda Portfolio** | Home Assistant up to 2026.9 lists both Bitpanda entries in that dialog: choose **Bitpanda Price Tracker**, or use **⋮ → Add price tracker** on its entry (see [Track prices](#track-prices)) |
 | Dialogs show raw text | Reload the browser tab (`Ctrl+F5` / `Cmd+Shift+R`) — your browser cached old translations |
 | Group titles or the integration's messages are in English while everything else is in your language | They follow the language chosen for each service — when it was added, or later under **Configure** — not Home Assistant's language; after an upgrade from a date version it is English. Choose your language under **Configure** |
 | A wallet sensor is `unavailable` | The asset is no longer in your portfolio; the wallet is removed after about 15 minutes, or at once with **⋮ → Delete** on its device page |
@@ -398,7 +399,9 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 | No Balance (staking) sensor for an asset | It appears once something is staked or Bitpanda offers an Earn product for the asset |
 | A price in another currency has no value and a `conversion` attribute | The ECB rates could not be loaded since Home Assistant started; the integration retries every 15 minutes and the value appears with the first success |
 | One asset's price sensors are `unavailable` | Bitpanda returned no price for it three rounds in a row; see the warning in the log |
-| 24h price change missing | The Recorder integration must be active and have at least 24 hours of history |
+| Prices update less often than every minute | Above 30 tracked assets the interval stretches so that the integration stays under 1,800 price requests an hour; **Settings → Repairs** says so once it passes 30 minutes (see [Features](#-features)) |
+| 24-hour price change missing | A newly tracked price shows it after a day, and only while the recorder records the sensor (see [Known limitations](#%EF%B8%8F-known-limitations)) |
+| A Portfolio sensor keeps no statistics after you set the Portfolio up again in another currency | Home Assistant still holds its statistics in the old currency. Delete them under **Settings → Tools → Statistics** (before Home Assistant 2026.8: **Developer tools → Statistics**), where the sensor is listed with the changed unit |
 
 **Still stuck?** Open an [issue](https://github.com/Spegeli/hacs_bitpanda/issues) with the diagnostics (**⋮ → Download diagnostics** on the entry; the API key is left out) and a debug log (**⋮ → Enable debug logging**).
 

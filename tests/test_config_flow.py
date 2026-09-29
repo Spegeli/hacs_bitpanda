@@ -391,7 +391,8 @@ async def test_closing_the_question_creates_and_deletes_nothing(hass):
 
 @pytest.mark.parametrize("choice", ["delete_statistics", "keep_statistics"])
 async def test_a_portfolio_set_up_meanwhile_stops_either_choice(hass, choice):
-    """Deleting now would delete what the other dialog's Portfolio records
+    """Home Assistant already stops a second dialog at its key step. Should a
+    Portfolio exist all the same, deleting now would hit what it records
     under the same IDs: the check comes before anything is deleted."""
     result, _ = await _submit_currency(hass, _FOUND)
     _portfolio_entry().add_to_hass(hass)

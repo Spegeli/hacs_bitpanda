@@ -268,6 +268,10 @@ async def test_a_listing_that_takes_too_long_finds_nothing_and_logs_a_timeout(ha
 
 
 async def test_statistics_of_another_source_do_not_count(hass):
+    """Home Assistant gives every sensor.* statistic the source "recorder"
+    (async_import_statistics refuses another; external statistics are keyed
+    domain:id), so this listing does not occur: the test pins the source
+    check the spec asks for."""
     hass.config.components.add("recorder")
     listed = [{"statistic_id": "sensor.bitpanda_portfolio_total", "source": "other",
                "statistics_unit_of_measurement": "USD"}]

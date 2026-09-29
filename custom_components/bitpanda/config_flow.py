@@ -338,9 +338,9 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_delete_statistics(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Delete their history and statistics, then set up. Checked first:
-        a Portfolio another dialog set up meanwhile records under the same
-        IDs, and its data must stay."""
+        """Delete their history and statistics, then set up. The check for an
+        existing Portfolio comes first: one that exists by then records under
+        the same IDs, and its data must stay."""
         await self._async_abort_if_portfolio_set_up()
         await async_purge_recorded(self.hass, self._old_statistics.entity_ids)
         return self._async_create_portfolio()
@@ -354,8 +354,10 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self._async_create_portfolio()
 
     async def _async_abort_if_portfolio_set_up(self) -> None:
-        """Re-checked before anything is created or deleted: a second dialog
-        may have finished a Portfolio setup in between."""
+        """Checked again before anything is created or deleted. Home
+        Assistant already stops a second setup dialog at its key step
+        (already_in_progress), so this is a safety net: a Portfolio entry
+        that exists by then stays the only one, with its data."""
         await self.async_set_unique_id(ENTRY_TYPE_PORTFOLIO)
         self._abort_if_unique_id_configured()
 

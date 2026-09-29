@@ -161,7 +161,9 @@ async def async_find_old_statistics(hass: HomeAssistant, currency: str) -> OldSt
     a statistic whose ID still has one belongs to a sensor that exists -- a
     template's or another integration's under a matching ID -- and cannot be
     attributed to the integration safely. It counts neither for the question
-    nor for the deletion, whatever its unit.
+    nor for the deletion, whatever its unit. What this cannot tell apart is a
+    look-alike that is gone as well -- a deleted template with a wallet-like
+    ID: its statistics count as the earlier Portfolio's.
 
     A question is needed when one of the statistics that count has a unit
     that is neither `currency` nor "%" -- the returns' unit -- so any other

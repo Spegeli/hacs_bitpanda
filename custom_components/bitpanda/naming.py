@@ -163,7 +163,9 @@ def is_portfolio_entity_id(entity_id: str) -> bool:
 
     Only the form is checked: a template's or another integration's sensor
     can have such an ID too, so whoever deletes something under it asks Home
-    Assistant first whether a sensor lives there (purge.py does).
+    Assistant first whether a sensor lives there (purge.py does). A look-alike
+    that is gone as well -- a deleted template with such an ID -- cannot be
+    told apart from an earlier Portfolio's sensor.
     """
     return (
         entity_id in _PORTFOLIO_FIGURE_IDS

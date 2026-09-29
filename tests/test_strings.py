@@ -734,6 +734,8 @@ def test_the_old_statistics_step_explains_both_choices():
         assert "\n" not in way_back and _placeholders(way_back) == set(), name
         assert "X" in way_back, name
         assert _LINK_TARGET.findall(keep) == ["{troubleshooting_url}"], name
+        # The link text is the README's heading, in English in every file.
+        assert "[Troubleshooting]({troubleshooting_url})" in keep, name
     assert _load("strings.json")["config"]["step"]["old_statistics"] == {
         "title": "Old statistics in another currency",
         "description": (

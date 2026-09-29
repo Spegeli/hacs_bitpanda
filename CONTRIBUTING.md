@@ -40,7 +40,7 @@ python -m pytest tests/ -q --cov=custom_components.bitpanda --cov-report=term-mi
 python -m mypy --strict
 ```
 
-`pytest` runs the suite and reports the line coverage of each file, and fails under 95 % overall, as CI does; `mypy` checks the types of the integration in strict mode, as `pyproject.toml` configures it — the tests are not type-checked.
+`pytest` runs the suite and reports the line coverage of each file, and fails under 95 % overall, as CI does; `mypy` checks the types of the integration and of the release script in strict mode, as `pyproject.toml` configures it — the tests are not type-checked.
 
 The same in Docker, on any system, with the Python version and the pinned requirements CI uses; each run installs them afresh, which takes a few minutes. On Windows, run it from PowerShell: Git Bash rewrites the mount path.
 

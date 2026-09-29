@@ -231,9 +231,9 @@ The action `bitpanda.refresh` fetches the portfolio and the prices right away an
 
 ## 🤖 Automation examples
 
-Paste one into a new automation's YAML editor (in the automation editor: **⋮ → Edit in YAML**) and adjust the entity ID and the numbers.
+Paste one into a new automation's YAML editor (in the automation editor: **⋮ → Edit in YAML**) and adjust the entity IDs and the numbers. A price sensor's entity ID ends in its currency: for US dollars, use `sensor.bitpanda_bitcoin_btc_price_tracker_usd` once USD is one of the Price Tracker's extra currencies, and write the threshold in USD. Every example works from Home Assistant 2025.5 on.
 
-**Price alert** — a notification once Bitcoin rises above 100,000 EUR. It fires when the price crosses the threshold, not again while the price stays above it; the condition keeps it quiet when the price only comes back above it after an outage or a restart. Use `below:` for a fall.
+**Price alert** — a notification once Bitcoin rises above 100,000 EUR. It fires when the price crosses the threshold, not while it stays above, and at most once an hour, so a price that swings around the threshold does not flood you with messages. The first condition keeps it quiet when the price only comes back after an outage or a restart. Use `below:` for a fall; add `for: "00:05:00"` to the trigger to ignore a spike shorter than five minutes.
 
 ```yaml
 alias: Bitcoin above 100,000 EUR
@@ -245,19 +245,49 @@ conditions:
   # Only a real crossing: not the price coming back after an outage or a restart.
   - condition: template
     value_template: "{{ trigger.from_state is not none and trigger.from_state.state | is_number }}"
+  # At most one message an hour (60 minutes × 60 seconds) — for 10 minutes, write 10 * 60.
+  - condition: template
+    value_template: "{{ now().timestamp() - as_timestamp(this.attributes.last_triggered, 0) > 60 * 60 }}"
 actions:
   - action: persistent_notification.create
     data:
       title: Bitcoin
-      message: "Bitcoin is at {{ states('sensor.bitpanda_bitcoin_btc_price_tracker_eur') }} EUR."
+      message: "Bitcoin is at {{ states('sensor.bitpanda_bitcoin_btc_price_tracker_eur', with_unit=True) }}."
 ```
 
 For a push message to your phone, use its `notify.mobile_app_…` action instead.
 
-**Refresh on a schedule** — ask Bitpanda at a set time instead of waiting for the next regular update, then show the portfolio's total value. With `continue_on_error: true`, a failed refresh (see [Refreshing by hand](#refreshing-by-hand)) does not stop the automation: the notification still comes, with the last figures.
+**Big move** — a notification when Bitcoin has risen or fallen by more than 10 % within 24 hours (the sensor's `change_24h_pct` attribute), again at most once an hour.
 
 ```yaml
-alias: Refresh Bitpanda every morning
+alias: Bitcoin moved more than 10 % in 24 hours
+triggers:
+  - trigger: numeric_state
+    entity_id: sensor.bitpanda_bitcoin_btc_price_tracker_eur
+    attribute: change_24h_pct
+    above: 10
+  - trigger: numeric_state
+    entity_id: sensor.bitpanda_bitcoin_btc_price_tracker_eur
+    attribute: change_24h_pct
+    below: -10
+conditions:
+  # Only a real move: not the change appearing after a restart.
+  - condition: template
+    value_template: "{{ trigger.from_state is not none and trigger.from_state.attributes.change_24h_pct is number }}"
+  # At most one message an hour.
+  - condition: template
+    value_template: "{{ now().timestamp() - as_timestamp(this.attributes.last_triggered, 0) > 60 * 60 }}"
+actions:
+  - action: persistent_notification.create
+    data:
+      title: Bitcoin
+      message: "Bitcoin moved {{ state_attr('sensor.bitpanda_bitcoin_btc_price_tracker_eur', 'change_24h_pct') }} % in 24 hours."
+```
+
+**Morning report** — ask Bitpanda at a set time instead of waiting for the next regular update, then show the portfolio's total value and today's return. With `continue_on_error: true`, a failed refresh (see [Refreshing by hand](#refreshing-by-hand)) does not stop the automation: the report still comes, with the last figures.
+
+```yaml
+alias: Bitpanda morning report
 triggers:
   - trigger: time
     at: "07:00:00"
@@ -268,10 +298,29 @@ actions:
   - action: persistent_notification.create
     data:
       title: Bitpanda
-      message: "Portfolio: {{ states('sensor.bitpanda_portfolio_total') }}"
+      message: "Portfolio: {{ states('sensor.bitpanda_portfolio_total', with_unit=True) }}, today {{ states('sensor.bitpanda_portfolio_return_day', with_unit=True) }}"
 ```
 
 The same steps work in a script, which you can start from anywhere — from a button, for example.
+
+**Staking reward** — a notification when a new staking reward arrives, on the staking sensor of one wallet (here Ethereum). It compares the number of payouts (`rewards_count`), so a restart stays quiet.
+
+```yaml
+alias: New Ethereum staking reward
+triggers:
+  - trigger: state
+    entity_id: sensor.bitpanda_ethereum_eth_wallet_staking
+    attribute: rewards_count
+conditions:
+  # Only a new payout: the count went up, it did not just appear after a restart.
+  - condition: template
+    value_template: "{{ trigger.from_state is not none and trigger.from_state.attributes.rewards_count is number and trigger.to_state.attributes.rewards_count > trigger.from_state.attributes.rewards_count }}"
+actions:
+  - action: persistent_notification.create
+    data:
+      title: Ethereum staking
+      message: "New reward: {{ trigger.to_state.attributes.rewards_net }} ETH net so far."
+```
 
 ---
 

@@ -100,7 +100,7 @@
       }
     },
     "error": {
-      "invalid_auth": "Bitpanda rejected this API key. Check that it was copied completely and that it has at least one of the required permissions.",
+      "invalid_auth": "Bitpanda rejected this API key. It may be copied incompletely, deleted in your Bitpanda account or expired, or it has none of the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\". Check the key, or create a new one with all three.",
       "missing_scopes": "Permissions of this API key: \"Balances\" {balance}, \"Transaction\" {transaction}, \"Earn (Read)\" {earn}. Permissions cannot be added to an existing key. Create a new one with all three.",
       "rate_limited": "Too many requests. Wait a moment and try again.",
       "cannot_connect": "Could not reach Bitpanda. Try again later.",

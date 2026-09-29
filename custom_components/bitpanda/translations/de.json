@@ -100,7 +100,7 @@
       }
     },
     "error": {
-      "invalid_auth": "Bitpanda hat diesen API-Schlüssel abgelehnt. Prüfe, ob er vollständig kopiert wurde und mindestens eine der benötigten Berechtigungen hat.",
+      "invalid_auth": "Bitpanda hat diesen API-Schlüssel abgelehnt. Vielleicht ist er unvollständig kopiert, in deinem Bitpanda-Konto gelöscht oder abgelaufen, oder er hat keine der Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“. Prüfe den Schlüssel oder erstelle einen neuen mit allen dreien.",
       "missing_scopes": "Berechtigungen dieses API-Schlüssels: „Guthaben“ {balance}, „Transaktion“ {transaction}, „Earn (Read)“ {earn}. Einem bestehenden Schlüssel lassen sich keine Berechtigungen hinzufügen. Erstelle einen neuen mit allen dreien.",
       "rate_limited": "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
       "cannot_connect": "Bitpanda ist nicht erreichbar. Versuche es später erneut.",

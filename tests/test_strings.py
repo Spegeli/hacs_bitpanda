@@ -834,6 +834,32 @@ def test_the_missing_permissions_error_marks_each_permission():
     )
 
 
+def test_the_rejected_key_error_names_the_likely_causes_and_the_permissions():
+    """Bitpanda answers a wrong, deleted or expired key and a key with none of
+    the three permissions alike: every probe of the setup fails. The error
+    names these causes and the three permissions as Bitpanda's key page does
+    in each language -- never the trading one --, and asks to check the key or
+    create a new one with all three. In the approved English and German
+    wording."""
+    for name in _FILES:
+        error = _load(name)["config"]["error"]["invalid_auth"]
+        *required, trade = _PERMISSION_LABELS[_language(name)]
+        assert all(label in error for label in required), name
+        assert trade not in error and _placeholders(error) == set(), name
+    assert _load("strings.json")["config"]["error"]["invalid_auth"] == (
+        "Bitpanda rejected this API key. It may be copied incompletely, deleted in your"
+        " Bitpanda account or expired, or it has none of the permissions \"Balances\","
+        " \"Transaction\" and \"Earn (Read)\". Check the key, or create a new one with all"
+        " three."
+    )
+    assert _load("translations/de.json")["config"]["error"]["invalid_auth"] == (
+        "Bitpanda hat diesen API-Schlüssel abgelehnt. Vielleicht ist er unvollständig"
+        " kopiert, in deinem Bitpanda-Konto gelöscht oder abgelaufen, oder er hat keine der"
+        " Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“. Prüfe den Schlüssel"
+        " oder erstelle einen neuen mit allen dreien."
+    )
+
+
 # A German text names the key's permissions when it says Berechtigung or
 # names one of them -- but Guthaben alone, which is also the German name of
 # the balance sensors.

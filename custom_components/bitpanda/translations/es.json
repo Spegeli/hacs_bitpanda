@@ -100,7 +100,7 @@
       }
     },
     "error": {
-      "invalid_auth": "Bitpanda ha rechazado esta clave API. Comprueba que se haya copiado completa y que tenga al menos uno de los permisos necesarios.",
+      "invalid_auth": "Bitpanda ha rechazado esta clave API. Puede que se haya copiado incompleta, que se haya eliminado de tu cuenta de Bitpanda o que haya caducado, o que no tenga ninguno de los permisos \"Créditos\", \"Transacción\" y \"Earn (Lectura)\". Comprueba la clave o crea una nueva con los tres.",
       "missing_scopes": "Permisos de esta clave API: \"Créditos\" {balance}, \"Transacción\" {transaction}, \"Earn (Lectura)\" {earn}. A una clave existente no se le pueden añadir permisos. Crea una nueva con los tres.",
       "rate_limited": "Demasiadas solicitudes. Espera un momento y vuelve a intentarlo.",
       "cannot_connect": "No se ha podido conectar con Bitpanda. Inténtalo de nuevo más tarde.",

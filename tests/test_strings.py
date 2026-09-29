@@ -733,6 +733,9 @@ def test_the_old_statistics_step_explains_both_choices():
         assert _LINK_TARGET.findall(intro + delete + way_back) == [], name
         assert "\n" not in way_back and _placeholders(way_back) == set(), name
         assert "X" in way_back, name
+        # One sentence: with old statistics in several currencies, no advice
+        # on which currency to choose would hold.
+        assert ". " not in way_back and way_back.endswith("."), name
         assert _LINK_TARGET.findall(keep) == ["{troubleshooting_url}"], name
         # The link text is the README's heading, in English in every file.
         assert "[Troubleshooting]({troubleshooting_url})" in keep, name
@@ -750,7 +753,7 @@ def test_the_old_statistics_step_explains_both_choices():
             " sensors with old statistics record none until you delete the old statistics"
             " yourself; [Troubleshooting]({troubleshooting_url}) in the README explains how.\n\n"
             'To keep the old statistics, close this dialog with the "X" instead: nothing is set'
-            " up or deleted then. Set up the Portfolio again in their currency, and they continue."
+            " up or deleted then."
         ),
         "menu_options": {
             "delete_statistics": "Delete and set up",
@@ -772,8 +775,7 @@ def test_the_old_statistics_step_explains_both_choices():
             " Statistik selbst löschst; [Troubleshooting]({troubleshooting_url}) in der README"
             " erklärt, wie.\n\n"
             "Möchtest du die alte Statistik behalten, schließe den Dialog stattdessen über das"
-            " „X“: Dann wird nichts eingerichtet oder gelöscht. Richte das Portfolio danach in"
-            " ihrer Währung ein, dann läuft sie weiter."
+            " „X“: Dann wird nichts eingerichtet oder gelöscht."
         ),
         "menu_options": {
             "delete_statistics": "Löschen und einrichten",

@@ -2,6 +2,7 @@
 and looking for the statistics an earlier Portfolio left -- the cases that need
 no real recorder (test_old_statistics.py has one)."""
 import asyncio
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -202,12 +203,27 @@ async def test_the_recorded_purge_deletes_history_then_statistics_of_the_given_i
     assert calls == [("purge", ["sensor.a", "sensor.b"], 0), ("clear", ["sensor.a", "sensor.b"])]
 
 
-async def test_the_recorded_purge_without_ids_does_nothing(hass):
+async def test_the_recorded_purge_says_in_the_log_how_many_sensors_it_clears(hass, caplog):
+    """A user asking where the history went finds the deletion in the log:
+    how many sensors, nothing else."""
+    caplog.set_level(logging.INFO, logger="custom_components.bitpanda.purge")
+    instance = _fake_recorder(hass, [])
+    with patch("custom_components.bitpanda.purge.get_instance", return_value=instance):
+        await async_purge_recorded(hass, ["sensor.b", "sensor.a"])
+    [record] = [r for r in caplog.records if r.name == "custom_components.bitpanda.purge"]
+    assert (record.levelname, record.getMessage()) == (
+        "INFO", "Deleting the history and long-term statistics of 2 Portfolio sensors"
+    )
+
+
+async def test_the_recorded_purge_without_ids_does_nothing(hass, caplog):
+    caplog.set_level(logging.INFO, logger="custom_components.bitpanda.purge")
     calls: list = []
     instance = _fake_recorder(hass, calls)
     with patch("custom_components.bitpanda.purge.get_instance", return_value=instance):
         await async_purge_recorded(hass, [])
     assert calls == []
+    assert not [r for r in caplog.records if r.name == "custom_components.bitpanda.purge"]
 
 
 async def test_the_recorded_purge_without_a_recorder_does_nothing(hass):

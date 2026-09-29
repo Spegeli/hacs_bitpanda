@@ -1,10 +1,12 @@
 """Shared fixtures for Bitpanda integration tests."""
+from collections.abc import Mapping
 from datetime import timedelta
 from functools import partial
 import json
 import logging
 from pathlib import Path
 import string
+from typing import Any
 from unittest.mock import patch
 
 from homeassistant.components.recorder import get_instance
@@ -115,6 +117,49 @@ def _placeholders(template: str) -> frozenset[str]:
     )
 
 
+def flow_text_problems(texts: dict, result: Mapping[str, Any]) -> list[tuple]:
+    """What the flow result `result` shows without a text, and every
+    placeholder a text it shows uses that the code did not supply. `texts`
+    are the flow's part of the English strings: `config`, `options` or one
+    subentry type's."""
+    problems: list[tuple] = []
+    shown: list[str] = []
+    if result["type"] in (FlowResultType.FORM, FlowResultType.MENU):
+        step = texts.get("step", {}).get(result["step_id"])
+        if step is None:
+            return [("no step texts", result["step_id"])]
+        shown += [step.get("title", ""), step.get("description", "")]
+    if result["type"] == FlowResultType.FORM:
+        shown += step.get("data_description", {}).values()
+        for part in step.get("sections", {}).values():
+            shown += [part.get("description", ""), *part.get("data_description", {}).values()]
+        for error in (result.get("errors") or {}).values():
+            if error in texts.get("error", {}):
+                shown.append(texts["error"][error])
+            else:
+                problems.append(("no error text", result["step_id"], error))
+    elif result["type"] == FlowResultType.MENU:
+        # The frontend fills the placeholders into the button labels too.
+        labels = step.get("menu_options", {})
+        for option in result["menu_options"]:
+            if option in labels:
+                shown.append(labels[option])
+            else:
+                problems.append(("no menu option text", result["step_id"], option))
+    elif result["type"] == FlowResultType.ABORT:
+        if result["reason"] in texts.get("abort", {}):
+            shown.append(texts["abort"][result["reason"]])
+        else:
+            problems.append(("no abort text", result["reason"]))
+    supplied = set(result.get("description_placeholders") or {})
+    problems.extend(
+        ("placeholder not supplied", result.get("step_id") or result["reason"], missing)
+        for text in shown
+        if (missing := _placeholders(text) - supplied)
+    )
+    return problems
+
+
 @pytest.fixture(autouse=True)
 def check_flow_texts():
     """Every form, menu and abort a Bitpanda flow shows has its texts, and
@@ -153,41 +198,8 @@ def check_flow_texts():
     async def _checked(self, flow, *args, **kwargs):
         result = await original(self, flow, *args, **kwargs)
         texts = _texts(self, flow)
-        if texts is None:
-            return result
-        shown: list[str] = []
-        if result["type"] in (FlowResultType.FORM, FlowResultType.MENU):
-            step = texts.get("step", {}).get(result["step_id"])
-            if step is None:
-                problems.append(("no step texts", result["step_id"]))
-                return result
-            shown += [step.get("title", ""), step.get("description", "")]
-        if result["type"] == FlowResultType.FORM:
-            shown += step.get("data_description", {}).values()
-            for part in step.get("sections", {}).values():
-                shown += [part.get("description", ""), *part.get("data_description", {}).values()]
-            for error in (result.get("errors") or {}).values():
-                if error in texts.get("error", {}):
-                    shown.append(texts["error"][error])
-                else:
-                    problems.append(("no error text", result["step_id"], error))
-        elif result["type"] == FlowResultType.MENU:
-            problems.extend(
-                ("no menu option text", result["step_id"], option)
-                for option in result["menu_options"]
-                if option not in step.get("menu_options", {})
-            )
-        elif result["type"] == FlowResultType.ABORT:
-            if result["reason"] in texts.get("abort", {}):
-                shown.append(texts["abort"][result["reason"]])
-            else:
-                problems.append(("no abort text", result["reason"]))
-        supplied = set(result.get("description_placeholders") or {})
-        problems.extend(
-            ("placeholder not supplied", result.get("step_id") or result["reason"], missing)
-            for text in shown
-            if (missing := _placeholders(text) - supplied)
-        )
+        if texts is not None:
+            problems.extend(flow_text_problems(texts, result))
         return result
 
     with patch.object(FlowManager, "_async_handle_step", _checked):

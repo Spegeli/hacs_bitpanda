@@ -42,7 +42,7 @@
       },
       "old_statistics": {
         "title": "Old statistics in another currency",
-        "description": "Home Assistant still holds long-term statistics of an earlier Bitpanda Portfolio in {old}. You chose {new}. A sensor whose statistics are in another currency records no new statistics until the old ones are gone.\n\n- **Delete and set up:** deletes the history and long-term statistics of every earlier Portfolio sensor – figures, returns and wallets – and sets up the Portfolio in {new}. Its statistics then start afresh. The deleted data cannot be restored.\n- **Keep and set up:** sets up the Portfolio in {new} and deletes nothing. The sensors with old statistics record none until you delete the old statistics yourself; [Troubleshooting](https://github.com/Spegeli/hacs_bitpanda#-troubleshooting) in the README explains how.",
+        "description": "Home Assistant still holds long-term statistics of an earlier Bitpanda Portfolio in {old}. You chose {new}. A sensor whose statistics are in another currency records no new statistics until the old ones are gone.\n\n- **Delete and set up:** deletes the history and long-term statistics of every earlier Portfolio sensor – figures, returns and wallets – and sets up the Portfolio in {new}. Its statistics then start afresh. The deleted data cannot be restored.\n- **Keep and set up:** sets up the Portfolio in {new} and deletes nothing. The sensors with old statistics record none until you delete the old statistics yourself; [Troubleshooting]({troubleshooting_url}) in the README explains how.",
         "menu_options": {
           "delete_statistics": "Delete and set up",
           "keep_statistics": "Keep and set up"

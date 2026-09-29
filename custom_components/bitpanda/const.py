@@ -41,6 +41,9 @@ API_ERROR_KINDS: tuple[str, ...] = (
 )
 
 API_KEY_URL = "https://app.bitpanda.com/my-account/apikey"
+# The README's Troubleshooting section. A text links it through a placeholder:
+# hassfest allows no URL in a strings file.
+TROUBLESHOOTING_URL = "https://github.com/Spegeli/hacs_bitpanda#-troubleshooting"
 
 # Measured 2026-09-24 with one key per scope: /portfolio needs Balances,
 # /operations Transaction, /earn/configs Earn (Read) -- the names on Bitpanda's

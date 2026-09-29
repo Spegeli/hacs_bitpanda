@@ -13,7 +13,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
 from custom_components.bitpanda.assets import slim_asset
-from custom_components.bitpanda.const import API_KEY_URL, DOMAIN
+from custom_components.bitpanda.const import API_KEY_URL, DOMAIN, TROUBLESHOOTING_URL
 from custom_components.bitpanda.purge import OldStatistics
 
 from tests.conftest import load_fixture
@@ -338,8 +338,19 @@ async def test_old_statistics_in_another_currency_are_asked_about_first(hass):
     result, _ = await _submit_currency(hass, _FOUND)
     assert (result["type"], result["step_id"]) == (_FLOW.MENU, "old_statistics")
     assert result["menu_options"] == ["delete_statistics", "keep_statistics"]
-    assert result["description_placeholders"] == {"old": "CHF, EUR", "new": "USD"}
+    assert result["description_placeholders"] == {
+        "old": "CHF, EUR", "new": "USD", "troubleshooting_url": TROUBLESHOOTING_URL,
+    }
     assert hass.config_entries.async_entries(DOMAIN) == []
+
+
+def test_the_troubleshooting_link_leads_to_the_readmes_troubleshooting_section():
+    """The anchor GitHub gives the heading "🔧 Troubleshooting": the emoji
+    dropped, the space after it kept as a dash. The issue templates'
+    config.yml links the same section."""
+    readme = (Path(__file__).parent.parent / "README.md").read_text(encoding="utf-8")
+    assert "\n## \U0001f527 Troubleshooting\n" in readme
+    assert TROUBLESHOOTING_URL == "https://github.com/Spegeli/hacs_bitpanda#-troubleshooting"
 
 
 async def test_delete_and_set_up_deletes_first_then_creates_the_entry(hass):

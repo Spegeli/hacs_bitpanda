@@ -30,7 +30,11 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
     get_start_time,
 )
 
-from custom_components.bitpanda.const import DOMAIN, PORTFOLIO_UPDATE_INTERVAL
+from custom_components.bitpanda.const import (
+    DOMAIN,
+    PORTFOLIO_UPDATE_INTERVAL,
+    TROUBLESHOOTING_URL,
+)
 
 from tests.conftest import load_fixture, recorded_history, statistics_units
 
@@ -257,7 +261,9 @@ async def test_a_new_setup_in_another_currency_deletes_the_old_statistics_when_a
 
     result = await _set_up_portfolio(hass, "usd")
     assert (result["type"], result["step_id"]) == (FlowResultType.MENU, "old_statistics")
-    assert result["description_placeholders"] == {"old": "EUR", "new": "USD"}
+    assert result["description_placeholders"] == {
+        "old": "EUR", "new": "USD", "troubleshooting_url": TROUBLESHOOTING_URL,
+    }
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"next_step_id": "delete_statistics"}
     )

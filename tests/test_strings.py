@@ -114,6 +114,22 @@ def test_every_link_keeps_its_english_target():
             )
 
 
+# hassfest's pattern for a URL in a text (script/hassfest/translations.py,
+# RE_URL, in 2026.9): it refuses a strings file that has one. A link target
+# comes in as a placeholder the code fills in, as {api_key_url} does.
+_URL = re.compile(
+    r"(((ftp|ftps|scp|http|https|mqtt|mqtts|socket|socks5):\/\/|www\.)"
+    r"[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}(:[0-9]{1,5})?(\/.*)?)",
+    re.IGNORECASE,
+)
+
+
+def test_no_string_contains_a_url():
+    for name in _FILES:
+        for key, text in _texts(_load(name)).items():
+            assert not _URL.search(text), (name, key)
+
+
 def test_no_language_is_an_untranslated_copy_of_english():
     """Codes, product names and a few loanwords ("EUR", "Cash Plus",
     "Staking") may read the same in every language. A sentence never does,
@@ -692,15 +708,13 @@ def test_the_reauth_dialog_starts_what_to_do_on_a_line_of_its_own():
     )
 
 
-_TROUBLESHOOTING = "https://github.com/Spegeli/hacs_bitpanda#-troubleshooting"
-
-
 def test_the_old_statistics_step_explains_both_choices():
     """The setup's question about old statistics: what happened, in one
     paragraph with both currencies; then a list item per button, led by the
     button's own label in bold, each saying it sets up the Portfolio in the
-    new currency; the second points to Troubleshooting. In the approved
-    English and German wording."""
+    new currency; the second links Troubleshooting through a placeholder, as
+    hassfest allows no URL in a text. In the approved English and German
+    wording."""
     for name in _FILES:
         step = _load(name)["config"]["step"]["old_statistics"]
         assert set(step) == {"title", "description", "menu_options"}, name
@@ -708,12 +722,15 @@ def test_the_old_statistics_step_explains_both_choices():
         intro, choices = step["description"].split("\n\n")
         assert "\n" not in intro and _placeholders(intro) == {"old", "new"}, name
         delete, keep = choices.split("\n")
-        for item, option in ((delete, "delete_statistics"), (keep, "keep_statistics")):
+        for item, option, placeholders in (
+            (delete, "delete_statistics", {"new"}),
+            (keep, "keep_statistics", {"new", "troubleshooting_url"}),
+        ):
             label = re.escape(step["menu_options"][option])
             assert re.match(rf"- \*\*{label}\s?:\*\* ", item), (name, option)
-            assert _placeholders(item) == {"new"}, (name, option)
+            assert _placeholders(item) == placeholders, (name, option)
         assert _LINK_TARGET.findall(intro + delete) == [], name
-        assert _LINK_TARGET.findall(keep) == [_TROUBLESHOOTING], name
+        assert _LINK_TARGET.findall(keep) == ["{troubleshooting_url}"], name
     assert _load("strings.json")["config"]["step"]["old_statistics"] == {
         "title": "Old statistics in another currency",
         "description": (
@@ -726,7 +743,7 @@ def test_the_old_statistics_step_explains_both_choices():
             " restored.\n"
             "- **Keep and set up:** sets up the Portfolio in {new} and deletes nothing. The"
             " sensors with old statistics record none until you delete the old statistics"
-            f" yourself; [Troubleshooting]({_TROUBLESHOOTING}) in the README explains how."
+            " yourself; [Troubleshooting]({troubleshooting_url}) in the README explains how."
         ),
         "menu_options": {
             "delete_statistics": "Delete and set up",
@@ -745,7 +762,7 @@ def test_the_old_statistics_step_explains_both_choices():
             " Daten lassen sich nicht wiederherstellen.\n"
             "- **Behalten und einrichten:** richtet das Portfolio in {new} ein und löscht"
             " nichts. Die Sensoren mit alter Statistik zeichnen keine auf, bis du die alte"
-            f" Statistik selbst löschst; [Troubleshooting]({_TROUBLESHOOTING}) in der README"
+            " Statistik selbst löschst; [Troubleshooting]({troubleshooting_url}) in der README"
             " erklärt, wie."
         ),
         "menu_options": {

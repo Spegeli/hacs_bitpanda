@@ -54,6 +54,7 @@ from .const import (
     REQUIRED_SCOPES,
     SUBENTRY_TYPE_PRICE_GROUP,
     SUPPORTED_CURRENCIES,
+    TROUBLESHOOTING_URL,
     entry_type,
 )
 from .groups import async_group_titles, price_group_subentries
@@ -330,6 +331,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders={
                 "old": ", ".join(self._old_statistics.currencies),
                 "new": self._portfolio_data[CONF_CURRENCY],
+                "troubleshooting_url": TROUBLESHOOTING_URL,
             },
         )
 

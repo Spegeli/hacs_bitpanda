@@ -90,6 +90,17 @@ async def test_mixed_units_name_only_the_other_currencies_and_delete_every_id(ha
     )
 
 
+async def test_a_statistic_without_a_unit_is_left_alone(hass):
+    """Every Portfolio sensor has a unit -- its currency, or % for a return
+    -- so a statistic without one under a Portfolio ID is another sensor's:
+    it goes neither into the question nor into the deletion."""
+    units = {_TOTAL: "EUR", _CASH: None}
+    await _record(hass, units, deleted=units)
+    assert await async_find_old_statistics(hass, "USD") == OldStatistics(
+        entity_ids=[_TOTAL], currencies=["EUR"]
+    )
+
+
 @pytest.mark.parametrize(
     "units",
     [

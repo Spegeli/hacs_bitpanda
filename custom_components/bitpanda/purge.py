@@ -165,13 +165,14 @@ async def async_find_old_statistics(hass: HomeAssistant, currency: str) -> OldSt
     look-alike that is gone as well -- a deleted template with a wallet-like
     ID: its statistics count as the earlier Portfolio's.
 
-    A question is needed when one of the statistics that count has a unit
-    that is neither `currency` nor "%" -- the returns' unit -- so any other
-    currency code, also one the integration no longer supports; a statistic
-    without a unit never counts. Then every one of them goes, whatever its
-    unit: the earlier Portfolio's sensors are deleted together, as they are
-    in a currency change. Statistics in the same currency ask nothing: they
-    simply continue.
+    A statistic without a unit never counts either: every Portfolio sensor
+    has one -- its currency, or "%" for a return -- so such a statistic is
+    another sensor's. A question is needed when one of the statistics that
+    count has a unit that is neither `currency` nor "%", so any other
+    currency code, also one the integration no longer supports. Then every
+    one of them goes, whatever its unit: the earlier Portfolio's sensors are
+    deleted together, as they are in a currency change. Statistics in the
+    same currency ask nothing: they simply continue.
 
     Nothing is found without the recorder, or when the listing fails or takes
     longer than _LISTING_TIMEOUT: setup goes on without the question, and the
@@ -186,10 +187,11 @@ async def async_find_old_statistics(hass: HomeAssistant, currency: str) -> OldSt
             listed = await async_list_statistic_ids(hass)
         # A statistic of another source is an external one, keyed `domain:id`,
         # which no Portfolio ID matches: the source check only guards that.
-        units: dict[str, str | None] = {
+        units: dict[str, str] = {
             entry["statistic_id"]: entry["statistics_unit_of_measurement"]
             for entry in listed
             if entry["source"] == _RECORDER
+            and entry["statistics_unit_of_measurement"] is not None
             and is_portfolio_entity_id(entry["statistic_id"])
             and not _is_live(hass, entry["statistic_id"])
         }
@@ -200,9 +202,7 @@ async def async_find_old_statistics(hass: HomeAssistant, currency: str) -> OldSt
             type(err).__name__,
         )
         return nothing
-    currencies = {
-        unit for unit in units.values() if unit is not None and unit not in (currency, PERCENTAGE)
-    }
+    currencies = {unit for unit in units.values() if unit not in (currency, PERCENTAGE)}
     if not currencies:
         return nothing
     return OldStatistics(entity_ids=sorted(units), currencies=sorted(currencies))

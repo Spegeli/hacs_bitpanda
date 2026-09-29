@@ -40,6 +40,14 @@
           }
         }
       },
+      "old_statistics": {
+        "title": "Oude statistieken in een andere valuta",
+        "description": "Home Assistant bewaart nog langetermijnstatistieken van een eerder Bitpanda Portfolio in {old}. Je hebt {new} gekozen. Een sensor waarvan de statistieken in een andere valuta staan, legt geen nieuwe statistieken vast zolang de oude er nog zijn.\n\n- **Verwijderen en instellen:** verwijdert de geschiedenis en de langetermijnstatistieken van alle eerdere Portfolio-sensoren – waarden, rendementen en wallets – en stelt het Portfolio in {new} in. De statistieken beginnen dan opnieuw. De verwijderde gegevens kunnen niet worden hersteld.\n- **Behouden en instellen:** stelt het Portfolio in {new} in en verwijdert niets. De sensoren met oude statistieken leggen er geen vast totdat je de oude statistieken zelf verwijdert; [Troubleshooting](https://github.com/Spegeli/hacs_bitpanda#-troubleshooting) in de README legt uit hoe.",
+        "menu_options": {
+          "delete_statistics": "Verwijderen en instellen",
+          "keep_statistics": "Behouden en instellen"
+        }
+      },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
         "description": "De Bitpanda Price Tracker maakt voor elke gevolgde asset altijd een prijssensor in EUR aan. Kies hier optioneel extra valuta waarin de prijzen ook worden getoond.\n\nJe kunt de extra valuta en de taal ook later kiezen of wijzigen via \"Configureren\" (⚙) bij de invoer \"Bitpanda Price Tracker\" op de integratiepagina van Bitpanda. Voeg na het instellen assets toe met \"Prijstracker toevoegen\" bij dezelfde invoer.",

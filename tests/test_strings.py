@@ -692,6 +692,69 @@ def test_the_reauth_dialog_starts_what_to_do_on_a_line_of_its_own():
     )
 
 
+_TROUBLESHOOTING = "https://github.com/Spegeli/hacs_bitpanda#-troubleshooting"
+
+
+def test_the_old_statistics_step_explains_both_choices():
+    """The setup's question about old statistics: what happened, in one
+    paragraph with both currencies; then a list item per button, led by the
+    button's own label in bold, each saying it sets up the Portfolio in the
+    new currency; the second points to Troubleshooting. In the approved
+    English and German wording."""
+    for name in _FILES:
+        step = _load(name)["config"]["step"]["old_statistics"]
+        assert set(step) == {"title", "description", "menu_options"}, name
+        assert set(step["menu_options"]) == {"delete_statistics", "keep_statistics"}, name
+        intro, choices = step["description"].split("\n\n")
+        assert "\n" not in intro and _placeholders(intro) == {"old", "new"}, name
+        delete, keep = choices.split("\n")
+        for item, option in ((delete, "delete_statistics"), (keep, "keep_statistics")):
+            label = re.escape(step["menu_options"][option])
+            assert re.match(rf"- \*\*{label}\s?:\*\* ", item), (name, option)
+            assert _placeholders(item) == {"new"}, (name, option)
+        assert _LINK_TARGET.findall(intro + delete) == [], name
+        assert _LINK_TARGET.findall(keep) == [_TROUBLESHOOTING], name
+    assert _load("strings.json")["config"]["step"]["old_statistics"] == {
+        "title": "Old statistics in another currency",
+        "description": (
+            "Home Assistant still holds long-term statistics of an earlier Bitpanda Portfolio"
+            " in {old}. You chose {new}. A sensor whose statistics are in another currency"
+            " records no new statistics until the old ones are gone.\n\n"
+            "- **Delete and set up:** deletes the history and long-term statistics of every"
+            " earlier Portfolio sensor – figures, returns and wallets – and sets up the"
+            " Portfolio in {new}. Its statistics then start afresh. The deleted data cannot be"
+            " restored.\n"
+            "- **Keep and set up:** sets up the Portfolio in {new} and deletes nothing. The"
+            " sensors with old statistics record none until you delete the old statistics"
+            f" yourself; [Troubleshooting]({_TROUBLESHOOTING}) in the README explains how."
+        ),
+        "menu_options": {
+            "delete_statistics": "Delete and set up",
+            "keep_statistics": "Keep and set up",
+        },
+    }
+    assert _load("translations/de.json")["config"]["step"]["old_statistics"] == {
+        "title": "Alte Statistiken in anderer Währung",
+        "description": (
+            "Home Assistant hat noch Langzeitstatistiken eines früheren Bitpanda Portfolios in"
+            " {old}. Du hast {new} gewählt. Ein Sensor, dessen Statistik in einer anderen"
+            " Währung vorliegt, zeichnet keine neue Statistik auf, bis die alte weg ist.\n\n"
+            "- **Löschen und einrichten:** löscht Verlauf und Langzeitstatistiken aller"
+            " früheren Portfolio-Sensoren – Kennzahlen, Renditen und Wallets – und richtet"
+            " das Portfolio in {new} ein. Seine Statistik beginnt dann neu. Die gelöschten"
+            " Daten lassen sich nicht wiederherstellen.\n"
+            "- **Behalten und einrichten:** richtet das Portfolio in {new} ein und löscht"
+            " nichts. Die Sensoren mit alter Statistik zeichnen keine auf, bis du die alte"
+            f" Statistik selbst löschst; [Troubleshooting]({_TROUBLESHOOTING}) in der README"
+            " erklärt, wie."
+        ),
+        "menu_options": {
+            "delete_statistics": "Löschen und einrichten",
+            "keep_statistics": "Behalten und einrichten",
+        },
+    }
+
+
 # Bitpanda's permission names as its key page shows them in each language
 # (read by the maintainer on 2026-09-29), in that language's quotation marks:
 # Balances, Transaction, Earn (Read), Trade (Read). A language Bitpanda's

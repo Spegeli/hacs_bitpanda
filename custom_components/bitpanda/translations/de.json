@@ -40,6 +40,14 @@
           }
         }
       },
+      "old_statistics": {
+        "title": "Alte Statistiken in anderer Währung",
+        "description": "Home Assistant hat noch Langzeitstatistiken eines früheren Bitpanda Portfolios in {old}. Du hast {new} gewählt. Ein Sensor, dessen Statistik in einer anderen Währung vorliegt, zeichnet keine neue Statistik auf, bis die alte weg ist.\n\n- **Löschen und einrichten:** löscht Verlauf und Langzeitstatistiken aller früheren Portfolio-Sensoren – Kennzahlen, Renditen und Wallets – und richtet das Portfolio in {new} ein. Seine Statistik beginnt dann neu. Die gelöschten Daten lassen sich nicht wiederherstellen.\n- **Behalten und einrichten:** richtet das Portfolio in {new} ein und löscht nichts. Die Sensoren mit alter Statistik zeichnen keine auf, bis du die alte Statistik selbst löschst; [Troubleshooting](https://github.com/Spegeli/hacs_bitpanda#-troubleshooting) in der README erklärt, wie.",
+        "menu_options": {
+          "delete_statistics": "Löschen und einrichten",
+          "keep_statistics": "Behalten und einrichten"
+        }
+      },
       "price_tracker": {
         "title": "Bitpanda Price Tracker",
         "description": "Der Bitpanda Price Tracker legt für jedes verfolgte Asset immer einen Preis-Sensor in EUR an. Optional wählst du hier zusätzliche Währungen, in denen die Preise ebenfalls angezeigt werden.\n\nDie zusätzlichen Währungen und die Sprache kannst du auch später mit „Konfigurieren“ (⚙) beim Eintrag „Bitpanda Price Tracker“ auf der Bitpanda-Integrationsseite wählen oder ändern. Assets fügst du nach der Einrichtung mit „Preis-Tracker hinzufügen“ beim selben Eintrag hinzu.",

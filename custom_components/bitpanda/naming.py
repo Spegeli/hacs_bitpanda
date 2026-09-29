@@ -139,6 +139,34 @@ def total_entity_id(asset: dict[str, Any]) -> str:
     return _entity_id(wallet_device_name(asset), "total")
 
 
+_PORTFOLIO_FIGURE_IDS = frozenset(portfolio_entity_id(key) for key in PORTFOLIO_KEYS)
+# The prefix, a wallet device's slug and the ending of wallet_entity_id,
+# staking_entity_id or total_entity_id -- then the "_2", "_3", ... Home
+# Assistant appends when two assets share a label.
+_WALLET_ENTITY_ID = re.compile(
+    re.escape(_ENTITY_ID_PREFIX) + r"[a-z0-9_]+_wallet_(?:available|staking|total)(?:_\d+)?"
+)
+
+
+def is_portfolio_entity_id(entity_id: str) -> bool:
+    """Whether `entity_id` is a default ID of a Portfolio sensor: one of the
+    eight figures, or a wallet's Balance, Staking or Total sensor.
+
+    A new Portfolio setup meets exactly these IDs again. The entity registry
+    restores a deleted entity by (domain, platform, unique_id), and the
+    unique_ids carry the config entry ID: a new setup is a new entry, so its
+    sensors never get back an ID the user gave a sensor of the deleted
+    entry -- they take the default ones. So these are the only IDs where an
+    earlier Portfolio's statistics can block a new sensor (purge.py); a
+    renamed sensor, a legacy entity or a Price Tracker sensor is none of
+    them.
+    """
+    return (
+        entity_id in _PORTFOLIO_FIGURE_IDS
+        or _WALLET_ENTITY_ID.fullmatch(entity_id) is not None
+    )
+
+
 def managed_asset_key(entry_id: str, unique_id: str) -> tuple[str, str] | None:
     """(kind, asset id) of a wallet, staking or total unique_id of this
     entry, kind being "wallet", "staking" or "total".

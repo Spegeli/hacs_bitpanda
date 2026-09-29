@@ -1,9 +1,13 @@
 """Tests for labels, entity IDs, unique_ids and legacy default IDs."""
+import pytest
+
 from custom_components.bitpanda.naming import (
     LEGACY_PORTFOLIO_OBJECT_ID,
     PORTFOLIO_DEVICE_NAME,
+    PORTFOLIO_KEYS,
     asset_display_label,
     is_default_entity_id,
+    is_portfolio_entity_id,
     legacy_price_object_id,
     legacy_wallet_object_id,
     managed_asset_id,
@@ -242,3 +246,37 @@ def test_default_entity_id_allows_a_numeric_suffix_only():
     assert is_default_entity_id("sensor.bitpanda_wallets_vsn_wallet_12", object_id)
     assert not is_default_entity_id("sensor.my_vision", object_id)
     assert not is_default_entity_id("sensor.bitpanda_wallets_vsn_wallet_old", object_id)
+
+
+def test_the_figures_and_every_wallet_id_are_portfolio_ids():
+    figures = [portfolio_entity_id(key) for key in PORTFOLIO_KEYS]
+    assert figures == [
+        "sensor.bitpanda_portfolio_total", "sensor.bitpanda_portfolio_cash",
+        "sensor.bitpanda_portfolio_cash_plus", "sensor.bitpanda_portfolio_return_day",
+        "sensor.bitpanda_portfolio_return_week", "sensor.bitpanda_portfolio_return_month",
+        "sensor.bitpanda_portfolio_return_6_months", "sensor.bitpanda_portfolio_return_year",
+    ]
+    wallets = [
+        make(asset)
+        for asset in (VISION, AMUNDI, GRAB)
+        for make in (wallet_entity_id, staking_entity_id, total_entity_id)
+    ]
+    # Home Assistant's suffix when two assets share a label.
+    suffixed = [f"{wallet_entity_id(VISION)}_2", f"{total_entity_id(BTC)}_3"]
+    assert all(is_portfolio_entity_id(entity_id) for entity_id in figures + wallets + suffixed)
+
+
+@pytest.mark.parametrize(
+    "entity_id",
+    [
+        "sensor.my_cash",
+        "sensor.bitpanda_portfolio_total_2",
+        f"sensor.{LEGACY_PORTFOLIO_OBJECT_ID}",
+        f"sensor.{legacy_wallet_object_id('VSN')}",
+        price_entity_id(BTC, "EUR"),
+        "sensor.vision_vsn_wallet_available",
+        f"{wallet_entity_id(VISION)}_old",
+    ],
+)
+def test_other_ids_are_no_portfolio_ids(entity_id):
+    assert not is_portfolio_entity_id(entity_id)

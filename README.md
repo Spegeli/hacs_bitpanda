@@ -154,8 +154,8 @@ Tracking an asset again later brings its sensors back under the entity IDs the i
 
 **⋮ → Reconfigure** on the Portfolio entry:
 
-- **Replace the API key** at any time. Leave the key field empty to keep the current one.
-- **Change the currency.** ⚠️ This deletes all Portfolio sensors including their history and long-term statistics and recreates them in the new currency, under the entity IDs the integration gives them (your own changes: see [Resetting names and entity IDs](#resetting-names-and-entity-ids)). You are asked to confirm first.
+- **Replace the API key** at any time. Leave the API key field empty to keep the current one.
+- **Change the currency.** ⚠️ This deletes all Portfolio sensors including their history and long-term statistics and recreates them in the new currency, under the entity IDs the integration gives them (your own changes: see [Resetting names and entity IDs](#resetting-names-and-entity-ids)). You are asked to confirm first; if you entered a new API key as well, you can save only the key and keep the currency.
 
 **New Bitpanda API key needed:** when Bitpanda rejects the stored key — it expired, was revoked, or lacks a permission — Home Assistant asks for a new one. Paste it there; every sensor is kept.
 

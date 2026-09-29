@@ -162,11 +162,19 @@ Tracking an asset again later brings its sensors back under the entity IDs the i
 
 ## 📊 Using the sensors
 
-The Portfolio's wallets and groups come and go by themselves. Deleting a group (**⋮ → Delete**) only hides it until the next update while you still hold its assets. The wallet of an asset you no longer hold can be deleted from its device page instead of waiting for it to go; the Portfolio device and the wallets of assets you hold cannot be deleted — they would come straight back, and the dialog explains why. On the Price Tracker, deleting a device or a group stops tracking (see [Stop tracking](#stop-tracking)).
+The Portfolio keeps its wallets and groups up to date by itself:
+
+- **A new asset** gets its wallet, in the group of its type, at the next update — every five minutes.
+- **An asset you no longer hold** loses its wallet about ten minutes after Bitpanda stops listing it. To remove the wallet sooner, delete it on its device page (**⋮ → Delete**).
+- **What you cannot delete:** the Portfolio device and the wallet of an asset you hold — they would come straight back, and the dialog says why. A group you delete (**⋮ → Delete**) while you still hold its assets comes back at the next update.
+
+On the Price Tracker, deleting a device or a group stops tracking (see [Stop tracking](#stop-tracking)).
 
 ### Entity IDs
 
-Entity IDs are English and fixed, whatever language Home Assistant runs in: `sensor.bitpanda_`, then the device's name as an ID writes it (lower case, `_` for spaces and punctuation), then the sensor's own ending. Device names are English too — the asset's label followed by **Wallet** or **Price Tracker**. Assets are labelled `Name (SYMBOL)`, or just the symbol when the name only repeats it (BNB, BCI5). Stocks, ETFs and ETCs add their ISIN: `Name (SYMBOL / ISIN)`, or `SYMBOL (ISIN)` when the name only repeats the symbol.
+The integration gives every sensor an English entity ID, the same in every language: `sensor.bitpanda_`, then the device's name in lower case with `_` for spaces and punctuation, then the sensor's own ending. Device names are English too — the asset's label followed by **Wallet** or **Price Tracker**. Assets are labelled `Name (SYMBOL)`, or just the symbol when the name only repeats it (BNB, BCI5). Stocks, ETFs and ETCs add their ISIN: `Name (SYMBOL / ISIN)`, or `SYMBOL (ISIN)` when the name only repeats the symbol.
+
+You can change an entity ID in the sensor's settings: the sensor keeps working under the new ID, with its history, and the integration does not change it back — only a currency change, which recreates the Portfolio's sensors, returns to the integration's IDs. To go back yourself, see [Resetting names and entity IDs](#resetting-names-and-entity-ids).
 
 | Sensor | Entity ID |
 |---|---|
@@ -181,15 +189,15 @@ When two assets share a label, Home Assistant appends `_2` to the second one's I
 
 ### Resetting names and entity IDs
 
-To go back to the names and entity IDs the integration gives, reset them in Home Assistant itself — deleting a device does not do it. The wallet of an asset you hold cannot be deleted, and a device that comes back, even after its whole group was deleted, gets your changes back: from Home Assistant 2025.7 on, it keeps the name, area and labels you gave it, and each of its sensors its name, icon, area, labels and entity ID.
+To go back to the names and entity IDs the integration gives, reset them in Home Assistant as described below. Deleting the device does not help: the wallet of an asset you hold cannot be deleted, and from Home Assistant 2025.7 on, a device that comes back — even after its whole group was deleted — gets your changes back: its name, area and labels, and each of its sensors' names, icons, areas, labels and entity IDs.
 
 1. **Device name:** on the device page, select the pencil, clear the name and save. The device shows its default name again.
 2. **Sensor name and icon:** in the sensor's settings, clear **Name** or **Icon** and save.
-3. **Entity ID:** in the sensor's settings, select ↺ (**Restore entity ID**) next to the entity ID — Home Assistant 2026.7 and newer. From 2025.6 to 2026.6, use **⋮ → Recreate entity IDs** on the device page instead; it resets all of the device's sensors at once. On 2025.5, enter the entity ID by hand (see [Entity IDs](#entity-ids)). Clear a name you gave the sensor first (step 2): a name of your own takes precedence over the integration's entity ID.
+3. **Entity ID:** first clear a name you gave the sensor (step 2) — a name of your own takes precedence over the integration's entity ID. Then, in the sensor's settings, select ↺ (**Restore entity ID**) next to the entity ID (Home Assistant 2026.7 and newer). From 2025.6 to 2026.6, use **⋮ → Recreate entity IDs** on the device page instead; it resets all of the device's sensors at once. On 2025.5, enter the entity ID by hand (see [Entity IDs](#entity-ids)).
 
 ### Attributes
 
-Home Assistant lists these in the entity's Details view (before Home Assistant 2026.3: **Attributes**) under translated names grouped by prefix (e.g. "Asset: quantity", "Position: invested"); the keys in the table below are what templates use.
+Each sensor's attributes appear in its **Details** view (before Home Assistant 2026.3: **Attributes**), under translated names with a prefix per group, such as "Asset: quantity" or "Position: invested". Templates and automations use the keys in the table below.
 
 | Sensor | Attributes |
 |---|---|
@@ -205,13 +213,19 @@ Home Assistant lists these in the entity's Details view (before Home Assistant 2
 The lifetime reward amounts `rewards_gross`, `rewards_fee` and `rewards_net` are in units of the asset, and `rewards_count` is the number of payouts; `rewards_net_value` is what the net rewards are worth at today's price, as the Bitpanda app shows it — not their value when they were paid out.
 
 ### Long-term statistics
-- Every value sensor keeps long-term statistics: the Portfolio's figures, returns and wallets, and every price
-- Show them over weeks or months with a **Statistics graph** card: under **Show stat types**, choose *State* for a money value, and *Mean*, *Min* or *Max* for a return
-- Changing the Portfolio currency deletes the Portfolio sensors' statistics along with their history — they were recorded in the old currency
+
+Every value sensor keeps long-term statistics: the Portfolio's figures, returns and wallets, and every price.
+
+- **To show them** over weeks or months, use a **Statistics graph** card. Under **Show stat types**, choose *State* for a money value and *Mean*, *Min* or *Max* for a return.
+- **A currency change** deletes the Portfolio sensors' statistics along with their history — they were recorded in the old currency.
 
 ### Refreshing by hand
 
-The action `bitpanda.refresh` fetches the portfolio and the prices at once and finishes when both are done. A call within the cooldown of the last accepted one is ignored: the price interval (60 seconds, longer with many tracked assets), or 10 seconds with the Portfolio alone. When a refresh fails — Bitpanda cannot be reached, answers with an error, or reports an empty portfolio that is not confirmed yet — the action fails with an error naming the service; the other one is refreshed all the same. It also fails while neither service is loaded. A failed action stops a script or automation at that step, unless the step sets `continue_on_error: true` (see the [second example](#-automation-examples)).
+The action `bitpanda.refresh` fetches the portfolio and the prices right away and finishes when both are done.
+
+- **Cooldown:** a call within the cooldown of the last accepted one is ignored. The cooldown is the price interval — 60 seconds, longer with many tracked assets — or 10 seconds with the Portfolio alone.
+- **Failures:** when a refresh fails — Bitpanda cannot be reached, answers with an error, or reports an empty portfolio that is not confirmed yet — the action fails with an error naming the service; the other service is refreshed all the same. The action also fails while neither service is loaded.
+- **In automations:** a failed action stops a script or automation at that step, unless the step sets `continue_on_error: true` (see the [second example](#-automation-examples)).
 
 ---
 

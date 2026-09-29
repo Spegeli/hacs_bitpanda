@@ -423,9 +423,10 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 
 ## ⚖️ Disclaimer
 
-This integration is **not officially developed or supported by Bitpanda**. It is an independent community project using the public [Bitpanda API](https://docs.public.bitpanda.com). Use it at your own risk.
-
-For integration-related issues, please use the [GitHub issue tracker](https://github.com/Spegeli/hacs_bitpanda/issues).
+- **Not a Bitpanda product.** This integration is an independent community project. Bitpanda does not develop, endorse or support it, and Bitpanda's support cannot help with it — use the [GitHub issue tracker](https://github.com/Spegeli/hacs_bitpanda/issues) instead.
+- **Trademarks.** Bitpanda, the Bitpanda logo and other product names are trademarks of their respective owners. They appear here only to name the service the integration connects to.
+- **Figures for information only.** The integration shows what Bitpanda's [public API](https://docs.public.bitpanda.com) returns; prices in other currencies are converted with ECB rates (see [Known limitations](#%EF%B8%8F-known-limitations)). Figures can be delayed or differ from the Bitpanda app. Nothing here is financial advice.
+- **Use at your own risk.** The software is provided as is, without warranty, under the MIT License. It only reads your account and never trades — keep your API key private all the same.
 
 ---
 

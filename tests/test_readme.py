@@ -230,6 +230,22 @@ async def test_the_staking_reward_alert_stays_quiet_when_the_count_first_appears
     await _turn_off(hass)
 
 
+async def test_the_staking_reward_alert_stays_quiet_through_an_outage(hass, caplog):
+    """The staking sensor turns unavailable, without its attributes, at every
+    reload of the Portfolio and in an outage, and it can be removed: no
+    message and no condition error then -- the next new payout is reported."""
+    await _rewards(hass, 3, 0.10)
+    notifications = await _set_up(hass, _examples()[3])
+    await _set(hass, _STAKING, "unavailable")
+    await _rewards(hass, 3, 0.10)
+    await _rewards(hass, 4, 0.12)
+    hass.states.async_remove(_STAKING)
+    await hass.async_block_till_done()
+    assert _messages(notifications) == ["New reward: 0.12 ETH net so far."]
+    assert "Error evaluating condition" not in caplog.text
+    await _turn_off(hass)
+
+
 async def test_every_example_loads_as_an_automation(hass):
     """An automation Home Assistant cannot validate is set up unavailable."""
     examples = _examples()

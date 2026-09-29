@@ -34,7 +34,7 @@ The integration offers two services. Set up either or both — each one once.
 - One device per tracked asset, such as **Bitcoin (BTC) Price Tracker**, in groups by asset type, with a price sensor in EUR (**Bitcoin (BTC) Price Tracker EUR**) and, optionally, one in each of the other 11 supported currencies
 - EUR prices come from Bitpanda every 60 seconds. Above 30 tracked assets the interval stretches automatically, so the integration never sends more than 1,800 price requests per hour. Should it grow past 30 minutes (above 900 tracked assets), **Settings → Repairs** says so until you track fewer
 - Other currencies are converted with the daily reference rates of the European Central Bank (ECB), fetched every 6 hours
-- 24h price change (`change_24h_pct`) as an attribute, from the Home Assistant recorder
+- 24-hour price change (`change_24h_pct`) as an attribute, from the Home Assistant recorder
 
 ### Supported Assets
 | Type | Examples | Price Tracker | Portfolio |
@@ -148,7 +148,7 @@ Tracking an asset again later brings its sensors back under the entity IDs the i
 
 **Configure** — the ⚙ on each service's entry (before Home Assistant 2025.7 a button labelled **Configure**):
 
-- **Price Tracker:** the extra currencies and the language of group titles. Removing a currency deletes its sensors; adding it back brings them back under the entity IDs the integration gives them, with their history.
+- **Price Tracker:** the extra currencies and the language of group titles. Removing a currency deletes its sensors; adding it back brings them back under the entity IDs the integration gives them, with their history (your own changes: see [Resetting names and entity IDs](#resetting-names-and-entity-ids)).
 - **Portfolio:** the language of group titles and messages (see [Languages](#languages)).
 
 **⋮ → Reconfigure** on the Portfolio entry:
@@ -174,7 +174,7 @@ On the Price Tracker, deleting a device or a group stops tracking (see [Stop tra
 
 The integration gives every sensor an English entity ID, the same in every language: `sensor.bitpanda_`, then the device's name in lower case with `_` for spaces and punctuation, then the sensor's own ending. Device names are English too — the asset's label followed by **Wallet** or **Price Tracker**. Assets are labelled `Name (SYMBOL)`, or just the symbol when the name only repeats it (BNB, BCI5). Stocks, ETFs and ETCs add their ISIN: `Name (SYMBOL / ISIN)`, or `SYMBOL (ISIN)` when the name only repeats the symbol.
 
-You can change an entity ID in the sensor's settings: the sensor keeps working under the new ID, with its history, and the integration does not change it back — only a currency change, which recreates the Portfolio's sensors, returns to the integration's IDs. To go back yourself, see [Resetting names and entity IDs](#resetting-names-and-entity-ids).
+You can change an entity ID in the sensor's settings: the sensor keeps working under the new ID, with its history, and the integration does not change it back (before Home Assistant 2025.7, a currency change does: it recreates the Portfolio's sensors under the integration's IDs). To go back yourself, see [Resetting names and entity IDs](#resetting-names-and-entity-ids).
 
 | Sensor | Entity ID |
 |---|---|
@@ -312,9 +312,13 @@ triggers:
     entity_id: sensor.bitpanda_ethereum_eth_wallet_staking
     attribute: rewards_count
 conditions:
-  # Only a new payout: the count went up, it did not just appear after a restart.
+  # Only a new payout: the count went up — not a count that appears after a restart or disappears in an outage.
   - condition: template
-    value_template: "{{ trigger.from_state is not none and trigger.from_state.attributes.rewards_count is number and trigger.to_state.attributes.rewards_count > trigger.from_state.attributes.rewards_count }}"
+    value_template: >-
+      {{ trigger.from_state is not none and trigger.to_state is not none
+         and trigger.from_state.attributes.rewards_count is number
+         and trigger.to_state.attributes.rewards_count is number
+         and trigger.to_state.attributes.rewards_count > trigger.from_state.attributes.rewards_count }}
 actions:
   - action: persistent_notification.create
     data:

@@ -2,6 +2,7 @@
 from datetime import timedelta
 from functools import partial
 import json
+import logging
 from pathlib import Path
 import string
 from unittest.mock import patch
@@ -46,6 +47,11 @@ def pytest_configure(config):
         raise pytest.UsageError(
             "pytest-timeout is required; install it from tests/requirements.txt"
         )
+    # The plugin sets the SQLAlchemy engine's logger to INFO when it is
+    # imported, which is after this file: every SQL statement would be
+    # written to stderr, and the recorder's thread can write one between two
+    # tests, outside pytest's capture. Its warnings still show.
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
 _FIXTURES = Path(__file__).parent / "fixtures"
 

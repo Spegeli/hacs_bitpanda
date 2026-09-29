@@ -1,5 +1,16 @@
 """Verify the test harness itself works."""
+import logging
+
 from tests.conftest import load_fixture
+
+
+def test_the_database_engine_writes_no_sql_statements():
+    """pytest-homeassistant-custom-component sets the SQLAlchemy engine's
+    logger to INFO and gives the root logger a handler on stderr, so every
+    SQL statement is written out. The recorder's thread can write one between
+    two tests, outside pytest's capture, into the suite's output;
+    tests/conftest.py sets the level back to WARNING."""
+    assert logging.getLogger("sqlalchemy.engine").getEffectiveLevel() >= logging.WARNING
 
 
 def test_currency_fixture_is_readable():

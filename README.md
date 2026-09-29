@@ -326,17 +326,28 @@ actions:
 
 ## ⬆️ Upgrading from a date version
 
-For every version before 2.0.0: the date versions, 2026.06.04 and older. Version 2.0.0 moves to Bitpanda's new Public API and splits the integration into two services. It needs Home Assistant **2025.5** or newer — on 2025.3 or 2025.4 the entry is left unmigrated, the integration does not load, and **Settings → Repairs** asks you to update Home Assistant; older versions cannot load the integration at all.
+This section is for everyone upgrading from a version before 2.0.0 — the date versions, 2026.06.04 and older. Version 2.0.0 moves to Bitpanda's new Public API and splits the integration into two services.
+
+It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays as it is, the integration does not load, and **Settings → Repairs** asks you to update Home Assistant; older versions cannot load the integration at all.
 
 ⚠️ **The upgrade is one-way.** The previous release cannot load the migrated entries, so going back to it afterwards does not work. Make a backup before you update if you may want to return.
 
-1. Create a new API key with **Balances**, **Transaction** and **Earn (Read)** at [app.bitpanda.com/my-account/apikey](https://app.bitpanda.com/my-account/apikey) — keys from the classic site, web.bitpanda.com, lack Earn
-2. Update the integration through HACS and restart Home Assistant
+1. Your old key has no Earn permission, so create a new one, as in steps 1–3 of [Set up the Portfolio](#set-up-the-portfolio):
+   - Open [app.bitpanda.com/my-account/apikey](https://app.bitpanda.com/my-account/apikey) — the key page of the classic site, web.bitpanda.com, has no **Earn (Read)**.
+   - Select **Balances**, **Transaction** and **Earn (Read)**; **Trade (Read)** is not needed.
+   - Copy the key — Bitpanda shows it only once.
+2. Update the integration through HACS and restart Home Assistant.
    - HACS offers no update? From 2.0.0 on, versions are numbers instead of dates, and HACS can rank a date such as 2026.06.04 above them. Install the newest version once by hand: **HACS → Bitpanda → ⋮ → Redownload**, open **Need a different version?**, pick the newest version not marked as a pre-release and download it. Later updates show up as usual.
    - No version choice in HACS? Open **Settings → Tools → Actions** (before Home Assistant 2026.8: **Developer tools → Actions**) and run `update.install` with the Bitpanda update entity and, as version, the newest release's tag (such as `v2.1.0`).
-3. **Reload the browser tab** (`Ctrl+F5` / `Cmd+Shift+R`) — otherwise the integration's dialogs can show raw text from your browser's cached translations
-4. Home Assistant shows **New Bitpanda API key needed** — paste the new key (or use **⋮ → Reconfigure** on the Bitpanda Portfolio entry)
-5. The upgrade details appear under **Settings → Repairs**, in your profile language: **every renamed entity ID (old → new)**, the entities that could not be migrated, the Portfolio's switch to EUR if your old currency is not available, and the assets to add to a Bitpanda Price Tracker you had already set up — its prices are not moved into one that existed before the upgrade. The Home Assistant log keeps the same list in English, with the reason for each entity that was not migrated. **Check your dashboards, automations and scripts** for the old IDs.
+3. **Reload the browser tab** (`Ctrl+F5` / `Cmd+Shift+R`) — otherwise the integration's dialogs can show raw text from your browser's cached translations.
+4. Home Assistant shows **New Bitpanda API key needed**: paste the new key there (or use **⋮ → Reconfigure** on the Bitpanda Portfolio entry).
+5. Under **Settings → Repairs**, in your profile language, the upgrade lists:
+   - **every renamed entity ID (old → new)**,
+   - the entities that could not be migrated,
+   - the Portfolio's switch to EUR if your old currency is not available,
+   - the assets to add to a Bitpanda Price Tracker you had already set up — its prices are not moved into one that existed before the upgrade.
+
+   The Home Assistant log keeps the same list in English, with the reason for each entity that was not migrated. **Check your dashboards, automations and scripts** for the old IDs.
 
 **What is kept:** the history of every migrated sensor (it moves with the rename), your price trackers (now in the Bitpanda Price Tracker, in EUR and in your old currency) and the wallets of assets you still hold. Entity IDs you renamed yourself are left as they are.
 

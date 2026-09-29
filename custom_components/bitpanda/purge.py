@@ -27,6 +27,7 @@ them; the deletion is the one the currency change uses
 """
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 import logging
 
@@ -50,6 +51,10 @@ from .naming import (
 _LOGGER = logging.getLogger(__name__)
 
 _RECORDER = "recorder"
+
+# Seconds setup waits for the recorder's list of statistics: a recorder busy
+# with a database migration, or a locked database, must not hold the dialog.
+_LISTING_TIMEOUT = 10
 
 
 def _is_managed_device(entry_id: str, device: dr.DeviceEntry) -> bool:
@@ -166,15 +171,17 @@ async def async_find_old_statistics(hass: HomeAssistant, currency: str) -> OldSt
     in a currency change. Statistics in the same currency ask nothing: they
     simply continue.
 
-    Nothing is found without the recorder, or when the listing fails: setup
-    goes on without the question, and the manual way stays. The error is
-    logged by its type alone, as everywhere here.
+    Nothing is found without the recorder, or when the listing fails or takes
+    longer than _LISTING_TIMEOUT: setup goes on without the question, and the
+    manual way stays. The error is logged by its type alone, as everywhere
+    here.
     """
     nothing = OldStatistics(entity_ids=[], currencies=[])
     if _RECORDER not in hass.config.components:
         return nothing
     try:
-        listed = await async_list_statistic_ids(hass)
+        async with asyncio.timeout(_LISTING_TIMEOUT):
+            listed = await async_list_statistic_ids(hass)
         # A statistic of another source is an external one, keyed `domain:id`,
         # which no Portfolio ID matches: the source check only guards that.
         units: dict[str, str | None] = {

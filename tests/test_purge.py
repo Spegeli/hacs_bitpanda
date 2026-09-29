@@ -1,6 +1,7 @@
 """Deleting what the Portfolio manages, with its history, on a currency change,
 and looking for the statistics an earlier Portfolio left -- the cases that need
 no real recorder (test_old_statistics.py has one)."""
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -246,6 +247,24 @@ async def test_a_listing_of_an_unexpected_shape_finds_nothing_and_logs_the_error
         assert await async_find_old_statistics(hass, "EUR") == _NOTHING
     [record] = [r for r in caplog.records if r.name == "custom_components.bitpanda.purge"]
     assert record.levelname == "WARNING" and "KeyError" in record.getMessage()
+
+
+@pytest.mark.timeout(10)
+async def test_a_listing_that_takes_too_long_finds_nothing_and_logs_a_timeout(hass, caplog):
+    """A recorder that answers late -- a database migration, a locked file --
+    must not hold the setup dialog: after the timeout, setup goes on without
+    the question."""
+    hass.config.components.add("recorder")
+
+    async def never_answers(*_: object) -> None:
+        await asyncio.Event().wait()
+
+    with patch(_LIST, AsyncMock(side_effect=never_answers)), patch(
+        "custom_components.bitpanda.purge._LISTING_TIMEOUT", 0.01
+    ):
+        assert await async_find_old_statistics(hass, "EUR") == _NOTHING
+    [record] = [r for r in caplog.records if r.name == "custom_components.bitpanda.purge"]
+    assert "(TimeoutError)" in record.getMessage()
 
 
 async def test_statistics_of_another_source_do_not_count(hass):

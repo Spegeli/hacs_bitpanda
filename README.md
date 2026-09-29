@@ -432,4 +432,4 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 
 ## 📜 License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details. It covers this project's code and documentation, not Bitpanda's name and logo (`logo.png` and `custom_components/bitpanda/brand/`), which remain their owner's trademarks (see [Disclaimer](#%EF%B8%8F-disclaimer)).

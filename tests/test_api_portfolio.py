@@ -190,6 +190,30 @@ async def test_a_failed_request_says_what_failed_without_words(response, error, 
     assert secret not in repr(vars(excinfo.value))
 
 
+async def test_a_closed_session_is_a_connection_error():
+    """Home Assistant closes its shared session when it stops, and a refresh
+    that starts just then meets aiohttp's RuntimeError "Session is closed".
+    That is a failed request like a lost connection -- not an unexpected
+    error, which Home Assistant's coordinator would log with a traceback."""
+    session = aiohttp.ClientSession()
+    await session.close()
+    with pytest.raises(BitpandaApiError) as excinfo:
+        await BitpandaApiClient(None, session).async_get_ticker("uuid-btc")
+    assert (excinfo.value.kind, excinfo.value.path, excinfo.value.status) == (
+        "connection", "/tickers/uuid-btc", None
+    )
+
+
+async def test_any_other_runtime_error_stays_what_it_is():
+    """Only a closed session counts as a failed request: another
+    RuntimeError is a bug and must not pass as an outage."""
+    async with aiohttp.ClientSession() as session:
+        client = BitpandaApiClient(None, session)
+        with patch.object(session, "get", side_effect=RuntimeError("a bug")):
+            with pytest.raises(RuntimeError, match="a bug"):
+                await client.async_get_ticker("uuid-btc")
+
+
 @pytest.mark.parametrize(
     "body",
     [{"data": [{"price": "1"}]}, {"data": "x"}],

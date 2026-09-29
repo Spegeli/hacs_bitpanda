@@ -232,6 +232,17 @@ class BitpandaApiClient:
             raise BitpandaApiError(
                 f"Timeout for {path}", kind=ERROR_TIMEOUT, path=path
             ) from None
+        except RuntimeError:
+            # Home Assistant closes its shared session when it stops; a
+            # refresh that starts just then gets aiohttp's "Session is
+            # closed". That is a failed request, not a bug -- any other
+            # RuntimeError is one, and stays one.
+            if not self._session.closed:
+                raise
+            _LOGGER.debug("Session closed for %s", path)
+            raise BitpandaApiError(
+                f"Connection error for {path}", kind=ERROR_CONNECTION, path=path
+            ) from None
         except ValueError:
             # json.JSONDecodeError subclasses ValueError, and a body that
             # decodes to text but not JSON can also raise UnicodeDecodeError

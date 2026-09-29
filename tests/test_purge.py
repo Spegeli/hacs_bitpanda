@@ -231,7 +231,10 @@ async def test_a_failed_listing_finds_nothing_and_logs_the_error_type_only(hass,
     with patch(_LIST, AsyncMock(side_effect=RuntimeError("detail from the database"))):
         assert await async_find_old_statistics(hass, "EUR") == _NOTHING
     [record] = [r for r in caplog.records if r.name == "custom_components.bitpanda.purge"]
-    assert record.levelname == "WARNING" and "RuntimeError" in record.getMessage()
+    assert record.levelname == "WARNING" and record.getMessage() == (
+        "Could not look for long-term statistics of an earlier Bitpanda Portfolio"
+        " (RuntimeError); setup continues without asking about them"
+    )
     assert record.exc_info is None and "detail from the database" not in caplog.text
 
 

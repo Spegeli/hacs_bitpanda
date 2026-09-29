@@ -1,4 +1,6 @@
-"""Deleting what the Portfolio manages, with its history, on a currency change."""
+"""Deleting what the Portfolio manages, with its history, on a currency change,
+and looking for the statistics an earlier Portfolio left -- the cases that need
+no real recorder (test_old_statistics.py has one)."""
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -16,7 +18,12 @@ from custom_components.bitpanda.naming import (
     wallet_device_identifier,
     wallet_unique_id,
 )
-from custom_components.bitpanda.purge import async_purge_portfolio, async_purge_recorded
+from custom_components.bitpanda.purge import (
+    OldStatistics,
+    async_find_old_statistics,
+    async_purge_portfolio,
+    async_purge_recorded,
+)
 
 VSN = "1f051b7c-5980-6dda-9d3d-cf107d8d4bfb"
 
@@ -205,3 +212,65 @@ async def test_the_recorded_purge_without_ids_does_nothing(hass):
 async def test_the_recorded_purge_without_a_recorder_does_nothing(hass):
     # No recorder.purge_entities service: a call would raise ServiceNotFound.
     await async_purge_recorded(hass, ["sensor.a"])
+
+
+_LIST = "custom_components.bitpanda.purge.async_list_statistic_ids"
+_NOTHING = OldStatistics(entity_ids=[], currencies=[])
+
+
+async def test_without_a_recorder_no_old_statistics_are_found(hass):
+    # A failed listing finds nothing too, so the result alone cannot tell the
+    # two apart: the listing must not be asked at all.
+    with patch(_LIST, AsyncMock()) as listing:
+        assert await async_find_old_statistics(hass, "EUR") == _NOTHING
+    listing.assert_not_called()
+
+
+async def test_a_failed_listing_finds_nothing_and_logs_the_error_type_only(hass, caplog):
+    hass.config.components.add("recorder")
+    with patch(_LIST, AsyncMock(side_effect=RuntimeError("detail from the database"))):
+        assert await async_find_old_statistics(hass, "EUR") == _NOTHING
+    [record] = [r for r in caplog.records if r.name == "custom_components.bitpanda.purge"]
+    assert record.levelname == "WARNING" and "RuntimeError" in record.getMessage()
+    assert record.exc_info is None and "detail from the database" not in caplog.text
+
+
+async def test_a_listing_of_an_unexpected_shape_finds_nothing_and_logs_the_error_type(hass, caplog):
+    """Home Assistant could rename what an entry holds: setup must go on
+    without the question, not fail with it."""
+    hass.config.components.add("recorder")
+    with patch(_LIST, AsyncMock(return_value=[{"statistic_id": "sensor.bitpanda_portfolio_total"}])):
+        assert await async_find_old_statistics(hass, "EUR") == _NOTHING
+    [record] = [r for r in caplog.records if r.name == "custom_components.bitpanda.purge"]
+    assert record.levelname == "WARNING" and "KeyError" in record.getMessage()
+
+
+async def test_statistics_of_another_source_do_not_count(hass):
+    hass.config.components.add("recorder")
+    listed = [{"statistic_id": "sensor.bitpanda_portfolio_total", "source": "other",
+               "statistics_unit_of_measurement": "USD"}]
+    with patch(_LIST, AsyncMock(return_value=listed)):
+        assert await async_find_old_statistics(hass, "EUR") == _NOTHING
+
+
+async def test_the_ids_and_the_other_currencies_come_out_sorted(hass):
+    """The dialog names the currencies as they come: a set's order would
+    change from one start of Home Assistant to the next."""
+    hass.config.components.add("recorder")
+    # Listed neither sorted by ID nor by currency.
+    units = {
+        "sensor.bitpanda_portfolio_total": "SEK",
+        "sensor.bitpanda_portfolio_cash": "PLN",
+        "sensor.bitpanda_portfolio_cash_plus": "CZK",
+        "sensor.bitpanda_vision_vsn_wallet_available": "GBP",
+        "sensor.bitpanda_vision_vsn_wallet_staking": "CHF",
+    }
+    listed = [
+        {"statistic_id": entity_id, "source": "recorder", "statistics_unit_of_measurement": unit}
+        for entity_id, unit in units.items()
+    ]
+    with patch(_LIST, AsyncMock(return_value=listed)):
+        found = await async_find_old_statistics(hass, "USD")
+    assert found == OldStatistics(
+        entity_ids=sorted(units), currencies=["CHF", "CZK", "GBP", "PLN", "SEK"]
+    )

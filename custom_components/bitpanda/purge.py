@@ -1,33 +1,53 @@
-"""Delete what the Portfolio manages, with its history, on a currency change.
+"""Delete Portfolio sensors' history and long-term statistics: the entry's own
+on a currency change, and at setup those an earlier Portfolio left behind in
+another currency.
 
-Every value its sensors recorded is in the old currency and would be wrong
-next to the new one. What goes is what the Portfolio manages: its figures
-(naming.PORTFOLIO_KEYS), the wallet, staking and total sensors of this entry
-(naming.managed_asset_id), their devices -- the Portfolio device and the
-wallet devices -- and their history and the long-term statistics every one
-of these sensors keeps (state_class, portfolio_sensor.py). Anything else of the
-entry -- a legacy entity the version 1 migration left in place, such as an
-unresolved wallet, another fiat wallet or a legacy price sensor, and the
-legacy device it sits on -- keeps its entity and its history: the
-`entities_not_migrated` repair issue tells the user it stays until they
-delete it. The wallet groups stay too; the recreated wallets go back into
-them.
+A currency change. Every value the Portfolio's sensors recorded is in the old
+currency and would be wrong next to the new one. What goes is what the
+Portfolio manages: its figures (naming.PORTFOLIO_KEYS), the wallet, staking
+and total sensors of this entry (naming.managed_asset_id), their devices --
+the Portfolio device and the wallet devices -- and their history and the
+long-term statistics every one of these sensors keeps (state_class,
+portfolio_sensor.py). Anything else of the entry -- a legacy entity the
+version 1 migration left in place, such as an unresolved wallet, another fiat
+wallet or a legacy price sensor, and the legacy device it sits on -- keeps its
+entity and its history: the `entities_not_migrated` repair issue tells the
+user it stays until they delete it. The wallet groups stay too; the recreated
+wallets go back into them.
+
+A new Portfolio setup. The entity IDs carry no currency, and a long-term
+statistic is keyed by its entity ID and stores its unit. Deleting a Portfolio
+keeps its statistics, so a new Portfolio in another currency meets them under
+the very IDs its sensors take (naming.is_portfolio_entity_id). Home Assistant
+cannot convert one currency to another: for such a sensor it records no
+statistics at all, and lists a "units changed" issue until the old ones are
+gone. async_find_old_statistics finds them, so that setup can offer to delete
+them; the deletion is the one the currency change uses
+(async_purge_recorded).
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+import logging
+
 from homeassistant.components.recorder import get_instance
+from homeassistant.components.recorder.statistics import async_list_statistic_ids
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
+from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from .devices import device_identifiers
 from .naming import (
     PORTFOLIO_KEYS,
+    is_portfolio_entity_id,
     managed_asset_id,
     portfolio_device_identifier,
     portfolio_unique_id,
     wallet_device_asset_id,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 _RECORDER = "recorder"
 
@@ -102,3 +122,60 @@ async def async_purge_portfolio(hass: HomeAssistant, entry: ConfigEntry) -> bool
 
     await async_purge_recorded(hass, entity_ids)
     return True
+
+
+@dataclass(frozen=True)
+class OldStatistics:
+    """What an earlier Portfolio left in another currency.
+
+    `entity_ids` are the IDs to delete, sorted -- empty when no question needs
+    to be asked; `currencies` are the other currencies found, sorted.
+    """
+
+    entity_ids: list[str]
+    currencies: list[str]
+
+
+async def async_find_old_statistics(hass: HomeAssistant, currency: str) -> OldStatistics:
+    """Look for long-term statistics an earlier Portfolio left in another
+    currency than `currency` (upper case), under the IDs a new Portfolio's
+    sensors take.
+
+    Only the recorder's own statistics under a Portfolio ID count
+    (naming.is_portfolio_entity_id). A question is needed when one of them has
+    a unit that is neither `currency` nor "%" -- the returns' unit -- so any
+    other currency code, also one the integration no longer supports; a
+    statistic without a unit never counts. Then every such ID goes, whatever
+    its unit: the earlier Portfolio's sensors are deleted together, as they
+    are in a currency change. Statistics in the same currency ask nothing:
+    they simply continue.
+
+    Nothing is found without the recorder, or when the listing fails: setup
+    goes on without the question, and the manual way stays. The error is
+    logged by its type alone, as everywhere here.
+    """
+    nothing = OldStatistics(entity_ids=[], currencies=[])
+    if _RECORDER not in hass.config.components:
+        return nothing
+    try:
+        listed = await async_list_statistic_ids(hass)
+        # The recorder's own statistics come from sensor states; an
+        # integration that imports statistics names itself as their source.
+        units: dict[str, str | None] = {
+            entry["statistic_id"]: entry["statistics_unit_of_measurement"]
+            for entry in listed
+            if entry["source"] == _RECORDER and is_portfolio_entity_id(entry["statistic_id"])
+        }
+    except Exception as err:  # noqa: BLE001 - setup goes on without the question
+        _LOGGER.warning(
+            "Could not look for long-term statistics of an earlier Bitpanda "
+            "Portfolio (%s); setup continues without asking about them",
+            type(err).__name__,
+        )
+        return nothing
+    currencies = {
+        unit for unit in units.values() if unit is not None and unit not in (currency, PERCENTAGE)
+    }
+    if not currencies:
+        return nothing
+    return OldStatistics(entity_ids=sorted(units), currencies=sorted(currencies))

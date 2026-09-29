@@ -7,13 +7,9 @@ Home Assistant warns about. What the version 1 migration left in place keeps
 its entity and its history.
 """
 from datetime import timedelta
-from functools import partial
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from homeassistant.components.recorder import get_instance
-from homeassistant.components.recorder.history import get_significant_states
-from homeassistant.components.recorder.statistics import get_metadata
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
@@ -30,7 +26,7 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
 
 from custom_components.bitpanda.const import DOMAIN, PORTFOLIO_UPDATE_INTERVAL
 
-from tests.conftest import load_fixture
+from tests.conftest import load_fixture, recorded_history, statistics_units
 
 _CLIENT = "custom_components.bitpanda.api.BitpandaApiClient."
 _EUR_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
@@ -84,18 +80,6 @@ def _entity_ids(hass, entry) -> list[str]:
     )
 
 
-async def _history(hass, entity_id: str) -> list[tuple[str, str | None]]:
-    """(state, unit) of every state the recorder holds for `entity_id`."""
-    start = dt_util.utcnow() - timedelta(hours=1)
-    states = await get_instance(hass).async_add_executor_job(
-        get_significant_states, hass, start, None, [entity_id]
-    )
-    return [
-        (state.state, state.attributes.get("unit_of_measurement"))
-        for state in states.get(entity_id, [])
-    ]
-
-
 def _portfolio(hass) -> MockConfigEntry:
     entry = MockConfigEntry(
         domain=DOMAIN, version=3, unique_id="portfolio", title="Bitpanda Portfolio",
@@ -115,18 +99,6 @@ async def _change_currency_to_usd(hass, entry) -> None:
     await async_wait_purge_done(hass)
 
 
-async def _statistics_units(hass, entity_ids) -> dict[str, str | None]:
-    """The unit of the long-term statistics the recorder keeps for each of
-    `entity_ids` -- the ones it keeps any for."""
-    metadata = await get_instance(hass).async_add_executor_job(
-        partial(get_metadata, hass, statistic_ids=set(entity_ids))
-    )
-    return {
-        statistic_id: meta["unit_of_measurement"]
-        for statistic_id, (_, meta) in metadata.items()
-    }
-
-
 async def test_a_currency_change_clears_the_statistics_of_every_portfolio_sensor(
     hass, portfolio_api
 ):
@@ -141,7 +113,7 @@ async def test_a_currency_change_clears_the_statistics_of_every_portfolio_sensor
     assert len(sensors) == 11
     do_adhoc_statistics(hass, start=get_start_time(dt_util.utcnow()))
     await async_wait_recording_done(hass)
-    assert await _statistics_units(hass, sensors) == {
+    assert await statistics_units(hass, sensors) == {
         entity_id: "%" if "_return_" in entity_id else "EUR" for entity_id in sensors
     }
 
@@ -149,7 +121,7 @@ async def test_a_currency_change_clears_the_statistics_of_every_portfolio_sensor
     await async_wait_recording_done(hass)
 
     assert _entity_ids(hass, entry) == sensors
-    assert await _statistics_units(hass, sensors) == {}
+    assert await statistics_units(hass, sensors) == {}
 
 
 async def test_a_currency_change_recreates_the_sensors_without_the_old_history(
@@ -165,8 +137,8 @@ async def test_a_currency_change_recreates_the_sensors_without_the_old_history(
     await async_wait_recording_done(hass)
     entity_ids = _entity_ids(hass, entry)
     assert {_WALLET, _LEFTOVER} <= set(entity_ids)
-    assert await _history(hass, _WALLET) == [("50.0", "EUR")]
-    assert await _history(hass, _LEFTOVER) == [("5.0", "USD")]
+    assert await recorded_history(hass, _WALLET) == [("50.0", "EUR")]
+    assert await recorded_history(hass, _LEFTOVER) == [("5.0", "USD")]
     calls = portfolio_api.call_count
     [group] = entry.subentries.values()
 
@@ -185,10 +157,10 @@ async def test_a_currency_change_recreates_the_sensors_without_the_old_history(
     assert portfolio_api.call_count == calls + 1
     assert portfolio_api.call_args.kwargs == {"equivalent_currency_id": _USD_ID}
     # The EUR history is gone; the state the recreated sensor wrote is kept.
-    assert await _history(hass, _WALLET) == [("50.0", "USD")]
+    assert await recorded_history(hass, _WALLET) == [("50.0", "USD")]
     # The leftover is not the Portfolio's own: the migration promised it
     # stays until the user deletes it, and so does its history.
-    assert await _history(hass, _LEFTOVER) == [("5.0", "USD")]
+    assert await recorded_history(hass, _LEFTOVER) == [("5.0", "USD")]
     assert "update listener" not in caplog.text
 
 

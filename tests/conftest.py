@@ -1,9 +1,14 @@
 """Shared fixtures for Bitpanda integration tests."""
+from datetime import timedelta
+from functools import partial
 import json
 from pathlib import Path
 import string
 from unittest.mock import patch
 
+from homeassistant.components.recorder import get_instance
+from homeassistant.components.recorder.history import get_significant_states
+from homeassistant.components.recorder.statistics import get_metadata
 from homeassistant.config_entries import (
     ConfigEntriesFlowManager,
     ConfigSubentryData,
@@ -12,6 +17,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.data_entry_flow import FlowManager, FlowResultType
 from homeassistant.helpers import device_registry as dr, issue_registry as ir
+from homeassistant.util import dt as dt_util
 import pytest
 
 from custom_components.bitpanda.assets import slim_asset
@@ -217,4 +223,28 @@ def device_names_in_subentry(hass, entry_id: str, subentry_id: str | None) -> se
         device.name
         for device in dr.async_entries_for_config_entry(dr.async_get(hass), entry_id)
         if device.config_subentry_id == subentry_id
+    }
+
+
+async def recorded_history(hass, entity_id: str) -> list[tuple[str, str | None]]:
+    """(state, unit) of every state the recorder holds for `entity_id`."""
+    start = dt_util.utcnow() - timedelta(hours=1)
+    states = await get_instance(hass).async_add_executor_job(
+        get_significant_states, hass, start, None, [entity_id]
+    )
+    return [
+        (state.state, state.attributes.get("unit_of_measurement"))
+        for state in states.get(entity_id, [])
+    ]
+
+
+async def statistics_units(hass, entity_ids) -> dict[str, str | None]:
+    """The unit of the long-term statistics the recorder keeps for each of
+    `entity_ids` -- the ones it keeps any for."""
+    metadata = await get_instance(hass).async_add_executor_job(
+        partial(get_metadata, hass, statistic_ids=set(entity_ids))
+    )
+    return {
+        statistic_id: meta["unit_of_measurement"]
+        for statistic_id, (_, meta) in metadata.items()
     }

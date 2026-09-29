@@ -219,6 +219,7 @@ Every value sensor keeps long-term statistics: the Portfolio's figures, returns 
 
 - **To show them** over weeks or months, use a **Statistics graph** card. Under **Show stat types**, choose *State* for a money value and *Mean*, *Min* or *Max* for a return.
 - **A currency change** deletes the Portfolio sensors' statistics along with their history — they were recorded in the old currency.
+- **Setting up the Portfolio again** in another currency: setup finds the statistics an earlier Portfolio left and asks whether to delete them — see [Troubleshooting](#-troubleshooting).
 
 ### Refreshing by hand
 
@@ -422,7 +423,7 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 
 **History:** the recorded history of the removed sensors stays in Home Assistant's database until the recorder purges it — after 10 days by default (the recorder's `purge_keep_days`).
 
-**Long-term statistics** are not purged: delete them under **Settings → Tools → Statistics** (before Home Assistant 2026.8: **Developer tools → Statistics**) if you no longer want them.
+**Long-term statistics** are not purged: delete them under **Settings → Tools → Statistics** (before Home Assistant 2026.8: **Developer tools → Statistics**) if you no longer want them. A later Portfolio setup in another currency offers to delete them.
 
 ---
 

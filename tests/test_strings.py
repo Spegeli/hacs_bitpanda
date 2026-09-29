@@ -713,13 +713,14 @@ def test_the_old_statistics_step_explains_both_choices():
     paragraph with both currencies; then a list item per button, led by the
     button's own label in bold, each saying it sets up the Portfolio in the
     new currency; the second links Troubleshooting through a placeholder, as
-    hassfest allows no URL in a text. In the approved English and German
-    wording."""
+    hassfest allows no URL in a text. Last, in a paragraph of its own, the
+    way back: closing the dialog keeps the old statistics. In the approved
+    English and German wording."""
     for name in _FILES:
         step = _load(name)["config"]["step"]["old_statistics"]
         assert set(step) == {"title", "description", "menu_options"}, name
         assert set(step["menu_options"]) == {"delete_statistics", "keep_statistics"}, name
-        intro, choices = step["description"].split("\n\n")
+        intro, choices, way_back = step["description"].split("\n\n")
         assert "\n" not in intro and _placeholders(intro) == {"old", "new"}, name
         delete, keep = choices.split("\n")
         for item, option, placeholders in (
@@ -729,7 +730,9 @@ def test_the_old_statistics_step_explains_both_choices():
             label = re.escape(step["menu_options"][option])
             assert re.match(rf"- \*\*{label}\s?:\*\* ", item), (name, option)
             assert _placeholders(item) == placeholders, (name, option)
-        assert _LINK_TARGET.findall(intro + delete) == [], name
+        assert _LINK_TARGET.findall(intro + delete + way_back) == [], name
+        assert "\n" not in way_back and _placeholders(way_back) == set(), name
+        assert "X" in way_back, name
         assert _LINK_TARGET.findall(keep) == ["{troubleshooting_url}"], name
     assert _load("strings.json")["config"]["step"]["old_statistics"] == {
         "title": "Old statistics in another currency",
@@ -743,7 +746,9 @@ def test_the_old_statistics_step_explains_both_choices():
             " restored.\n"
             "- **Keep and set up:** sets up the Portfolio in {new} and deletes nothing. The"
             " sensors with old statistics record none until you delete the old statistics"
-            " yourself; [Troubleshooting]({troubleshooting_url}) in the README explains how."
+            " yourself; [Troubleshooting]({troubleshooting_url}) in the README explains how.\n\n"
+            'To keep the old statistics, close this dialog with the "X" instead: nothing is set'
+            " up or deleted then. Set up the Portfolio again in their currency, and they continue."
         ),
         "menu_options": {
             "delete_statistics": "Delete and set up",
@@ -763,7 +768,10 @@ def test_the_old_statistics_step_explains_both_choices():
             "- **Behalten und einrichten:** richtet das Portfolio in {new} ein und löscht"
             " nichts. Die Sensoren mit alter Statistik zeichnen keine auf, bis du die alte"
             " Statistik selbst löschst; [Troubleshooting]({troubleshooting_url}) in der README"
-            " erklärt, wie."
+            " erklärt, wie.\n\n"
+            "Möchtest du die alte Statistik behalten, schließe den Dialog stattdessen über das"
+            " „X“: Dann wird nichts eingerichtet oder gelöscht. Richte das Portfolio danach in"
+            " ihrer Währung ein, dann läuft sie weiter."
         ),
         "menu_options": {
             "delete_statistics": "Löschen und einrichten",

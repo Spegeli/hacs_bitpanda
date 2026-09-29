@@ -118,6 +118,7 @@ A new version can come out as a beta first, for testing before everyone gets it.
 3. Copy your API key — **you will only see it once!** Home Assistant stores it locally and sends it only to Bitpanda; the integration never logs it, and diagnostics leave it out.
 4. Go to **Settings → Devices & services → Add integration**, search for **Bitpanda**, select it, and choose **Bitpanda Portfolio** in the dialog that follows. If the Price Tracker is already set up, **Add service** on the Bitpanda integration page opens the same dialog. It lists only what is not set up yet.
 5. Enter your API key — setup checks all three permissions and marks any that is missing — then choose your currency and the language of group titles and messages (see [Languages](#languages))
+   - If an earlier Portfolio left long-term statistics in another currency, a last step asks whether to delete them — see [Troubleshooting](#-troubleshooting).
 
 Bitpanda API keys expire on the date you choose when you create them, **one year** later at most. Home Assistant then asks for a new one — see [Changing settings later](#changing-settings-later).
 
@@ -406,7 +407,7 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 | One asset's price sensors are `unavailable` | Bitpanda returned no price for it three rounds in a row; see the warning in the log |
 | Prices update less often than every minute | Above 30 tracked assets the interval stretches so that the integration stays under 1,800 price requests an hour; **Settings → Repairs** says so once it passes 30 minutes (see [Features](#-features)) |
 | 24-hour price change missing | A newly tracked price shows it after a day, and only while the recorder records the sensor (see [Known limitations](#%EF%B8%8F-known-limitations)) |
-| A Portfolio sensor keeps no statistics after you set the Portfolio up again in another currency | Home Assistant still holds its statistics in the old currency. Delete them under **Settings → Tools → Statistics** (before Home Assistant 2026.8: **Developer tools → Statistics**), where the sensor is listed with the changed unit |
+| A Portfolio sensor keeps no statistics after you set the Portfolio up again in another currency | Home Assistant still holds its statistics in the old currency — setup offered to delete them, and you kept them. Delete them under **Settings → Tools → Statistics** (before Home Assistant 2026.8: **Developer tools → Statistics**), where the sensor is listed with the changed unit |
 
 **Still stuck?** Open an [issue](https://github.com/Spegeli/hacs_bitpanda/issues) with the diagnostics (**⋮ → Download diagnostics** on the entry; the API key is left out) and a debug log (**⋮ → Enable debug logging**).
 

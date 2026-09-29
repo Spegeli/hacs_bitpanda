@@ -223,11 +223,12 @@ def _text(strings: dict, key: tuple[str, ...]) -> str:
 
 # Where those controls sit, in Home Assistant's frontend at the 2025.5 floor as
 # at 2026.9: "Reconfigure" and "Delete" in the ⋮ menu of an entry on the
-# integration page; "Configure" on the entry itself (a button, ⚙ in newer
-# versions); "Add price tracker" on the entry too (in its ⋮ menu at 2025.5, a
-# button later). A text that sends the user to one of them -- or to delete a
-# device or a group, which the ⋮ menu on its page offers -- says where: on the
-# Bitpanda integration page, by the entry's name, with the ⋮ or ⚙ to look for.
+# integration page; "Configure" on the entry itself (a labelled button before
+# 2025.7, ⚙ from 2025.7); "Add price tracker" in the entry's ⋮ menu (from 2025.7
+# also a button at the top of the integration page). A text that sends the user
+# to one of them -- or to delete a device or a group, which the ⋮ menu on its
+# page offers -- says where: on the Bitpanda integration page, by the entry's
+# name, with the ⋮ or ⚙ to look for.
 _INTEGRATION_PAGE = {
     "de": "Bitpanda-Integrationsseite",
     "en": "Bitpanda integration page",

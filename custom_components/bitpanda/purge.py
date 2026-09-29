@@ -136,19 +136,35 @@ class OldStatistics:
     currencies: list[str]
 
 
+def _is_live(hass: HomeAssistant, entity_id: str) -> bool:
+    """Whether something lives under `entity_id`: it is registered, or it
+    has a state."""
+    return (
+        er.async_get(hass).async_get(entity_id) is not None
+        or hass.states.get(entity_id) is not None
+    )
+
+
 async def async_find_old_statistics(hass: HomeAssistant, currency: str) -> OldStatistics:
     """Look for long-term statistics an earlier Portfolio left in another
     currency than `currency` (upper case), under the IDs a new Portfolio's
     sensors take.
 
-    Only the recorder's own statistics under a Portfolio ID count
-    (naming.is_portfolio_entity_id). A question is needed when one of them has
-    a unit that is neither `currency` nor "%" -- the returns' unit -- so any
-    other currency code, also one the integration no longer supports; a
-    statistic without a unit never counts. Then every such ID goes, whatever
-    its unit: the earlier Portfolio's sensors are deleted together, as they
-    are in a currency change. Statistics in the same currency ask nothing:
-    they simply continue.
+    Only a statistic under a Portfolio ID counts
+    (naming.is_portfolio_entity_id), and only one whose sensor is gone: a
+    deleted Portfolio leaves neither an entity-registry entry nor a state, so
+    a statistic whose ID still has one belongs to a sensor that exists -- a
+    template's or another integration's under a matching ID -- and cannot be
+    attributed to the integration safely. It counts neither for the question
+    nor for the deletion, whatever its unit.
+
+    A question is needed when one of the statistics that count has a unit
+    that is neither `currency` nor "%" -- the returns' unit -- so any other
+    currency code, also one the integration no longer supports; a statistic
+    without a unit never counts. Then every one of them goes, whatever its
+    unit: the earlier Portfolio's sensors are deleted together, as they are
+    in a currency change. Statistics in the same currency ask nothing: they
+    simply continue.
 
     Nothing is found without the recorder, or when the listing fails: setup
     goes on without the question, and the manual way stays. The error is
@@ -159,12 +175,14 @@ async def async_find_old_statistics(hass: HomeAssistant, currency: str) -> OldSt
         return nothing
     try:
         listed = await async_list_statistic_ids(hass)
-        # The recorder's own statistics come from sensor states; an
-        # integration that imports statistics names itself as their source.
+        # A statistic of another source is an external one, keyed `domain:id`,
+        # which no Portfolio ID matches: the source check only guards that.
         units: dict[str, str | None] = {
             entry["statistic_id"]: entry["statistics_unit_of_measurement"]
             for entry in listed
-            if entry["source"] == _RECORDER and is_portfolio_entity_id(entry["statistic_id"])
+            if entry["source"] == _RECORDER
+            and is_portfolio_entity_id(entry["statistic_id"])
+            and not _is_live(hass, entry["statistic_id"])
         }
     except Exception as err:  # noqa: BLE001 - setup goes on without the question
         _LOGGER.warning(

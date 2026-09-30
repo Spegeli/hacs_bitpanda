@@ -7,11 +7,13 @@ name: Validate
 #                                 summed up as "Validation summary"
 #   pull request to main        - everything, summed up as "Validation
 #                                 result": the check main's ruleset requires,
-#                                 so nothing merges unvalidated -- a
-#                                 contributor's pull request included:
-#                                 pull_request, never pull_request_target,
-#                                 runs a fork's code with a read-only token
-#                                 and no secrets
+#                                 so nothing merges unvalidated
+#   pull request to dev         - everything, so a contribution is checked
+#                                 before it merges; summed up as "Validation
+#                                 summary", so that it never answers for
+#                                 main's check on the same commit
+#   either pull request runs a contributor's code from a fork with a
+#   read-only token and no secrets: pull_request, never pull_request_target
 #   manual                      - on any branch; the tests as chosen;
 #                                 summed up as "Validation summary"
 # main itself needs no run: changes only arrive through a validated pull
@@ -30,7 +32,7 @@ on:
   push:
     branches-ignore: [main]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
     inputs:
       tests:
@@ -54,17 +56,18 @@ jobs:
       tests: ${{ github.event_name != 'workflow_dispatch' || inputs.tests }}
 
   # The one check main's ruleset requires; a fixed name stays valid when the
-  # jobs above change. Only a pull request's run reports under that name,
-  # push and manual runs as "Validation summary": the ruleset matches the
-  # check by name on the pull request's head commit, and a push's run there
-  # counts as well. So only the pull request's own run, which validates the
-  # merge result, can satisfy it, and a push's run that a manual one
-  # cancelled leaves no red "Validation result" beside it. always(), not
+  # jobs above change. Only the run of a pull request to main reports under
+  # that name; push and manual runs, and the run of a pull request to dev,
+  # report as "Validation summary": the ruleset matches the check by name on
+  # the pull request's head commit, and any other run there counts as well.
+  # So only the pull request's own run, which validates the merge result
+  # into main, can satisfy it, and a push's run that a manual one cancelled
+  # leaves no red "Validation result" beside it. always(), not
   # !cancelled(): a skipped job counts as passed for a required check, so a
   # failed or cancelled validation must still run this job and fail it. It
   # needs every other job, or one could fail and leave it green.
   result:
-    name: ${{ github.event_name == 'pull_request' && 'Validation result' || 'Validation summary' }}
+    name: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'Validation result' || 'Validation summary' }}
     needs: [checks]
     if: always()
     runs-on: ubuntu-24.04

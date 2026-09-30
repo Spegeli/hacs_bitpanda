@@ -262,16 +262,17 @@ def test_the_checks_run_what_ci_promises():
     assert "from __future__ import annotations" in _script(floor)
 
 
-def test_validate_runs_on_every_push_but_main_on_pull_requests_to_main_and_by_hand():
+def test_validate_runs_on_every_push_but_main_on_pull_requests_to_main_and_dev_and_by_hand():
     """main needs no run of its own: changes reach it only through a
     validated pull request, or as the release's version commit, validated
-    just before. A newer push or pull request update cancels the run it
-    makes obsolete."""
+    just before. A pull request to dev -- where contributions go -- is
+    validated as well, before it merges. A newer push or pull request update
+    cancels the run it makes obsolete."""
     validate = _workflow("validate.yml")
     on = validate["on"]
     assert sorted(on) == ["pull_request", "push", "workflow_dispatch"]
     assert on["push"] == {"branches-ignore": ["main"]}
-    assert on["pull_request"] == {"branches": ["main"]}
+    assert on["pull_request"] == {"branches": ["main", "dev"]}
     tests = on["workflow_dispatch"]["inputs"]["tests"]
     assert tests["type"] == "boolean"
     assert tests["default"] is True
@@ -320,11 +321,12 @@ def test_validation_result_is_the_one_required_check():
     """main's ruleset requires this one check by its name, which stays valid
     when the jobs behind it change.
 
-    Only a pull request's run reports under that name; push and manual runs
-    report as "Validation summary". The ruleset matches the check by name on
-    the pull request's head commit, and a push's run there counts as well:
-    only the pull request's own run, which validates the merge result, may
-    satisfy it.
+    Only the run of a pull request to main reports under that name; push and
+    manual runs, and the run of a pull request to dev, report as "Validation
+    summary". The ruleset matches the check by name on the pull request's
+    head commit, and any other run there counts as well -- a push's, or that
+    of a pull request to dev from the same commit: only the pull request's
+    own run, which validates the merge result into main, may satisfy it.
 
     always(), not the default success() or !cancelled(): a skipped job
     counts as passed for a required check, so a failed or cancelled
@@ -336,7 +338,7 @@ def test_validation_result_is_the_one_required_check():
     jobs = _workflow("validate.yml")["jobs"]
     result = jobs["result"]
     assert result["name"] == (
-        "${{ github.event_name == 'pull_request'"
+        "${{ github.event_name == 'pull_request' && github.base_ref == 'main'"
         " && 'Validation result' || 'Validation summary' }}"
     )
     assert "checks" in result["needs"]

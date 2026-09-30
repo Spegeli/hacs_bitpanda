@@ -199,7 +199,7 @@ Follow the [Home Assistant developer guidelines](https://developers.home-assista
 2. Keep the change focused — one topic per PR.
 3. Write the commit messages as [Conventional Commits](https://www.conventionalcommits.org) — see [Commit messages](#commit-messages).
 4. Open the PR against `dev` and fill in the template.
-5. Validate runs for pull requests to `main` only, so run the tests and mypy yourself first (see [Tests and typing](#tests-and-typing)). The maintainer validates your pull request by pushing it to a topic branch of this repository, which runs every check.
+5. Validate runs every check on your pull request (see [Continuous integration](#continuous-integration)), and it merges once that run is green. A first-time contributor's run waits for the maintainer's approval, so run the tests and mypy yourself first (see [Tests and typing](#tests-and-typing)): you get the answer sooner.
 
 **Do not bump the version in `manifest.json`.** The Create Release workflow sets it (see [Releases](#releases)).
 
@@ -237,14 +237,14 @@ One workflow, **Validate** (`.github/workflows/validate.yml`), checks every chan
 When Validate runs:
 
 - **A push to any branch but `main`** — all six checks.
-- **A pull request to `main`** — all six checks.
+- **A pull request to `main` or `dev`** — all six checks.
 - **By hand** — Actions → Validate → Run workflow, on any branch. Clear "Also run the tests with coverage and mypy --strict" to skip those two; the other four always run.
 
 Validate does not run on `main` itself: changes reach it only through a validated pull request, or as a release's version commit, validated just before. A newer push to the same branch, or a new commit in the same pull request, cancels the run it makes obsolete. A run started by hand and a push's run on the same branch cancel each other as well, whichever starts later cancelling the other: start one by hand only after the push's run has finished, or that run is cancelled and its Validation summary turns red.
 
-One last check sums up each run: green when every check passed or was switched off by hand, red when one failed or the run was cancelled. A pull request's run calls it **Validation result**. It is the one check `main` requires, so a pull request merges only with a green Validation result. Push and manual runs call it **Validation summary**: GitHub would count a push's run on the pull request's head commit for the required check as well, and only the pull request's own run, which validates the merge result, may answer for it. A run started by hand never counts for a pull request anyway, so switching its tests off cannot stand in for the required check.
+One last check sums up each run: green when every check passed or was switched off by hand, red when one failed or the run was cancelled. The run of a pull request to `main` calls it **Validation result**. It is the one check `main` requires, so a pull request to `main` merges only with a green Validation result. Push and manual runs, and the run of a pull request to `dev`, call it **Validation summary**: GitHub would count any other run on the pull request's head commit for the required check as well — a push's, or that of a pull request to `dev` from the same commit — and only the pull request's own run, which validates the merge result into `main`, may answer for it. A run started by hand never counts for a pull request anyway, so switching its tests off cannot stand in for the required check.
 
-A pull request to `main` from a fork runs the same checks, with a read-only token and no secrets: Validate uses `pull_request`, never `pull_request_target`. A first-time contributor's run waits for the maintainer's approval.
+A pull request from a fork, to `dev` or to `main`, runs the same checks, with a read-only token and no secrets: Validate uses `pull_request`, never `pull_request_target`. A first-time contributor's run waits for the maintainer's approval.
 
 ## Releases
 

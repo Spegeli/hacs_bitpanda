@@ -6,6 +6,7 @@ By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Ways to contribute
 
+- **Report a security vulnerability** — privately, never as a public issue: see the [security policy](SECURITY.md).
 - **Report a bug** — [open a bug report](https://github.com/Spegeli/hacs_bitpanda/issues/new?template=bug_report.yml). Concrete numbers and diagnostics help most.
 - **Suggest a feature** — [open a feature request](https://github.com/Spegeli/hacs_bitpanda/issues/new?template=feature_request.yml).
 - **Improve translations** — corrections and new languages are welcome, see below.

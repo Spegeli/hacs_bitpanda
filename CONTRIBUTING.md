@@ -9,8 +9,24 @@ By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 - **Report a security vulnerability** — privately, never as a public issue: see the [security policy](SECURITY.md).
 - **Report a bug** — [open a bug report](https://github.com/Spegeli/hacs_bitpanda/issues/new?template=bug_report.yml). Concrete numbers and diagnostics help most.
 - **Suggest a feature** — [open a feature request](https://github.com/Spegeli/hacs_bitpanda/issues/new?template=feature_request.yml).
-- **Improve translations** — corrections and new languages are welcome, see below.
-- **Submit code** — see the workflow below.
+- **Improve translations** — corrections and new languages are welcome, see [Translations](#translations).
+- **Submit a change** — see [Pull requests](#pull-requests).
+
+## Branches
+
+- **`main`** holds the released code. It changes only through the pull request from `dev` and through a release's version commit, and it merges only with a green **Validation result** (see [Continuous integration](#continuous-integration)).
+- **`dev`** is where work comes together; betas are released from it.
+- **Topic branches** start from `dev` and go back into it.
+
+## Pull requests
+
+1. Fork the repository and branch from `dev`.
+2. Keep the change focused — one topic per pull request.
+3. Write the commit messages as [Conventional Commits](https://www.conventionalcommits.org) — see [Commit messages](#commit-messages).
+4. Open the pull request against `dev` and fill in the template.
+5. Validate checks it automatically (see [Continuous integration](#continuous-integration)); it is merged once its **Validation summary** is green. A first-time contributor's run waits for the maintainer's approval, so run the tests and mypy yourself first (see [Tests and typing](#tests-and-typing)): you get the answer sooner.
+
+**Do not bump the version in `manifest.json`.** The Create Release workflow sets it (see [Releases](#releases)).
 
 ## Development setup
 
@@ -187,40 +203,6 @@ Follow the [Home Assistant developer guidelines](https://developers.home-assista
 - `async`/`await` for anything touching the network.
 - Constants in `const.py`, not inline.
 
-## Branches
-
-- **`main`** holds the released code. It changes only through the pull request from `dev` and through a release's version commit, and it merges only with a green **Validation result** (see [Continuous integration](#continuous-integration)).
-- **`dev`** is where work comes together; betas are released from it.
-- **Topic branches** start from `dev` and go back into it.
-
-## Pull requests
-
-1. Branch from `dev`.
-2. Keep the change focused — one topic per PR.
-3. Write the commit messages as [Conventional Commits](https://www.conventionalcommits.org) — see [Commit messages](#commit-messages).
-4. Open the PR against `dev` and fill in the template.
-5. Validate runs every check on your pull request (see [Continuous integration](#continuous-integration)), and it merges once that run is green. A first-time contributor's run waits for the maintainer's approval, so run the tests and mypy yourself first (see [Tests and typing](#tests-and-typing)): you get the answer sooner.
-
-**Do not bump the version in `manifest.json`.** The Create Release workflow sets it (see [Releases](#releases)).
-
-### Commit messages
-
-A release computes its version from the commit messages and writes its release notes from their subjects (see [Releases](#releases)), so a commit's type decides where the change shows up:
-
-| Type | Release notes section |
-|---|---|
-| `feat` | ✨ New Features |
-| `perf` | ⚡ Improvements |
-| `fix` | 🐛 Bug Fixes |
-| `refactor`, `style` | ♻️ Refactor & Code Quality |
-| `docs` — user-facing documentation, the README | 📝 Documentation |
-| `test`, `ci`, `build`, `chore` | not listed — unless breaking or scoped `security` (below) |
-
-- **A change to CI, the tests or the release tooling alone is `ci:`, `test:`, `build:` or `chore:`** — also when it fixes or adds something there. **So is a change to the contributor documentation alone** — this file, the issue and pull request templates: `chore:`. `docs:` is for what the people who run the integration read, the README. The notes are for them: a `fix:` for a workflow would show up among their bug fixes, a `docs:` for this file among their documentation.
-- A breaking change — a `!` after the type or the scope (`feat!:`, `fix(scope)!:`, `ci!:`), or a line that starts with `BREAKING CHANGE:` in the message body — makes the next version a major one on **any** type, `ci`, `test`, `build` and `chore` included, and is listed under 💥 Breaking Changes, and only there. So mark only what breaks an installation as breaking.
-- The scope `security`, with any type — `chore` and `build` included — lists the change under 🔒 Security.
-- Write the description for the people who run the integration, in the imperative: the notes print it with a capital first letter, the scope in bold before it — `fix(fx): require …` becomes "**fx:** Require …". Within a section, a description whose first word is `add` (or `adds`, `added`, `adding`) comes first, then everything else, then the forms of `fix`, then the forms of `remove`, `drop` and `delete`.
-
 ## Continuous integration
 
 One workflow, **Validate** (`.github/workflows/validate.yml`), checks every change. The checks themselves live in `.github/workflows/_validate.yml`, which a release runs as well:
@@ -242,9 +224,27 @@ When Validate runs:
 
 Validate does not run on `main` itself: changes reach it only through a validated pull request, or as a release's version commit, validated just before. A newer push to the same branch, or a new commit in the same pull request, cancels the run it makes obsolete. A run started by hand and a push's run on the same branch cancel each other as well, whichever starts later cancelling the other: start one by hand only after the push's run has finished, or that run is cancelled and its Validation summary turns red.
 
-One last check sums up each run: green when every check passed or was switched off by hand, red when one failed or the run was cancelled. The run of a pull request to `main` calls it **Validation result**. It is the one check `main` requires, so a pull request to `main` merges only with a green Validation result. Push and manual runs, and the run of a pull request to `dev`, call it **Validation summary**: GitHub would count any other run on the pull request's head commit for the required check as well — a push's, or that of a pull request to `dev` from the same commit — and only the pull request's own run, which validates the merge result into `main`, may answer for it. A run started by hand never counts for a pull request anyway, so switching its tests off cannot stand in for the required check.
+One last check sums up each run: green when every check passed or was switched off by hand, red when one failed or the run was cancelled. A pull request to `main` calls it **Validation result**, the check `main` requires: a pull request to `main` merges only when it is green. Every other run — a pull request to `dev`, a push, a run by hand — calls it **Validation summary**: GitHub counts a required check by its name on a commit, so only the run that validates the merge into `main` may answer for it. A pull request to `dev` is merged once its Validation summary is green. A run by hand never counts for a pull request anyway, so switching its tests off cannot stand in for the required check.
 
-A pull request from a fork, to `dev` or to `main`, runs the same checks, with a read-only token and no secrets: Validate uses `pull_request`, never `pull_request_target`. A first-time contributor's run waits for the maintainer's approval.
+A pull request from a fork, to `dev` or to `main`, runs the same checks, with a read-only token and no secrets: Validate uses `pull_request`, never `pull_request_target`. A first-time contributor's run waits for the maintainer's approval. In your own fork, Validate works as it is: it needs no secrets.
+
+## Commit messages
+
+A release computes its version from the commit messages and writes its release notes from their subjects (see [Releases](#releases)), so a commit's type decides where the change shows up:
+
+| Type | Release notes section |
+|---|---|
+| `feat` | ✨ New Features |
+| `perf` | ⚡ Improvements |
+| `fix` | 🐛 Bug Fixes |
+| `refactor`, `style` | ♻️ Refactor & Code Quality |
+| `docs` — user-facing documentation, the README | 📝 Documentation |
+| `test`, `ci`, `build`, `chore` | not listed — unless breaking or scoped `security` (below) |
+
+- **A change to CI, the tests or the release tooling alone is `ci:`, `test:`, `build:` or `chore:`** — also when it fixes or adds something there. **So is a change to the contributor documentation alone** — this file, the issue and pull request templates: `chore:`. `docs:` is for what the people who run the integration read, the README. The notes are for them: a `fix:` for a workflow would show up among their bug fixes, a `docs:` for this file among their documentation.
+- A breaking change — a `!` after the type or the scope (`feat!:`, `fix(scope)!:`, `ci!:`), or a line that starts with `BREAKING CHANGE:` in the message body — makes the next version a major one on **any** type, `ci`, `test`, `build` and `chore` included, and is listed under 💥 Breaking Changes, and only there. So mark only what breaks an installation as breaking.
+- The scope `security`, with any type — `chore` and `build` included — lists the change under 🔒 Security.
+- Write the description for the people who run the integration, in the imperative: the notes print it with a capital first letter, the scope in bold before it — `fix(fx): require …` becomes "**fx:** Require …". Within a section, a description whose first word is `add` (or `adds`, `added`, `adding`) comes first, then everything else, then the forms of `fix`, then the forms of `remove`, `drop` and `delete`.
 
 ## Releases
 
@@ -284,3 +284,12 @@ When a release fails:
 - **The plan stops with "Nothing to release"** (step 3), before anything is committed: no commit came after the previous release — the same release was started a second time, "Re-run all jobs" came after its tag was pushed, or a new run came right after a stable release. If the previous release is published, there is nothing to do; if its tag has no GitHub release yet, create the release from the tag by hand, as under "Publishing fails" — or, for a draft you withdrew, delete the tag.
 
 After a stable release, merge `main` into `dev`, so the version commit reaches `dev` too: `git switch dev`, `git pull`, `git merge origin/main`, `git push`. A pre-release leaves nothing to merge.
+
+## After merging
+
+- A change on `dev` reaches `main` with the next pull request from `dev`.
+- Installations get it with the next release: a beta from `dev` brings it to those that switched pre-releases on (see the README's [Beta versions](README.md#beta-versions)), a stable release to everyone.
+
+## License
+
+Contributions are licensed under the repository's [MIT License](LICENSE).

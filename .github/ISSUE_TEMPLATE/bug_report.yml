@@ -83,6 +83,15 @@ body:
     validations:
       required: false
 
+  - type: input
+    id: asset_id
+    attributes:
+      label: Asset ID
+      description: The asset's device page shows it under **Service info** as **Serial number**. For a holding without a wallet, the debug log names it. It identifies the asset, not your account.
+      placeholder: e.g. b86c034b-efe3-11eb-b56f-0691764446a7
+    validations:
+      required: false
+
   - type: textarea
     id: description
     attributes:

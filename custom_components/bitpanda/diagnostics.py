@@ -82,6 +82,9 @@ def _portfolio(
             "holdings": len(data.holdings) if data else 0,
             "wallets": len(data.wallet_ids) if data else 0,
             "unnamed_holdings": len(data.holdings) - len(data.assets) if data else 0,
+            # Of those, the ones the catalogue does not list: no Cash Plus,
+            # unlike a lookup that failed, which leaves Cash Plus unknown.
+            "unlisted_holdings": len(data.unlisted) if data else 0,
         },
         "history": {
             **_health(runtime.history),

@@ -161,7 +161,7 @@ class PortfolioCashSensor(_PortfolioFigure):
 
 class PortfolioCashPlusSensor(_PortfolioFigure):
     """Value of the Cash Plus holdings. Unknown while any holding is
-    unclassified."""
+    unclassified -- but one the catalogue does not list, which is none."""
 
     _key = "cash_plus"
     _attr_translation_key = "cash_plus"

@@ -59,6 +59,9 @@ class _Directory:
     def get(self, asset_id):
         return self.records.get(asset_id)
 
+    def is_unlisted(self, asset_id):
+        return False
+
 
 class _EarnClient:
     def __init__(self, configs=None, error=None):

@@ -123,6 +123,12 @@ class AssetDirectory:
     def get(self, asset_id: str) -> dict[str, Any] | None:
         return self._cache.get(asset_id)
 
+    def is_unlisted(self, asset_id: str) -> bool:
+        """Whether the catalogue answered without the asset when it last
+        answered: it does not list it. A lookup that failed since tells
+        nothing and changes nothing."""
+        return asset_id in self._unknown
+
     async def async_resolve(self, asset_ids: Iterable[str]) -> None:
         now = dt_util.utcnow()
         pending = [

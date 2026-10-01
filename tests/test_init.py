@@ -733,6 +733,26 @@ async def test_refreshing_by_hand_never_confirms_an_empty_portfolio_sooner(
     assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
 
 
+async def test_cash_plus_has_its_value_beside_a_holding_the_catalogue_does_not_list(
+    hass, portfolio_api
+):
+    """The catalogue answers without the held asset: it gets no wallet, but
+    Cash Plus -- the catalogue lists every Cash Plus product -- keeps its
+    value."""
+    with patch(f"{_CLIENT}async_get_assets", AsyncMock(return_value=[])):
+        await _setup(hass, _portfolio_entry(hass))
+    assert _value(hass, "sensor.bitpanda_portfolio_cash_plus") == 0.0
+    assert er.async_get(hass).async_get("sensor.bitpanda_vision_vsn_wallet_available") is None
+
+
+async def test_cash_plus_is_unknown_while_a_holding_cannot_be_looked_up(hass, portfolio_api):
+    """A failed lookup tells nothing: the holding might be Cash Plus."""
+    failing = AsyncMock(side_effect=BitpandaApiError("HTTP 503 from /assets"))
+    with patch(f"{_CLIENT}async_get_assets", failing):
+        await _setup(hass, _portfolio_entry(hass))
+    assert hass.states.get("sensor.bitpanda_portfolio_cash_plus").state == "unknown"
+
+
 async def test_a_holding_the_catalogue_lists_later_gets_its_wallet_within_a_day(
     hass, portfolio_api, freezer
 ):

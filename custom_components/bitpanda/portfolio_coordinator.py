@@ -208,6 +208,9 @@ class PortfolioCoordinator(TolerantCoordinator[PortfolioData]):
             for asset_id in data.holdings
             if (record := self._directory.get(asset_id)) is not None
         }
+        data.unlisted = {
+            asset_id for asset_id in data.holdings if self._directory.is_unlisted(asset_id)
+        }
         return data
 
     def _check_empty_answer(

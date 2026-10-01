@@ -121,7 +121,9 @@ class PortfolioData:
 
     `assets` is filled by the coordinator from the AssetDirectory: only a
     record's `group` tells Cash Plus from a wallet, so a holding without one
-    is neither, and makes Cash Plus unknown.
+    is neither, and makes Cash Plus unknown -- unless the catalogue answered
+    without it (`unlisted`): Bitpanda's catalogue lists its Cash Plus
+    products, so such a holding is none.
 
     An entry `parse_portfolio` could not read at all -- not even enough to
     hold a zero -- is recorded in `unparsed_assets` rather than dropped: a
@@ -134,6 +136,7 @@ class PortfolioData:
     holdings: dict[str, Holding] = field(default_factory=dict)
     cash: float | None = 0.0
     assets: dict[str, dict[str, Any]] = field(default_factory=dict)
+    unlisted: set[str] = field(default_factory=set)
     unparsed_assets: set[str] = field(default_factory=set)
     # When /portfolio was asked for this answer (Home Assistant's clock): the
     # times `confirmed` measures between answers. None where no request
@@ -166,15 +169,18 @@ class PortfolioData:
         """The Cash Plus holdings by asset id, in one pass over the holdings.
 
         None when they cannot be told with confidence: a holding is
-        unclassified, a Cash Plus holding's value is unknown, or an entry
-        failed to parse at all and so was never classified
-        (`unparsed_assets`) -- it might itself be Cash Plus.
+        unclassified -- but one the catalogue does not list (`unlisted`) --
+        a Cash Plus holding's value is unknown, or an entry failed to parse
+        at all and so was never classified (`unparsed_assets`) -- it might
+        itself be Cash Plus.
         """
         if self.unparsed_assets:
             return None
         found: dict[str, Holding] = {}
         for asset_id, holding in self.holdings.items():
             kind = self.is_cash_plus(asset_id)
+            if kind is None and asset_id in self.unlisted:
+                continue
             if kind is None:
                 return None
             if kind:

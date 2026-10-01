@@ -172,12 +172,48 @@ async def test_an_asset_missing_from_the_catalogue_is_asked_for_again_a_day_late
     freezer.tick(UNKNOWN_ASSET_RETRY - timedelta(seconds=1))
     await directory.async_resolve([VSN["id"]])
     assert client.calls == [VSN["id"]]
+    assert directory.is_unlisted(VSN["id"])
 
     client.records = {VSN["id"]: VSN}
     freezer.tick(timedelta(seconds=1))
     await directory.async_resolve([VSN["id"]])
     assert client.calls == [VSN["id"], VSN["id"]]
     assert directory.get(VSN["id"]) == slim_asset(VSN)
+    assert not directory.is_unlisted(VSN["id"])
+
+
+async def test_an_asset_still_missing_a_day_later_waits_another_day(freezer):
+    """Each answer without the asset starts the day again: one request a
+    day, never one at every refresh."""
+    client = _Client({})
+    directory = AssetDirectory(client, {})
+    await directory.async_resolve([VSN["id"]])
+    freezer.tick(UNKNOWN_ASSET_RETRY)
+    await directory.async_resolve([VSN["id"]])
+    freezer.tick(timedelta(minutes=5))
+    await directory.async_resolve([VSN["id"]])
+    assert client.calls == [VSN["id"], VSN["id"]]
+
+
+async def test_a_failed_daily_lookup_tells_nothing(freezer):
+    """The catalogue did not list the asset; a day later its lookup fails.
+    That changes nothing: the asset stays unlisted, and the next refresh
+    asks again -- until an answer without it restarts the day."""
+    client = _Client({})
+    directory = AssetDirectory(client, {})
+    await directory.async_resolve([VSN["id"]])
+    freezer.tick(UNKNOWN_ASSET_RETRY)
+    client.fail = {VSN["id"]}
+    await directory.async_resolve([VSN["id"]])
+    assert directory.is_unlisted(VSN["id"])
+
+    client.fail = set()
+    freezer.tick(timedelta(minutes=5))
+    await directory.async_resolve([VSN["id"]])
+    freezer.tick(timedelta(minutes=5))
+    await directory.async_resolve([VSN["id"]])
+    assert client.calls == [VSN["id"]] * 3
+    assert directory.is_unlisted(VSN["id"])
 
 
 async def test_an_asset_missing_from_the_catalogue_is_logged_once_at_info(caplog, freezer):

@@ -99,9 +99,15 @@ def _portfolio_entry(hass, *, loaded: bool) -> MockConfigEntry:
     _add_device(hass, entry, "Gold (XAU) Wallet", "metal")
     if loaded:
         data = PortfolioData(
-            holdings={"a": Holding("a", 1.0, 1.0, 5.0), "b": Holding("b", 1.0, 1.0, 5.0)}
+            holdings={
+                "a": Holding("a", 1.0, 1.0, 5.0),
+                "b": Holding("b", 1.0, 1.0, 5.0),
+                "c": Holding("c", 1.0, 1.0, 5.0),
+            }
         )
         data.assets = {"a": {"id": "a", "group": "coin"}}
+        # "b" the catalogue does not list; the lookup of "c" failed.
+        data.unlisted = {"b"}
         entry.runtime_data = SimpleNamespace(
             portfolio=_Coordinator(data),
             history=_History(
@@ -121,8 +127,8 @@ async def test_portfolio_diagnostics_report_health_and_never_the_key(hass):
     assert result["service"] == "portfolio"
     assert result["config"] == {"api_key": "**REDACTED**", "currency": "EUR"}
     assert result["coordinators"] == {
-        "portfolio": {"last_update_success": True, "holdings": 2, "wallets": 1,
-                      "unnamed_holdings": 1},
+        "portfolio": {"last_update_success": True, "holdings": 3, "wallets": 1,
+                      "unnamed_holdings": 2, "unlisted_holdings": 1},
         "history": {"last_update_success": True, "timeframes": 1, "failed_timeframes": 1},
         "earn": {"last_update_success": True, "offered_assets": 1},
         "rewards": {"last_update_success": False, "assets_with_rewards": 0},

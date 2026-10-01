@@ -227,6 +227,17 @@ def test_cash_plus_is_zero_without_cash_plus_holdings():
     assert isinstance(data.cash_plus, float)
 
 
+def test_a_holding_the_catalogue_does_not_list_is_no_cash_plus():
+    """Bitpanda's catalogue lists its Cash Plus products: a holding it
+    answered without is none, so Cash Plus has its value. The holding still
+    gets no wallet -- nothing names it."""
+    data = _data({BCPEUR: _cash_plus_asset(BCPEUR, "BCPEUR")})
+    data.unlisted = {VSN}
+    assert data.cash_plus == 50.0
+    assert data.cash_plus_amounts == {"eur": 50.0}
+    assert data.wallet_ids == []
+
+
 def test_unresolved_holding_is_no_wallet():
     data = _data({BCPEUR: {"id": BCPEUR, "group": "fiat_earn"}})
     assert data.is_cash_plus(VSN) is None

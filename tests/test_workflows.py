@@ -225,9 +225,11 @@ def test_internal_validation_checks_the_commit_its_caller_runs_for():
 
 def test_the_checks_run_what_ci_promises():
     """The gates and commands CONTRIBUTING.md names. The tests and mypy run
-    on 3.14, which the pinned Home Assistant needs, and install from
+    on 3.14, which the newest Home Assistant needs, and install from
     tests/requirements.txt -- another mypy release can find errors in
-    unchanged code. The floor job runs on 3.13, Home Assistant 2025.5's.
+    unchanged code -- with the test package of the Home Assistant release
+    the run found (see the test below). The floor job runs on 3.13, Home
+    Assistant 2025.5's.
     The release script runs on 3.12, the key job's system Python, which the
     tests and mypy never use: it must compile there, and plan a release
     from the whole history, tags included."""
@@ -252,7 +254,10 @@ def test_the_checks_run_what_ci_promises():
     )
     for job in (tests, typing):
         assert _python(job) == "3.14", job["name"]
-        assert "pip install -r tests/requirements.txt" in _script(job), job["name"]
+        assert (
+            'python -m pip install -r tests/requirements.txt'
+            ' "pytest-homeassistant-custom-component==${PLUGIN}"'
+        ) in _script(job), job["name"]
     assert "python -m pytest tests/" in _script(tests)
     assert "--cov=custom_components.bitpanda" in _script(tests)
     assert "--cov-fail-under=95" in _script(tests)
@@ -260,6 +265,67 @@ def test_the_checks_run_what_ci_promises():
     assert _python(floor) == "3.13"
     assert "python -m compileall" in _script(floor)
     assert "from __future__ import annotations" in _script(floor)
+
+
+# The step every job that depends on Home Assistant starts with: it names the
+# newest stable release with a test package (.github/scripts/ha_version.py).
+_FIND_HOME_ASSISTANT = {
+    "name": "Find the newest stable Home Assistant",
+    "id": "ha",
+    "run": 'python3 .github/scripts/ha_version.py >> "$GITHUB_OUTPUT"',
+}
+
+
+def test_hassfest_the_tests_and_mypy_check_one_home_assistant_release():
+    """The newest stable release with a test package -- never a beta: each
+    of the three jobs finds it the same way, the tests and mypy install its
+    test package, and hassfest runs as that very release, not as whatever
+    hassfest image is newest. A new stable release reaches every one of
+    them without a change here."""
+    jobs = _jobs_by_name(_workflow("_validate.yml"))
+    for name in ("Hassfest validation", "Tests with coverage", "Strict typing"):
+        steps = jobs[name]["steps"]
+        assert _FIND_HOME_ASSISTANT in steps, name
+        found = steps.index(_FIND_HOME_ASSISTANT)
+        assert [step for step in steps[:found] if "run" in step] == [], name
+    for name in ("Tests with coverage", "Strict typing"):
+        [install] = [
+            step for step in jobs[name]["steps"] if step.get("name") == "Install the test requirements"
+        ]
+        assert install["env"] == {"PLUGIN": "${{ steps.ha.outputs.plugin }}"}, name
+    hassfest = jobs["Hassfest validation"]
+    assert [step["uses"] for step in hassfest["steps"] if "uses" in step] == ["actions/checkout@v7"]
+    [run] = [step for step in hassfest["steps"] if step.get("name") == "Run hassfest"]
+    assert run["env"] == {"HOME_ASSISTANT": "${{ steps.ha.outputs.home_assistant }}"}
+    assert (
+        'docker run --rm -v "${GITHUB_WORKSPACE}:/github/workspace"'
+        ' "ghcr.io/home-assistant/hassfest:${HOME_ASSISTANT}"'
+    ) in run["run"]
+    assert 'echo "::add-matcher::${GITHUB_WORKSPACE}/.github/hassfest-matcher.json"' in run["run"]
+
+
+def test_hassfest_findings_turn_into_annotations():
+    """hassfest prints each finding as `* [ERROR] ...` or `* [WARNING] ...`;
+    the matcher the hassfest job adds makes an annotation of each, as the
+    action it replaces did."""
+    matcher = json.loads(
+        (_WORKFLOWS.parent / "hassfest-matcher.json").read_text(encoding="utf-8")
+    )
+    [entry] = matcher["problemMatcher"]
+    assert entry["owner"] == "hassfest"
+    [pattern] = entry["pattern"]
+    regexp = re.compile(pattern["regexp"])
+    finding = regexp.match(
+        "* [ERROR] [REQUIREMENTS] Requirement aiohttp>=3.8.0 is a dependency of"
+        " Home Assistant itself"
+    )
+    assert finding is not None
+    assert finding.group(pattern["severity"]) == "ERROR"
+    assert finding.group(pattern["message"]).startswith("[REQUIREMENTS] Requirement aiohttp")
+    warning = regexp.match("* [WARNING] [MANIFEST] Something to look at")
+    assert warning is not None and warning.group(pattern["severity"]) == "WARNING"
+    assert regexp.match("Validating manifest... done in 0.00s") is None
+    assert regexp.match("Invalid integrations: 1") is None
 
 
 def test_validate_runs_on_every_push_but_main_on_pull_requests_to_main_and_dev_and_by_hand():

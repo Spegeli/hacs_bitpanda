@@ -49,20 +49,20 @@ logger:
 
 ### Tests and typing
 
-Tests use `pytest-homeassistant-custom-component`, whose harness does not run on Windows. `tests/requirements.txt` pins it — and with it the Home Assistant release the suite runs against, which needs Python 3.14 — and mypy. Install mypy from that file too, never with a bare `pip install mypy`: another mypy release can report errors CI does not, or miss ones it does. The tests and mypy need Python 3.14; the integration itself must still run on 3.13 (see [Things that are easy to get wrong](#things-that-are-easy-to-get-wrong)). On Linux or macOS, with Python 3.14:
+Tests use `pytest-homeassistant-custom-component`, whose harness does not run on Windows. Each of its releases pins one Home Assistant release; the suite runs against the newest stable Home Assistant that has one, never a beta, as CI does (see [Continuous integration](#continuous-integration)). `python .github/scripts/ha_version.py` names that release and its package release, `--plugin` the package release alone. `tests/requirements.txt` pins mypy and the rest. Install mypy from that file too, never with a bare `pip install mypy`: another mypy release can report errors CI does not, or miss ones it does. The tests and mypy need Python 3.14; the integration itself must still run on 3.13 (see [Things that are easy to get wrong](#things-that-are-easy-to-get-wrong)). On Linux or macOS, with Python 3.14:
 
 ```bash
-pip install -r tests/requirements.txt
+pip install -r tests/requirements.txt "pytest-homeassistant-custom-component==$(python .github/scripts/ha_version.py --plugin)"
 python -m pytest tests/ -q --cov=custom_components.bitpanda --cov-report=term-missing --cov-fail-under=95
 python -m mypy --strict
 ```
 
-`pytest` runs the suite and reports the line coverage of each file, and fails under 95 % overall, as CI does; `mypy` checks the types of the integration and of the release script in strict mode, as `pyproject.toml` configures it — the tests are not type-checked.
+`pytest` runs the suite and reports the line coverage of each file, and fails under 95 % overall, as CI does; `mypy` checks the types of the integration and of the scripts in `.github/scripts` in strict mode, as `pyproject.toml` configures it — the tests are not type-checked.
 
-The same in Docker, on any system, with the Python version and the pinned requirements CI uses; each run installs them afresh, which takes a few minutes. On Windows, run it from PowerShell: Git Bash rewrites the mount path.
+The same in Docker, on any system, with the Python version and the requirements CI uses; each run installs them afresh, which takes a few minutes. On Windows, run it from PowerShell: Git Bash rewrites the mount path.
 
 ```bash
-docker run --rm -v "${PWD}:/workspace" -w /workspace python:3.14 sh -c "pip install -q -r tests/requirements.txt && python -m pytest tests/ -q --cov=custom_components.bitpanda --cov-report=term-missing --cov-fail-under=95 && python -m mypy --strict"
+docker run --rm -v "${PWD}:/workspace" -w /workspace python:3.14 sh -c 'pip install -q -r tests/requirements.txt "pytest-homeassistant-custom-component==$(python .github/scripts/ha_version.py --plugin)" && python -m pytest tests/ -q --cov=custom_components.bitpanda --cov-report=term-missing --cov-fail-under=95 && python -m mypy --strict'
 ```
 
 CI runs both (see [Continuous integration](#continuous-integration)): the suite must pass with at least 95 % line coverage, and `mypy --strict` must report no error. `config_flow.py` and `asset_flow.py` stay at 100 %, and every test that shows an error in a dialog goes on to finish that dialog.
@@ -209,12 +209,14 @@ One workflow, **Validate** (`.github/workflows/validate.yml`), checks every chan
 
 | Check | What it runs |
 |---|---|
-| Hassfest validation | Home Assistant's own checks of the integration (`hassfest`) |
+| Hassfest validation | Home Assistant's own checks of the integration (`hassfest`), as the Home Assistant release below |
 | HACS validation | HACS's checks of the repository |
 | Python 3.13 syntax | a compile of the integration with Python 3.13, the Python of the 2025.5 floor, and a check that every module keeps `from __future__ import annotations` |
 | Release script on Python 3.12 | a compile of `.github/scripts/release.py` with Python 3.12 — the release runs it on the runner's own Python — and a stable release planned from the whole history |
 | Tests with coverage | the suite on Python 3.14, as under [Tests and typing](#tests-and-typing); fails under 95 % line coverage |
 | Strict typing | `python -m mypy --strict` on Python 3.14 |
+
+**Which Home Assistant.** Hassfest, the tests and mypy check against one release: the newest stable Home Assistant that `pytest-homeassistant-custom-component` has been released for, never a beta. Each of the three jobs finds it first with `.github/scripts/ha_version.py` and names it in its log. So a new stable release reaches CI without a change in this repository, and it can turn a run red although nothing changed here: then the integration needs an update for that release, before the next release goes out. HACS validation depends on no Home Assistant release: it checks the repository against HACS's own rules.
 
 When Validate runs:
 

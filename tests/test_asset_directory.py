@@ -1,5 +1,6 @@
 """Tests for the asset directory that names the holdings."""
 import asyncio
+from datetime import timedelta
 import logging
 
 from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client
@@ -10,7 +11,7 @@ from custom_components.bitpanda.api import (
     BitpandaRateLimitError,
 )
 from custom_components.bitpanda.assets import AssetDirectory, slim_asset
-from custom_components.bitpanda.const import API_BASE_URL
+from custom_components.bitpanda.const import API_BASE_URL, UNKNOWN_ASSET_RETRY
 
 VSN = {
     "id": "1f051b7c-5980-6dda-9d3d-cf107d8d4bfb",
@@ -161,11 +162,43 @@ async def test_a_rate_limit_stops_the_round():
     assert client.calls == [VSN["id"]]
 
 
-async def test_an_asset_missing_from_the_catalogue_is_asked_for_once(caplog):
+async def test_an_asset_missing_from_the_catalogue_is_asked_for_again_a_day_later(freezer):
+    """Not in the catalogue -- at least not yet: not asked for again at every
+    refresh, but a day later, and named once the catalogue lists it. The
+    wallet then comes without a restart."""
     client = _Client({})
     directory = AssetDirectory(client, {})
-    with caplog.at_level(logging.WARNING):
-        await directory.async_resolve([VSN["id"]])
-        await directory.async_resolve([VSN["id"]])
+    await directory.async_resolve([VSN["id"]])
+    freezer.tick(UNKNOWN_ASSET_RETRY - timedelta(seconds=1))
+    await directory.async_resolve([VSN["id"]])
     assert client.calls == [VSN["id"]]
-    assert caplog.text.count(VSN["id"]) == 1
+
+    client.records = {VSN["id"]: VSN}
+    freezer.tick(timedelta(seconds=1))
+    await directory.async_resolve([VSN["id"]])
+    assert client.calls == [VSN["id"], VSN["id"]]
+    assert directory.get(VSN["id"]) == slim_asset(VSN)
+
+
+async def test_an_asset_missing_from_the_catalogue_is_logged_once_at_info(caplog, freezer):
+    """Nothing the user can do about it, so info, not a warning -- and once,
+    not again at every daily retry."""
+    client = _Client({})
+    directory = AssetDirectory(client, {})
+    with caplog.at_level(logging.DEBUG):
+        await directory.async_resolve([VSN["id"]])
+        freezer.tick(UNKNOWN_ASSET_RETRY)
+        await directory.async_resolve([VSN["id"]])
+    assert client.calls == [VSN["id"], VSN["id"]]
+    assert [
+        (record.levelno, record.getMessage())
+        for record in caplog.records
+        if record.levelno >= logging.INFO and VSN["id"] in record.getMessage()
+    ] == [
+        (
+            logging.INFO,
+            f"Held asset {VSN['id']} is not in Bitpanda's asset catalogue, at least not"
+            " yet: it gets no wallet device until it is, and its value still counts in"
+            " Total value",
+        )
+    ]

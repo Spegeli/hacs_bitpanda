@@ -8,11 +8,15 @@ here ever keys by symbol. `pick_legacy` serves only the version 1 migration;
 """
 from __future__ import annotations
 
-import logging
 from collections.abc import Iterable
+from datetime import datetime
+import logging
 from typing import Any
 
+from homeassistant.util import dt as dt_util
+
 from .api import BitpandaApiClient, BitpandaApiError
+from .const import UNKNOWN_ASSET_RETRY
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -101,13 +105,16 @@ class AssetDirectory:
     an asset whose own lookup keeps failing never keeps the others waiting
     longer than that, and assets that keep failing take turns. An asset the
     catalogue does not know -- an empty answer, not a failure -- is asked
-    for once per run, and the pass goes on.
+    for again UNKNOWN_ASSET_RETRY later, not at every refresh, and the pass
+    goes on: once the catalogue lists it, its wallet comes without a
+    restart.
     """
 
     def __init__(self, client: BitpandaApiClient, cache: dict[str, dict[str, Any]]) -> None:
         self._client = client
         self._cache = cache
-        self._unknown: set[str] = set()
+        # Asset id -> when the catalogue last answered without it.
+        self._unknown: dict[str, datetime] = {}
         # Asset id -> when its lookup last failed, as a running count of
         # failures: the order in which failed assets are asked for again.
         self._failed: dict[str, int] = {}
@@ -117,10 +124,15 @@ class AssetDirectory:
         return self._cache.get(asset_id)
 
     async def async_resolve(self, asset_ids: Iterable[str]) -> None:
+        now = dt_util.utcnow()
         pending = [
             asset_id
             for asset_id in asset_ids
-            if asset_id not in self._cache and asset_id not in self._unknown
+            if asset_id not in self._cache
+            and (
+                asset_id not in self._unknown
+                or now - self._unknown[asset_id] >= UNKNOWN_ASSET_RETRY
+            )
         ]
         # Stable: the assets never failed keep the order given, ahead of the
         # rest.
@@ -140,13 +152,19 @@ class AssetDirectory:
             self._failed.pop(asset_id, None)
             record = next((a for a in found if a.get("id") == asset_id), None)
             if record is None:
-                self._unknown.add(asset_id)
-                _LOGGER.warning(
-                    "Held asset %s is not in the Bitpanda catalogue; it gets no "
-                    "wallet sensor",
-                    asset_id,
-                )
+                # Nothing the user can do about it: info, and once a run.
+                if asset_id in self._unknown:
+                    _LOGGER.debug("Held asset %s is still not in the catalogue", asset_id)
+                else:
+                    _LOGGER.info(
+                        "Held asset %s is not in Bitpanda's asset catalogue, at least "
+                        "not yet: it gets no wallet device until it is, and its value "
+                        "still counts in Total value",
+                        asset_id,
+                    )
+                self._unknown[asset_id] = now
                 continue
+            self._unknown.pop(asset_id, None)
             self._cache[asset_id] = slim_asset(record)
 
 

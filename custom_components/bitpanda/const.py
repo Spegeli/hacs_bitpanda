@@ -132,6 +132,12 @@ TICKER_HOURLY_BUDGET = 1800
 WALLET_REMOVAL_MISSES = 3
 WALLET_REMOVAL_TIME = (WALLET_REMOVAL_MISSES - 1) * PORTFOLIO_UPDATE_INTERVAL
 
+# A held asset Bitpanda's catalogue does not list -- at least not yet -- is
+# asked for again this long after the catalogue last answered without it
+# (assets.AssetDirectory): its wallet then comes without a restart, at one
+# request a day for each such asset.
+UNKNOWN_ASSET_RETRY = timedelta(days=1)
+
 # Failed refreshes in a row, spread over (FAILURE_TOLERANCE - 1) regular
 # intervals at the least, that make a coordinator's sensors unavailable
 # rather than clearing them at the first failure (spec §3.1). The same rule

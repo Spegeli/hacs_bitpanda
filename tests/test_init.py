@@ -48,6 +48,7 @@ from custom_components.bitpanda.const import (
     FIRST_LOAD_RETRY_INTERVAL,
     PORTFOLIO_UPDATE_INTERVAL,
     REWARDS_UPDATE_INTERVAL,
+    UNKNOWN_ASSET_RETRY,
 )
 from custom_components.bitpanda.devices import find_entry_device
 from custom_components.bitpanda.ecb import EcbError, EcbRates
@@ -730,6 +731,31 @@ async def test_refreshing_by_hand_never_confirms_an_empty_portfolio_sooner(
         freezer.tick(2 * PORTFOLIO_UPDATE_INTERVAL)
         await _refresh(hass)
     assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
+
+
+async def test_a_holding_the_catalogue_lists_later_gets_its_wallet_within_a_day(
+    hass, portfolio_api, freezer
+):
+    """Not in the catalogue -- at least not yet: no wallet, and no lookup at
+    every refresh. Once the catalogue lists it, the first refresh a day after
+    the last lookup adds its wallet -- without a restart."""
+    listed: list[dict] = []
+    assets = AsyncMock(
+        side_effect=lambda **kwargs: [a for a in listed if a["id"] == kwargs.get("asset_id")]
+    )
+    ent_reg = er.async_get(hass)
+    with patch(f"{_CLIENT}async_get_assets", assets):
+        await _setup(hass, _portfolio_entry(hass))
+        assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is None
+
+        listed.append(VSN)
+        await _next_refresh(hass, freezer)
+        assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is None
+        assert assets.await_count == 1
+
+        freezer.tick(UNKNOWN_ASSET_RETRY)
+        await _next_refresh(hass, freezer)
+    assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is not None
 
 
 async def test_refreshing_by_hand_never_removes_a_sold_wallet_sooner(

@@ -786,7 +786,21 @@ async def test_an_unresolvable_wallet_is_left_alone_and_listed(
     assert await async_migrate_entry(hass, entry)
     assert er.async_get(hass).async_get(gone).unique_id == f"{eid}_wallet_cryptocoin_GONE"
     assert _not_migrated(hass) == f"- `{gone}`"
-    assert f"- `{gone}`: GONE no longer exists at Bitpanda" in _logged(caplog)
+    assert f"- `{gone}`: GONE is not in Bitpanda's asset catalogue, at least not yet" in _logged(caplog)
+
+
+async def test_a_wallet_whose_symbol_now_names_another_kind_of_asset_is_gone(
+    hass, legacy_api, no_setup, caplog
+):
+    """The catalogue lists the symbol, but not as the kind of asset the old
+    wallet held -- XAU is gold, not a coin: that coin is gone, not just
+    unlisted."""
+    entry = _v1_entry(hass, wallets=["cryptocoin_XAU"])
+    eid = entry.entry_id
+    old = _legacy_entity(hass, entry, f"{eid}_wallet_cryptocoin_XAU", "bitpanda_wallets_xau_wallet")
+    assert await async_migrate_entry(hass, entry)
+    assert _not_migrated(hass) == f"- `{old}`"
+    assert f"- `{old}`: XAU no longer exists at Bitpanda" in _logged(caplog)
 
 
 async def test_a_legacy_wallet_whose_asset_already_has_a_wallet_is_left_and_listed(
@@ -1415,7 +1429,7 @@ async def test_the_full_mapping_is_logged_once_in_english(
         "Renamed entity IDs. Check dashboards, automations and scripts that use them:\n"
         "- `sensor.bitpanda_wallets_btc_wallet` → `sensor.bitpanda_bitcoin_btc_wallet_available`\n\n"
         "Not migrated (left unchanged; delete them when you no longer need them):\n"
-        f"- `{gone}`: GONE no longer exists at Bitpanda\n"
+        f"- `{gone}`: GONE is not in Bitpanda's asset catalogue, at least not yet\n"
         f"- `{price}`: a Price Tracker was already set up\n\n"
         "JPY is not available for the Bitpanda Portfolio; it now reports in EUR.\n\n"
         "A Bitpanda Price Tracker was already set up, so the prices tracked before the "

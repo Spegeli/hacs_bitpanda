@@ -244,8 +244,8 @@ async def async_plan(hass: HomeAssistant, entry: ConfigEntry) -> MigrationPlan:
     """Resolve every legacy identifier. Changes nothing; API errors propagate.
 
     Public endpoints only, called without a key: the legacy key plays no
-    part. An empty answer is the only meaning of "no longer exists" -- a
-    timeout or a 5xx says nothing about a symbol, so it aborts instead.
+    part. An empty answer is the only meaning of "not in the catalogue" --
+    a timeout or a 5xx says nothing about a symbol, so it aborts instead.
     """
     client = BitpandaApiClient(None, async_get_clientsession(hass))
     # Every released version 1 stored a currency. Only here, reading what
@@ -294,6 +294,9 @@ async def async_plan(hass: HomeAssistant, entry: ConfigEntry) -> MigrationPlan:
         survivors = legacy_candidates(candidates[symbol], prefix)
         if len(survivors) > 1:
             return None, f"{symbol} matches {len(survivors)} assets, which one is unclear"
+        if not candidates[symbol]:
+            # Bitpanda adds assets to the catalogue later, too.
+            return None, f"{symbol} is not in Bitpanda's asset catalogue, at least not yet"
         return None, f"{symbol} no longer exists at Bitpanda"
 
     fiat: list[str] = []

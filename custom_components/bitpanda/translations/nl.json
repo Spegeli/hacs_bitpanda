@@ -499,36 +499,36 @@
   },
   "issues": {
     "renamed_entities": {
-      "title": "Bitpanda-update: entiteit-ID's hernoemd",
-      "description": "Bij de overstap naar de twee diensten Bitpanda Portfolio en Bitpanda Price Tracker zijn deze entiteit-ID's hernoemd; hun geschiedenis is meegegaan. Controleer dashboards, automatiseringen en scripts die nog de oude ID's gebruiken:\n\n{entities}"
+      "title": "Bitpanda-overstap: entiteit-ID's hernoemd",
+      "description": "Bij de overstap zijn de apparaten \"Bitpanda Wallets\" en \"Bitpanda Price Tracker\" opgesplitst: elke wallet en elke gevolgde asset heeft nu een eigen apparaat, genoemd naar de asset. De cijfers van je account staan op het apparaat \"Portfolio\". Entiteit-ID's volgen de apparaatnamen, daarom zijn deze ID's hernoemd; hun geschiedenis is meegegaan. Controleer dashboards, automatiseringen en scripts die nog de oude ID's gebruiken:\n\n{entities}"
     },
     "entities_not_migrated": {
-      "title": "Bitpanda-update: entiteiten niet gemigreerd",
+      "title": "Bitpanda-overstap: entiteiten niet gemigreerd",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Niet-gemigreerde entiteiten verwijderen?",
-            "description": "De update heeft deze entiteiten ongewijzigd gelaten; ze worden niet meer bijgewerkt. Het kan gaan om:\n\n- wallets en prijzen van assets die de nieuwe API van Bitpanda niet vermeldt, in elk geval nog niet. Zolang je zo'n asset nog bezit, maakt het Portfolio er vanzelf een nieuwe wallet voor aan, uiterlijk een dag nadat de nieuwe API de asset vermeldt.\n- fiatwallets: de sensor \"Contanten\" van het Portfolio omvat nu alle fiatsaldi.\n- prijzen in valuta die Bitpanda niet meer aanbiedt.\n\nDe logs van Home Assistant noemen per entiteit de reden.\n\n{entities}\n\nKlik op \"Verwijderen\" om deze entiteiten te verwijderen, samen met elk oud apparaat dat daarna geen entiteiten meer heeft. Hun geschiedenis blijft bewaard totdat Home Assistant oude geschiedenis opschoont, standaard na 10 dagen. Wil je ze voorlopig houden, sluit dan dit venster.",
+            "description": "De overstap heeft deze entiteiten ongewijzigd gelaten; ze worden niet meer bijgewerkt. Het kan gaan om:\n\n- wallets en prijzen van assets die de nieuwe API van Bitpanda niet vermeldt, in elk geval nog niet. Zolang je zo'n asset nog bezit, maakt het Portfolio er vanzelf een nieuwe wallet voor aan, uiterlijk een dag nadat de nieuwe API de asset vermeldt.\n- fiatwallets: de sensor \"Contanten\" van het Portfolio omvat nu alle fiatsaldi.\n- prijzen in valuta die Bitpanda niet meer aanbiedt.\n\nDe logs van Home Assistant noemen per entiteit de reden.\n\n{entities}\n\nKlik op \"Verwijderen\" om deze entiteiten te verwijderen, samen met elk oud apparaat dat daarna geen entiteiten meer heeft. Hun geschiedenis blijft bewaard totdat Home Assistant oude geschiedenis opschoont, standaard na 10 dagen. Wil je ze voorlopig houden, sluit dan dit venster.",
             "submit": "Verwijderen"
           }
         }
       }
     },
     "currency_dropped": {
-      "title": "Bitpanda-update: Portfolio-valuta gewijzigd in EUR",
-      "description": "{currency}, de valuta van je Bitpanda-invoer vóór de update, is niet beschikbaar voor Bitpanda Portfolio; dat rapporteert daarom nu alle waarden in EUR. Om een andere valuta te kiezen, open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies je \"Herconfigureer\"."
+      "title": "Bitpanda-overstap: Portfolio-valuta gewijzigd in EUR",
+      "description": "{currency}, de valuta van je Bitpanda-invoer vóór de overstap, is niet beschikbaar voor Bitpanda Portfolio; dat rapporteert daarom nu alle waarden in EUR. Om een andere valuta te kiezen, open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies je \"Herconfigureer\"."
     },
     "price_tracker_exists": {
-      "title": "Bitpanda-update: prijzen toevoegen aan de Price Tracker",
-      "description": "Bij de update was er al een Bitpanda Price Tracker ingesteld, dus de prijzen die je oude Bitpanda-invoer volgde, zijn daar niet naartoe verplaatst. Voeg deze assets toe met \"Prijstracker toevoegen\" bij de invoer \"Bitpanda Price Tracker\" op de integratiepagina van Bitpanda om ze te blijven volgen:\n\n{assets}"
+      "title": "Bitpanda-overstap: prijzen toevoegen aan de Price Tracker",
+      "description": "Bij de overstap was er al een Bitpanda Price Tracker ingesteld, dus de prijzen die je oude Bitpanda-invoer volgde, zijn daar niet naartoe verplaatst. Voeg deze assets toe met \"Prijstracker toevoegen\" bij de invoer \"Bitpanda Price Tracker\" op de integratiepagina van Bitpanda om ze te blijven volgen:\n\n{assets}"
     },
     "home_assistant_too_old": {
-      "title": "Bitpanda-update vereist Home Assistant {minimum}",
-      "description": "De Bitpanda-invoer van vóór de update kan pas vanaf Home Assistant {minimum} worden bijgewerkt; die versie behoudt de geschiedenis van de hernoemde sensoren. Deze installatie draait Home Assistant {version}, dus er is niets gewijzigd. Werk Home Assistant bij; de invoer wordt bij de volgende start bijgewerkt."
+      "title": "Bitpanda-overstap vereist Home Assistant {minimum}",
+      "description": "De Bitpanda-invoer van vóór de overstap kan pas vanaf Home Assistant {minimum} worden omgezet; die versie behoudt de geschiedenis van de hernoemde sensoren. Deze installatie draait Home Assistant {version}, dus er is niets gewijzigd. Werk Home Assistant bij; de invoer wordt bij de volgende start omgezet."
     },
     "portfolio_exists": {
-      "title": "Bitpanda-update geblokkeerd: er is al een Bitpanda Portfolio ingesteld",
-      "description": "De Bitpanda-invoer \"{entry}\" van vóór de update kan niet worden bijgewerkt: die zou naast \"{portfolio}\" een tweede Bitpanda Portfolio worden, en er kan er maar één worden ingesteld. Er is niets aan gewijzigd. Verwijder een van beide op de integratiepagina van Bitpanda (⋮ → \"Verwijderen\"): \"{entry}\" of \"{portfolio}\". Houd je \"{entry}\", herstart Home Assistant daarna om die bij te werken."
+      "title": "Bitpanda-overstap geblokkeerd: er is al een Bitpanda Portfolio ingesteld",
+      "description": "De Bitpanda-invoer \"{entry}\" van vóór de overstap kan niet worden omgezet: die zou naast \"{portfolio}\" een tweede Bitpanda Portfolio worden, en er kan er maar één worden ingesteld. Er is niets aan gewijzigd. Verwijder een van beide op de integratiepagina van Bitpanda (⋮ → \"Verwijderen\"): \"{entry}\" of \"{portfolio}\". Houd je \"{entry}\", herstart Home Assistant daarna om die om te zetten."
     },
     "slow_price_interval": {
       "title": "Bitpanda Price Tracker: prijzen slechts elke {minutes} minuten vernieuwd",

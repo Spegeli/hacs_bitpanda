@@ -718,6 +718,59 @@ def test_the_reauth_dialog_starts_what_to_do_on_a_line_of_its_own():
     )
 
 
+# The switch from a date version to 2.0.0, by the word each language gives
+# it, and the word for an ordinary update, which the switch is never called:
+# an update is any new version, also one within 2.x.
+_SWITCH_WORDS = {
+    "de": ("umstieg", "aktualisierung"),
+    "en": ("upgrade", None),
+    "es": ("migración", "actualización"),
+    "fr": ("migration", "mise à jour"),
+    "it": ("migrazione", "aggiornamento"),
+    "nl": ("overstap", "update"),
+    "pl": ("migracj", "aktualizac"),
+}
+
+
+def test_the_upgrade_issues_call_the_switch_by_its_own_word():
+    """Every repair issue about the switch from a date version names it in
+    its title, by the same word, and none calls it an update -- "update
+    Home Assistant" stays what it is."""
+    assert sorted(_SWITCH_WORDS) == _LANGUAGES
+    for language, (switch, update) in _SWITCH_WORDS.items():
+        issues = _load(f"translations/{language}.json")["issues"]
+        for key in (*migration.UPGRADE_ISSUES, *migration.BLOCKER_ISSUES):
+            issue = issues[key]
+            text = issue.get("description") or issue["fix_flow"]["step"]["confirm"]["description"]
+            assert switch in issue["title"].lower(), (language, key)
+            if update is not None:
+                assert update not in (issue["title"] + text).lower(), (language, key)
+
+
+def test_the_renamed_entity_ids_issue_says_why_the_ids_changed():
+    """The entity IDs follow the device names, and every wallet and tracked
+    asset got a device of its own: that -- not the two services -- is why
+    they changed. In the approved English and German wording."""
+    assert _load("strings.json")["issues"]["renamed_entities"]["description"] == (
+        'The upgrade split the devices "Bitpanda Wallets" and "Bitpanda Price Tracker": each'
+        " wallet and each tracked asset now has a device of its own, named after the asset."
+        ' The figures of your account are on the "Portfolio" device. Entity IDs follow the'
+        " device names, so these IDs were renamed; their history moved with them. Check"
+        " dashboards, automations and scripts that still use the old IDs:\n\n{entities}"
+    )
+    assert _load("translations/de.json")["issues"]["renamed_entities"] == {
+        "title": "Bitpanda-Umstieg: Entitäts-IDs umbenannt",
+        "description": (
+            "Beim Umstieg wurden die Geräte „Bitpanda Wallets“ und „Bitpanda Price Tracker“"
+            " aufgeteilt: Jedes Wallet und jedes verfolgte Asset hat jetzt ein eigenes Gerät,"
+            " benannt nach dem Asset. Gesamtwert, Bargeld und Renditen deines Kontos liegen"
+            " beim Gerät „Portfolio“. Entitäts-IDs folgen den Gerätenamen, daher wurden diese"
+            " IDs umbenannt; ihr Verlauf ist mitgewandert. Prüfe Dashboards, Automationen und"
+            " Skripte, die noch die alten IDs verwenden:\n\n{entities}"
+        ),
+    }
+
+
 def test_the_old_statistics_step_explains_its_three_choices():
     """The setup's question about old statistics: what happened, in one
     paragraph with both currencies; then a list item per button, led by the

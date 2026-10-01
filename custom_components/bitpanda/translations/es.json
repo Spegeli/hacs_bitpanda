@@ -499,36 +499,36 @@
   },
   "issues": {
     "renamed_entities": {
-      "title": "Actualización de Bitpanda: ID de entidad renombrados",
-      "description": "La actualización a los dos servicios Bitpanda Portfolio y Bitpanda Price Tracker ha renombrado estos ID de entidad; su historial se ha trasladado con ellos. Revisa los paneles, automatizaciones y scripts que aún usan los ID antiguos:\n\n{entities}"
+      "title": "Migración de Bitpanda: ID de entidad renombrados",
+      "description": "La migración ha dividido los dispositivos \"Bitpanda Wallets\" y \"Bitpanda Price Tracker\": cada wallet y cada activo seguido tiene ahora su propio dispositivo, con el nombre del activo. Las cifras de tu cuenta están en el dispositivo \"Portfolio\". Los ID de entidad siguen los nombres de los dispositivos, así que estos ID se han renombrado; su historial se ha trasladado con ellos. Revisa los paneles, automatizaciones y scripts que aún usan los ID antiguos:\n\n{entities}"
     },
     "entities_not_migrated": {
-      "title": "Actualización de Bitpanda: entidades sin migrar",
+      "title": "Migración de Bitpanda: entidades sin migrar",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "¿Eliminar las entidades sin migrar?",
-            "description": "La actualización ha dejado estas entidades sin cambios y ya no se actualizan. Entre ellas puede haber:\n\n- wallets y precios de activos que la nueva API de Bitpanda no recoge, al menos todavía no. Mientras sigas teniendo un activo así, el Portfolio crea por sí solo un nuevo wallet para él, como máximo un día después de que la nueva API lo recoja.\n- wallets fiat: el sensor \"Efectivo\" del Portfolio incluye ahora todos los saldos fiat.\n- precios en monedas que Bitpanda ya no ofrece.\n\nLos registros de Home Assistant indican el motivo de cada entidad.\n\n{entities}\n\nPulsa \"Eliminar\" para eliminar estas entidades y cada dispositivo antiguo que se quede sin entidades. Su historial se conserva hasta que Home Assistant borre el historial antiguo, por defecto a los 10 días. Para conservarlas por ahora, cierra este cuadro de diálogo.",
+            "description": "La migración ha dejado estas entidades sin cambios y ya no se actualizan. Entre ellas puede haber:\n\n- wallets y precios de activos que la nueva API de Bitpanda no recoge, al menos todavía no. Mientras sigas teniendo un activo así, el Portfolio crea por sí solo un nuevo wallet para él, como máximo un día después de que la nueva API lo recoja.\n- wallets fiat: el sensor \"Efectivo\" del Portfolio incluye ahora todos los saldos fiat.\n- precios en monedas que Bitpanda ya no ofrece.\n\nLos registros de Home Assistant indican el motivo de cada entidad.\n\n{entities}\n\nPulsa \"Eliminar\" para eliminar estas entidades y cada dispositivo antiguo que se quede sin entidades. Su historial se conserva hasta que Home Assistant borre el historial antiguo, por defecto a los 10 días. Para conservarlas por ahora, cierra este cuadro de diálogo.",
             "submit": "Eliminar"
           }
         }
       }
     },
     "currency_dropped": {
-      "title": "Actualización de Bitpanda: moneda del Portfolio cambiada a EUR",
-      "description": "{currency}, la moneda de tu entrada de Bitpanda antes de la actualización, no está disponible para Bitpanda Portfolio, así que ahora expresa todos sus valores en EUR. Para elegir otra moneda, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda y elige \"Reconfigurar\"."
+      "title": "Migración de Bitpanda: moneda del Portfolio cambiada a EUR",
+      "description": "{currency}, la moneda de tu entrada de Bitpanda antes de la migración, no está disponible para Bitpanda Portfolio, así que ahora expresa todos sus valores en EUR. Para elegir otra moneda, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda y elige \"Reconfigurar\"."
     },
     "price_tracker_exists": {
-      "title": "Actualización de Bitpanda: precios que añadir al Price Tracker",
-      "description": "Al actualizar ya había un Bitpanda Price Tracker configurado, así que los precios que seguía tu antigua entrada de Bitpanda no se han trasladado a él. Para seguir sus precios, añade estos activos con \"Añadir seguimiento de precio\" en la entrada \"Bitpanda Price Tracker\" de la página de la integración Bitpanda:\n\n{assets}"
+      "title": "Migración de Bitpanda: precios que añadir al Price Tracker",
+      "description": "Al migrar ya había un Bitpanda Price Tracker configurado, así que los precios que seguía tu antigua entrada de Bitpanda no se han trasladado a él. Para seguir sus precios, añade estos activos con \"Añadir seguimiento de precio\" en la entrada \"Bitpanda Price Tracker\" de la página de la integración Bitpanda:\n\n{assets}"
     },
     "home_assistant_too_old": {
-      "title": "La actualización de Bitpanda requiere Home Assistant {minimum}",
-      "description": "La entrada de Bitpanda de antes de la actualización solo se puede actualizar con Home Assistant {minimum} o posterior, que conserva el historial de los sensores renombrados. Esta instalación usa Home Assistant {version}, así que no se ha modificado nada. Actualiza Home Assistant; la entrada se actualizará en el próximo inicio."
+      "title": "La migración de Bitpanda requiere Home Assistant {minimum}",
+      "description": "La entrada de Bitpanda de antes de la migración solo se puede migrar con Home Assistant {minimum} o posterior, que conserva el historial de los sensores renombrados. Esta instalación usa Home Assistant {version}, así que no se ha modificado nada. Actualiza Home Assistant; la entrada se migrará en el próximo inicio."
     },
     "portfolio_exists": {
-      "title": "Actualización de Bitpanda bloqueada: ya hay un Bitpanda Portfolio configurado",
-      "description": "La entrada de Bitpanda \"{entry}\" de antes de la actualización no se puede actualizar: se convertiría en un segundo Bitpanda Portfolio junto a \"{portfolio}\", y solo se puede configurar uno. No se ha modificado nada en ella. Elimina una de las dos entradas en la página de la integración Bitpanda (⋮ → \"Eliminar\"). Si conservas \"{entry}\", reinicia después Home Assistant para actualizarla."
+      "title": "Migración de Bitpanda bloqueada: ya hay un Bitpanda Portfolio configurado",
+      "description": "La entrada de Bitpanda \"{entry}\" de antes de la migración no se puede migrar: se convertiría en un segundo Bitpanda Portfolio junto a \"{portfolio}\", y solo se puede configurar uno. No se ha modificado nada en ella. Elimina una de las dos entradas en la página de la integración Bitpanda (⋮ → \"Eliminar\"). Si conservas \"{entry}\", reinicia después Home Assistant para migrarla."
     },
     "slow_price_interval": {
       "title": "Bitpanda Price Tracker: precios actualizados solo cada {minutes} minutos",

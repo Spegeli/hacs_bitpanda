@@ -500,7 +500,7 @@
   "issues": {
     "renamed_entities": {
       "title": "Bitpanda upgrade: entity IDs renamed",
-      "description": "The upgrade to the two services Bitpanda Portfolio and Bitpanda Price Tracker renamed these entity IDs; their history moved with them. Check dashboards, automations and scripts that still use the old IDs:\n\n{entities}"
+      "description": "The upgrade split the devices \"Bitpanda Wallets\" and \"Bitpanda Price Tracker\": each wallet and each tracked asset now has a device of its own, named after the asset. The figures of your account are on the \"Portfolio\" device. Entity IDs follow the device names, so these IDs were renamed; their history moved with them. Check dashboards, automations and scripts that still use the old IDs:\n\n{entities}"
     },
     "entities_not_migrated": {
       "title": "Bitpanda upgrade: entities not migrated",

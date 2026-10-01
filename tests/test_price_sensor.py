@@ -14,7 +14,7 @@ from custom_components.bitpanda.price_sensor import (
     price_device_info,
 )
 
-from tests.conftest import price_group
+from tests.conftest import manifest_version, price_group
 
 BTC = {"id": "b86c034b-efe3-11eb-b56f-0691764446a7", "symbol": "BTC", "name": "Bitcoin",
        "type": "cryptocoin", "group": "coin"}
@@ -56,6 +56,15 @@ def test_ids_names_and_device():
     # under its device's name, and this one says what the sensor is.
     assert info["name"] == "Bitcoin (BTC) Price Tracker"
     assert info["identifiers"] == {("bitpanda", f"eid_price_{BTC['id']}")}
+
+
+def test_a_price_device_shows_the_assets_id_and_leads_to_bitpandas_prices():
+    """As a wallet device: Bitpanda's price overview, the asset's ID as the
+    serial number, the integration's version."""
+    info = price_device_info("eid", BTC)
+    assert info["configuration_url"] == "https://www.bitpanda.com/en/prices"
+    assert info["serial_number"] == BTC["id"]
+    assert info["sw_version"] == manifest_version()
 
 
 def test_eur_is_the_ticker_price():

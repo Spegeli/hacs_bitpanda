@@ -45,16 +45,23 @@ from custom_components.bitpanda.api import (
 )
 from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.const import (
+    API_KEY_URL,
     DOMAIN,
     FIRST_LOAD_RETRY_INTERVAL,
+    INTEGRATION_VERSION,
     PORTFOLIO_UPDATE_INTERVAL,
+    PRICES_URL,
     REWARDS_UPDATE_INTERVAL,
     UNKNOWN_ASSET_RETRY,
 )
 from custom_components.bitpanda.devices import find_entry_device
 from custom_components.bitpanda.ecb import EcbError, EcbRates
 from custom_components.bitpanda.groups import async_add_asset_to_group
-from custom_components.bitpanda.naming import PORTFOLIO_KEYS, portfolio_unique_id
+from custom_components.bitpanda.naming import (
+    PORTFOLIO_KEYS,
+    portfolio_device_identifier,
+    portfolio_unique_id,
+)
 
 from tests.conftest import device_names_in_subentry, load_fixture, price_group, wallet_group
 
@@ -188,6 +195,36 @@ async def test_portfolio_setup_creates_its_devices_and_sensors(hass, portfolio_a
     }
     devices = {d.name for d in dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)}
     assert devices == {"Portfolio", "Vision (VSN) Wallet"}
+
+
+async def test_every_device_shows_its_link_the_version_and_the_assets_id(
+    hass, portfolio_api, price_api
+):
+    """"Visit" leads to the API key page from the Portfolio and to Bitpanda's
+    prices from a wallet or a price device; each shows the integration's
+    version, and an asset's device its ID as the serial number. A device an
+    earlier version registered takes them at the next start."""
+    portfolio = _portfolio_entry(hass)
+    tracker = _price_entry(hass, [], price_group("crypto", BTC))
+    dev_reg = dr.async_get(hass)
+    dev_reg.async_get_or_create(
+        config_entry_id=portfolio.entry_id,
+        identifiers={(DOMAIN, portfolio_device_identifier(portfolio.entry_id))},
+        name="Portfolio", configuration_url="https://www.bitpanda.com",
+    )
+    await _setup(hass, portfolio)
+    assert tracker.state is ConfigEntryState.LOADED
+
+    devices = {
+        device.name: (device.configuration_url, device.sw_version, device.serial_number)
+        for entry in (portfolio, tracker)
+        for device in dr.async_entries_for_config_entry(dev_reg, entry.entry_id)
+    }
+    assert devices == {
+        "Portfolio": (API_KEY_URL, INTEGRATION_VERSION, None),
+        "Vision (VSN) Wallet": (PRICES_URL, INTEGRATION_VERSION, VSN["id"]),
+        "Bitcoin (BTC) Price Tracker": (PRICES_URL, INTEGRATION_VERSION, BTC["id"]),
+    }
 
 
 async def test_the_wallet_sensor_keeps_its_name_without_staking(hass, portfolio_api):

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import json
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -41,9 +43,21 @@ API_ERROR_KINDS: tuple[str, ...] = (
 )
 
 API_KEY_URL = "https://app.bitpanda.com/my-account/apikey"
+# Bitpanda's price overview, where "Visit" on every wallet and price device
+# leads: the same page for every asset type. Bitpanda has no overview of ETFs
+# or ETCs, and no address for each asset that can be built reliably from its
+# name and symbol (checked 2026-10-01).
+PRICES_URL = "https://www.bitpanda.com/en/prices"
 # The README's Troubleshooting section. A text links it through a placeholder:
 # hassfest allows no URL in a strings file.
 TROUBLESHOOTING_URL = "https://github.com/Spegeli/hacs_bitpanda#-troubleshooting"
+
+# The integration's version, as its manifest states it: every device shows it
+# ("Version …"). Read once, when Home Assistant imports the integration -- in
+# its import executor, so no event loop waits for the file.
+INTEGRATION_VERSION: str = json.loads(
+    (Path(__file__).parent / "manifest.json").read_text(encoding="utf-8")
+)["version"]
 
 # Measured 2026-09-24 with one key per scope: /portfolio needs Balances,
 # /operations Transaction, /earn/configs Earn (Read) -- the names on Bitpanda's

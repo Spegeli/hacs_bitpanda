@@ -100,6 +100,13 @@ def wallet_group(category: str, title: str | None = None) -> ConfigSubentryData:
 _INTEGRATION = Path(__file__).parent.parent / "custom_components" / "bitpanda"
 
 
+def manifest_version() -> str:
+    """The integration's version, as its manifest states it."""
+    manifest = json.loads((_INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
+    version: str = manifest["version"]
+    return version
+
+
 def raised_issues(hass) -> dict[str, dict[str, str] | None]:
     """This integration's repair issues, read back from the issue registry:
     translation key -> the placeholders the code supplied."""

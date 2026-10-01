@@ -27,9 +27,12 @@ from homeassistant.util import dt as dt_util
 
 from .assets import asset_attributes, asset_category
 from .const import (
+    API_KEY_URL,
     CONF_CURRENCY,
     DOMAIN,
+    INTEGRATION_VERSION,
     PORTFOLIO_TIMEFRAMES,
+    PRICES_URL,
     SUBENTRY_TYPE_WALLET_GROUP,
 )
 from .devices import find_entry_device
@@ -74,28 +77,32 @@ from .portfolio_model import (
 )
 from .tolerance import TolerantEntity
 
-_CONFIGURATION_URL = "https://www.bitpanda.com"
-
 
 def portfolio_device_info(entry_id: str) -> DeviceInfo:
+    """"Visit" opens the page where the user manages the API key."""
     return DeviceInfo(
         identifiers={(DOMAIN, portfolio_device_identifier(entry_id))},
         name=PORTFOLIO_DEVICE_NAME,
         manufacturer="Bitpanda",
         model="Portfolio",
         entry_type=DeviceEntryType.SERVICE,
-        configuration_url=_CONFIGURATION_URL,
+        configuration_url=API_KEY_URL,
+        sw_version=INTEGRATION_VERSION,
     )
 
 
 def wallet_device_info(entry_id: str, asset: dict[str, Any]) -> DeviceInfo:
+    """"Visit" opens Bitpanda's price overview; the serial number is the
+    asset's ID -- the one the log names."""
     return DeviceInfo(
         identifiers={(DOMAIN, wallet_device_identifier(entry_id, asset["id"]))},
         name=wallet_device_name(asset),
         manufacturer="Bitpanda",
         model="Wallet",
         entry_type=DeviceEntryType.SERVICE,
-        configuration_url=_CONFIGURATION_URL,
+        configuration_url=PRICES_URL,
+        serial_number=asset["id"],
+        sw_version=INTEGRATION_VERSION,
     )
 
 

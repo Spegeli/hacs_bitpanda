@@ -30,6 +30,8 @@ from .const import (
     CONF_ASSETS,
     CONF_EXTRA_CURRENCIES,
     DOMAIN,
+    INTEGRATION_VERSION,
+    PRICES_URL,
     SUBENTRY_TYPE_PRICE_GROUP,
 )
 from .devices import device_identifiers
@@ -79,13 +81,17 @@ def display_precision(value: float | None) -> int:
 
 
 def price_device_info(entry_id: str, asset: dict[str, Any]) -> DeviceInfo:
+    """As a wallet device's: "Visit" opens Bitpanda's price overview, and the
+    serial number is the asset's ID."""
     return DeviceInfo(
         identifiers={(DOMAIN, price_device_identifier(entry_id, asset["id"]))},
         name=price_device_name(asset),
         manufacturer="Bitpanda",
         model="Price Tracker",
         entry_type=DeviceEntryType.SERVICE,
-        configuration_url="https://www.bitpanda.com",
+        configuration_url=PRICES_URL,
+        serial_number=asset["id"],
+        sw_version=INTEGRATION_VERSION,
     )
 
 

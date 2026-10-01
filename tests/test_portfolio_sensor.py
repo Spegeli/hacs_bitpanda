@@ -21,6 +21,8 @@ from custom_components.bitpanda.portfolio_sensor import (
     wallet_device_info,
 )
 
+from tests.conftest import manifest_version
+
 VSN = {"id": "1f051b7c-5980-6dda-9d3d-cf107d8d4bfb", "symbol": "VSN", "name": "Vision", "group": "token"}
 BCPEUR = {"id": "1edf9721-e545-644c-9796-ae5b69a774d7", "symbol": "BCPEUR",
           "name": "Bitpanda Cash Plus EUR", "group": "fiat_earn"}
@@ -57,6 +59,26 @@ def _portfolio(**holdings) -> _Coordinator:
 
 
 # --- Devices ---------------------------------------------------------------------
+
+
+def test_the_portfolio_device_shows_the_version_and_leads_to_the_api_key_page():
+    """"Visit" opens the page where the user manages the API key; the card
+    shows the integration's version. No serial number: the Portfolio is no
+    asset."""
+    info = portfolio_device_info("eid")
+    assert info["configuration_url"] == "https://app.bitpanda.com/my-account/apikey"
+    assert info["sw_version"] == manifest_version()
+    assert "serial_number" not in info
+
+
+def test_a_wallet_device_shows_the_assets_id_and_leads_to_bitpandas_prices():
+    """"Visit" opens Bitpanda's price overview, the same for every asset
+    type; the asset's ID -- the one the log names -- shows as the serial
+    number, beside the integration's version."""
+    info = wallet_device_info("eid", VSN)
+    assert info["configuration_url"] == "https://www.bitpanda.com/en/prices"
+    assert info["serial_number"] == VSN["id"]
+    assert info["sw_version"] == manifest_version()
 
 
 def test_devices_are_named_after_the_service_and_the_asset():

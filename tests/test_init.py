@@ -35,6 +35,7 @@ from pytest_homeassistant_custom_component.common import (
 from custom_components.bitpanda import (
     _async_first_refresh,
     async_remove_config_entry_device,
+    migration,
     sensor,
 )
 from custom_components.bitpanda.api import (
@@ -731,6 +732,55 @@ async def test_refreshing_by_hand_never_confirms_an_empty_portfolio_sooner(
         freezer.tick(2 * PORTFOLIO_UPDATE_INTERVAL)
         await _refresh(hass)
     assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
+
+
+async def test_a_start_of_the_portfolio_keeps_the_not_migrated_issue_up_to_date(
+    hass, portfolio_api
+):
+    """The issue lists what the upgrade left alone; once the user deleted
+    all of it by hand, the next start of the Portfolio takes the issue away
+    (tests/test_repairs.py has the rest)."""
+    ir.async_create_issue(
+        hass, DOMAIN, "entities_not_migrated", is_fixable=False, is_persistent=True,
+        severity=ir.IssueSeverity.WARNING, translation_key="entities_not_migrated",
+        translation_placeholders={"entities": "- `sensor.bitpanda_wallets_stonkbroker_wallet`"},
+    )
+    await _setup(hass, _portfolio_entry(hass))
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "entities_not_migrated") is None
+
+
+async def test_a_rejected_key_keeps_the_not_migrated_issue_up_to_date_all_the_same(
+    hass, portfolio_api
+):
+    """Right after the upgrade Bitpanda rejects the old key: the start
+    still brings the issue up to date, before it asks Bitpanda."""
+    portfolio_api.side_effect = BitpandaAuthError("Unauthorized for /portfolio")
+    ir.async_create_issue(
+        hass, DOMAIN, "entities_not_migrated", is_fixable=False, is_persistent=True,
+        severity=ir.IssueSeverity.WARNING, translation_key="entities_not_migrated",
+        translation_placeholders={"entities": "- `sensor.bitpanda_wallets_stonkbroker_wallet`"},
+    )
+    entry = _portfolio_entry(hass)
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "entities_not_migrated") is None
+
+
+async def test_the_not_migrated_issue_goes_with_the_portfolio(hass, portfolio_api, price_api):
+    """Its entities go with the Portfolio, so it goes too -- not with the
+    Price Tracker."""
+    tracker = _price_entry(hass, [], price_group("crypto", BTC))
+    portfolio = _portfolio_entry(hass)
+    await _setup(hass, tracker)
+    migration.async_raise_not_migrated_issue(
+        hass, portfolio.entry_id, ["sensor.bitpanda_wallets_stonkbroker_wallet"]
+    )
+    await hass.config_entries.async_remove(tracker.entry_id)
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "entities_not_migrated") is not None
+
+    _price_entry(hass, [])
+    await hass.config_entries.async_remove(portfolio.entry_id)
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "entities_not_migrated") is None
 
 
 async def test_cash_plus_has_its_value_beside_a_holding_the_catalogue_does_not_list(

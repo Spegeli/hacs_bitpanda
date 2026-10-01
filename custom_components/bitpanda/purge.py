@@ -11,9 +11,9 @@ long-term statistics every one of these sensors keeps (state_class,
 portfolio_sensor.py). Anything else of the entry -- a legacy entity the
 version 1 migration left in place, such as an unresolved wallet, another fiat
 wallet or a legacy price sensor, and the legacy device it sits on -- keeps its
-entity and its history: the `entities_not_migrated` repair issue tells the
-user it stays until they delete it. The wallet groups stay too; the recreated
-wallets go back into them.
+entity and its history: the `entities_not_migrated` repair issue lists it,
+and its dialog deletes it (repairs.py). The wallet groups stay too; the
+recreated wallets go back into them.
 
 A new Portfolio setup. The entity IDs carry no currency, and a long-term
 statistic is keyed by its entity ID and stores its unit. Deleting a Portfolio

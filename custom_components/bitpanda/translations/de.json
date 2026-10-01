@@ -504,7 +504,15 @@
     },
     "entities_not_migrated": {
       "title": "Bitpanda-Aktualisierung: Entitäten nicht migriert",
-      "description": "Beim Umstieg blieben diese Entitäten unverändert; sie erhalten keine neuen Werte mehr. Lösche sie, sobald du sie nicht mehr brauchst. Darunter können Fiat-Wallets sein: „Bargeld“ im Portfolio umfasst jetzt alle Fiat-Guthaben. Das Protokoll von Home Assistant nennt für jede Entität den Grund.\n\n{entities}"
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Nicht migrierte Entitäten löschen?",
+            "description": "Beim Umstieg blieben diese Entitäten unverändert; sie erhalten keine neuen Werte mehr. Darunter können sein:\n\n- Wallets und Preise von Assets, die die neue API von Bitpanda nicht führt, zumindest noch nicht. Solange du ein solches Asset noch hältst, legt das Portfolio von selbst das Wallet dafür an, spätestens einen Tag, nachdem die neue API es führt.\n- Fiat-Wallets: „Bargeld“ im Portfolio umfasst jetzt alle Fiat-Guthaben.\n- Preise in Währungen, die Bitpanda nicht mehr anbietet.\n\nDas Protokoll von Home Assistant nennt für jede Entität den Grund.\n\n{entities}\n\n„Löschen“ entfernt diese Entitäten und jedes alte Gerät, das danach keine Entität mehr hat. Ihr Verlauf bleibt, bis Home Assistant alten Verlauf löscht, standardmäßig nach 10 Tagen. Um sie vorerst zu behalten, schließe diesen Dialog.",
+            "submit": "Löschen"
+          }
+        }
+      }
     },
     "currency_dropped": {
       "title": "Bitpanda-Aktualisierung: Portfolio-Währung auf EUR umgestellt",

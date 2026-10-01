@@ -6,12 +6,14 @@ from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
 from homeassistant import data_entry_flow
+from homeassistant.components.repairs import repairs_flow_manager
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import (
     device_registry as dr,
     entity_registry as er,
     issue_registry as ir,
 )
+from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda import migration
@@ -729,7 +731,9 @@ async def test_a_migrated_install_ends_with_its_wallets_in_groups(hass, legacy_a
     assert device_names_in_subentry(hass, eid, groups["metal"].subentry_id) == {
         "Gold (XAU) Wallet"
     }
-    assert device_names_in_subentry(hass, eid, None) == {"Portfolio", "Bitpanda Wallets"}
+    assert device_names_in_subentry(hass, eid, None) == {
+        "Portfolio", "Bitpanda Wallets (old version, not migrated)",
+    }
 
 
 async def test_the_fiat_wallet_of_the_entry_currency_becomes_portfolio_cash(
@@ -892,6 +896,95 @@ async def test_a_legacy_price_in_a_currency_no_longer_offered_is_left_alone_and_
     assert (left.config_entry_id, left.unique_id) == (eid, f"{eid}_BTC_price_JPY")
     assert _not_migrated(hass) == f"- `{jpy}`"
     assert f"- `{jpy}`: Bitpanda no longer offers JPY" in _logged(caplog)
+
+
+async def test_an_old_device_that_keeps_an_entity_says_so_in_its_name(
+    hass, legacy_api, price_api
+):
+    """An old device stays while it holds an entity the upgrade left alone.
+    Its name then says so -- beside the Portfolio's own devices and the new
+    Bitpanda Price Tracker, which bears the old price device's name. A name
+    the user gave the device still shows instead."""
+    entry = _v1_entry(hass, assets=["BTC"], wallets=["fiat_EUR", "fiat_USD"])
+    eid = entry.entry_id
+    wallets = _legacy_device(hass, entry, "wallets")
+    prices = _legacy_device(hass, entry, "price_tracker")
+    _legacy_entity(hass, entry, f"{eid}_wallet_fiat_USD", "bitpanda_wallets_usd_wallet", wallets)
+    _legacy_entity(hass, entry, f"{eid}_BTC_price_EUR", "bitpanda_price_tracker_btc_eur", prices)
+    _legacy_entity(hass, entry, f"{eid}_BTC_price_JPY", "bitpanda_price_tracker_btc_jpy", prices)
+    dev_reg = dr.async_get(hass)
+    dev_reg.async_update_device(prices, name_by_user="My prices")
+
+    assert await async_migrate_entry(hass, entry)
+    await hass.async_block_till_done()
+
+    assert dev_reg.async_get(wallets).name == "Bitpanda Wallets (old version, not migrated)"
+    old_prices = dev_reg.async_get(prices)
+    assert (old_prices.name, old_prices.name_by_user) == (
+        "Bitpanda Price Tracker (old version, not migrated)", "My prices",
+    )
+
+
+async def test_the_old_price_device_says_so_beside_a_price_tracker_set_up_before(
+    hass, legacy_api, no_setup
+):
+    """With a Price Tracker set up before the upgrade, nothing adopts the
+    legacy price sensors: they stay on their old device, named as not
+    migrated as well."""
+    _price_tracker_set_up_before(hass)
+    entry = _v1_entry(hass, assets=["BTC"])
+    eid = entry.entry_id
+    prices = _legacy_device(hass, entry, "price_tracker")
+    _legacy_entity(hass, entry, f"{eid}_BTC_price_EUR", "bitpanda_price_tracker_btc_eur", prices)
+    assert await async_migrate_entry(hass, entry)
+    assert dr.async_get(hass).async_get(prices).name == (
+        "Bitpanda Price Tracker (old version, not migrated)"
+    )
+
+
+async def test_an_empty_old_price_device_goes_without_a_price_tracker_to_adopt(
+    hass, legacy_api, no_setup
+):
+    """An entry that tracked no prices any more can still have its old,
+    empty price device: the upgrade removes it, as it removes an empty old
+    wallets device."""
+    entry = _v1_entry(hass, wallets=["cryptocoin_BTC"])
+    prices = _legacy_device(hass, entry, "price_tracker")
+    assert await async_migrate_entry(hass, entry)
+    assert _price_trackers(hass) == []
+    assert dr.async_get(hass).async_get(prices) is None
+
+
+async def test_the_dialog_after_an_upgrade_deletes_what_it_left_and_keeps_what_moved(
+    hass, legacy_api, price_api
+):
+    """The upgrade end to end, with the Price Tracker it creates: the
+    dialog lists the wallet and the price left behind, and deletes them
+    with their old devices. The price the Price Tracker adopted stays, on
+    its new device."""
+    entry = _v1_entry(hass, assets=["BTC"], wallets=["fiat_EUR", "fiat_USD"])
+    eid = entry.entry_id
+    wallets = _legacy_device(hass, entry, "wallets")
+    prices = _legacy_device(hass, entry, "price_tracker")
+    usd = _legacy_entity(hass, entry, f"{eid}_wallet_fiat_USD", "bitpanda_wallets_usd_wallet", wallets)
+    _legacy_entity(hass, entry, f"{eid}_BTC_price_EUR", "bitpanda_price_tracker_btc_eur", prices)
+    jpy = _legacy_entity(hass, entry, f"{eid}_BTC_price_JPY", "bitpanda_price_tracker_btc_jpy", prices)
+    assert await async_migrate_entry(hass, entry)
+    await hass.async_block_till_done()
+
+    assert await async_setup_component(hass, "repairs", {})
+    manager = repairs_flow_manager(hass)
+    result = await manager.async_init(DOMAIN, data={"issue_id": "entities_not_migrated"})
+    assert result["description_placeholders"] == {"entities": f"- `{jpy}`\n- `{usd}`"}
+    await manager.async_configure(result["flow_id"], {})
+
+    ent_reg, dev_reg = er.async_get(hass), dr.async_get(hass)
+    assert ent_reg.async_get(usd) is None and ent_reg.async_get(jpy) is None
+    assert dev_reg.async_get(wallets) is None and dev_reg.async_get(prices) is None
+    [tracker] = _price_trackers(hass)
+    adopted = ent_reg.async_get("sensor.bitpanda_bitcoin_btc_price_tracker_eur")
+    assert adopted.config_entry_id == tracker.entry_id
+    assert dev_reg.async_get(adopted.device_id).name == "Bitcoin (BTC) Price Tracker"
 
 
 async def test_a_legacy_price_sensor_with_its_own_entity_id_keeps_it(
@@ -1250,8 +1343,9 @@ async def test_the_upgrade_raises_exactly_the_repair_issues_that_apply(
     """Renamed entity IDs, entities left alone, the currency fallback and the
     assets to add to a Price Tracker set up before, each an issue of its
     own; a list is a language-neutral Markdown list of entity IDs or asset
-    labels. Informational (not fixable), kept across restarts until the user
-    dismisses it, "Learn more" on the README's upgrade section. Nothing
+    labels. Kept across restarts until the user dismisses it, "Learn more"
+    on the README's upgrade section. Informational, but for the entities
+    left alone: that issue's dialog deletes them (repairs.py). Nothing
     else: no persistent notification, and no issue for the new API key --
     Home Assistant's reauthentication dialog asks for it."""
     entry, gone, price = _upgrade_with_every_issue(hass)
@@ -1275,11 +1369,20 @@ async def test_the_upgrade_raises_exactly_the_repair_issues_that_apply(
         "currency_dropped": ("currency_dropped", {"currency": "JPY"}),
         "price_tracker_exists": ("price_tracker_exists", {"assets": "- Bitcoin (BTC)"}),
     }
-    for issue in issues.values():
+    for issue_id, issue in issues.items():
         assert (
             issue.severity, issue.is_fixable, issue.is_persistent, issue.learn_more_url,
             issue.issue_domain,
-        ) == (ir.IssueSeverity.WARNING, False, True, UPGRADE_URL, None)
+        ) == (
+            ir.IssueSeverity.WARNING, issue_id == "entities_not_migrated", True,
+            UPGRADE_URL, None,
+        ), issue_id
+    # Only the issue for the entities left alone has a dialog, which deletes
+    # them (repairs.py): it carries the Portfolio's entry.
+    assert issues["entities_not_migrated"].data == {"entry_id": entry.entry_id}
+    assert [issue_id for issue_id, issue in issues.items() if issue.data] == [
+        "entities_not_migrated"
+    ]
 
 
 async def test_an_upgrade_with_nothing_to_report_raises_no_issue(
@@ -1367,7 +1470,9 @@ async def test_the_upgrade_issues_go_with_the_last_bitpanda_entry(hass, legacy_a
     """Once no Bitpanda entry remains, the upgrade's repair issues describe
     entities that are gone -- and after an uninstall Repairs could not even
     show their texts: removing the last entry deletes them. While another
-    Bitpanda entry remains they stay; other integrations' issues always do."""
+    Bitpanda entry remains they stay -- but for the one listing the
+    entities left alone, which went with the Portfolio; other integrations'
+    issues always do."""
     entry, _, _ = _upgrade_with_every_issue(hass)
     assert await async_migrate_entry(hass, entry)
     [tracker] = _price_trackers(hass)
@@ -1378,7 +1483,7 @@ async def test_the_upgrade_issues_go_with_the_last_bitpanda_entry(hass, legacy_a
     assert set(_issues(hass)) == set(migration.UPGRADE_ISSUES)
 
     await hass.config_entries.async_remove(entry.entry_id)
-    assert set(_issues(hass)) == set(migration.UPGRADE_ISSUES)
+    assert set(_issues(hass)) == set(migration.UPGRADE_ISSUES) - {"entities_not_migrated"}
 
     await hass.config_entries.async_remove(tracker.entry_id)
     assert _issues(hass) == {}

@@ -504,7 +504,15 @@
     },
     "entities_not_migrated": {
       "title": "Bitpanda-update: entiteiten niet gemigreerd",
-      "description": "De update heeft deze entiteiten ongewijzigd gelaten; ze worden niet meer bijgewerkt. Verwijder ze zodra je ze niet meer nodig hebt. Er kunnen fiatwallets tussen zitten: de sensor \"Contanten\" van het Portfolio omvat nu alle fiatsaldi. De logs van Home Assistant noemen per entiteit de reden.\n\n{entities}"
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Niet-gemigreerde entiteiten verwijderen?",
+            "description": "De update heeft deze entiteiten ongewijzigd gelaten; ze worden niet meer bijgewerkt. Het kan gaan om:\n\n- wallets en prijzen van assets die de nieuwe API van Bitpanda niet vermeldt, in elk geval nog niet. Zolang je zo'n asset nog bezit, maakt het Portfolio er vanzelf een nieuwe wallet voor aan, uiterlijk een dag nadat de nieuwe API de asset vermeldt.\n- fiatwallets: de sensor \"Contanten\" van het Portfolio omvat nu alle fiatsaldi.\n- prijzen in valuta die Bitpanda niet meer aanbiedt.\n\nDe logs van Home Assistant noemen per entiteit de reden.\n\n{entities}\n\nKlik op \"Verwijderen\" om deze entiteiten te verwijderen, samen met elk oud apparaat dat daarna geen entiteiten meer heeft. Hun geschiedenis blijft bewaard totdat Home Assistant oude geschiedenis opschoont, standaard na 10 dagen. Wil je ze voorlopig houden, sluit dan dit venster.",
+            "submit": "Verwijderen"
+          }
+        }
+      }
     },
     "currency_dropped": {
       "title": "Bitpanda-update: Portfolio-valuta gewijzigd in EUR",

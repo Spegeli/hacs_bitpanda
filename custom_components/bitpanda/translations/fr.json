@@ -504,7 +504,15 @@
     },
     "entities_not_migrated": {
       "title": "Mise à jour de Bitpanda : entités non migrées",
-      "description": "La mise à jour a laissé ces entités telles quelles ; elles ne sont plus actualisées. Supprimez-les quand vous n'en avez plus besoin. Il peut s'agir de wallets fiat : le capteur « Liquidités » du Portfolio regroupe désormais tous les soldes fiat. Les journaux de Home Assistant indiquent la raison pour chaque entité.\n\n{entities}"
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Supprimer les entités non migrées ?",
+            "description": "La mise à jour a laissé ces entités telles quelles ; elles ne sont plus actualisées. Il peut s'agir :\n\n- de wallets et de prix d'actifs que la nouvelle API de Bitpanda ne répertorie pas, du moins pas encore. Tant que vous détenez encore un tel actif, le Portfolio crée de lui-même un nouveau wallet pour cet actif, au plus tard un jour après que la nouvelle API l'a répertorié.\n- de wallets fiat : le capteur « Liquidités » du Portfolio regroupe désormais tous les soldes fiat.\n- de prix dans des devises que Bitpanda ne propose plus.\n\nLes journaux de Home Assistant indiquent la raison pour chaque entité.\n\n{entities}\n\nCliquez sur « Supprimer » pour supprimer ces entités ainsi que chaque ancien appareil qui n'a alors plus aucune entité. Leur historique est conservé jusqu'à ce que Home Assistant supprime l'ancien historique, par défaut au bout de 10 jours. Si vous souhaitez les conserver pour l'instant, fermez cette boîte de dialogue.",
+            "submit": "Supprimer"
+          }
+        }
+      }
     },
     "currency_dropped": {
       "title": "Mise à jour de Bitpanda : devise du Portfolio passée en EUR",

@@ -129,6 +129,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> 
         entry.runtime_data = await _async_start_price_tracker(hass, tracker)
         reload_listener = _price_tracker_reload_listener(at_start)
     else:
+        # Before the first refresh, which a rejected key fails: the
+        # entities left over from the upgrade are counted whether Bitpanda
+        # answers or not.
+        migration.async_update_left_overs(hass, entry)
         entry.runtime_data = await _async_start_portfolio(
             hass, cast(PortfolioConfigEntry, entry), group_titles
         )
@@ -407,9 +411,11 @@ async def async_remove_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) ->
     """Forget what outlived the entry's setups: its count of empty
     /portfolio answers and whether its account listed anything, kept in
     hass.data across reloads; the Price Tracker's slow-interval repair issue
-    with the Price Tracker; each repair issue about what blocks the upgrade
-    of a version 1 entry, once its cause went with this entry -- and, with
-    the last Bitpanda entry, the upgrade's repair issues (migration.py).
+    with the Price Tracker; the repair issue for the entities the upgrade
+    left alone with the Portfolio, whose entities they were; each repair
+    issue about what blocks the upgrade of a version 1 entry, once its cause
+    went with this entry -- and, with the last Bitpanda entry, the upgrade's
+    repair issues (migration.py).
 
     The entry itself is left out when looking for another one: Home
     Assistant 2025.5 has already dropped it from its entries when this
@@ -418,6 +424,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) ->
     async_forget_empty_answers(hass, entry.entry_id)
     if entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER:
         async_delete_price_interval_issue(hass)
+    else:
+        migration.async_delete_not_migrated_issue(hass)
     migration.async_update_blocker_issues(hass, entry.entry_id)
     if not any(
         other.entry_id != entry.entry_id

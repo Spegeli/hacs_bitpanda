@@ -504,7 +504,15 @@
     },
     "entities_not_migrated": {
       "title": "Bitpanda upgrade: entities not migrated",
-      "description": "The upgrade left these entities unchanged, and they are no longer updated. Delete them once you no longer need them. Fiat wallets may be among them: Portfolio Cash now covers every fiat balance. The Home Assistant log names the reason for each entity.\n\n{entities}"
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Delete the entities that were not migrated?",
+            "description": "The upgrade left these entities unchanged, and they are no longer updated. Among them can be:\n\n- wallets and prices of assets that Bitpanda's new API does not list, at least not yet. While you still hold such an asset, the Portfolio adds a new wallet for it by itself, within a day after the new API lists it.\n- fiat wallets: Portfolio Cash now covers every fiat balance.\n- prices in currencies that Bitpanda no longer offers.\n\nThe Home Assistant log names the reason for each entity.\n\n{entities}\n\nSelect \"Delete\" to delete these entities and each old device left without entities. Their history stays until Home Assistant purges old history, after 10 days by default. To keep them for now, close this dialog.",
+            "submit": "Delete"
+          }
+        }
+      }
     },
     "currency_dropped": {
       "title": "Bitpanda upgrade: Portfolio currency changed to EUR",

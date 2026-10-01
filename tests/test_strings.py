@@ -272,6 +272,17 @@ _LOCATED_TEXTS = {
 _ON_THE_SAME_ENTRY = ("config", "abort", "no_reconfigure")
 
 
+def test_the_deletion_dialog_names_its_button_as_home_assistant_names_delete():
+    """The dialog of the entities not migrated deletes: its button says so,
+    with Home Assistant's own label for Delete, and its text quotes it."""
+    for language, labels in _MENU_LABELS.items():
+        confirm = _load(f"translations/{language}.json")["issues"]["entities_not_migrated"][
+            "fix_flow"
+        ]["step"]["confirm"]
+        assert confirm["submit"] == labels["delete"], language
+        assert _quoted(labels["delete"]).search(confirm["description"]), language
+
+
 def test_texts_say_where_to_find_what_they_send_the_user_to():
     """For users new to Home Assistant: a text never names a menu item
     without saying where to find it."""
@@ -951,6 +962,42 @@ def test_german_texts_quote_the_permission_names():
         if name in text.replace(f"„{name}“", "")
     ]
     assert unquoted == []
+
+
+# A word that makes a following "Wallet" feminine, or a singular one
+# masculine: "die Wallet", "eine neue Wallet", "der Wallet".
+_FEMININE_WALLET = re.compile(
+    r"\b(?:die|der|eine|einer|keine|keiner|diese|dieser|jede|jeder|deine|deiner"
+    r"|ihre|ihrer|seine|seiner)\s+(?:\w+\s+)?Wallet\b",
+    re.IGNORECASE,
+)
+
+
+_LIST_ITEM = re.compile(r"(?:- |\d+\. )")
+
+
+def test_every_list_opens_a_paragraph_of_its_own():
+    """A list -- bullets or numbered steps -- follows a blank line or
+    another of its items, so that every Markdown renderer shows it as a
+    list, not as a line of the paragraph before."""
+    for name in _FILES:
+        for key, text in _texts(_load(name)).items():
+            lines = text.split("\n")
+            for before, line in zip(lines, lines[1:]):
+                if _LIST_ITEM.match(line):
+                    assert before == "" or _LIST_ITEM.match(before), (name, key, line[:40])
+
+
+def test_german_texts_say_das_wallet():
+    """German texts treat a wallet as neuter, "das Wallet", as the
+    Portfolio's setup ("ein eigenes Wallet") and the refusal to delete a
+    held asset's wallet ("dieses Wallet") do; "die Wallets" is the plural."""
+    feminine = [
+        (key, match.group())
+        for key, text in _texts(_load("translations/de.json")).items()
+        for match in _FEMININE_WALLET.finditer(text)
+    ]
+    assert feminine == []
 
 
 def test_no_language_but_german_names_a_permission_in_german():

@@ -211,9 +211,11 @@ def assert_issue_texts_render(raised: dict[str, dict[str, str] | None]) -> None:
     """Every issue in `raised` -- translation key -> the placeholders the
     code supplied -- has a title and a description in every shipped
     language that use exactly those placeholders and render with them. A
-    list opens a paragraph of its own, so the frontend renders it as a
-    Markdown list. Read from the files themselves: Home Assistant would
-    replace a mismatched translation with English, hiding it."""
+    fixable issue's description is its dialog's, and that dialog has a
+    title of its own. A list opens a paragraph of its own, so the frontend
+    renders it as a Markdown list. Read from the files themselves: Home
+    Assistant would replace a mismatched translation with English, hiding
+    it."""
     languages = sorted(path.stem for path in (_INTEGRATION / "translations").glob("*.json"))
     assert len(languages) == 7
     for language in languages:
@@ -222,7 +224,14 @@ def assert_issue_texts_render(raised: dict[str, dict[str, str] | None]) -> None:
         )["issues"]
         for key, placeholders in raised.items():
             placeholders = placeholders or {}
-            title, description = texts[key]["title"], texts[key]["description"]
+            title = texts[key]["title"]
+            if "fix_flow" in texts[key]:
+                assert "description" not in texts[key], (language, key)
+                confirm = texts[key]["fix_flow"]["step"]["confirm"]
+                assert confirm["title"] and not _placeholders(confirm["title"]), (language, key)
+                description = confirm["description"]
+            else:
+                description = texts[key]["description"]
             assert _placeholders(title) | _placeholders(description) == set(placeholders), (
                 language, key,
             )

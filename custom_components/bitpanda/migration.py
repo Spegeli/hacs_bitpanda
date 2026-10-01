@@ -19,7 +19,9 @@ Tracker set up before the upgrade). The frontend shows their texts,
 their placeholders carry nothing but entity IDs, codes and asset labels.
 One WARNING in the log, in English like every log line, keeps the whole
 mapping with the reason for every entity left alone -- also once the
-issues are dismissed.
+issues are dismissed. The issue for the entities left alone offers to
+delete them (repairs.py), and every start of the Portfolio keeps its list
+to what is left of them.
 
 What keeps a version 1 entry from being upgraded at all, and the user can
 remove -- Home Assistant older than 2025.5, a Portfolio set up beside it --
@@ -30,6 +32,7 @@ from __future__ import annotations
 from collections.abc import Container
 from dataclasses import dataclass, field
 import logging
+import re
 from typing import Any, cast
 
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
@@ -77,6 +80,7 @@ from .naming import (
     portfolio_entity_id,
     portfolio_unique_id,
     price_entity_id,
+    price_key,
     price_unique_id,
     wallet_entity_id,
     wallet_unique_id,
@@ -541,21 +545,108 @@ def rewrite_portfolio_registry(
     return renames, skipped
 
 
-def remove_empty_legacy_device(hass: HomeAssistant, entry_id: str, identifier: str) -> None:
-    """Remove a legacy device once no entity refers to it any more.
+# The devices of a version 1 entry, by their kind -- an identifier is
+# f"{entry_id}_{kind}" -- with the name version 1 gave them.
+_LEGACY_DEVICES = {"wallets": "Bitpanda Wallets", "price_tracker": "Bitpanda Price Tracker"}
 
-    Removing a device also removes its entities -- which is why every
-    migrated entity was detached first, and why a device that still holds a
-    legacy entity the migration left alone is kept. The device is looked up
-    within its own config entry, `entry_id` (see `devices.find_entry_device`).
+# Added to the name of a legacy device that keeps an entity the upgrade left
+# alone. The device comes from a date version, before 2.0.0: "old version"
+# stays true after later updates, where "previous version" would not.
+# English, as every device name.
+_NOT_MIGRATED = " (old version, not migrated)"
+
+
+def settle_legacy_device(hass: HomeAssistant, entry_id: str, kind: str) -> bool:
+    """Delete the legacy device `kind` (_LEGACY_DEVICES) of the entry
+    `entry_id` once no entity refers to it any more, and say whether it did.
+    While an entity still does -- one the upgrade left alone -- the device
+    stays, and its name says it is from the old version and not migrated:
+    beside the Portfolio's own devices and the new Bitpanda Price Tracker,
+    which bears the old price device's name. A name the user gave the
+    device still shows instead.
+
+    Deleting a device also deletes its entities -- which is why every
+    migrated entity was detached first. The device is looked up within its
+    own config entry, `entry_id` (see `devices.find_entry_device`).
     """
     dev_reg = dr.async_get(hass)
-    device = find_entry_device(dev_reg, entry_id, identifier)
+    device = find_entry_device(dev_reg, entry_id, f"{entry_id}_{kind}")
     if device is None:
-        return
+        return False
     if er.async_entries_for_device(er.async_get(hass), device.id, include_disabled_entities=True):
-        return
+        dev_reg.async_update_device(device.id, name=_LEGACY_DEVICES[kind] + _NOT_MIGRATED)
+        return False
     dev_reg.async_remove_device(device.id)
+    return True
+
+
+def _awaiting_adoption(hass: HomeAssistant) -> set[str]:
+    """The unique_ids of the legacy prices a Price Tracker is still to
+    adopt: its setup stopped before it did (async_adopt_legacy_prices)."""
+    return {
+        item["unique_id"]
+        for other in hass.config_entries.async_entries(DOMAIN)
+        for item in (other.data.get(CONF_LEGACY_ADOPT) or {}).get("entities", [])
+    }
+
+
+def _is_legacy(entry_id: str, unique_id: str) -> bool:
+    """Whether `unique_id` is one version 1 built for the entry `entry_id`:
+    a wallet, f"{entry_id}_wallet_<wallet id>", or a price,
+    f"{entry_id}_<SYMBOL>_price_<CUR>" with an upper-case currency code.
+
+    Never one the integration builds today: the Portfolio's wallets carry
+    an asset's UUID (managed_asset_id), the Price Tracker's prices one
+    before "_price_" (naming.price_key), and a figure whose key holds
+    "_price_" ends in no currency code.
+    """
+    if unique_id.startswith(f"{entry_id}_wallet_"):
+        return managed_asset_id(entry_id, unique_id) is None
+    key = legacy_price_key(entry_id, unique_id)
+    return (
+        key is not None
+        and re.fullmatch(r"[A-Z]{3}", key[1]) is not None
+        and price_key(entry_id, unique_id) is None
+    )
+
+
+def left_over_entity_ids(hass: HomeAssistant, entry_id: str) -> list[str]:
+    """The entities the upgrade left in place in the Portfolio entry
+    `entry_id`, sorted: a wallet or a price of the old version that is still
+    one of its entities.
+
+    Told by their unique_ids, as version 1 built them (_is_legacy), never by
+    what the Portfolio manages: a sensor of a kind the Portfolio adds later
+    is never taken for one. A legacy price a Price Tracker is still to adopt
+    is none either -- it is about to move.
+    """
+    waiting = _awaiting_adoption(hass)
+    return sorted(
+        reg_entry.entity_id
+        for reg_entry in er.async_entries_for_config_entry(er.async_get(hass), entry_id)
+        if reg_entry.unique_id not in waiting and _is_legacy(entry_id, reg_entry.unique_id)
+    )
+
+
+@callback
+def async_delete_left_over(hass: HomeAssistant, entry_id: str, entity_ids: list[str]) -> None:
+    """Delete those of `entity_ids` that are still left over
+    (left_over_entity_ids), then each legacy device of the entry that holds
+    no entity any more (settle_legacy_device).
+
+    History and statistics are not touched: the recorder purges the history
+    with all old history, and the old version recorded no statistics.
+    """
+    ent_reg = er.async_get(hass)
+    doomed = set(entity_ids) & set(left_over_entity_ids(hass, entry_id))
+    for entity_id in doomed:
+        ent_reg.async_remove(entity_id)
+    devices = sum(settle_legacy_device(hass, entry_id, kind) for kind in _LEGACY_DEVICES)
+    _LOGGER.info(
+        "Deleted what the upgrade left in place -- entities: %d, old devices: %d",
+        len(doomed),
+        devices,
+    )
 
 
 @callback
@@ -594,7 +685,7 @@ def async_adopt_legacy_prices(hass: HomeAssistant, entry: ConfigEntry) -> None:
         ent_reg.async_update_entity(entity_id, **updates)
     source = adopt.get("source_entry_id")
     if source:
-        remove_empty_legacy_device(hass, source, f"{source}_price_tracker")
+        settle_legacy_device(hass, source, "price_tracker")
     hass.config_entries.async_update_entry(
         entry, data={k: v for k, v in entry.data.items() if k != CONF_LEGACY_ADOPT}
     )
@@ -636,12 +727,17 @@ def _log_text(
 # (config_flow.py).
 ISSUE_CURRENCY_DROPPED = "currency_dropped"
 
+# The upgrade's repair issue listing the entities it left alone. Its dialog
+# deletes them (repairs.py); every start of the Portfolio keeps its list to
+# what is left (async_update_left_overs).
+ISSUE_NOT_MIGRATED = "entities_not_migrated"
+
 # Every repair issue the upgrade can raise, by id -- each id is also its
 # translation key. tests/test_migration.py ties this to what the migration
 # raises and to the `issues` in strings.json.
 UPGRADE_ISSUES = (
     "renamed_entities",
-    "entities_not_migrated",
+    ISSUE_NOT_MIGRATED,
     ISSUE_CURRENCY_DROPPED,
     "price_tracker_exists",
 )
@@ -740,9 +836,71 @@ def _async_raise_issue(hass: HomeAssistant, key: str, placeholders: dict[str, st
     )
 
 
+def entity_id_list(entity_ids: list[str]) -> str:
+    """Entity IDs as a Markdown list."""
+    return "\n".join(f"- `{entity_id}`" for entity_id in entity_ids)
+
+
+@callback
+def async_raise_not_migrated_issue(
+    hass: HomeAssistant, entry_id: str, entity_ids: list[str]
+) -> None:
+    """The repair issue for the entities the upgrade left alone,
+    `entity_ids`, entities of the Portfolio entry `entry_id`.
+
+    Kept across restarts with "Learn more" on the README's upgrade section,
+    like the upgrade's other issues; unlike them, it has a dialog, which
+    deletes the entities (repairs.py) -- the ones left when it opens. Raised
+    again, it replaces the one before; one the user ignored stays ignored.
+    """
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        ISSUE_NOT_MIGRATED,
+        data={"entry_id": entry_id},
+        is_fixable=True,
+        is_persistent=True,
+        learn_more_url=UPGRADE_URL,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key=ISSUE_NOT_MIGRATED,
+        translation_placeholders={"entities": entity_id_list(entity_ids)},
+    )
+
+
+@callback
+def async_update_left_overs(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """At a start of the Portfolio `entry`: settle the old devices, and keep
+    the repair issue for the entities the upgrade left alone to what is
+    left of them.
+
+    An old device left empty -- the user deleted its entities by hand -- is
+    deleted, one that keeps an entity says it is not migrated
+    (settle_legacy_device), also after an upgrade by 2.0.0-beta.1, which
+    left the old names. The issue exists while left-overs do: it goes once
+    the user deleted them by hand, and comes back after Home Assistant's
+    plain confirmation -- all Repairs shows while the integration is not
+    loaded -- deleted the issue and nothing else. An issue of 2.0.0-beta.1,
+    raised without the dialog, gets it here.
+    """
+    for kind in _LEGACY_DEVICES:
+        settle_legacy_device(hass, entry.entry_id, kind)
+    if left := left_over_entity_ids(hass, entry.entry_id):
+        async_raise_not_migrated_issue(hass, entry.entry_id, left)
+    else:
+        async_delete_not_migrated_issue(hass)
+
+
+@callback
+def async_delete_not_migrated_issue(hass: HomeAssistant) -> None:
+    """Delete the repair issue for the entities the upgrade left alone --
+    also when the Portfolio goes, which takes them with it."""
+    ir.async_delete_issue(hass, DOMAIN, ISSUE_NOT_MIGRATED)
+
+
 @callback
 def _async_report(
     hass: HomeAssistant,
+    entry_id: str,
     renames: list[tuple[str, str]],
     skipped: list[tuple[str, str]],
     notes: list[Note],
@@ -750,7 +908,8 @@ def _async_report(
     """Tell the user what changed: the English log line, and the repair
     issues that apply. An entity list is a Markdown list of entity IDs --
     no reason in it, as no English may stand in a text the frontend shows
-    in the user's own language.
+    in the user's own language. The entities left alone are entities of
+    the Portfolio entry `entry_id`.
 
     No issue asks for the new API key: Home Assistant's reauthentication
     dialog, translated, does.
@@ -759,11 +918,7 @@ def _async_report(
     if renames:
         _async_raise_issue(hass, "renamed_entities", {"entities": _rename_list(renames)})
     if skipped:
-        _async_raise_issue(
-            hass,
-            "entities_not_migrated",
-            {"entities": "\n".join(f"- `{entity_id}`" for entity_id, _ in skipped)},
-        )
+        async_raise_not_migrated_issue(hass, entry_id, [entity_id for entity_id, _ in skipped])
     for note in notes:
         _async_raise_issue(hass, note.issue, note.placeholders)
 
@@ -874,7 +1029,11 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ]
         if (note := price_tracker_note(hass, plan)) is not None:
             notes.append(note)
-    remove_empty_legacy_device(hass, entry.entry_id, f"{entry.entry_id}_wallets")
+    # The price device too: a Price Tracker the migration created has settled
+    # it already, but nothing adopts from one set up before, and an entry that
+    # tracked no prices any more may still have it, empty.
+    for kind in _LEGACY_DEVICES:
+        settle_legacy_device(hass, entry.entry_id, kind)
     hass.config_entries.async_update_entry(
         entry,
         title=PORTFOLIO_TITLE,
@@ -895,5 +1054,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ),
         version=3,
     )
-    _async_report(hass, renames + price_renames, skipped + price_skipped, notes)
+    _async_report(
+        hass, entry.entry_id, renames + price_renames, skipped + price_skipped, notes
+    )
     return True

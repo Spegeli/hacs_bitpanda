@@ -75,12 +75,9 @@
       },
       "reauth_confirm": {
         "title": "Potrzebny nowy klucz API platformy Bitpanda",
-        "description": "Bitpanda odrzuciła zapisany klucz API. Mógł wygasnąć albo powstać przed wprowadzeniem uprawnień, których wymaga ta wersja.\nUtwórz nowy klucz API na stronie [{api_key_url}]({api_key_url}) i wklej go tutaj. Twoje sensory zostaną zachowane.",
+        "description": "Bitpanda odrzuciła zapisany klucz API. Mógł wygasnąć albo powstać przed wprowadzeniem uprawnień, których wymaga ta wersja. Twoje sensory zostaną zachowane.\n\nJak utworzyć nowy klucz API:\n\n1. Otwórz [{api_key_url}]({api_key_url}) i utwórz nowy klucz API.\n2. Wybierz tylko uprawnienia „Salda”, „Transakcja” i „Earn (Odczytaj)” – bez uprawnienia „Trade (Odczytaj)”.\n3. Skopiuj klucz API i wklej go poniżej. Bitpanda pokazuje go tylko raz.\n\nIntegracja używa klucza API tylko do odczytu: nie może handlować ani przenosić pieniędzy.\nKlucze API Bitpanda są ważne do daty wybranej przy ich tworzeniu, najwyżej przez rok; potem Home Assistant poprosi o nowy.",
         "data": {
           "api_key": "Klucz API"
-        },
-        "data_description": {
-          "api_key": "Nowy klucz API potrzebuje uprawnień „Salda”, „Transakcja” i „Earn (Odczytaj)” – bez uprawnienia „Trade (Odczytaj)”."
         }
       },
       "reconfigure": {
@@ -91,7 +88,7 @@
           "currency": "Waluta"
         },
         "data_description": {
-          "api_key": "Pozostaw pole puste, aby zachować obecny klucz API.\nNowy klucz API ze strony [{api_key_url}]({api_key_url}) potrzebuje uprawnień „Salda”, „Transakcja” i „Earn (Odczytaj)” – bez uprawnienia „Trade (Odczytaj)”.",
+          "api_key": "Pozostaw pole puste, aby zachować obecny klucz API.\nNowy klucz API ze strony [{api_key_url}]({api_key_url}) potrzebuje uprawnień „Salda”, „Transakcja” i „Earn (Odczytaj)” – bez uprawnienia „Trade (Odczytaj)”.\nIntegracja używa klucza API tylko do odczytu: nie może handlować ani przenosić pieniędzy.",
           "currency": "Zmiana waluty usuwa wszystkie sensory Portfolio wraz z ich historią; potwierdzisz to w następnym kroku."
         }
       },

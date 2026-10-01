@@ -75,12 +75,9 @@
       },
       "reauth_confirm": {
         "title": "Nouvelle clé API Bitpanda requise",
-        "description": "Bitpanda a refusé la clé API enregistrée. Elle a peut-être expiré, ou elle est antérieure aux autorisations dont cette version a besoin.\nCréez une nouvelle clé API sur [{api_key_url}]({api_key_url}), puis collez-la ici. Vos capteurs sont conservés.",
+        "description": "Bitpanda a refusé la clé API enregistrée. Elle a peut-être expiré, ou elle est antérieure aux autorisations dont cette version a besoin. Vos capteurs sont conservés.\n\nPour créer une nouvelle clé API :\n\n1. Ouvrez [{api_key_url}]({api_key_url}) et créez une nouvelle clé API.\n2. Sélectionnez uniquement les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) ».\n3. Copiez la clé API et collez-la ci-dessous. Bitpanda ne l'affiche qu'une seule fois.\n\nL'intégration ne fait que lire avec cette clé API : elle ne peut ni passer d'ordres ni déplacer d'argent.\nLes clés API Bitpanda sont valables jusqu'à la date choisie lors de leur création, un an au plus ; ensuite, Home Assistant en demande une nouvelle.",
         "data": {
           "api_key": "Clé API"
-        },
-        "data_description": {
-          "api_key": "La nouvelle clé API doit avoir les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) »."
         }
       },
       "reconfigure": {
@@ -91,7 +88,7 @@
           "currency": "Devise"
         },
         "data_description": {
-          "api_key": "Laissez le champ vide pour conserver la clé API actuelle.\nUne nouvelle clé API créée sur [{api_key_url}]({api_key_url}) doit avoir les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) ».",
+          "api_key": "Laissez le champ vide pour conserver la clé API actuelle.\nUne nouvelle clé API créée sur [{api_key_url}]({api_key_url}) doit avoir les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) ».\nL'intégration ne fait que lire avec cette clé API : elle ne peut ni passer d'ordres ni déplacer d'argent.",
           "currency": "Changer de devise supprime tous les capteurs du Portfolio, y compris leur historique ; vous le confirmerez à l'étape suivante."
         }
       },

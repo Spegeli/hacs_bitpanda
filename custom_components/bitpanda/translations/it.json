@@ -75,12 +75,9 @@
       },
       "reauth_confirm": {
         "title": "Serve una nuova chiave API di Bitpanda",
-        "description": "Bitpanda ha rifiutato la chiave API salvata. Potrebbe essere scaduta oppure risalire a prima delle autorizzazioni richieste da questa versione.\nCrea una nuova chiave API su [{api_key_url}]({api_key_url}) e incollala qui. I tuoi sensori vengono mantenuti.",
+        "description": "Bitpanda ha rifiutato la chiave API salvata. Potrebbe essere scaduta oppure risalire a prima delle autorizzazioni richieste da questa versione. I tuoi sensori vengono mantenuti.\n\nEcco come creare una nuova chiave API:\n\n1. Apri [{api_key_url}]({api_key_url}) e crea una nuova chiave API.\n2. Seleziona solo le autorizzazioni \"Saldi\", \"Transazione\" e \"Earn (Lettura)\" – non \"Trading (Lettura)\".\n3. Copia la chiave API e incollala qui sotto. Bitpanda la mostra una sola volta.\n\nCon la chiave API l'integrazione legge soltanto: non può fare trading né spostare denaro.\nLe chiavi API Bitpanda valgono fino alla data scelta alla creazione, al massimo un anno; dopo, Home Assistant ne chiede una nuova.",
         "data": {
           "api_key": "Chiave API"
-        },
-        "data_description": {
-          "api_key": "La nuova chiave API deve avere le autorizzazioni \"Saldi\", \"Transazione\" e \"Earn (Lettura)\" – non \"Trading (Lettura)\"."
         }
       },
       "reconfigure": {
@@ -91,7 +88,7 @@
           "currency": "Valuta"
         },
         "data_description": {
-          "api_key": "Lascia il campo vuoto per mantenere la chiave API attuale.\nUna nuova chiave API da [{api_key_url}]({api_key_url}) deve avere le autorizzazioni \"Saldi\", \"Transazione\" e \"Earn (Lettura)\" – non \"Trading (Lettura)\".",
+          "api_key": "Lascia il campo vuoto per mantenere la chiave API attuale.\nUna nuova chiave API da [{api_key_url}]({api_key_url}) deve avere le autorizzazioni \"Saldi\", \"Transazione\" e \"Earn (Lettura)\" – non \"Trading (Lettura)\".\nCon la chiave API l'integrazione legge soltanto: non può fare trading né spostare denaro.",
           "currency": "Cambiare la valuta elimina tutti i sensori del Portfolio, cronologia inclusa; lo confermerai nel passaggio successivo."
         }
       },

@@ -75,12 +75,9 @@
       },
       "reauth_confirm": {
         "title": "New Bitpanda API key needed",
-        "description": "Bitpanda rejected the stored API key. It may have expired, or it predates the permissions this version needs.\nCreate a new API key at [{api_key_url}]({api_key_url}) and paste it here. Your sensors are kept.",
+        "description": "Bitpanda rejected the stored API key. It may have expired, or it predates the permissions this version needs. Your sensors are kept.\n\nTo create a new API key:\n\n1. Open [{api_key_url}]({api_key_url}) and create a new API key.\n2. Select only the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\".\n3. Copy the API key and paste it below. Bitpanda shows it only once.\n\nThe integration only reads with it: it cannot trade or move money.\nBitpanda API keys are valid until the date you choose when creating them, one year at most; after that, Home Assistant asks for a new one.",
         "data": {
           "api_key": "API key"
-        },
-        "data_description": {
-          "api_key": "The new API key needs the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\"."
         }
       },
       "reconfigure": {
@@ -91,7 +88,7 @@
           "currency": "Currency"
         },
         "data_description": {
-          "api_key": "Leave empty to keep the current API key.\nA new API key from [{api_key_url}]({api_key_url}) needs the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\".",
+          "api_key": "Leave empty to keep the current API key.\nA new API key from [{api_key_url}]({api_key_url}) needs the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\".\nThe integration only reads with it: it cannot trade or move money.",
           "currency": "Changing the currency deletes all Portfolio sensors including their history; you confirm this in the next step."
         }
       },

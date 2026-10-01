@@ -75,12 +75,9 @@
       },
       "reauth_confirm": {
         "title": "Nieuwe Bitpanda API-sleutel nodig",
-        "description": "Bitpanda heeft de opgeslagen API-sleutel geweigerd. Misschien is hij verlopen, of hij dateert van vóór de rechten die deze versie nodig heeft.\nMaak op [{api_key_url}]({api_key_url}) een nieuwe API-sleutel aan en plak die hier. Je sensoren blijven behouden.",
+        "description": "Bitpanda heeft de opgeslagen API-sleutel geweigerd. Misschien is hij verlopen, of hij dateert van vóór de rechten die deze versie nodig heeft. Je sensoren blijven behouden.\n\nZo maak je een nieuwe API-sleutel aan:\n\n1. Open [{api_key_url}]({api_key_url}) en maak een nieuwe API-sleutel aan.\n2. Kies alleen de rechten \"Saldi\", \"Transactie\" en \"Earn (Lezen)\" – niet \"Traden (Lezen)\".\n3. Kopieer de API-sleutel en plak hem hieronder. Bitpanda toont hem maar één keer.\n\nDe integratie leest er alleen mee: handelen of geld verplaatsen kan ze niet.\nBitpanda-API-sleutels zijn geldig tot de datum die je bij het aanmaken kiest, hoogstens een jaar; daarna vraagt Home Assistant om een nieuwe.",
         "data": {
           "api_key": "API-sleutel"
-        },
-        "data_description": {
-          "api_key": "De nieuwe API-sleutel heeft de rechten \"Saldi\", \"Transactie\" en \"Earn (Lezen)\" nodig – niet \"Traden (Lezen)\"."
         }
       },
       "reconfigure": {
@@ -91,7 +88,7 @@
           "currency": "Valuta"
         },
         "data_description": {
-          "api_key": "Laat het veld leeg om de huidige API-sleutel te behouden.\nEen nieuwe API-sleutel van [{api_key_url}]({api_key_url}) heeft de rechten \"Saldi\", \"Transactie\" en \"Earn (Lezen)\" nodig – niet \"Traden (Lezen)\".",
+          "api_key": "Laat het veld leeg om de huidige API-sleutel te behouden.\nEen nieuwe API-sleutel van [{api_key_url}]({api_key_url}) heeft de rechten \"Saldi\", \"Transactie\" en \"Earn (Lezen)\" nodig – niet \"Traden (Lezen)\".\nDe integratie leest er alleen mee: handelen of geld verplaatsen kan ze niet.",
           "currency": "Als je de valuta wijzigt, worden alle Portfolio-sensoren met hun geschiedenis verwijderd; dat bevestig je in de volgende stap."
         }
       },

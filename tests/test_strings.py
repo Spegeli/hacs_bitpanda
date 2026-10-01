@@ -656,16 +656,19 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
 
 
 def test_the_reconfigure_key_help_has_a_line_per_sentence():
-    """Under Reconfigure's key field: that an empty field keeps the key, and
-    on a line of its own what a new key needs -- with the trading permission
-    set off by a dash, as in the setup's guide. In the approved English and German
-    wording."""
+    """Under Reconfigure's key field: that an empty field keeps the key; on
+    a line of its own what a new key needs -- with the trading permission
+    set off by a dash, as in the setup's guide; and on a third, as in the
+    setup, that the integration only reads with it. In the approved English
+    and German wording."""
     help_texts = {
         name: _load(name)["config"]["step"]["reconfigure"]["data_description"]["api_key"]
         for name in _FILES
     }
     for name, help_text in help_texts.items():
-        keep, new_key = help_text.split("\n")
+        keep, new_key, reads = help_text.split("\n")
+        setup_key = _load(name)["config"]["step"]["portfolio"]["description"].split("\n\n")[-1]
+        assert reads == setup_key.split("\n")[0], name
         assert "[{api_key_url}]({api_key_url})" in new_key, name
         chosen, left_out = new_key.split(" \u2013 ")
         *required, trade = _PERMISSION_LABELS[_language(name)]
@@ -674,47 +677,57 @@ def test_the_reconfigure_key_help_has_a_line_per_sentence():
     assert help_texts["strings.json"] == (
         "Leave empty to keep the current API key.\n"
         'A new API key from [{api_key_url}]({api_key_url}) needs the permissions "Balances",'
-        ' "Transaction" and "Earn (Read)" \u2013 not "Trade (Read)".'
+        ' "Transaction" and "Earn (Read)" \u2013 not "Trade (Read)".\n'
+        "The integration only reads with it: it cannot trade or move money."
     )
     assert help_texts["translations/de.json"] == (
         "Lass das Feld leer, um den aktuellen API-Schlüssel zu behalten.\n"
         "Ein neuer API-Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen"
-        " „Guthaben“, „Transaktion“ und „Earn (Read)“ \u2013 kein „Trading (Read)“."
+        " „Guthaben“, „Transaktion“ und „Earn (Read)“ \u2013 kein „Trading (Read)“.\n"
+        "Die Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht."
     )
 
 
-def test_the_reauth_dialog_starts_what_to_do_on_a_line_of_its_own():
-    """The new-key dialog says what happened and why, then -- on a line of
-    its own -- where to create the new key and that the sensors are kept.
-    Under the field, what the new key needs, with the trading permission set
-    off by a dash as in the setup's guide. In the approved English and German wording."""
-    steps = {name: _load(name)["config"]["step"]["reauth_confirm"] for name in _FILES}
-    texts = {
-        name: (step["description"], step["data_description"]["api_key"])
-        for name, step in steps.items()
-    }
-    for name, (description, help_text) in texts.items():
-        happened, to_do = description.split("\n")
-        assert "{api_key_url}" not in happened and "[{api_key_url}]({api_key_url})" in to_do, name
-        chosen, left_out = help_text.split(" \u2013 ")
-        *required, trade = _PERMISSION_LABELS[_language(name)]
-        assert all(label in chosen for label in required) and trade in left_out, name
-        assert trade not in chosen, name
-    assert texts["strings.json"] == (
+def test_the_reauth_dialog_walks_through_creating_the_key_as_the_setup_does():
+    """The new-key dialog says what happened, why, and that the sensors are
+    kept; then, as the Portfolio's setup does, it walks through creating the
+    key -- the same numbered steps -- and says that the integration only
+    reads with it and how long a key is valid. Its field has no help text:
+    the steps are the guide. In the approved English and German wording."""
+    for name in _FILES:
+        steps = _load(name)["config"]["step"]
+        reauth = steps["reauth_confirm"]
+        assert set(reauth) == {"title", "description", "data"}, name
+        happened, lead, guide, key = reauth["description"].split("\n\n")
+        assert "\n" not in happened + lead and "{api_key_url}" not in happened, name
+        _, _, setup_guide, setup_key = steps["portfolio"]["description"].split("\n\n")
+        assert guide == setup_guide, name
+        assert key.split("\n") == setup_key.split("\n")[:2], name
+    assert _load("strings.json")["config"]["step"]["reauth_confirm"]["description"] == (
         "Bitpanda rejected the stored API key. It may have expired, or it predates the"
-        " permissions this version needs.\n"
-        "Create a new API key at [{api_key_url}]({api_key_url}) and paste it here. Your sensors"
-        " are kept.",
-        'The new API key needs the permissions "Balances", "Transaction" and "Earn (Read)"'
-        ' \u2013 not "Trade (Read)".',
+        " permissions this version needs. Your sensors are kept.\n\n"
+        "To create a new API key:\n\n"
+        "1. Open [{api_key_url}]({api_key_url}) and create a new API key.\n"
+        '2. Select only the permissions "Balances", "Transaction" and "Earn (Read)"'
+        ' \u2013 not "Trade (Read)".\n'
+        "3. Copy the API key and paste it below. Bitpanda shows it only once.\n\n"
+        "The integration only reads with it: it cannot trade or move money.\n"
+        "Bitpanda API keys are valid until the date you choose when creating them, one year at"
+        " most; after that, Home Assistant asks for a new one."
     )
-    assert texts["translations/de.json"] == (
+    assert _load("translations/de.json")["config"]["step"]["reauth_confirm"]["description"] == (
         "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen,"
-        " oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht.\n"
-        "Erstelle unter [{api_key_url}]({api_key_url}) einen neuen API-Schlüssel und füge ihn hier"
-        " ein. Deine Sensoren bleiben erhalten.",
-        "Der neue API-Schlüssel braucht die Berechtigungen „Guthaben“, „Transaktion“ und"
-        " „Earn (Read)“ \u2013 kein „Trading (Read)“.",
+        " oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht. Deine"
+        " Sensoren bleiben erhalten.\n\n"
+        "So erstellst du einen neuen API-Schlüssel:\n\n"
+        "1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen API-Schlüssel.\n"
+        "2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“"
+        " \u2013 kein „Trading (Read)“.\n"
+        "3. Kopiere den API-Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal"
+        " an.\n\n"
+        "Die Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\n"
+        "Bitpanda-API-Schlüssel gelten bis zu dem Datum, das du beim Erstellen wählst,"
+        " höchstens ein Jahr; danach fragt Home Assistant nach einem neuen."
     )
 
 
@@ -1080,9 +1093,10 @@ def test_the_refresh_action_says_what_it_does():
     )
 
 
-# The one step whose field has no help text: the Portfolio's setup, whose step
-# text above its key field is the guide to creating the key.
-_WITHOUT_HELP_TEXT = {"config.portfolio"}
+# The steps whose field has no help text: the Portfolio's setup and the
+# new-key dialog, whose step text above the key field is the guide to
+# creating the key.
+_WITHOUT_HELP_TEXT = {"config.portfolio", "config.reauth_confirm"}
 
 
 def test_every_field_has_a_help_text():

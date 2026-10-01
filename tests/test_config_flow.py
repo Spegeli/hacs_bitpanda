@@ -1480,7 +1480,10 @@ async def test_every_field_of_every_form_has_a_label_and_a_help_text(hass):
         ("options", "portfolio"),
         ("options", "price_tracker"),
     ]
-    without_help_text = {("config", "portfolio"): {"data_description": ["api_key"]}}
+    without_help_text = {
+        ("config", "portfolio"): {"data_description": ["api_key"]},
+        ("config", "reauth_confirm"): {"data_description": ["api_key"]},
+    }
     for flow, result in forms:
         form = (flow, result["step_id"])
         assert _fields_without_texts(flow, result) == without_help_text.get(form, {}), form

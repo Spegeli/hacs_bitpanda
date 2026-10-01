@@ -349,7 +349,7 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 4. Home Assistant shows **New Bitpanda API key needed**: paste the new key there (or use **⋮ → Reconfigure** on the Bitpanda Portfolio entry).
 5. Under **Settings → Repairs**, in your profile language, the upgrade lists:
    - **every renamed entity ID (old → new)**,
-   - the entities that could not be migrated,
+   - the entities that could not be migrated, which you can delete right there,
    - the Portfolio's switch to EUR if your old currency is not available,
    - the assets to add to a Bitpanda Price Tracker you had already set up — its prices are not moved into one that existed before the upgrade.
 
@@ -392,14 +392,16 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 |---|---|
 | The integration does not load | The entry on the Bitpanda integration page says why its setup failed or is being retried; **Settings → Repairs** says what blocks an upgrade from a date version. If Bitpanda could not be reached while Home Assistant started, the upgrade runs again at the next restart. |
 | HACS offers no update while you are on a date version (2026.06.04 or older) | Install the newest version once by hand — see [Upgrading from a date version](#%EF%B8%8F-upgrading-from-a-date-version), step 2 |
+| After the upgrade, old sensors stay `unavailable` on a device such as Bitpanda Wallets (old version, not migrated) | The upgrade could not migrate them, for example the wallet of an asset that Bitpanda's new API does not list yet. **Settings → Repairs → Bitpanda upgrade: entities not migrated** deletes them, together with the old device |
 | "New Bitpanda API key needed" | The key expired, was revoked, or lacks a permission — paste a new key with all three permissions (see [Set up the Portfolio](#set-up-the-portfolio)) |
 | Setup says permissions are missing | Create a new key with all three — permissions cannot be added to an existing key |
 | **Add price tracker** fails after choosing **Bitpanda Portfolio** | Home Assistant up to 2026.9 lists both Bitpanda entries in that dialog: choose **Bitpanda Price Tracker**, or use **⋮ → Add price tracker** on its entry (see [Track prices](#track-prices)) |
 | Dialogs show raw text | Reload the browser tab (`Ctrl+F5` / `Cmd+Shift+R`) — your browser cached old translations |
 | Group titles or the integration's messages are in English while everything else is in your language | They follow the language chosen for each service — when it was added, or later under **Configure** — not Home Assistant's language; after an upgrade from a date version it is English. Choose your language under **Configure** |
 | A wallet sensor is `unavailable` | The asset is no longer in your portfolio; the wallet is removed after about 15 minutes, or at once with **⋮ → Delete** on its device page |
+| An asset you hold has no wallet | Bitpanda's asset catalogue does not list the asset, at least not yet: without its name and type, no wallet can be set up. Its value still counts in **Total value**. Bitpanda's API names such an asset only by its ID; to see the ID, enable debug logging and reload the Bitpanda Portfolio. Once the catalogue lists it, the wallet appears within a day |
 | Every sensor of a service is `unavailable` | Bitpanda has not answered three refreshes in a row (see [Known limitations](#%EF%B8%8F-known-limitations)), or it rejected the API key — then Home Assistant asks for a new one |
-| Portfolio Total value, Cash, Cash Plus or a wallet sensor is `unknown` | Bitpanda answered, but an entry could not be read or came without a value; rather than show a figure that silently leaves something out, the sensor shows none until Bitpanda sends it again. Enable debug logging to see which entry. Cash Plus is also `unknown` while an asset you hold cannot be looked up at Bitpanda; the integration tries again at every refresh. |
+| Portfolio Total value, Cash, Cash Plus or a wallet sensor is `unknown` | Bitpanda answered, but an entry could not be read or came without a value; rather than show a figure that silently leaves something out, the sensor shows none until Bitpanda sends it again. Enable debug logging to see which entry. Cash Plus is also `unknown` while looking up an asset you hold fails at Bitpanda; the integration tries again at every refresh. |
 | A return sensor is `unknown` | Bitpanda answered for that timeframe without a figure, for example while the account has no history for it yet |
 | A return sensor is `unavailable` while the other returns are not | Bitpanda's answer for that timeframe failed three refreshes in a row; it kept its last value until then and comes back with the next answer |
 | The Portfolio still shows your holdings after you emptied your account | An empty answer from Bitpanda counts only once three answers in a row, at least ten minutes apart from first to last, confirm it; until then the last figures stay, and refreshing by hand does not make that sooner. Right after a restart there are no last figures: Total value, Cash, Cash Plus and the wallets are `unavailable` until then. |

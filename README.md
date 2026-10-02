@@ -136,7 +136,7 @@ The Price Tracker shows its assets in groups by type — Cryptocurrencies, Stock
 2. Choose the **Asset type**: Crypto, Stocks, ETFs, ETCs, Crypto indices or Precious metals.
 3. Choose the asset. Type a name or a symbol to search the list — for stocks, ETFs and ETCs also an ISIN. Each entry reads `Name / SYMBOL`, for stocks, ETFs and ETCs `Name / SYMBOL / ISIN`.
 
-The asset gets its own device in the group of its type; the first asset of a type creates the group. The integration keeps each list for 24 hours; the first time, loading a large one such as Stocks can take a few seconds.
+The asset gets its own device in the group of its type; the first asset of a type creates the group. The integration keeps each list for an hour. Loading a large list, such as Stocks, can take a few seconds.
 
 #### Stop tracking
 

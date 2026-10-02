@@ -1,10 +1,12 @@
-"""The README's automation examples: copyable as they stand.
+"""The README: its automation examples copyable as they stand, and its
+Home Assistant badge in step with hacs.json.
 
 Each YAML block of the "Automation examples" section is what a user pastes
 into a new automation's YAML editor, so each must load as a valid
 automation, and use the entity IDs the integration creates.
 """
 from datetime import timedelta
+import json
 from pathlib import Path
 import re
 
@@ -23,7 +25,8 @@ from custom_components.bitpanda.naming import (
 
 from tests.conftest import load_fixture
 
-_README = (Path(__file__).parent.parent / "README.md").read_text(encoding="utf-8")
+_ROOT = Path(__file__).parent.parent
+_README = (_ROOT / "README.md").read_text(encoding="utf-8")
 _SECTION = "\n## \U0001f916 Automation examples\n"
 
 
@@ -256,3 +259,15 @@ async def test_every_example_loads_as_an_automation(hass):
     assert [state.state for state in states] == ["on"] * 4
     # Off again, so no trigger -- the schedule's timer -- outlives the test.
     await _turn_off(hass)
+
+
+# --- The badges under the title --------------------------------------------------
+
+
+def test_the_home_assistant_badge_names_the_minimum_version_of_hacs_json():
+    """The badge says which Home Assistant the integration needs; hacs.json
+    states it for HACS. A new minimum turns this red until the badge
+    follows."""
+    minimum = json.loads((_ROOT / "hacs.json").read_text(encoding="utf-8"))["homeassistant"]
+    major, minor, *_ = minimum.split(".")
+    assert f"https://img.shields.io/badge/Home%20Assistant-{major}.{minor}%2B-" in _README

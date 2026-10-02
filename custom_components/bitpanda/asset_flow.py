@@ -1,8 +1,8 @@
 """The "Add price tracker" config subentry flow of the Price Tracker.
 
 Category first, then one searchable pick from that category's catalogue --
-public data, fetched without a key and cached for 24 hours. The asset joins
-the group of its asset type, which the flow creates when there is none yet.
+public data, fetched without a key and kept for an hour. The asset joins the
+group of its asset type, which the flow creates when there is none yet.
 
 The pick shows under one of two step ids, each with texts of its own:
 `security` for stocks, ETFs and ETCs, whose labels carry their ISIN, and
@@ -15,15 +15,15 @@ from typing import Any, cast
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigSubentryFlow, SubentryFlowResult
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HassJob, HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.selector import (
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
 )
-from homeassistant.util import dt as dt_util
 
 from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
 from .assets import (
@@ -45,9 +45,9 @@ from .groups import (
 from .language import entry_language
 from .naming import asset_display_label
 
-# The stock listing alone is ~103 requests; a day-old catalogue is current
-# enough for picking an asset.
-_CATALOGUE_CACHE_TTL = timedelta(hours=24)
+# The stock listing alone is ~103 requests: kept for an hour, it serves a
+# round of picks, and an asset Bitpanda adds shows within the hour.
+_CATALOGUE_CACHE_TTL = timedelta(hours=1)
 
 # Its own top-level hass.data key, never inside hass.data[DOMAIN]: it serves
 # every flow and survives entry reloads.
@@ -57,25 +57,23 @@ _CATALOGUE_KEY = f"{DOMAIN}_asset_catalogue"
 async def async_category_listing(
     hass: HomeAssistant, client: BitpandaApiClient, category: str
 ) -> list[dict[str, Any]]:
-    """Every asset of one category, all pages, slimmed, cached for 24 hours.
+    """Every asset of one category, all pages, slimmed, kept for an hour.
+
+    A timer drops each listing an hour after it was loaded, whether or not
+    the dialog is opened again: no listing outstays its hour in memory --
+    the stocks alone take about 6 MB. Only the timer ends a listing; no
+    clock is read here, so a clock set forward cannot end one early. A
+    timer drops only the listing it was started for: two dialogs can load
+    the same category at once, the later listing replacing the earlier one.
+    Home Assistant cancels the timers when it stops.
 
     Nothing here catches an API error: an error partway through a
-    multi-filter category must not cache a partial listing. Every listing
-    past its TTL is dropped on each call, so the cache holds at most a day's
-    worth of what was actually browsed.
+    multi-filter category must not cache a partial listing.
     """
-    store: dict[str, tuple[datetime, list[dict[str, Any]]]] = hass.data.setdefault(
-        _CATALOGUE_KEY, {}
-    )
-    now = dt_util.utcnow()
-    for expired in [
-        key for key, (fetched_at, _) in store.items() if now - fetched_at >= _CATALOGUE_CACHE_TTL
-    ]:
-        del store[expired]
-
+    store: dict[str, list[dict[str, Any]]] = hass.data.setdefault(_CATALOGUE_KEY, {})
     cached = store.get(category)
     if cached is not None:
-        return cached[1]
+        return cached
 
     assets: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -85,7 +83,16 @@ async def async_category_listing(
             if asset_id and asset_id not in seen:
                 seen.add(asset_id)
                 assets.append(slim_asset(asset))
-    store[category] = (now, assets)
+    store[category] = assets
+
+    @callback
+    def _async_drop(_: datetime) -> None:
+        if store.get(category) is assets:
+            del store[category]
+
+    async_call_later(
+        hass, _CATALOGUE_CACHE_TTL, HassJob(_async_drop, cancel_on_shutdown=True)
+    )
     return assets
 
 
@@ -96,6 +103,9 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
 
     def __init__(self) -> None:
         self._category: str | None = None
+        # Category -> the listing this dialog got: kept until the dialog
+        # ends, whatever the store's timer does meanwhile.
+        self._listings: dict[str, list[dict[str, Any]]] = {}
 
     def _tracked_ids(self) -> set[str]:
         """Assets tracked in any group.
@@ -164,15 +174,23 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
         )
 
     async def _async_listing(self) -> tuple[list[dict[str, Any]], str | None]:
-        client = BitpandaApiClient(None, async_get_clientsession(self.hass))
+        """The listing of the category picked, once per dialog: showing it and
+        resolving the pick use the same one, even when the store's hour ends
+        in between."""
         # Set by the user step: this step is only ever reached through it.
         category = cast(str, self._category)
+        kept = self._listings.get(category)
+        if kept is not None:
+            return kept, None
+        client = BitpandaApiClient(None, async_get_clientsession(self.hass))
         try:
-            return await async_category_listing(self.hass, client, category), None
+            listing = await async_category_listing(self.hass, client, category)
         except BitpandaRateLimitError:
             return [], "rate_limited"
         except BitpandaApiError:
             return [], "cannot_connect"
+        self._listings[category] = listing
+        return listing, None
 
     async def async_step_asset(
         self, user_input: dict[str, Any] | None = None

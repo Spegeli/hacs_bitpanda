@@ -9,7 +9,10 @@ from homeassistant.config_entries import ConfigSubentryData, UnknownEntry
 from homeassistant.util import dt as dt_util
 import pytest
 import voluptuous as vol
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client
 
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
@@ -19,6 +22,7 @@ from custom_components.bitpanda.const import API_BASE_URL, DOMAIN
 from tests.conftest import load_fixture, price_group
 
 _LIST = "custom_components.bitpanda.asset_flow.BitpandaApiClient.async_list_assets"
+_STORE = "bitpanda_asset_catalogue"
 _FLOW = data_entry_flow.FlowResultType
 
 
@@ -220,32 +224,63 @@ async def test_the_stock_category_merges_both_listing_families(hass):
     assert len(_options(result)) == 2
 
 
-async def test_a_listing_is_cached_for_24_hours_in_slim_records(hass):
-    """Time is moved by editing the cached timestamp, not by mocking the clock."""
+async def test_a_listing_is_kept_for_an_hour_in_slim_records(hass):
+    """Picked again within the hour, a category takes its listing from the
+    store. An hour after the listing was loaded, a timer drops it -- whether
+    or not anyone opens the dialog again, so no listing outstays its hour in
+    memory -- and the next pick loads it anew."""
     entry = _entry(hass)
     listing = AsyncMock(return_value=_metals())
     with patch(_LIST, listing):
         await _pick_category(hass, entry)
-        await _pick_category(hass, entry)
-        assert listing.await_count == 1
-        store = hass.data["bitpanda_asset_catalogue"]
-        fetched_at, records = store["metal"]
+        store = hass.data[_STORE]
         assert all(
             set(record) <= {"id", "symbol", "name", "isin", "type", "group"}
-            for record in records
+            for record in store["metal"]
         )
-        store["metal"] = (fetched_at - timedelta(hours=24, minutes=1), records)
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=59))
+        await _pick_category(hass, entry)
+        assert listing.await_count == 1
+
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(hours=1))
+        assert "metal" not in store
+
         await _pick_category(hass, entry)
     assert listing.await_count == 2
 
 
-async def test_expired_listings_are_dropped_not_kept(hass):
-    store = hass.data.setdefault("bitpanda_asset_catalogue", {})
-    store["stock"] = (dt_util.utcnow() - timedelta(hours=25), [{"id": "old"}])
+async def test_a_timer_drops_only_the_listing_it_was_started_for(hass):
+    """Two dialogs can load the same category at once, and the later listing
+    replaces the earlier one in the store. The earlier one's timer must not
+    drop the later listing before that listing's own hour is over."""
     with patch(_LIST, AsyncMock(return_value=_metals())):
         await _pick_category(hass, _entry(hass))
-    assert "stock" not in store
-    assert "metal" in store
+    store = hass.data[_STORE]
+    later = [slim_asset(GOLD)]
+    store["metal"] = later
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(hours=1))
+
+    assert store["metal"] is later
+
+
+async def test_an_open_dialog_keeps_its_listing_when_the_hour_ends(hass):
+    """The hour can end between showing the listing and submitting the pick:
+    the dialog keeps the listing it showed, so the pick needs no new
+    loading, and the store does not hold it any longer than its hour."""
+    entry = _entry(hass)
+    listing = AsyncMock(return_value=_metals())
+    with patch(_LIST, listing):
+        result = await _pick_category(hass, entry)
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(hours=1))
+        assert "metal" not in hass.data[_STORE]
+
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {"asset": GOLD["id"]}
+        )
+
+    assert listing.await_count == 1
+    assert result["type"] is _FLOW.CREATE_ENTRY
 
 
 # --- One asset step per kind of search -------------------------------------------

@@ -240,7 +240,7 @@ The action `bitpanda.refresh` fetches the portfolio and the prices right away an
 
 - **Cooldown:** a call within the cooldown of the last accepted one is ignored. The cooldown is the price interval — 60 seconds, longer with many tracked assets — or 10 seconds with the Portfolio alone.
 - **Failures:** when a refresh fails — Bitpanda cannot be reached, answers with an error, or reports an empty portfolio that is not confirmed yet — the action fails with an error naming the service; the other service is refreshed all the same. The action also fails while neither service is loaded.
-- **In automations:** a failed action stops a script or automation at that step, unless the step sets `continue_on_error: true` (see the [Morning report](#-automation-examples) example).
+- **In automations:** a failed action stops a script or automation at that step, unless the step sets `continue_on_error: true` (see the [Morning report](#3-morning-report-portfolio-value-and-todays-return-at-a-set-time) example).
 
 ---
 
@@ -248,7 +248,9 @@ The action `bitpanda.refresh` fetches the portfolio and the prices right away an
 
 Paste one into a new automation's YAML editor (in the automation editor: **⋮ → Edit in YAML**) and adjust the entity IDs and the numbers. A price sensor's entity ID ends in its currency: for US dollars, use `sensor.bitpanda_bitcoin_btc_price_tracker_usd` once USD is one of the Price Tracker's extra currencies, and write the threshold in USD. Every example works from Home Assistant 2025.5 on.
 
-**Price alert** — a notification once Bitcoin rises above 100,000 EUR. It fires when the price crosses the threshold, not while it stays above, and at most once an hour, so a price that swings around the threshold does not flood you with messages. The first condition keeps it quiet when the price only comes back after an outage or a restart. Use `below:` for a fall; add `for: "00:05:00"` to the trigger to ignore a spike shorter than five minutes.
+### 1. Price alert: notify when Bitcoin rises above 100,000 EUR
+
+A notification once Bitcoin rises above 100,000 EUR. It fires when the price crosses the threshold, not while it stays above, and at most once an hour, so a price that swings around the threshold does not flood you with messages. The first condition keeps it quiet when the price only comes back after an outage or a restart. Use `below:` for a fall; add `for: "00:05:00"` to the trigger to ignore a spike shorter than five minutes.
 
 ```yaml
 alias: Bitcoin above 100,000 EUR
@@ -272,7 +274,11 @@ actions:
 
 For a push message to your phone, use its `notify.mobile_app_…` action instead.
 
-**Big move** — a notification when Bitcoin has risen or fallen by more than 10 % within 24 hours (the sensor's `change_24h_pct` attribute), again at most once an hour.
+---
+
+### 2. Big move: notify when Bitcoin moves more than 10 % in 24 hours
+
+A notification when Bitcoin has risen or fallen by more than 10 % within 24 hours (the sensor's `change_24h_pct` attribute), again at most once an hour.
 
 ```yaml
 alias: Bitcoin moved more than 10 % in 24 hours
@@ -299,7 +305,11 @@ actions:
       message: "Bitcoin moved {{ state_attr('sensor.bitpanda_bitcoin_btc_price_tracker_eur', 'change_24h_pct') }} % in 24 hours."
 ```
 
-**Morning report** — ask Bitpanda at a set time instead of waiting for the next regular update, then show the portfolio's total value and today's return. With `continue_on_error: true`, a failed refresh (see [Refreshing by hand](#refreshing-by-hand)) does not stop the automation: the report still comes, with the last figures.
+---
+
+### 3. Morning report: portfolio value and today's return at a set time
+
+Ask Bitpanda at a set time instead of waiting for the next regular update, then show the portfolio's total value and today's return. With `continue_on_error: true`, a failed refresh (see [Refreshing by hand](#refreshing-by-hand)) does not stop the automation: the report still comes, with the last figures.
 
 ```yaml
 alias: Bitpanda morning report
@@ -318,7 +328,11 @@ actions:
 
 The same steps work in a script, which you can start from anywhere — from a button, for example.
 
-**Staking reward** — a notification when a new staking reward arrives, on the staking sensor of one wallet (here Ethereum). It compares the number of payouts (`rewards_count`), so a restart stays quiet.
+---
+
+### 4. Staking reward: notify on each new Ethereum payout
+
+A notification when a new staking reward arrives, on the staking sensor of one wallet (here Ethereum). It compares the number of payouts (`rewards_count`), so a restart stays quiet.
 
 ```yaml
 alias: New Ethereum staking reward

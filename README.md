@@ -80,24 +80,32 @@ Entity IDs, device names and log messages are always English. A group you rename
 
 ## 📦 Installation
 
-### Via HACS (recommended)
-
-Click the button below to automatically add the repository to HACS:
+### Method 1: Installation via HACS (Recommended)
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Spegeli&repository=hacs_bitpanda&category=Integration)
 
-Or add it by hand:
+**One-Click Install:** Click the button above to add and open the repository directly inside Home Assistant!
 
-1. Open **HACS**, select **⋮** (top right) → **Custom repositories**
-2. Enter `https://github.com/Spegeli/hacs_bitpanda`, choose the type **Integration**, select **Add**
-3. Open **Bitpanda** in HACS and select **Download**
-4. Restart Home Assistant
+**Manual HACS Steps:**
+1. In Home Assistant, open **HACS**.
+2. Click the three dots `⋮` in the top right corner and choose **Custom repositories**.
+3. Paste the repository URL:
+   ```text
+   https://github.com/Spegeli/hacs_bitpanda
+   ```
+4. Select **Integration** as the **Type** and click **Add**.
+5. Find **Bitpanda** in the list and click **Download**.
+6. Restart Home Assistant.
 
-### Manual
+### Method 2: Manual Installation
 
-1. Download the source code (zip) of the latest release from the [releases page](https://github.com/Spegeli/hacs_bitpanda/releases)
-2. Copy its `custom_components/bitpanda` folder to `config/custom_components/bitpanda`
-3. Restart Home Assistant
+1. Download the `Source code (zip)` of the latest release from the [Releases](https://github.com/Spegeli/hacs_bitpanda/releases) page.
+2. Unpack the ZIP archive.
+3. Copy its `custom_components/bitpanda` folder into your Home Assistant directory under:
+   ```text
+   /config/custom_components/bitpanda/
+   ```
+4. Restart Home Assistant.
 
 ### Beta versions
 

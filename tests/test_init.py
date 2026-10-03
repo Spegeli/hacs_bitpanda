@@ -2124,10 +2124,13 @@ async def test_switching_the_portfolios_language_retitles_its_wallet_groups(
     assert _group(entry, "crypto").title == "Kryptowährungen"
     calls = portfolio_api.call_count
 
-    await _configure(hass, entry, {"language": {"language": "en"}})
+    await _configure(
+        hass, entry,
+        {"language": {"language": "en"}, "notifications": {"notify_new_wallets": True}},
+    )
 
     assert entry.state is ConfigEntryState.LOADED
-    assert dict(entry.options) == {"language": "en"}
+    assert dict(entry.options) == {"language": "en", "notify_new_wallets": True}
     assert _group(entry, "crypto").title == "Cryptocurrencies"
     assert portfolio_api.call_count == calls + 1
 
@@ -2531,7 +2534,10 @@ async def test_a_refusal_follows_a_language_switched_under_configure(
     last applies -- here after the reload that saving it causes."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
-    await _configure(hass, entry, {"language": {"language": "de"}})
+    await _configure(
+        hass, entry,
+        {"language": {"language": "de"}, "notifications": {"notify_new_wallets": True}},
+    )
     device = _own_device(hass, entry, "portfolio")
 
     response = await _remove_through_the_device_page(hass, hass_ws_client, entry, device)

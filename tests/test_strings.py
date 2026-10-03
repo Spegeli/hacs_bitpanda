@@ -196,6 +196,7 @@ _LABEL_REFERENCES = {
     "configure": [
         ("config", "step", "price_tracker", "description"),
         ("config", "step", "currency", "sections", "language", "data_description", "language"),
+        ("config", "step", "currency", "sections", "notifications", "description"),
         ("config", "abort", "no_reconfigure"),
     ],
     "submit": [
@@ -262,6 +263,7 @@ _LOCATED_TEXTS = {
     ("issues", "currency_dropped", "description"): "⋮",
     ("config", "step", "price_tracker", "description"): "⚙",
     ("config", "step", "currency", "sections", "language", "data_description", "language"): "⚙",
+    ("config", "step", "currency", "sections", "notifications", "description"): "⚙",
     ("issues", "price_tracker_exists", "description"): "",
     ("issues", "portfolio_exists", "description"): "⋮",
     ("exceptions", "portfolio_device_not_removable", "message"): "⋮",
@@ -342,9 +344,10 @@ def test_every_shipped_language_is_offered_by_its_own_name():
 def test_each_service_has_options_texts_of_its_own():
     """Configure shows one form per service, each under its own step id
     (config_flow.BitpandaOptionsFlow), every field in a named section: the
-    Price Tracker's in two, the Portfolio's language in one of its own,
-    under the same heading as the Price Tracker's. Every field has a
-    label and a help text, in its section. The Portfolio keeps its step
+    Price Tracker's in two, the Portfolio's notifications in one of their
+    own, then its language under the same heading as the Price Tracker's --
+    the language last in every form. Every field has a label and a help
+    text, in its section. The Portfolio keeps its step
     text (where to find Reconfigure); the Price Tracker has none."""
     steps = _load("strings.json")["options"]["step"]
     assert set(steps) == {"price_tracker", "portfolio"}
@@ -353,7 +356,7 @@ def test_each_service_has_options_texts_of_its_own():
         assert "data" not in step and "data_description" not in step
     assert "description" not in price_tracker and portfolio["description"]
     assert list(price_tracker["sections"]) == ["currencies", "language"]
-    assert list(portfolio["sections"]) == ["language"]
+    assert list(portfolio["sections"]) == ["notifications", "language"]
     assert set(price_tracker["sections"]["currencies"]["data"]) == {"extra_currencies"}
     assert set(price_tracker["sections"]["language"]["data"]) == {"language"}
     for texts in (*price_tracker["sections"].values(), *portfolio["sections"].values()):
@@ -479,9 +482,11 @@ def test_the_price_tracker_names_its_language_by_its_own_field():
 def test_the_language_field_says_what_it_sets_for_each_service():
     """Each service's language field names what follows it: the Price
     Tracker's its group titles alone -- it writes no messages of its own --
-    the Portfolio's also the message why a device cannot be deleted. The
-    help text gives the crypto group's own title as its example and names
-    what follows the other two languages."""
+    the Portfolio's also the message why a device cannot be deleted and the
+    notifications chosen in its "Notifications" section, worded generically
+    so that a later notification needs no new text. The help text gives the
+    crypto group's own title as its example and names what follows the other
+    two languages."""
     for name in _FILES:
         strings = _load(name)
         crypto = strings["selector"]["asset_group"]["options"]["crypto"]
@@ -516,10 +521,10 @@ def test_the_language_field_says_what_it_sets_for_each_service():
             ),
             "portfolio": (
                 "Language of group titles and messages",
-                'Group titles, such as "Cryptocurrencies", appear in this language, and so does '
-                "the message explaining why a device cannot be deleted. Sensor names follow Home "
-                "Assistant's system language, dialogs and attribute names the language of your "
-                "user profile.",
+                'Group titles, such as "Cryptocurrencies", appear in this language, and so do '
+                "the message explaining why a device cannot be deleted and the notifications you "
+                'choose in the "Notifications" section. Sensor names follow Home Assistant\'s '
+                "system language, dialogs and attribute names the language of your user profile.",
             ),
         },
         "de": {
@@ -532,12 +537,220 @@ def test_the_language_field_says_what_it_sets_for_each_service():
             "portfolio": (
                 "Sprache für Gruppentitel und Meldungen",
                 "Gruppentitel wie „Kryptowährungen“ erscheinen in dieser Sprache, ebenso die "
-                "Meldung, warum sich ein Gerät nicht löschen lässt. Sensornamen folgen der "
+                "Meldung, warum sich ein Gerät nicht löschen lässt, und die Benachrichtigungen, "
+                "die du im Abschnitt „Benachrichtigungen“ auswählst. Sensornamen folgen der "
                 "Systemsprache von Home Assistant, Dialoge und Attributnamen der Sprache deines "
                 "Benutzerprofils.",
             ),
         },
     }
+
+
+# The Portfolio's notifications, as approved on 2026-10-03
+# (docs/superpowers/specs/2026-10-03-new-wallet-notifications-design.md): the
+# section's name -- Home Assistant's own name for its notification drawer in
+# each language -- the switch's label, its help text, alike in setup and in
+# Configure, and the setup section's description: where to change the
+# notification settings later, once for every switch the section may hold.
+_NOTIFICATIONS_SECTION = {
+    "en": (
+        "Notifications",
+        "Notify about new wallets",
+        'When a new wallet appears in the Portfolio, after you buy an asset for example, Home '
+        'Assistant shows a notification under "Notifications". Wallets present when the '
+        "Portfolio was set up do not count. Automations can react to the event "
+        "`bitpanda_wallet_added` either way.",
+        'You can change the notification settings later with "Configure" (⚙) on the "Bitpanda '
+        'Portfolio" entry of the Bitpanda integration page.',
+    ),
+    "de": (
+        "Benachrichtigungen",
+        "Bei neuen Wallets benachrichtigen",
+        "Kommt im Portfolio ein neues Wallet dazu, etwa nach dem Kauf eines Assets, zeigt Home "
+        "Assistant eine Benachrichtigung unter „Benachrichtigungen“. Wallets, die es bei der "
+        "Einrichtung schon gab, zählen nicht. Automationen können in jedem Fall auf das "
+        "Ereignis `bitpanda_wallet_added` reagieren.",
+        "Die Benachrichtigungseinstellungen kannst du später mit „Konfigurieren“ (⚙) beim "
+        "Eintrag „Bitpanda Portfolio“ auf der Bitpanda-Integrationsseite ändern.",
+    ),
+    "fr": (
+        "Notifications",
+        "Signaler les nouveaux wallets",
+        "Lorsqu'un nouveau wallet apparaît dans le Portfolio, par exemple après l'achat d'un "
+        "actif, Home Assistant affiche une notification dans «\u00a0Notifications\u00a0». Les "
+        "wallets présents lors de la configuration du Portfolio ne comptent pas. Les "
+        "automatisations peuvent réagir à l'événement `bitpanda_wallet_added` dans tous les "
+        "cas.",
+        "Vous pourrez modifier les paramètres de notification plus tard avec «\u00a0Configurer"
+        "\u00a0» (⚙) sur l'entrée «\u00a0Bitpanda Portfolio\u00a0» de la page de l'intégration "
+        "Bitpanda.",
+    ),
+    "nl": (
+        "Meldingen",
+        "Melding bij nieuwe wallets",
+        "Komt er een nieuwe wallet bij in het Portfolio, bijvoorbeeld nadat je een asset hebt "
+        'gekocht, dan toont Home Assistant een melding onder "Meldingen". Wallets die er al '
+        "waren toen het Portfolio werd ingesteld, tellen niet mee. Automatiseringen kunnen in "
+        "elk geval reageren op de gebeurtenis `bitpanda_wallet_added`.",
+        'Je kunt de meldingsinstellingen later wijzigen via "Configureren" (⚙) bij de invoer '
+        '"Bitpanda Portfolio" op de integratiepagina van Bitpanda.',
+    ),
+    "it": (
+        "Notifiche",
+        "Notifica per i nuovi wallet",
+        "Quando nel Portfolio compare un nuovo wallet, per esempio dopo l'acquisto di un asset, "
+        'Home Assistant mostra una notifica in "Notifiche". I wallet già presenti quando il '
+        "Portfolio è stato configurato non contano. Le automazioni possono reagire in ogni caso "
+        "all'evento `bitpanda_wallet_added`.",
+        'Puoi modificare le impostazioni delle notifiche in seguito con "Configura" (⚙) sulla '
+        'voce "Bitpanda Portfolio" nella pagina dell\'integrazione Bitpanda.',
+    ),
+    "es": (
+        "Notificaciones",
+        "Avisar de los wallets nuevos",
+        "Cuando aparece un wallet nuevo en el Portfolio, por ejemplo después de comprar un "
+        'activo, Home Assistant muestra una notificación en "Notificaciones". Los wallets que ya '
+        "existían al configurar el Portfolio no cuentan. Las automatizaciones pueden reaccionar "
+        "al evento `bitpanda_wallet_added` en cualquier caso.",
+        'Puedes cambiar los ajustes de notificación más adelante con "Configurar" (⚙) en la '
+        'entrada "Bitpanda Portfolio" de la página de la integración Bitpanda.',
+    ),
+    "pl": (
+        "Powiadomienia",
+        "Powiadamiaj o nowych portfelach",
+        "Gdy w Portfolio pojawi się nowy portfel, na przykład po zakupie aktywa, Home Assistant "
+        "wyświetli powiadomienie w panelu „Powiadomienia”. Portfele istniejące w chwili "
+        "konfiguracji Portfolio się nie liczą. Automatyzacje mogą w każdym przypadku reagować na "
+        "zdarzenie `bitpanda_wallet_added`.",
+        "Ustawienia powiadomień możesz później zmienić, klikając „Konfiguruj” (⚙) przy wpisie "
+        "„Bitpanda Portfolio” na stronie integracji Bitpanda.",
+    ),
+}
+
+
+def test_the_notifications_section_says_what_it_switches():
+    """One switch in a section of its own, worded alike in setup and in
+    Configure; the setup's section adds where to change the notification
+    settings later, once for every switch it may hold."""
+    assert sorted(_NOTIFICATIONS_SECTION) == _LANGUAGES
+    for language, (name, label, help_text, later) in _NOTIFICATIONS_SECTION.items():
+        strings = _load(f"translations/{language}.json")
+        configure = strings["options"]["step"]["portfolio"]["sections"]["notifications"]
+        setup = strings["config"]["step"]["currency"]["sections"]["notifications"]
+        assert configure == {
+            "name": name,
+            "data": {"notify_new_wallets": label},
+            "data_description": {"notify_new_wallets": help_text},
+        }, language
+        assert setup == {
+            "name": name,
+            "description": later,
+            "data": {"notify_new_wallets": label},
+            "data_description": {"notify_new_wallets": help_text},
+        }, language
+
+
+_CURRENCY_STEP_DESCRIPTIONS = {
+    "en": "The API key works. Now choose your portfolio's currency, which notifications you want, "
+    "and the language of group titles and messages.",
+    "de": "Der API-Schlüssel funktioniert. Wähle jetzt die Währung deines Portfolios, welche "
+    "Benachrichtigungen du möchtest, und die Sprache für Gruppentitel und Meldungen.",
+    "fr": "La clé API fonctionne. Choisissez maintenant la devise de votre portefeuille, les "
+    "notifications que vous souhaitez et la langue des titres de groupe et des messages.",
+    "nl": "De API-sleutel werkt. Kies nu de valuta van je portfolio, welke meldingen je wilt "
+    "ontvangen en de taal van groepstitels en meldingen.",
+    "it": "La chiave API funziona. Ora scegli la valuta del tuo portafoglio, quali notifiche vuoi "
+    "ricevere e la lingua dei titoli dei gruppi e dei messaggi.",
+    "es": "La clave API funciona. Ahora elige la moneda de tu cartera, qué notificaciones quieres "
+    "recibir y el idioma de los títulos de grupo y de los mensajes.",
+    "pl": "Klucz API działa. Teraz wybierz walutę swojego portfolio, powiadomienia, które chcesz "
+    "otrzymywać, oraz język tytułów grup i komunikatów.",
+}
+
+
+def test_the_currency_step_names_what_it_asks_for():
+    """The currency, the notifications -- named generically, so that a
+    later notification needs no new text -- and the language, in the order
+    of the step's sections."""
+    assert sorted(_CURRENCY_STEP_DESCRIPTIONS) == _LANGUAGES
+    for language, description in _CURRENCY_STEP_DESCRIPTIONS.items():
+        step = _load(f"translations/{language}.json")["config"]["step"]["currency"]
+        assert step["description"] == description, language
+        assert list(step["sections"]) == ["currency", "notifications", "language"], language
+
+
+# The notification about a new wallet, in each entry language: its title and
+# its message, whose link text is the wallet's name and whose target the
+# wallet's device page.
+_WALLET_ADDED = {
+    "en": (
+        "New Bitpanda wallet",
+        "The Portfolio added a new wallet: **[{wallet}]({link})** in the group {group}.",
+    ),
+    "de": (
+        "Neues Bitpanda-Wallet",
+        "Das Portfolio hat ein neues Wallet angelegt: **[{wallet}]({link})** in der Gruppe "
+        "{group}.",
+    ),
+    "fr": (
+        "Nouveau wallet Bitpanda",
+        "Le Portfolio a ajouté un nouveau wallet\u00a0: **[{wallet}]({link})** dans le groupe "
+        "{group}.",
+    ),
+    "nl": (
+        "Nieuwe Bitpanda-wallet",
+        "Het Portfolio heeft een nieuwe wallet toegevoegd: **[{wallet}]({link})** in de groep "
+        "{group}.",
+    ),
+    "it": (
+        "Nuovo wallet Bitpanda",
+        "Il Portfolio ha aggiunto un nuovo wallet: **[{wallet}]({link})** nel gruppo {group}.",
+    ),
+    "es": (
+        "Nuevo wallet de Bitpanda",
+        "El Portfolio ha añadido un wallet nuevo: **[{wallet}]({link})** en el grupo {group}.",
+    ),
+    "pl": (
+        "Nowy portfel Bitpanda",
+        "Portfolio dodało nowy portfel: **[{wallet}]({link})** w grupie {group}.",
+    ),
+}
+
+
+def test_the_new_wallet_notification_texts():
+    assert sorted(_WALLET_ADDED) == _LANGUAGES
+    for language, (title, message) in _WALLET_ADDED.items():
+        exceptions = _load(f"translations/{language}.json")["exceptions"]
+        assert (
+            exceptions["wallet_added_title"]["message"], exceptions["wallet_added"]["message"]
+        ) == (title, message), language
+
+
+# The notification's second paragraph when all of the new wallet's sensors are
+# disabled (docs/superpowers/specs/2026-10-03-announce-on-wallet-device-design.md):
+# Home Assistant's own word for enabling an entity, and the words the texts
+# already use for sensors and a device page.
+_SENSORS_DISABLED = {
+    "en": "Its sensors are disabled. You can enable them on its [device page]({link}).",
+    "de": "Seine Sensoren sind deaktiviert. Du kannst sie auf seiner [Geräteseite]({link}) "
+    "aktivieren.",
+    "fr": "Ses capteurs sont désactivés. Vous pouvez les activer sur sa [page d'appareil]({link}).",
+    "nl": "De sensoren van deze wallet zijn uitgeschakeld. Je kunt ze inschakelen op de "
+    "[apparaatpagina]({link}).",
+    "it": "I suoi sensori sono disabilitati. Puoi abilitarli nella [pagina del dispositivo]({link}).",
+    "es": "Sus sensores están deshabilitados. Puedes habilitarlos en su [página de dispositivo]"
+    "({link}).",
+    "pl": "Jego sensory są wyłączone. Możesz je włączyć na jego [stronie urządzenia]({link}).",
+}
+
+
+def test_the_sensors_disabled_hint_says_how_to_enable_them():
+    """A paragraph of its own under the notification, linking to the same
+    device page."""
+    assert sorted(_SENSORS_DISABLED) == _LANGUAGES
+    for language, hint in _SENSORS_DISABLED.items():
+        exceptions = _load(f"translations/{language}.json")["exceptions"]
+        assert exceptions["wallet_added_sensors_disabled"] == {"message": hint}, language
 
 
 def test_the_setup_menu_says_what_each_service_is_for():
@@ -1121,7 +1334,7 @@ def test_every_field_has_a_help_text():
         for name, step in steps.items()
         for key, texts in step.get("sections", {}).items()
     }
-    assert len(labelled) == 13
+    assert len(labelled) == 15
     for name, step in labelled.items():
         helped = set() if name in _WITHOUT_HELP_TEXT else set(step["data"])
         assert set(step.get("data_description", {})) == helped, name

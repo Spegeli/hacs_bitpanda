@@ -18,7 +18,7 @@
       },
       "currency": {
         "title": "Bitpanda Portfolio",
-        "description": "De API-sleutel werkt. Kies nu de valuta van je portfolio en de taal van groepstitels en meldingen.",
+        "description": "De API-sleutel werkt. Kies nu de valuta van je portfolio, welke meldingen je wilt ontvangen en de taal van groepstitels en meldingen.",
         "sections": {
           "currency": {
             "name": "Valuta",
@@ -29,13 +29,23 @@
               "currency": "Bitpanda geeft alle waarden van je portfolio in deze valuta weer. Om de valuta later te wijzigen, open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies je \"Herconfigureer\". Een wijziging verwijdert alle Portfolio-sensoren met hun geschiedenis en maakt ze opnieuw aan in de nieuwe valuta."
             }
           },
+          "notifications": {
+            "name": "Meldingen",
+            "description": "Je kunt de meldingsinstellingen later wijzigen via \"Configureren\" (⚙) bij de invoer \"Bitpanda Portfolio\" op de integratiepagina van Bitpanda.",
+            "data": {
+              "notify_new_wallets": "Melding bij nieuwe wallets"
+            },
+            "data_description": {
+              "notify_new_wallets": "Komt er een nieuwe wallet bij in het Portfolio, bijvoorbeeld nadat je een asset hebt gekocht, dan toont Home Assistant een melding onder \"Meldingen\". Wallets die er al waren toen het Portfolio werd ingesteld, tellen niet mee. Automatiseringen kunnen in elk geval reageren op de gebeurtenis `bitpanda_wallet_added`."
+            }
+          },
           "language": {
             "name": "Taal",
             "data": {
               "language": "Taal van groepstitels en meldingen"
             },
             "data_description": {
-              "language": "Groepstitels zoals \"Cryptovaluta\" verschijnen in deze taal, net als de melding waarom een apparaat niet kan worden verwijderd. Sensornamen volgen de systeemtaal van Home Assistant, dialogen en attribuutnamen de taal van je gebruikersprofiel. Je kunt deze taal later wijzigen via \"Configureren\" (⚙) bij de invoer \"Bitpanda Portfolio\" op de integratiepagina van Bitpanda."
+              "language": "Groepstitels zoals \"Cryptovaluta\" verschijnen in deze taal, net als de melding waarom een apparaat niet kan worden verwijderd en de meldingen die je kiest in het onderdeel \"Meldingen\". Sensornamen volgen de systeemtaal van Home Assistant, dialogen en attribuutnamen de taal van je gebruikersprofiel. Je kunt deze taal later wijzigen via \"Configureren\" (⚙) bij de invoer \"Bitpanda Portfolio\" op de integratiepagina van Bitpanda."
             }
           }
         }
@@ -152,13 +162,22 @@
         "title": "Opties van het Portfolio",
         "description": "Om de API-sleutel te vervangen of de valuta te wijzigen, open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies je \"Herconfigureer\".",
         "sections": {
+          "notifications": {
+            "name": "Meldingen",
+            "data": {
+              "notify_new_wallets": "Melding bij nieuwe wallets"
+            },
+            "data_description": {
+              "notify_new_wallets": "Komt er een nieuwe wallet bij in het Portfolio, bijvoorbeeld nadat je een asset hebt gekocht, dan toont Home Assistant een melding onder \"Meldingen\". Wallets die er al waren toen het Portfolio werd ingesteld, tellen niet mee. Automatiseringen kunnen in elk geval reageren op de gebeurtenis `bitpanda_wallet_added`."
+            }
+          },
           "language": {
             "name": "Taal",
             "data": {
               "language": "Taal van groepstitels en meldingen"
             },
             "data_description": {
-              "language": "Groepstitels zoals \"Cryptovaluta\" verschijnen in deze taal, net als de melding waarom een apparaat niet kan worden verwijderd. Sensornamen volgen de systeemtaal van Home Assistant, dialogen en attribuutnamen de taal van je gebruikersprofiel."
+              "language": "Groepstitels zoals \"Cryptovaluta\" verschijnen in deze taal, net als de melding waarom een apparaat niet kan worden verwijderd en de meldingen die je kiest in het onderdeel \"Meldingen\". Sensornamen volgen de systeemtaal van Home Assistant, dialogen en attribuutnamen de taal van je gebruikersprofiel."
             }
           }
         }
@@ -492,6 +511,15 @@
     },
     "refresh_failed": {
       "message": "Vernieuwen mislukt voor {services}."
+    },
+    "wallet_added_title": {
+      "message": "Nieuwe Bitpanda-wallet"
+    },
+    "wallet_added": {
+      "message": "Het Portfolio heeft een nieuwe wallet toegevoegd: **[{wallet}]({link})** in de groep {group}."
+    },
+    "wallet_added_sensors_disabled": {
+      "message": "De sensoren van deze wallet zijn uitgeschakeld. Je kunt ze inschakelen op de [apparaatpagina]({link})."
     }
   },
   "issues": {

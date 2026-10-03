@@ -226,21 +226,23 @@ async def test_v1_becomes_the_portfolio(hass, legacy_api, no_setup):
 async def test_a_language_chosen_before_the_upgrade_is_kept(hass, legacy_api, no_setup):
     """Home Assistant offers Configure on every entry -- a version 1 entry
     still waiting for its migration too, which opens the Portfolio's form.
-    A language saved there survives the migration; the tracked lists of
-    version 1 do not."""
+    A language and a notification choice saved there survive the migration;
+    the tracked lists of version 1 do not."""
     entry = _v1_entry(hass, wallets=["cryptocoin_BTC"])
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["step_id"] == "portfolio"
     await hass.config_entries.options.async_configure(
-        result["flow_id"], {"language": {"language": "de"}}
+        result["flow_id"],
+        {"language": {"language": "de"}, "notifications": {"notify_new_wallets": False}},
     )
     assert dict(entry.options) == {
         "tracked_assets": [], "tracked_wallets": ["cryptocoin_BTC"], "language": "de",
+        "notify_new_wallets": False,
     }
 
     assert await async_migrate_entry(hass, entry)
 
-    assert dict(entry.options) == {"language": "de"}
+    assert dict(entry.options) == {"language": "de", "notify_new_wallets": False}
 
 
 async def test_public_lookups_never_carry_the_legacy_key(hass, no_setup):

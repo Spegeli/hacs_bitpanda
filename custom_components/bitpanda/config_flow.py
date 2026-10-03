@@ -23,6 +23,7 @@ from homeassistant.data_entry_flow import SectionConfig, section
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -41,8 +42,10 @@ from .const import (
     CONF_EXTRA_CURRENCIES,
     CONF_LANGUAGE,
     CONF_LEGACY_ADOPT,
+    CONF_NOTIFY_NEW_WALLETS,
     DEFAULT_CURRENCY,
     DEFAULT_LANGUAGE,
+    DEFAULT_NOTIFY_NEW_WALLETS,
     DOMAIN,
     ENTRY_TYPE,
     ENTRY_TYPE_PORTFOLIO,
@@ -56,6 +59,7 @@ from .const import (
     SUPPORTED_CURRENCIES,
     TROUBLESHOOTING_URL,
     entry_type,
+    notifies_new_wallets,
 )
 from .groups import async_group_titles, price_group_subentries
 from .language import async_shipped_languages, entry_language, preselected_language
@@ -155,13 +159,14 @@ def _language_field(languages: list[str], current: str) -> dict[vol.Required, Se
 
 
 # The sections of the forms. The Price Tracker's two, in their order, at
-# setup as under Configure; the Portfolio's language, one of its own so that
-# any later option gets a section of its own too -- at setup below its
-# currency, which has a section of its own there. Their names and their
-# fields' texts are `<flow>.step.<step id>.sections`.
+# setup as under Configure; the Portfolio's notifications and language, each
+# in one of its own -- at setup below its currency, which has a section of
+# its own there. The language comes last in every form. Their names and
+# their fields' texts are `<flow>.step.<step id>.sections`.
 _SECTION_CURRENCIES = "currencies"
 _SECTION_CURRENCY = "currency"
 _SECTION_LANGUAGE = "language"
+_SECTION_NOTIFICATIONS = "notifications"
 # Every one open: a section is the only way a Home Assistant form sets fields
 # apart, not a place to hide them.
 _OPEN: SectionConfig = {"collapsed": False}
@@ -177,6 +182,17 @@ def _language_section(languages: list[str], current: str) -> dict[vol.Required, 
     return {
         vol.Required(_SECTION_LANGUAGE): section(
             vol.Schema(_language_field(languages, current)), _OPEN
+        )
+    }
+
+
+def _notifications_section(enabled: bool) -> dict[vol.Required, section]:
+    """The Portfolio's notification switch, in its open section; `enabled`
+    is what it shows."""
+    return {
+        vol.Required(_SECTION_NOTIFICATIONS): section(
+            vol.Schema({vol.Required(CONF_NOTIFY_NEW_WALLETS, default=enabled): BooleanSelector()}),
+            _OPEN,
         )
     }
 
@@ -243,8 +259,8 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         }
 
     async def _async_language_section(self) -> dict[vol.Required, section]:
-        """The new entry's language (language.py), in its open section below
-        the service's own field: Home Assistant's system language first,
+        """The new entry's language (language.py), in its open section, the
+        last of the form: Home Assistant's system language first,
         where this integration ships it (language.preselected_language).
         Stored flat in the entry's options, as Configure stores it."""
         languages = await async_shipped_languages(self.hass)
@@ -298,7 +314,10 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_CURRENCY_ID: self._currency_ids[currency],
             }
             self._portfolio_options = {
-                CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE]
+                CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE],
+                CONF_NOTIFY_NEW_WALLETS: user_input[_SECTION_NOTIFICATIONS][
+                    CONF_NOTIFY_NEW_WALLETS
+                ],
             }
             self._old_statistics = await async_find_old_statistics(self.hass, currency)
             if self._old_statistics.entity_ids:
@@ -313,6 +332,8 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required(_SECTION_CURRENCY): section(currency, _OPEN),
+                    **_notifications_section(DEFAULT_NOTIFY_NEW_WALLETS),
+                    # The language last, as in every form.
                     **await self._async_language_section(),
                 }
             ),
@@ -657,8 +678,9 @@ class BitpandaOptionsFlow(config_entries.OptionsFlow):
     has texts of its own (`options.step.price_tracker`, `.portfolio`): the
     Price Tracker's extra currencies -- EUR is always there -- and the
     language of its own texts, each in a section of its own; the Portfolio's
-    language alone, in a section too, as its key and currency change through
-    Reconfigure. Saving changes the entry's options -- flat, whatever
+    notifications and language, each in a section too, as its key and
+    currency change through Reconfigure -- the language last in both forms.
+    Saving changes the entry's options -- flat, whatever
     sections the form shows -- and its update listener reloads it
     (__init__.py).
     """
@@ -706,15 +728,25 @@ class BitpandaOptionsFlow(config_entries.OptionsFlow):
     async def async_step_portfolio(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """The language in its section; the input arrives nested and is
+        """The notifications and the language, each in its section -- the
+        language last, as in every form; the input arrives nested and is
         stored flat, as ever."""
         if user_input is not None:
             return self.async_create_entry(
                 data={
                     **self.config_entry.options,
                     CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE],
+                    CONF_NOTIFY_NEW_WALLETS: user_input[_SECTION_NOTIFICATIONS][
+                        CONF_NOTIFY_NEW_WALLETS
+                    ],
                 }
             )
         return self.async_show_form(
-            step_id="portfolio", data_schema=vol.Schema(await self._async_language_section())
+            step_id="portfolio",
+            data_schema=vol.Schema(
+                {
+                    **_notifications_section(notifies_new_wallets(self.config_entry)),
+                    **await self._async_language_section(),
+                }
+            ),
         )

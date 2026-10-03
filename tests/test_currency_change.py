@@ -395,7 +395,12 @@ async def _set_up_portfolio(hass, currency: str):
             result["flow_id"], {"api_key": "key"}
         )
     return await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"currency": {"currency": currency}, "language": {"language": "en"}}
+        result["flow_id"],
+        {
+            "currency": {"currency": currency},
+            "language": {"language": "en"},
+            "notifications": {"notify_new_wallets": True},
+        },
     )
 
 

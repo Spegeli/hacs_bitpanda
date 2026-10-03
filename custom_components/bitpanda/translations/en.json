@@ -18,7 +18,7 @@
       },
       "currency": {
         "title": "Bitpanda Portfolio",
-        "description": "The API key works. Now choose your portfolio's currency and the language of group titles and messages.",
+        "description": "The API key works. Now choose your portfolio's currency, which notifications you want, and the language of group titles and messages.",
         "sections": {
           "currency": {
             "name": "Currency",
@@ -29,13 +29,23 @@
               "currency": "Bitpanda reports every value of your portfolio in this currency. To change it later, open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page and choose \"Reconfigure\". Changing it deletes all Portfolio sensors including their history and creates them again in the new currency."
             }
           },
+          "notifications": {
+            "name": "Notifications",
+            "description": "You can change the notification settings later with \"Configure\" (⚙) on the \"Bitpanda Portfolio\" entry of the Bitpanda integration page.",
+            "data": {
+              "notify_new_wallets": "Notify about new wallets"
+            },
+            "data_description": {
+              "notify_new_wallets": "When a new wallet appears in the Portfolio, after you buy an asset for example, Home Assistant shows a notification under \"Notifications\". Wallets present when the Portfolio was set up do not count. Automations can react to the event `bitpanda_wallet_added` either way."
+            }
+          },
           "language": {
             "name": "Language",
             "data": {
               "language": "Language of group titles and messages"
             },
             "data_description": {
-              "language": "Group titles, such as \"Cryptocurrencies\", appear in this language, and so does the message explaining why a device cannot be deleted. Sensor names follow Home Assistant's system language, dialogs and attribute names the language of your user profile. You can change this language later with \"Configure\" (⚙) on the \"Bitpanda Portfolio\" entry of the Bitpanda integration page."
+              "language": "Group titles, such as \"Cryptocurrencies\", appear in this language, and so do the message explaining why a device cannot be deleted and the notifications you choose in the \"Notifications\" section. Sensor names follow Home Assistant's system language, dialogs and attribute names the language of your user profile. You can change this language later with \"Configure\" (⚙) on the \"Bitpanda Portfolio\" entry of the Bitpanda integration page."
             }
           }
         }
@@ -152,13 +162,22 @@
         "title": "Portfolio options",
         "description": "To replace the API key or change the currency, open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page and choose \"Reconfigure\".",
         "sections": {
+          "notifications": {
+            "name": "Notifications",
+            "data": {
+              "notify_new_wallets": "Notify about new wallets"
+            },
+            "data_description": {
+              "notify_new_wallets": "When a new wallet appears in the Portfolio, after you buy an asset for example, Home Assistant shows a notification under \"Notifications\". Wallets present when the Portfolio was set up do not count. Automations can react to the event `bitpanda_wallet_added` either way."
+            }
+          },
           "language": {
             "name": "Language",
             "data": {
               "language": "Language of group titles and messages"
             },
             "data_description": {
-              "language": "Group titles, such as \"Cryptocurrencies\", appear in this language, and so does the message explaining why a device cannot be deleted. Sensor names follow Home Assistant's system language, dialogs and attribute names the language of your user profile."
+              "language": "Group titles, such as \"Cryptocurrencies\", appear in this language, and so do the message explaining why a device cannot be deleted and the notifications you choose in the \"Notifications\" section. Sensor names follow Home Assistant's system language, dialogs and attribute names the language of your user profile."
             }
           }
         }
@@ -492,6 +511,15 @@
     },
     "refresh_failed": {
       "message": "Refresh failed for {services}."
+    },
+    "wallet_added_title": {
+      "message": "New Bitpanda wallet"
+    },
+    "wallet_added": {
+      "message": "The Portfolio added a new wallet: **[{wallet}]({link})** in the group {group}."
+    },
+    "wallet_added_sensors_disabled": {
+      "message": "Its sensors are disabled. You can enable them on its [device page]({link})."
     }
   },
   "issues": {

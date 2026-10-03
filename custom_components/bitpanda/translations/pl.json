@@ -18,7 +18,7 @@
       },
       "currency": {
         "title": "Bitpanda Portfolio",
-        "description": "Klucz API działa. Teraz wybierz walutę swojego portfolio i język tytułów grup i komunikatów.",
+        "description": "Klucz API działa. Teraz wybierz walutę swojego portfolio, powiadomienia, które chcesz otrzymywać, oraz język tytułów grup i komunikatów.",
         "sections": {
           "currency": {
             "name": "Waluta",
@@ -29,13 +29,23 @@
               "currency": "Bitpanda podaje wszystkie wartości Twojego portfolio w tej walucie. Aby ją później zmienić, otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio” i wybierz „Rekonfiguracja”. Zmiana usuwa wszystkie sensory Portfolio wraz z historią i tworzy je od nowa w nowej walucie."
             }
           },
+          "notifications": {
+            "name": "Powiadomienia",
+            "description": "Ustawienia powiadomień możesz później zmienić, klikając „Konfiguruj” (⚙) przy wpisie „Bitpanda Portfolio” na stronie integracji Bitpanda.",
+            "data": {
+              "notify_new_wallets": "Powiadamiaj o nowych portfelach"
+            },
+            "data_description": {
+              "notify_new_wallets": "Gdy w Portfolio pojawi się nowy portfel, na przykład po zakupie aktywa, Home Assistant wyświetli powiadomienie w panelu „Powiadomienia”. Portfele istniejące w chwili konfiguracji Portfolio się nie liczą. Automatyzacje mogą w każdym przypadku reagować na zdarzenie `bitpanda_wallet_added`."
+            }
+          },
           "language": {
             "name": "Język",
             "data": {
               "language": "Język tytułów grup i komunikatów"
             },
             "data_description": {
-              "language": "Tytuły grup, takie jak „Kryptowaluty”, są wyświetlane w tym języku, podobnie jak komunikat wyjaśniający, dlaczego nie można usunąć urządzenia. Nazwy sensorów są w języku systemu Home Assistant, a okna dialogowe i nazwy atrybutów – w języku Twojego profilu użytkownika. Ten język możesz później zmienić, klikając „Konfiguruj” (⚙) przy wpisie „Bitpanda Portfolio” na stronie integracji Bitpanda."
+              "language": "Tytuły grup, takie jak „Kryptowaluty”, są wyświetlane w tym języku, podobnie jak komunikat wyjaśniający, dlaczego nie można usunąć urządzenia, i powiadomienia wybrane w sekcji „Powiadomienia”. Nazwy sensorów są w języku systemu Home Assistant, a okna dialogowe i nazwy atrybutów – w języku Twojego profilu użytkownika. Ten język możesz później zmienić, klikając „Konfiguruj” (⚙) przy wpisie „Bitpanda Portfolio” na stronie integracji Bitpanda."
             }
           }
         }
@@ -152,13 +162,22 @@
         "title": "Opcje Portfolio",
         "description": "Aby zastąpić klucz API lub zmienić walutę, otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio” i wybierz „Rekonfiguracja”.",
         "sections": {
+          "notifications": {
+            "name": "Powiadomienia",
+            "data": {
+              "notify_new_wallets": "Powiadamiaj o nowych portfelach"
+            },
+            "data_description": {
+              "notify_new_wallets": "Gdy w Portfolio pojawi się nowy portfel, na przykład po zakupie aktywa, Home Assistant wyświetli powiadomienie w panelu „Powiadomienia”. Portfele istniejące w chwili konfiguracji Portfolio się nie liczą. Automatyzacje mogą w każdym przypadku reagować na zdarzenie `bitpanda_wallet_added`."
+            }
+          },
           "language": {
             "name": "Język",
             "data": {
               "language": "Język tytułów grup i komunikatów"
             },
             "data_description": {
-              "language": "Tytuły grup, takie jak „Kryptowaluty”, są wyświetlane w tym języku, podobnie jak komunikat wyjaśniający, dlaczego nie można usunąć urządzenia. Nazwy sensorów są w języku systemu Home Assistant, a okna dialogowe i nazwy atrybutów – w języku Twojego profilu użytkownika."
+              "language": "Tytuły grup, takie jak „Kryptowaluty”, są wyświetlane w tym języku, podobnie jak komunikat wyjaśniający, dlaczego nie można usunąć urządzenia, i powiadomienia wybrane w sekcji „Powiadomienia”. Nazwy sensorów są w języku systemu Home Assistant, a okna dialogowe i nazwy atrybutów – w języku Twojego profilu użytkownika."
             }
           }
         }
@@ -492,6 +511,15 @@
     },
     "refresh_failed": {
       "message": "Nie udało się odświeżyć: {services}."
+    },
+    "wallet_added_title": {
+      "message": "Nowy portfel Bitpanda"
+    },
+    "wallet_added": {
+      "message": "Portfolio dodało nowy portfel: **[{wallet}]({link})** w grupie {group}."
+    },
+    "wallet_added_sensors_disabled": {
+      "message": "Jego sensory są wyłączone. Możesz je włączyć na jego [stronie urządzenia]({link})."
     }
   },
   "issues": {

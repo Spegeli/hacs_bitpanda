@@ -100,6 +100,12 @@ def _setup_language(language: str) -> dict:
     return {"language": {"language": language}}
 
 
+def _notifications(enabled: bool = True) -> dict:
+    """What the Portfolio's notifications section sends, in setup and in
+    Configure."""
+    return {"notifications": {"notify_new_wallets": enabled}}
+
+
 # --- Service menu -------------------------------------------------------------
 
 
@@ -136,7 +142,7 @@ async def test_a_second_portfolio_aborts_even_from_an_open_dialog(hass):
     assert result["step_id"] == "currency"
     _portfolio_entry().add_to_hass(hass)
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"currency": {"currency": "eur"}, **_setup_language("en")}
+        result["flow_id"], {"currency": {"currency": "eur"}, **_setup_language("en"), **_notifications()}
     )
     assert result["type"] == _FLOW.ABORT
     assert result["reason"] == "already_configured"
@@ -153,7 +159,7 @@ async def _finish_portfolio_setup(hass, result) -> None:
     result = await _submit_key(hass, result, "good")
     assert result["step_id"] == "currency"
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"currency": {"currency": "eur"}, **_setup_language("en")}
+        result["flow_id"], {"currency": {"currency": "eur"}, **_setup_language("en"), **_notifications()}
     )
     assert result["type"] == _FLOW.CREATE_ENTRY
     assert (result["result"].data["api_key"], result["result"].data["currency"]) == (
@@ -274,14 +280,14 @@ async def test_the_currency_step_offers_only_the_currencies_bitpanda_lists(hass)
     assert "huf" not in config["options"] and len(config["options"]) == 11
     with pytest.raises(data_entry_flow.InvalidData):
         await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"currency": {"currency": "huf"}, **_setup_language("en")}
+            result["flow_id"], {"currency": {"currency": "huf"}, **_setup_language("en"), **_notifications()}
         )
 
 
 async def test_portfolio_creates_the_entry(hass):
     result = await _submit_key(hass, await _portfolio_form(hass), "  good  \n")
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"currency": {"currency": "usd"}, **_setup_language("it")}
+        result["flow_id"], {"currency": {"currency": "usd"}, **_setup_language("it"), **_notifications()}
     )
     assert result["type"] == _FLOW.CREATE_ENTRY
     entry = result["result"]
@@ -295,8 +301,26 @@ async def test_portfolio_creates_the_entry(hass):
         "currency_id": _USD_ID,
     }
     # Flat, as Configure stores it.
-    assert dict(entry.options) == {"language": "it"}
+    assert dict(entry.options) == {"language": "it", "notify_new_wallets": True}
     assert "good" not in entry.title
+
+
+async def test_the_setup_asks_about_new_wallet_notifications_on_by_default(hass):
+    """A section of its own between the currency and the language -- the
+    language comes last in every form -- open, its switch on; the choice is
+    stored flat beside the language, as Configure stores it."""
+    result = await _submit_key(hass, await _portfolio_form(hass), "good")
+    schema = result["data_schema"]
+    assert list(schema.schema) == ["currency", "notifications", "language"]
+    assert dict(schema.schema)["notifications"].options == {"collapsed": False}
+    assert list(_section_schema(schema, "notifications").schema) == ["notify_new_wallets"]
+    assert _section_schema(schema, "notifications")({}) == {"notify_new_wallets": True}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"currency": {"currency": "usd"}, **_setup_language("en"), **_notifications(False)},
+    )
+    assert result["type"] == _FLOW.CREATE_ENTRY
+    assert dict(result["result"].options) == {"language": "en", "notify_new_wallets": False}
 
 
 # --- Old statistics at setup ---------------------------------------------------------
@@ -315,7 +339,7 @@ async def _submit_currency(hass, found: OldStatistics):
     result = await _submit_key(hass, await _portfolio_form(hass), "good")
     with patch(_FIND, AsyncMock(return_value=found)) as find:
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"currency": {"currency": "usd"}, **_setup_language("en")}
+            result["flow_id"], {"currency": {"currency": "usd"}, **_setup_language("en"), **_notifications()}
         )
     return result, find
 
@@ -325,7 +349,7 @@ def _assert_portfolio_created(result) -> None:
     assert dict(result["result"].data) == {
         "entry_type": "portfolio", "api_key": "good", "currency": "USD", "currency_id": _USD_ID,
     }
-    assert dict(result["result"].options) == {"language": "en"}
+    assert dict(result["result"].options) == {"language": "en", "notify_new_wallets": True}
 
 
 async def test_the_setup_looks_for_old_statistics_in_the_chosen_currency(hass):
@@ -1112,9 +1136,9 @@ def _price_tracker_input(extra: list[str], language: str) -> dict:
     return {"currencies": {"extra_currencies": extra}, "language": {"language": language}}
 
 
-def _portfolio_input(language: str) -> dict:
-    """What the Portfolio's Configure form sends: its one section."""
-    return {"language": {"language": language}}
+def _portfolio_input(language: str, notify: bool = True) -> dict:
+    """What the Portfolio's Configure form sends: its two sections."""
+    return {"language": {"language": language}, **_notifications(notify)}
 
 
 def _form_defaults(result) -> dict:
@@ -1220,25 +1244,27 @@ async def test_the_price_tracker_options_store_the_language_and_reload(hass):
 
 
 async def test_the_portfolio_options_offer_the_language_in_an_open_section(hass):
-    """Its only option, in a section like the Price Tracker's, so that any
-    later option gets a section of its own; its key and currency change
-    through Reconfigure."""
+    """The notifications in a section of their own, then the language in
+    one like the Price Tracker's -- last, as in every form; its key and
+    currency change through Reconfigure."""
     result = await _options_form(hass, _portfolio_entry())
     assert result["step_id"] == "portfolio"
     schema = result["data_schema"]
-    assert list(schema.schema) == ["language"]
-    assert dict(schema.schema)["language"].options == {"collapsed": False}
+    assert list(schema.schema) == ["notifications", "language"]
+    assert [dict(schema.schema)[key].options for key in schema.schema] == [
+        {"collapsed": False}, {"collapsed": False},
+    ]
     assert list(_section_schema(schema, "language").schema) == ["language"]
     config = _selector_config(_section_schema(schema, "language"), "language")
     assert config["options"] == _LANGUAGES
     assert config["translation_key"] == "language"
     assert config.get("multiple", False) is False
-    assert _form_defaults(result) == {"language": {"language": "en"}}
+    assert _form_defaults(result) == {"language": {"language": "en"}, **_notifications()}
 
 
 async def test_the_frontend_gets_the_portfolio_language_open_and_filled_in(hass, hass_client):
-    """Through Home Assistant's own options-flow API: one expandable
-    section, expanded, with the stored language as its default."""
+    """Through Home Assistant's own options-flow API: two expandable
+    sections, expanded, the stored language and the switch as defaults."""
     entry = _with_options(_portfolio_entry(), language="de")
     entry.add_to_hass(hass)
     assert await async_setup_component(hass, "config", {})
@@ -1248,9 +1274,13 @@ async def test_the_frontend_gets_the_portfolio_language_open_and_filled_in(hass,
     )
     shown = await response.json()
     assert shown["step_id"] == "portfolio"
-    [field] = shown["data_schema"]
-    assert (field["name"], field["type"], field["expanded"]) == ("language", "expandable", True)
-    assert [(inner["name"], inner["default"]) for inner in field["schema"]] == [("language", "de")]
+    assert [
+        (field["name"], field["type"], field["expanded"]) for field in shown["data_schema"]
+    ] == [("notifications", "expandable", True), ("language", "expandable", True)]
+    assert [
+        [(inner["name"], inner["default"]) for inner in field["schema"]]
+        for field in shown["data_schema"]
+    ] == [[("notify_new_wallets", True)], [("language", "de")]]
 
 
 async def test_the_portfolio_options_store_the_language_flat_and_reload(hass):
@@ -1259,7 +1289,7 @@ async def test_the_portfolio_options_store_the_language_flat_and_reload(hass):
     and whatever else its options hold stays."""
     entry = _with_options(_portfolio_entry(), language="de", other="kept")
     result = await _options_form(hass, entry)
-    assert _form_defaults(result) == {"language": {"language": "de"}}
+    assert _form_defaults(result) == {"language": {"language": "de"}, **_notifications()}
     listener = AsyncMock()
     entry.add_update_listener(listener)
     result = await hass.config_entries.options.async_configure(
@@ -1267,10 +1297,25 @@ async def test_the_portfolio_options_store_the_language_flat_and_reload(hass):
     )
     await hass.async_block_till_done()
     assert result["type"] == _FLOW.CREATE_ENTRY
-    assert dict(entry.options) == {"language": "fr", "other": "kept"}
+    assert dict(entry.options) == {"language": "fr", "notify_new_wallets": True, "other": "kept"}
     # The key and the currency stay where they are.
     assert dict(entry.data) == dict(_portfolio_entry().data)
     listener.assert_called_once()
+
+
+async def test_configure_switches_the_new_wallet_notification(hass):
+    """Shown as stored -- on for an entry that never had the switch -- and
+    stored flat beside the language, like every other option."""
+    entry = _portfolio_entry()
+    result = await _options_form(hass, entry)
+    assert _form_defaults(result)["notifications"] == {"notify_new_wallets": True}
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], _portfolio_input("en", notify=False)
+    )
+    assert result["type"] == _FLOW.CREATE_ENTRY
+    assert dict(entry.options)["notify_new_wallets"] is False
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert _form_defaults(result)["notifications"] == {"notify_new_wallets": False}
 
 
 def _shown_language(result) -> str:
@@ -1294,7 +1339,7 @@ async def test_a_stored_language_no_longer_shipped_shows_english(hass):
     """So the form can still be saved unchanged: a default outside the
     options would be refused."""
     result = await _options_form(hass, _with_options(_portfolio_entry(), language="xx"))
-    assert _form_defaults(result) == {"language": {"language": "en"}}
+    assert _form_defaults(result) == {"language": {"language": "en"}, **_notifications()}
 
 
 @pytest.mark.parametrize("service", ["price_tracker", "portfolio"])
@@ -1313,7 +1358,8 @@ async def test_a_language_the_integration_does_not_ship_is_refused(hass, service
         result["flow_id"], _language_input(service, "nl")
     )
     assert result["type"] == _FLOW.CREATE_ENTRY
-    assert dict(entry.options) == {**before, "language": "nl"}
+    switch = {"notify_new_wallets": True} if service == "portfolio" else {}
+    assert dict(entry.options) == {**before, "language": "nl", **switch}
 
 
 # --- Language at setup ------------------------------------------------------------------
@@ -1344,11 +1390,13 @@ def _preselected(result) -> str:
 async def test_the_setup_asks_for_the_language_in_an_open_section_below(
     hass, service, own_field
 ):
-    """Below the service's own field, under a heading of its own and open:
-    every shipped language, one to pick -- the field Configure shows."""
+    """Last, below the service's own field, under a heading of its own and
+    open: every shipped language, one to pick -- the field Configure shows.
+    The Portfolio's notifications come between, in a section of their own."""
     result = await _setup_form(hass, service)
     schema = result["data_schema"]
-    assert list(schema.schema) == [own_field, "language"]
+    between = ["notifications"] if service == "portfolio" else []
+    assert list(schema.schema) == [own_field, *between, "language"]
     assert dict(schema.schema)["language"].options == {"collapsed": False}
     assert list(_section_schema(schema, "language").schema) == ["language"]
     config = _selector_config(_section_schema(schema, "language"), "language")

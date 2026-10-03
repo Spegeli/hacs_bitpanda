@@ -56,6 +56,7 @@ from .const import (
     CONF_EXTRA_CURRENCIES,
     CONF_LANGUAGE,
     CONF_LEGACY_ADOPT,
+    CONF_NOTIFY_NEW_WALLETS,
     CONF_TRACKED_ASSETS,
     CONF_TRACKED_WALLETS,
     DEFAULT_CURRENCY,
@@ -1047,14 +1048,15 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             CONF_CURRENCY: plan.currency,
             CONF_CURRENCY_ID: plan.currency_id,
         },
-        # The tracked lists of version 1 are spent. A language chosen under
-        # Configure while the entry waited for this migration -- Home
-        # Assistant offers Configure on every entry -- stays.
-        options=(
-            {CONF_LANGUAGE: entry.options[CONF_LANGUAGE]}
-            if CONF_LANGUAGE in entry.options
-            else {}
-        ),
+        # The tracked lists of version 1 are spent. A language or a
+        # notification choice made under Configure while the entry waited for
+        # this migration -- Home Assistant offers Configure on every entry --
+        # stays.
+        options={
+            key: entry.options[key]
+            for key in (CONF_LANGUAGE, CONF_NOTIFY_NEW_WALLETS)
+            if key in entry.options
+        },
         version=3,
     )
     _async_report(

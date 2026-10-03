@@ -108,6 +108,13 @@ CONF_EXTRA_CURRENCIES = "extra_currencies"
 CONF_LANGUAGE = "language"
 DEFAULT_LANGUAGE = "en"
 
+# Portfolio option: whether a wallet new to the Portfolio brings a notification
+# (announcements.py). Set at setup and under Configure; on for an entry
+# without it. The event EVENT_WALLET_ADDED fires either way.
+CONF_NOTIFY_NEW_WALLETS = "notify_new_wallets"
+DEFAULT_NOTIFY_NEW_WALLETS = True
+EVENT_WALLET_ADDED = f"{DOMAIN}_wallet_added"
+
 # The Price Tracker keeps its assets in groups by asset type (groups.py): one
 # config subentry per category, keyed by the category, whose data holds the
 # category and the slim records of its assets by asset id.
@@ -165,6 +172,13 @@ CASH_PLUS_GROUP = "fiat_earn"
 # Import data key: the asset records the version 1 migration hands the
 # Price Tracker import flow.
 IMPORT_ASSETS = "assets"
+
+
+def notifies_new_wallets(entry: ConfigEntry) -> bool:
+    """Whether a wallet new to the Portfolio `entry` brings a notification:
+    its CONF_NOTIFY_NEW_WALLETS option, on for an entry without it."""
+    enabled: bool = entry.options.get(CONF_NOTIFY_NEW_WALLETS, DEFAULT_NOTIFY_NEW_WALLETS)
+    return enabled
 
 
 def entry_type(entry: ConfigEntry) -> str:

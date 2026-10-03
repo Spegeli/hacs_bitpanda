@@ -299,3 +299,25 @@ def test_the_home_assistant_badge_names_the_minimum_version_of_hacs_json():
     minimum = json.loads((_ROOT / "hacs.json").read_text(encoding="utf-8"))["homeassistant"]
     major, minor, *_ = minimum.split(".")
     assert f"https://img.shields.io/badge/Home%20Assistant-{major}.{minor}%2B-" in _README
+
+
+def test_the_license_badge_names_the_license_of_the_license_file_and_opens_it():
+    """The badge says which license the LICENSE file grants, and links to
+    that file."""
+    granted = (_ROOT / "LICENSE").read_text(encoding="utf-8").split(" License", 1)[0]
+    assert granted == "MIT"
+    assert (
+        f'<a href="LICENSE"><img src="https://img.shields.io/badge/license-{granted}-yellow" '
+        f'alt="License: {granted}"></a>'
+    ) in _README
+
+
+def test_the_release_badge_opens_the_release_it_shows():
+    """The badge shows the newest stable release -- pre-releases left out,
+    as include_prereleases is not set -- and GitHub's /releases/latest
+    forwards to that same release, whichever it is."""
+    [(link, badge)] = re.findall(
+        r'<a href="([^"]*)"><img src="(https://img\.shields\.io/github/v/release/[^"]*)"', _README
+    )
+    assert link == "https://github.com/Spegeli/hacs_bitpanda/releases/latest"
+    assert "include_prereleases" not in badge

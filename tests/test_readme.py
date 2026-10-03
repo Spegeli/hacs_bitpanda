@@ -3,7 +3,8 @@ Home Assistant badge in step with hacs.json.
 
 Each YAML block of the "Automation examples" section is what a user pastes
 into a new automation's YAML editor, so each must load as a valid
-automation, and use the entity IDs the integration creates.
+automation, and use the entity IDs the integration creates and the event
+it fires.
 """
 from datetime import timedelta
 import json
@@ -16,6 +17,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import async_mock_service
 import yaml
 
+from custom_components.bitpanda.const import EVENT_WALLET_ADDED
 from custom_components.bitpanda.naming import (
     portfolio_entity_id,
     price_entity_id,
@@ -46,8 +48,8 @@ _DAY = "sensor.bitpanda_portfolio_return_day"
 _STAKING = "sensor.bitpanda_ethereum_eth_wallet_staking"
 
 
-def test_the_examples_are_an_alert_a_big_move_a_report_and_a_reward():
-    alert, move, report, reward = _examples()
+def test_the_examples_are_an_alert_a_big_move_a_report_a_reward_and_a_new_wallet():
+    alert, move, report, reward, wallet = _examples()
     [trigger] = alert["triggers"]
     assert (trigger["trigger"], set(trigger) & {"above", "below"}) == ("numeric_state", {"above"})
     assert [
@@ -64,6 +66,10 @@ def test_the_examples_are_an_alert_a_big_move_a_report_and_a_reward():
     assert notified["action"] == "persistent_notification.create"
     [counted] = reward["triggers"]
     assert (counted["trigger"], counted["attribute"]) == ("state", "rewards_count")
+    [added] = wallet["triggers"]
+    assert (added["trigger"], added["event_type"]) == ("event", EVENT_WALLET_ADDED)
+    [pushed] = wallet["actions"]
+    assert pushed["action"] == "notify.mobile_app_your_phone"
 
 
 def test_the_examples_watch_the_sensors_the_integration_creates():
@@ -72,7 +78,7 @@ def test_the_examples_watch_the_sensors_the_integration_creates():
     assert portfolio_entity_id("total") == _TOTAL
     assert portfolio_entity_id(return_key("DAY")) == _DAY
     assert staking_entity_id({"symbol": "ETH", "name": "Ethereum"}) == _STAKING
-    alert, move, report, reward = _examples()
+    alert, move, report, reward, _wallet = _examples()
     assert [each["entity_id"] for each in (*alert["triggers"], *move["triggers"])] == [_PRICE] * 3
     message = report["actions"][1]["data"]["message"]
     assert f"states('{_TOTAL}', with_unit=True)" in message
@@ -249,14 +255,36 @@ async def test_the_staking_reward_alert_stays_quiet_through_an_outage(hass, capl
     await _turn_off(hass)
 
 
+async def test_the_new_wallet_example_sends_the_wallets_name(hass):
+    """One push message per announced wallet, named as the event names it."""
+    assert await async_setup_component(hass, "automation", {"automation": [_examples()[4]]})
+    await hass.async_block_till_done()
+    pushed = async_mock_service(hass, "notify", "mobile_app_your_phone")
+    hass.bus.async_fire(
+        EVENT_WALLET_ADDED,
+        {
+            "device_id": "wallet-device",
+            "asset_id": "vision-asset",
+            "symbol": "VSN",
+            "name": "Vision",
+            "wallet": "Vision (VSN) Wallet",
+            "category": "crypto",
+        },
+    )
+    await hass.async_block_till_done()
+    assert [(call.data["title"], call.data["message"]) for call in pushed] == [
+        ("New Bitpanda wallet", "Vision (VSN) Wallet was added to your Portfolio.")
+    ]
+
+
 async def test_every_example_loads_as_an_automation(hass):
     """An automation Home Assistant cannot validate is set up unavailable."""
     examples = _examples()
     assert await async_setup_component(hass, "automation", {"automation": examples})
     await hass.async_block_till_done()
     states = hass.states.async_all("automation")
-    assert len(states) == len(examples) == 4
-    assert [state.state for state in states] == ["on"] * 4
+    assert len(states) == len(examples) == 5
+    assert [state.state for state in states] == ["on"] * 5
     # Off again, so no trigger -- the schedule's timer -- outlives the test.
     await _turn_off(hass)
 

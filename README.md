@@ -32,6 +32,7 @@ The integration offers two services. Set up either or both — each one once.
 - A **Portfolio** device: **Total value** (all holdings, Cash Plus included, and all fiat), **Cash** (all fiat, including money reserved by an open order), **Cash Plus**, and your **return** over a day, a week, a month, six months and a year — every value in your Portfolio currency, as Bitpanda reports it
 - A wallet device for every asset you hold, such as **Vision (VSN) Wallet**, with **Balance (available)** (the value of the units you can trade), **Balance (total)** (the whole position, with invested amount, average buy price and return) and — while something is staked or Bitpanda offers Earn for the asset — **Balance (staking)** (with APR and rewards)
 - Nothing to maintain: a wallet appears at the next update after you buy an asset and goes about 15 minutes after you sell it, in groups by asset type such as Cryptocurrencies or Precious metals
+- A notification under **Notifications** when a new wallet appears — you can switch it off — and the event `bitpanda_wallet_added` for your own automations
 - Updates every 5 minutes; Earn offers daily, rewards hourly
 
 ### Bitpanda Price Tracker
@@ -65,7 +66,7 @@ The integration's texts follow three settings:
 |---|---|---|
 | Profile language (per user) | your profile → **Language** | dialogs, attribute names, group subtitles, **Repairs**, error messages — at once |
 | System language (all users) | **Settings → System → General** | sensor names — after a restart |
-| Language of group titles (per service) | when you add the service, later **Configure** (⚙) on its entry | group titles; for the Portfolio also the message why a device cannot be deleted — at once |
+| Language of group titles (per service) | when you add the service, later **Configure** (⚙) on its entry | group titles; for the Portfolio also the message why a device cannot be deleted, and its notifications — at once |
 
 Entity IDs, device names and log messages are always English. A group you renamed keeps its name; a service upgraded from a date version starts in English. For everything in one language, set all three and restart Home Assistant.
 
@@ -130,7 +131,7 @@ A new version can come out as a beta first, for testing before everyone gets it.
    - ⚠️ Permissions cannot be added to an existing key afterwards.
 3. Copy your API key — **you will only see it once!** Home Assistant stores it locally and sends it only to Bitpanda; the integration never logs it, and diagnostics leave it out.
 4. Go to **Settings → Devices & services → Add integration**, search for **Bitpanda**, select it, and choose **Bitpanda Portfolio** in the dialog that follows. If the Price Tracker is already set up, **Add service** on the Bitpanda integration page opens the same dialog. It lists only what is not set up yet.
-5. Enter your API key — setup checks all three permissions and marks any that is missing — then choose your currency and the language of group titles and messages (see [Languages](#languages))
+5. Enter your API key — setup checks all three permissions and marks any that is missing — then choose your currency, whether to be notified about new wallets (see [New wallets](#new-wallets)) and the language of group titles and messages (see [Languages](#languages))
    - If an earlier Portfolio left long-term statistics in another currency, a last step asks whether to delete them — see [Troubleshooting](#-troubleshooting).
 
 Bitpanda API keys expire on the date you choose when you create them, **one year** later at most. Home Assistant then asks for a new one — see [Changing settings later](#changing-settings-later).
@@ -163,7 +164,7 @@ Tracking an asset again later brings its sensors back under the entity IDs the i
 **Configure** — the ⚙ on each service's entry (before Home Assistant 2025.7 a button labelled **Configure**):
 
 - **Price Tracker:** the extra currencies and the language of group titles. Removing a currency deletes its sensors; adding it back brings them back under the entity IDs the integration gives them, with their history (your own changes: see [Resetting names and entity IDs](#resetting-names-and-entity-ids)).
-- **Portfolio:** the language of group titles and messages (see [Languages](#languages)).
+- **Portfolio:** the notification about new wallets (see [New wallets](#new-wallets)), and the language of group titles and messages (see [Languages](#languages)).
 
 **⋮ → Reconfigure** on the Portfolio entry:
 
@@ -183,6 +184,15 @@ The Portfolio keeps its wallets and groups up to date by itself:
 - **What you cannot delete:** the Portfolio device and the wallet of an asset you hold — they would come straight back, and the dialog says why. A group you delete (**⋮ → Delete**) while you still hold its assets comes back at the next update.
 
 On the Price Tracker, deleting a device or a group stops tracking (see [Stop tracking](#stop-tracking)).
+
+### New wallets
+
+When the Portfolio adds a wallet for an asset that is new to it — one you bought, one you bought again after its wallet had gone, or one Bitpanda's catalogue lists only later — it announces the wallet as soon as its device is created:
+
+- **A notification** under **Notifications**, linking to the wallet's device, in the Portfolio's language (see [Languages](#languages)). If its sensors are disabled, the notification says so and links to its device page. Switch it off under **Configure** (see [Changing settings later](#changing-settings-later)). Home Assistant does not keep notifications through a restart.
+- **The event `bitpanda_wallet_added`**, whether or not the notification is on, for your own automations (see [the example](#5-new-wallet-a-push-message-to-your-phone)). Its data: `device_id` (the wallet's device), `asset_id` (Bitpanda's ID of the asset, the device's serial number), `symbol`, `name`, `wallet` (the wallet's name, such as `Vision (VSN) Wallet`) and `category` (`crypto`, `stock`, `etf`, `etc`, `index`, `metal` or `other`).
+
+Wallets that exist when you set up the Portfolio or upgrade from a date version are not announced, and neither are wallets that come back after a restart, a currency change or a deleted group.
 
 ### Entity IDs
 
@@ -357,6 +367,24 @@ actions:
 
 ---
 
+### 5. New wallet: a push message to your phone
+
+A push message when the Portfolio adds a wallet (see [New wallets](#new-wallets)). Use your phone's `notify.mobile_app_…` action instead of `notify.mobile_app_your_phone`.
+
+```yaml
+alias: New Bitpanda wallet
+triggers:
+  - trigger: event
+    event_type: bitpanda_wallet_added
+actions:
+  - action: notify.mobile_app_your_phone
+    data:
+      title: New Bitpanda wallet
+      message: "{{ trigger.event.data.wallet }} was added to your Portfolio."
+```
+
+---
+
 ## ⬆️ Upgrading from a date version
 
 This section is for everyone upgrading from a version before 2.0.0 — the date versions, 2026.06.04 and older. Version 2.0.0 moves to Bitpanda's new Public API and splits the integration into two services.
@@ -427,6 +455,7 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 | Group titles or the integration's messages are in English while everything else is in your language | They follow the language chosen for each service — when it was added, or later under **Configure** — not Home Assistant's language; after an upgrade from a date version it is English. Choose your language under **Configure** |
 | A wallet sensor is `unavailable` | The asset is no longer in your portfolio; the wallet is removed after about 15 minutes, or at once with **⋮ → Delete** on its device page |
 | An asset you hold has no wallet | Bitpanda's asset catalogue does not list the asset, at least not yet: without its name and type, no wallet can be set up. Its value still counts in **Total value**. Bitpanda's API names such an asset only by its ID; to see the ID, enable debug logging and reload the Bitpanda Portfolio. Once the catalogue lists it, the wallet appears within a day |
+| A new wallet brought no notification | Check **Configure** on the Portfolio: the notification may be switched off. Wallets that existed when the Portfolio was set up or upgraded from a date version are not announced, and Home Assistant drops notifications at a restart. An asset sold and bought again within about 15 minutes keeps its wallet, so nothing is new. The event `bitpanda_wallet_added` comes even with the notification off |
 | Every sensor of a service is `unavailable` | Bitpanda has not answered three refreshes in a row (see [Known limitations](#%EF%B8%8F-known-limitations)), or it rejected the API key — then Home Assistant asks for a new one |
 | Portfolio Total value, Cash, Cash Plus or a wallet sensor is `unknown` | Bitpanda answered, but an entry could not be read or came without a value; rather than show a figure that silently leaves something out, the sensor shows none until Bitpanda sends it again. Enable debug logging to see which entry. Cash Plus is also `unknown` while looking up an asset you hold fails at Bitpanda; the integration tries again at every refresh. |
 | A return sensor is `unknown` | Bitpanda answered for that timeframe without a figure, for example while the account has no history for it yet |

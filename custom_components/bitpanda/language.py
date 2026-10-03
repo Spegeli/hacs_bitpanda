@@ -2,14 +2,15 @@
 
 Home Assistant picks the language of most of this integration's texts
 itself: dialogs, attribute names and repair issues follow each user's
-profile language, sensor names its system language. Two kinds of text the
-integration writes out itself, and Home Assistant shows as they are: the
-titles of its groups, and its refusals to delete a device. Those follow one
-setting per entry instead -- CONF_LANGUAGE, chosen among the languages this
-integration ships when a service is set up (Home Assistant's system
-language offered first) and changed under Configure -- so in a household of
-several users nobody meets them in a language nobody chose. An entry that
-never had the choice, one upgraded from version 1, uses English.
+profile language, sensor names its system language. Three kinds of text
+the integration writes out itself, and Home Assistant shows as they are: the
+titles of its groups, its refusals to delete a device, and the Portfolio's
+notification about a new wallet. Those follow one setting per entry instead
+-- CONF_LANGUAGE, chosen among the languages this integration ships when a
+service is set up (Home Assistant's system language offered first) and
+changed under Configure -- so in a household of several users nobody meets
+them in a language nobody chose. An entry that never had the choice, one
+upgraded from version 1, uses English.
 """
 from __future__ import annotations
 

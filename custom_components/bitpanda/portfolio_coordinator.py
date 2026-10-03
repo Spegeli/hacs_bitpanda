@@ -39,6 +39,7 @@ from .const import (
     PORTFOLIO_UPDATE_INTERVAL,
     REWARDS_UPDATE_INTERVAL,
 )
+from .known_wallets import KnownWallets
 from .naming import managed_asset_id
 from .portfolio_model import (
     EarnData,
@@ -505,6 +506,10 @@ class PortfolioRuntime:
     # home-assistant.log.
     data_at_setup: dict[str, Any] = field(repr=False)
     options_at_setup: dict[str, Any] = field(repr=False)
+    # The assets the Portfolio knows -- announced, or there when the list
+    # began (known_wallets.py): set at setup, None where a test builds a
+    # runtime without it.
+    known_wallets: KnownWallets | None = field(default=None, repr=False)
 
 
 # A Portfolio config entry, its runtime data typed.

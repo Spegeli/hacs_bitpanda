@@ -57,6 +57,7 @@ from custom_components.bitpanda.const import (
 from custom_components.bitpanda.devices import find_entry_device
 from custom_components.bitpanda.ecb import EcbError, EcbRates
 from custom_components.bitpanda.groups import async_add_asset_to_group
+from custom_components.bitpanda.known_wallets import async_get_known_wallets
 from custom_components.bitpanda.naming import (
     PORTFOLIO_KEYS,
     portfolio_device_identifier,
@@ -173,6 +174,18 @@ def test_the_sensor_platform_sets_no_limit_on_parallel_updates():
     """Every sensor reads its coordinator's data and requests nothing
     itself: 0, explicitly (quality scale rule parallel-updates)."""
     assert sensor.PARALLEL_UPDATES == 0
+
+
+async def test_the_portfolio_keeps_its_known_wallets_on_its_runtime(hass, portfolio_api):
+    """Loaded before the first refresh, the one list of the entry
+    (known_wallets.async_get_known_wallets): its reloads keep using it."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    known = entry.runtime_data.known_wallets
+    assert known is await async_get_known_wallets(hass, entry.entry_id)
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.runtime_data.known_wallets is known
 
 
 async def test_portfolio_setup_creates_its_devices_and_sensors(hass, portfolio_api):
@@ -970,6 +983,27 @@ async def test_removing_the_portfolio_forgets_its_empty_answers_and_what_it_list
 
     assert entry.entry_id not in hass.data["bitpanda_empty_portfolio_answers"]
     assert entry.entry_id not in hass.data["bitpanda_portfolio_listed"]
+
+
+async def test_removing_the_portfolio_deletes_its_known_wallets(
+    hass, portfolio_api, hass_storage, freezer
+):
+    """The list goes with the entry, its file too: a new setup starts
+    without one (known_wallets.py)."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    entry.runtime_data.known_wallets.seed({"BTC"})
+    freezer.tick(timedelta(seconds=2))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    key = f"bitpanda.portfolio.{entry.entry_id}"
+    assert key in hass_storage
+
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert key not in hass_storage
+    assert (await async_get_known_wallets(hass, entry.entry_id)).first_run is True
 
 
 async def test_a_wallet_may_be_deleted_while_an_empty_answer_awaits_confirmation(

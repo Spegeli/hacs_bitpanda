@@ -45,6 +45,7 @@ from .groups import (
     groups_of_type,
     tracked_assets,
 )
+from .known_wallets import async_get_known_wallets, async_remove_known_wallets
 from .language import entry_language
 from .naming import (
     asset_display_label,
@@ -165,6 +166,8 @@ async def _async_start_portfolio(
         group_titles=group_titles,
         data_at_setup=dict(entry.data),
         options_at_setup=dict(entry.options),
+        # Before the first refresh: its reconcile reads the list.
+        known_wallets=await async_get_known_wallets(hass, entry.entry_id),
     )
     try:
         await _async_first_refresh(runtime.portfolio)
@@ -410,7 +413,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) ->
 async def async_remove_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> None:
     """Forget what outlived the entry's setups: its count of empty
     /portfolio answers and whether its account listed anything, kept in
-    hass.data across reloads; the Price Tracker's slow-interval repair issue
+    hass.data across reloads; the Portfolio's list of known wallets, with its
+    file (known_wallets.py); the Price Tracker's slow-interval repair issue
     with the Price Tracker; the repair issue for the entities the upgrade
     left alone with the Portfolio, whose entities they were; each repair
     issue about what blocks the upgrade of a version 1 entry, once its cause
@@ -426,6 +430,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) ->
         async_delete_price_interval_issue(hass)
     else:
         migration.async_delete_not_migrated_issue(hass)
+        await async_remove_known_wallets(hass, entry.entry_id)
     migration.async_update_blocker_issues(hass, entry.entry_id)
     if not any(
         other.entry_id != entry.entry_id

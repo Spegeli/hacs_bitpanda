@@ -25,6 +25,7 @@ from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
+from .announcements import WalletAnnouncer
 from .assets import asset_attributes, asset_category
 from .const import (
     API_KEY_URL,
@@ -244,7 +245,13 @@ def _performance(holding: Holding) -> dict[str, float]:
 
 
 class _WalletPart(TolerantEntity[PortfolioCoordinator], SensorEntity):
-    """One value of one holding."""
+    """One value of one holding.
+
+    It knows nothing of the announcement of a new wallet: Home Assistant
+    creates the wallet's device as it takes in the first of its sensors,
+    added or registered disabled, and the creation announces the wallet
+    (announcements.py).
+    """
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.MONETARY
@@ -468,6 +475,22 @@ class PortfolioEntityManager:
     deleted took its devices and entities along; the next refresh brings
     back the wallets of assets still held, in a new group and under the same
     entity IDs, without reloading the entry.
+
+    With an announcer, a wallet it creates for an asset the Portfolio does
+    not know (known_wallets.py) is marked as new, with the category of the
+    group it goes into, before its sensors go to Home Assistant: the
+    creation of the wallet's device announces it (announcements.py), and a
+    device already there announces it at once. A wallet created again -- at
+    a start, after a currency change or a deleted group -- is known, and no
+    news. The first successful refresh without a list begins it with every
+    asset held but those Bitpanda's catalogue does not list, and every asset
+    whose wallet is registered, before any wallet is created: it announces
+    nothing. Every successful refresh ends with the list cut to the assets
+    held or whose wallet still exists -- tracked by this manager, or
+    registered: a sold asset bought back before its wallet went is no news,
+    a restart or reload in between included. It leaves the list once its
+    wallet went -- removed after the misses, deleted by the user, gone with
+    its group or with a currency change -- so that buying it again is news.
     """
 
     def __init__(
@@ -477,12 +500,14 @@ class PortfolioEntityManager:
         runtime: PortfolioRuntime,
         currency: str,
         add_entities: AddConfigEntryEntitiesCallback,
+        announcer: WalletAnnouncer | None = None,
     ) -> None:
         self._hass = hass
         self._entry = entry
         self._runtime = runtime
         self._currency = currency
         self._add_entities = add_entities
+        self._announcer = announcer
         # Asset id -> the category of the wallet group its sensors sit in.
         self._wallets: dict[str, str] = {}
         # The assets whose Staking sensor this manager has added.
@@ -546,6 +571,16 @@ class PortfolioEntityManager:
         data: PortfolioData | None = portfolio.data
         if not portfolio.last_update_success or data is None:
             return
+        announcer = self._announcer
+        if announcer is not None and announcer.known.first_run:
+            # No list yet -- a new setup, an upgrade, an update from a version
+            # without it: the wallets found now are no news, and neither is a
+            # wallet still registered -- a sold asset's waiting out its misses,
+            # or one whose asset the catalogue does not list at the moment. A
+            # held asset left unnamed by a failed lookup is known too, its
+            # wallet coming a refresh later; one the catalogue does not list,
+            # without a wallet, is not: its wallet, once listed, is news.
+            announcer.known.seed((data.held - data.unlisted) | set(self._registered()))
         self._forget_wallets_without_group()
         entry_id = self._entry.entry_id
         registered = self._registered()
@@ -562,7 +597,13 @@ class PortfolioEntityManager:
                 # group would list it in both on Home Assistant 2025.5;
                 # 2026.9 warns about such a move, and 2027.8 will refuse it.
                 sits_in = self._registered_category(asset_id)
-                self._wallets[asset_id] = asset_category(asset) if sits_in is None else sits_in
+                category = asset_category(asset) if sits_in is None else sits_in
+                self._wallets[asset_id] = category
+                # Before its sensors go to Home Assistant, which creates the
+                # wallet's device -- and so announces the wallet -- as it
+                # takes in the first of them, within this refresh.
+                if announcer is not None and asset_id not in announcer.known:
+                    announcer.mark(asset, category)
                 entities.append(WalletSensor(portfolio, entry_id, self._currency, asset))
                 entities.append(WalletTotalSensor(portfolio, entry_id, self._currency, asset))
             applies = staking_applies(data.holdings[asset_id], earn)
@@ -609,6 +650,16 @@ class PortfolioEntityManager:
             )
             self._add_entities(entities, config_subentry_id=group.subentry_id)
         self._remove_empty_groups()
+        if announcer is not None:
+            # A held asset stays known, and so does a sold one whose wallet
+            # still exists: tracked here while it waits out its misses, or
+            # registered from before a restart or reload, which this manager
+            # tracks only once it is held again. The registry is read afresh:
+            # a wallet removed above, after its misses, counts no more. Any
+            # other asset has no wallet left, and buying it again is news.
+            announcer.known.keep_only(
+                data.held | set(self._wallets) | set(self._registered())
+            )
 
     def _forget_wallets_without_group(self) -> None:
         """Forget every tracked wallet whose group is gone -- deleted by the
@@ -658,7 +709,8 @@ async def async_setup_portfolio_entities(
     add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """The Portfolio device's sensors, outside every group, then the wallets
-    the manager keeps current in their groups."""
+    the manager keeps current in their groups -- announcing the new ones
+    wherever setup loaded the list of known wallets."""
     runtime: PortfolioRuntime = entry.runtime_data
     currency = entry.data[CONF_CURRENCY]
     add_entities(
@@ -672,7 +724,14 @@ async def async_setup_portfolio_entities(
             ),
         ]
     )
-    manager = PortfolioEntityManager(hass, entry, runtime, currency, add_entities)
+    known = runtime.known_wallets
+    announcer = (
+        None if known is None else WalletAnnouncer(hass, entry, known, runtime.group_titles)
+    )
+    if announcer is not None:
+        # Before the first reconcile, which may create a new wallet's device.
+        entry.async_on_unload(announcer.async_listen_for_wallet_devices())
+    manager = PortfolioEntityManager(hass, entry, runtime, currency, add_entities, announcer)
     manager.async_reconcile()
     entry.async_on_unload(runtime.portfolio.async_add_listener(manager.async_reconcile))
     # Keep Earn polling even without a Staking sensor around (see

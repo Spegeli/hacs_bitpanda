@@ -1,7 +1,9 @@
 name: Validate
 
-# Checks a change without publishing anything, in three groups -- three
-# boxes in the run's graph, each a reusable workflow of its own:
+# Checks a change without publishing anything, in three groups, each a
+# reusable workflow of its own and a group of its own in the run's list of
+# jobs (the run's graph shows all their checks in one card: GitHub draws
+# jobs with the same needs and the same dependents as one):
 #   Newest HA  - hassfest, the tests with their coverage and mypy --strict,
 #                against the newest stable Home Assistant
 #                (_validate_newest.yml)

@@ -225,17 +225,17 @@ Follow the [Home Assistant developer guidelines](https://developers.home-assista
 
 ## Continuous integration
 
-One workflow, **Validate** (`.github/workflows/validate.yml`), checks every change. The checks themselves live in `.github/workflows/_validate.yml`, which a release runs as well:
+One workflow, **Validate** (`.github/workflows/validate.yml`), checks every change. The checks themselves live in three groups, each a workflow of its own, which a release runs as well: **Newest HA** (`.github/workflows/_validate_newest.yml`), **Minimum HA** (`_validate_minimum.yml`) and **Repository** (`_validate_repository.yml`). GitHub names each check after its group:
 
 | Check | What it runs |
 |---|---|
-| Hassfest validation | Home Assistant's own checks of the integration (`hassfest`), as the Home Assistant release below |
-| HACS validation | HACS's checks of the repository |
-| Python 3.13 syntax | a compile of the integration with Python 3.13, the Python of the 2025.5 floor, and a check that every module keeps `from __future__ import annotations` |
-| Release script on Python 3.12 | a compile of `.github/scripts/release.py` with Python 3.12 — the release runs it on the runner's own Python — and a stable release planned from the whole history |
-| Tests with coverage | the suite on Python 3.14, as under [Tests and typing](#tests-and-typing); fails under 95 % line coverage |
-| Tests on the minimum Home Assistant | the suite on Python 3.13 against the minimum release in `hacs.json` (`tests/requirements-floor.txt`), after a check that the installed release is that one |
-| Strict typing | `python -m mypy --strict` on Python 3.14 |
+| Newest HA / Hassfest | Home Assistant's own checks of the integration (`hassfest`), as the Home Assistant release below |
+| Newest HA / Tests | the suite on Python 3.14, as under [Tests and typing](#tests-and-typing); fails under 95 % line coverage |
+| Newest HA / Strict typing | `python -m mypy --strict` on Python 3.14 |
+| Minimum HA / Python 3.13 | a compile of the integration with Python 3.13, the Python of the 2025.5 floor, and a check that every module keeps `from __future__ import annotations` |
+| Minimum HA / Tests | the suite on Python 3.13 against the minimum release in `hacs.json` (`tests/requirements-floor.txt`), after a check that the installed release is that one |
+| Repository / HACS validation | HACS's checks of the repository |
+| Repository / Release script | a compile of `.github/scripts/release.py` with Python 3.12 — the release runs it on the runner's own Python — and a stable release planned from the whole history |
 
 **Which Home Assistant.** Hassfest, the tests and mypy check against one release: the newest stable Home Assistant that `pytest-homeassistant-custom-component` has been released for, never a beta. Each of the three jobs finds it first with `.github/scripts/ha_version.py` and names it in its log. So a new stable release reaches CI without a change in this repository, and it can turn a run red although nothing changed here: then the integration needs an update for that release, before the next release goes out. The tests also run against the minimum Home Assistant release in `hacs.json` (`tests/requirements-floor.txt`, no coverage gate): raise both together. That job can turn red without a change here as well: the dependencies of the minimum's packages are not all pinned. HACS validation depends on no Home Assistant release: it checks the repository against HACS's own rules.
 
@@ -243,11 +243,11 @@ When Validate runs:
 
 - **A push to any branch but `main`** — all seven checks.
 - **A pull request to `main` or `dev`** — all seven checks.
-- **By hand** — Actions → Validate → Run workflow, on any branch. Clear "Also run the tests (with coverage, and on the minimum Home Assistant) and mypy --strict" to skip those three; the other four always run.
+- **By hand** — all seven checks as well: Actions → Validate → Run workflow, on any branch.
 
 Validate does not run on `main` itself: changes reach it only through a validated pull request, or as a release's version commit, validated just before. A newer push to the same branch, or a new commit in the same pull request, cancels the run it makes obsolete. A run started by hand and a push's run on the same branch cancel each other as well, whichever starts later cancelling the other: start one by hand only after the push's run has finished, or that run is cancelled and its Validation summary turns red.
 
-One last check sums up each run: green when every check passed or was switched off by hand, red when one failed or the run was cancelled. A pull request to `main` calls it **Validation result**, the check `main` requires: a pull request to `main` merges only when it is green. Every other run — a pull request to `dev`, a push, a run by hand — calls it **Validation summary**: GitHub counts a required check by its name on a commit, so only the run that validates the merge into `main` may answer for it. A pull request to `dev` is merged once its Validation summary is green. A run by hand never counts for a pull request anyway, so switching its tests off cannot stand in for the required check.
+One last check sums up each run: green when every check passed, red when one failed or the run was cancelled. A pull request to `main` calls it **Validation result**, the check `main` requires: a pull request to `main` merges only when it is green. Every other run — a pull request to `dev`, a push, a run by hand — calls it **Validation summary**: GitHub counts a required check by its name on a commit, so only the run that validates the merge into `main` may answer for it. A pull request to `dev` is merged once its Validation summary is green.
 
 A pull request from a fork, to `dev` or to `main`, runs the same checks, with a read-only token and no secrets: Validate uses `pull_request`, never `pull_request_target`. A first-time contributor's run waits for the maintainer's approval. In your own fork, Validate works as it is: it needs no secrets.
 
@@ -290,9 +290,9 @@ The maintainer releases with the **Create Release** workflow (`.github/workflows
 
 To release: Actions → Create Release → Run workflow, on `main` for a stable release or on `dev` for a pre-release. Whenever something in the release path has changed since the last release — the workflow, the release script, the deploy key, `main`'s ruleset — tick "Dry run: validate, compute the version, tag and notes; push and publish nothing" first. The workflow
 
-1. fails at once unless a stable release runs on `main`, and a pre-release on `dev` and not as a draft ("Check branch");
-2. runs the complete validation: every check under [Continuous integration](#continuous-integration), the tests included — a release cannot switch them off ("Validate");
-3. computes the version, its tag and the release notes with `.github/scripts/release.py`, sets the version in `manifest.json`, stops unless the file then carries exactly that version, and commits it as `github-actions[bot]` (`chore: bump version to <version>`), on top of exactly the commit it validated ("Commit version and tag");
+1. fails at once unless a stable release runs on `main`, and a pre-release on `dev` and not as a draft ("Check branch and type");
+2. runs the complete validation: every check under [Continuous integration](#continuous-integration), in the same three groups ("Newest HA", "Minimum HA", "Repository");
+3. computes the version, its tag and the release notes with `.github/scripts/release.py`, sets the version in `manifest.json`, stops unless the file then carries exactly that version, and commits it as `github-actions[bot]` (`chore: bump version to <version>`), on top of exactly the commit it validated ("Set version and tag");
 4. pushes with the deploy key whose private key is the secret `RELEASE_DEPLOY_KEY`: a stable release pushes the commit to `main` — the one direct push `main`'s ruleset lets through — and then the tag; a pre-release pushes only the tag, which takes the commit along. The job that holds the key runs no third-party action, only `actions/checkout`, shell and the release script: a tampered action could read the key;
 5. creates the GitHub release, titled `v<version>`, with the generated notes, in a job of its own that gets neither a checkout nor the key ("Publish release").
 
@@ -303,7 +303,7 @@ When a release fails:
 - **`main` refuses the push** (step 4): either `main` moved while the release ran — a pull request merged meanwhile, a state that was never validated — or the deploy key cannot push to `main`: it lacks write access, or it is missing from the ruleset's bypass list. Nothing is tagged or published. Fix the key or the ruleset if that was the cause, then start a **new** run (Actions → Create Release → Run workflow). "Re-run jobs" would repeat the failed run on its original commit, which `main` refuses again once it has moved. A new run right after a stable release finds nothing to release and stops at its plan (the last case below).
 - **The secret `RELEASE_DEPLOY_KEY` is missing**: the release stops with an error before it commits anything.
 - **The tag's push fails after `main` took the commit**: start a new run on `main` with the same settings — not "Re-run jobs", whose commit `main` now refuses. The new run computes the same version, finds it in `manifest.json` already and commits nothing, then tags and publishes.
-- **Publishing fails after the tag was pushed** (step 5): the tag exists, without a release. Use **Re-run failed jobs**: only "Publish release" runs again, with the same tag, title and notes, because GitHub reuses the outputs of the jobs that succeeded. Never use **Re-run all jobs**, and do not start a new run: both stop at their plan with "Nothing to release" (below), and then only a release by hand is left; once more was merged, a new run releases the next version instead, and this tag stays without a release. If "Publish release" fails again, create the release from the tag by hand (Releases → Draft a new release → choose the tag), titled `v<version>`, marked as a pre-release for a beta, with the notes the "Commit version and tag" job printed in its log.
+- **Publishing fails after the tag was pushed** (step 5): the tag exists, without a release. Use **Re-run failed jobs**: only "Publish release" runs again, with the same tag, title and notes, because GitHub reuses the outputs of the jobs that succeeded. Never use **Re-run all jobs**, and do not start a new run: both stop at their plan with "Nothing to release" (below), and then only a release by hand is left; once more was merged, a new run releases the next version instead, and this tag stays without a release. If "Publish release" fails again, create the release from the tag by hand (Releases → Draft a new release → choose the tag), titled `v<version>`, marked as a pre-release for a beta, with the notes the "Set version and tag" job printed in its log.
 - **The plan stops with "Nothing to release"** (step 3), before anything is committed: no commit came after the previous release — the same release was started a second time, "Re-run all jobs" came after its tag was pushed, or a new run came right after a stable release. If the previous release is published, there is nothing to do; if its tag has no GitHub release yet, create the release from the tag by hand, as under "Publishing fails" — or, for a draft you withdrew, delete the tag.
 
 After a stable release, merge `main` into `dev`, so the version commit reaches `dev` too: `git switch dev`, `git pull`, `git merge origin/main`, `git push`. A pre-release leaves nothing to merge.

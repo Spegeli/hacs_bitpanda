@@ -44,11 +44,6 @@ def _every_workflow() -> list[tuple[str, dict]]:
     return [(name, _workflow(name)) for name in names]
 
 
-def _jobs_by_name(workflow: dict) -> dict[str, dict]:
-    """The workflow's jobs by the name GitHub shows for them."""
-    return {job["name"]: job for job in workflow["jobs"].values()}
-
-
 def _python(job: dict) -> str:
     """The Python version the job sets up."""
     [version] = [
@@ -160,48 +155,65 @@ def test_no_job_or_step_goes_on_after_a_failure():
     ] == []
 
 
-def test_internal_validation_offers_a_tests_switch():
-    """Only other workflows call it; a caller that sets nothing runs
-    everything."""
-    on = _workflow("_validate.yml")["on"]
-    tests = on["workflow_call"]["inputs"]["tests"]
-    assert on == {"workflow_call": {"inputs": {"tests": tests}}}
-    assert tests["type"] == "boolean"
-    assert tests["default"] is True
+# The three groups of checks, by the name of the job that calls each, and
+# the file that holds it: grouped by what they check against, so that a
+# reader of a run tells them apart.
+_GROUPS = {
+    "Newest HA": "_validate_newest.yml",
+    "Minimum HA": "_validate_minimum.yml",
+    "Repository": "_validate_repository.yml",
+}
 
 
-def test_internal_validation_always_runs_hassfest_hacs_and_the_floor_checks():
-    """hassfest and HACS check what ships, the floor checks what Home
-    Assistant 2025.5's Python needs, and the release script is checked on
-    the Python the release runs it with; each is quick, and no caller can
-    skip one. Only the tests -- on the newest and on the minimum Home
-    Assistant -- and mypy, minutes each, can be switched off -- and only as
-    whole jobs: no step is skipped on a condition of its own, and no job
-    waits for another, which a switched-off one would skip with it."""
-    workflow = _workflow("_validate.yml")
-    assert sorted(job["name"] for job in workflow["jobs"].values()) == [
-        "HACS validation",
-        "Hassfest validation",
-        "Python 3.13 syntax",
-        "Release script on Python 3.12",
-        "Strict typing",
-        "Tests on the minimum Home Assistant",
-        "Tests with coverage",
+def _checks() -> dict[str, dict]:
+    """Every check, by the name GitHub shows for it: "<group> / <job>". No
+    two share a name: one would hide the other from every test here."""
+    checks = [
+        (f"{group} / {job['name']}", job)
+        for group, name in _GROUPS.items()
+        for job in _workflow(name)["jobs"].values()
     ]
-    jobs = _jobs_by_name(workflow)
-    for name in (
-        "Hassfest validation",
-        "HACS validation",
-        "Python 3.13 syntax",
-        "Release script on Python 3.12",
-    ):
-        assert "if" not in jobs[name], name
-    for name in ("Tests with coverage", "Tests on the minimum Home Assistant", "Strict typing"):
-        assert jobs[name]["if"] in ("inputs.tests", "${{ inputs.tests }}"), name
-    assert [name for name, job in jobs.items() if "needs" in job] == []
+    names = [name for name, _ in checks]
+    assert len(set(names)) == len(names), names
+    return dict(checks)
+
+
+def _callers(workflow: dict) -> dict[str, dict]:
+    """The workflow's jobs that call a group of checks, by key."""
+    return {key: job for key, job in workflow["jobs"].items() if "uses" in job}
+
+
+def test_each_group_of_checks_is_called_by_other_workflows_only_and_takes_no_input():
+    """A group runs all of its checks every time: no caller can switch one
+    off. Every workflow that others call is one of the groups, so no check
+    escapes the tests below."""
+    for name in _GROUPS.values():
+        assert _workflow(name)["on"] == {"workflow_call": None}, name
+    assert [
+        name for name, workflow in _every_workflow() if "workflow_call" in workflow["on"]
+    ] == sorted(_GROUPS.values())
+
+
+def test_the_checks_are_grouped_by_the_home_assistant_they_check_and_always_run():
+    """Against the newest stable Home Assistant, against the minimum in
+    hacs.json, and against none: the repository's rules and the release
+    script. Every check runs every time, as a whole job: no job or step is
+    skipped on a condition of its own, and no job waits for another."""
+    checks = _checks()
+    assert sorted(checks) == [
+        "Minimum HA / Python 3.13",
+        "Minimum HA / Tests",
+        "Newest HA / Hassfest",
+        "Newest HA / Strict typing",
+        "Newest HA / Tests",
+        "Repository / HACS validation",
+        "Repository / Release script",
+    ]
+    assert [name for name, job in checks.items() if "if" in job] == []
+    assert [name for name, job in checks.items() if "needs" in job] == []
     assert [
         (name, step.get("name", step.get("uses")))
-        for name, job in jobs.items()
+        for name, job in checks.items()
         for step in job["steps"]
         if "if" in step
     ] == []
@@ -212,16 +224,15 @@ def test_internal_validation_checks_the_commit_its_caller_runs_for():
     push brought, a pull request's merge commit, the commit a release was
     started on -- and puts its version on top of. Any other ref would
     validate something else than what merges or ships."""
+    checks = _checks()
     checkouts = [
-        (key, step.get("with", {}))
-        for key, job in _workflow("_validate.yml")["jobs"].items()
+        (name, step.get("with", {}))
+        for name, job in checks.items()
         for step in job["steps"]
         if step.get("uses", "").startswith("actions/checkout@")
     ]
-    assert sorted(key for key, _ in checkouts) == sorted(
-        _workflow("_validate.yml")["jobs"]
-    )
-    assert [key for key, with_ in checkouts if "ref" in with_] == []
+    assert sorted(name for name, _ in checkouts) == sorted(checks)
+    assert [name for name, with_ in checkouts if "ref" in with_] == []
 
 
 def test_the_checks_run_what_ci_promises():
@@ -234,12 +245,12 @@ def test_the_checks_run_what_ci_promises():
     The release script runs on 3.12, the key job's system Python, which the
     tests and mypy never use: it must compile there, and plan a release
     from the whole history, tags included."""
-    jobs = _jobs_by_name(_workflow("_validate.yml"))
+    jobs = _checks()
     tests, typing, floor, release_script = (
-        jobs["Tests with coverage"],
-        jobs["Strict typing"],
-        jobs["Python 3.13 syntax"],
-        jobs["Release script on Python 3.12"],
+        jobs["Newest HA / Tests"],
+        jobs["Newest HA / Strict typing"],
+        jobs["Minimum HA / Python 3.13"],
+        jobs["Repository / Release script"],
     )
     assert _python(release_script) == "3.12"
     [checkout] = [
@@ -266,7 +277,7 @@ def test_the_checks_run_what_ci_promises():
     assert _python(floor) == "3.13"
     assert "python -m compileall" in _script(floor)
     assert "from __future__ import annotations" in _script(floor)
-    minimum = jobs["Tests on the minimum Home Assistant"]
+    minimum = jobs["Minimum HA / Tests"]
     assert _python(minimum) == "3.13"
     assert "python -m pip install -r tests/requirements-floor.txt" in _script(minimum)
     assert "tests/requirements.txt" not in _script(minimum)
@@ -289,18 +300,18 @@ def test_hassfest_the_tests_and_mypy_check_one_home_assistant_release():
     test package, and hassfest runs as that very release, not as whatever
     hassfest image is newest. A new stable release reaches every one of
     them without a change here."""
-    jobs = _jobs_by_name(_workflow("_validate.yml"))
-    for name in ("Hassfest validation", "Tests with coverage", "Strict typing"):
+    jobs = _checks()
+    for name in ("Newest HA / Hassfest", "Newest HA / Tests", "Newest HA / Strict typing"):
         steps = jobs[name]["steps"]
         assert _FIND_HOME_ASSISTANT in steps, name
         found = steps.index(_FIND_HOME_ASSISTANT)
         assert [step for step in steps[:found] if "run" in step] == [], name
-    for name in ("Tests with coverage", "Strict typing"):
+    for name in ("Newest HA / Tests", "Newest HA / Strict typing"):
         [install] = [
             step for step in jobs[name]["steps"] if step.get("name") == "Install the test requirements"
         ]
         assert install["env"] == {"PLUGIN": "${{ steps.ha.outputs.plugin }}"}, name
-    hassfest = jobs["Hassfest validation"]
+    hassfest = jobs["Newest HA / Hassfest"]
     assert [step["uses"] for step in hassfest["steps"] if "uses" in step] == ["actions/checkout@v7"]
     [run] = [step for step in hassfest["steps"] if step.get("name") == "Run hassfest"]
     assert run["env"] == {"HOME_ASSISTANT": "${{ steps.ha.outputs.home_assistant }}"}
@@ -316,7 +327,7 @@ _FLOOR_CHECK = "Check that this is the minimum Home Assistant in hacs.json"
 
 
 def _minimum_job() -> dict:
-    return _jobs_by_name(_workflow("_validate.yml"))["Tests on the minimum Home Assistant"]
+    return _checks()["Minimum HA / Tests"]
 
 
 def test_the_tests_also_run_on_the_minimum_home_assistant_in_hacs_json():
@@ -400,9 +411,8 @@ def test_validate_runs_on_every_push_but_main_on_pull_requests_to_main_and_dev_a
     assert sorted(on) == ["pull_request", "push", "workflow_dispatch"]
     assert on["push"] == {"branches-ignore": ["main"]}
     assert on["pull_request"] == {"branches": ["main", "dev"]}
-    tests = on["workflow_dispatch"]["inputs"]["tests"]
-    assert tests["type"] == "boolean"
-    assert tests["default"] is True
+    # By hand without a switch: a manual run checks everything, as the others.
+    assert on["workflow_dispatch"] is None
     assert validate["concurrency"] == {
         "group": "validate-${{ github.ref }}",
         "cancel-in-progress": True,
@@ -410,14 +420,26 @@ def test_validate_runs_on_every_push_but_main_on_pull_requests_to_main_and_dev_a
     assert validate["permissions"] == {"contents": "read"}
 
 
-def test_validate_runs_the_tests_unless_switched_off_by_hand():
-    """A push or pull request always runs them; only a manual run can
-    leave them out."""
-    checks = _workflow("validate.yml")["jobs"]["checks"]
-    assert checks["uses"] == "./.github/workflows/_validate.yml"
-    assert checks["with"]["tests"] == (
-        "${{ github.event_name != 'workflow_dispatch' || inputs.tests }}"
-    )
+def test_validate_runs_every_group_every_time():
+    """A push, a pull request and a manual run alike run every check: every
+    group, each called without a switch, on no condition of its own and
+    waiting for nothing, with a token that only reads."""
+    validate = _workflow("validate.yml")
+    callers = _callers(validate)
+    assert {
+        key: (job["name"], job["uses"], job.get("with")) for key, job in callers.items()
+    } == {
+        "newest": ("Newest HA", "./.github/workflows/_validate_newest.yml", None),
+        "minimum": ("Minimum HA", "./.github/workflows/_validate_minimum.yml", None),
+        "repository": ("Repository", "./.github/workflows/_validate_repository.yml", None),
+    }
+    assert {job["name"]: job["uses"] for job in callers.values()} == {
+        group: f"./.github/workflows/{name}" for group, name in _GROUPS.items()
+    }
+    for key, job in callers.items():
+        assert "if" not in job, key
+        assert "needs" not in job, key
+        assert job.get("permissions", validate["permissions"]) == {"contents": "read"}, key
 
 
 # The results GitHub reports for a job a later job needs, and the one
@@ -468,7 +490,7 @@ def test_validation_result_is_the_one_required_check():
         "${{ github.event_name == 'pull_request' && github.base_ref == 'main'"
         " && 'Validation result' || 'Validation summary' }}"
     )
-    assert "checks" in result["needs"]
+    assert sorted(result["needs"]) == ["minimum", "newest", "repository"]
     assert sorted(result["needs"]) == sorted(key for key in jobs if key != "result")
     assert result["if"] == "always()"
     assert result["runs-on"] == "ubuntu-24.04"
@@ -478,15 +500,15 @@ def test_validation_result_is_the_one_required_check():
     assert step["env"] == {"RESULTS": _EVERY_RESULT}
     assert [value for value in _JOB_RESULTS if value in step["run"]] == ["success"]
     assert "exit 1" in step["run"]
-    # One job, as today, in each result -- and any number of jobs, each of
-    # which fails the check unless it succeeded.
+    # One job alone, with each result -- and every mix of up to as many jobs
+    # as it needs: the check fails unless each of them succeeded.
     assert {value: _exit_status(step, (value,)) for value in _JOB_RESULTS} == {
         "success": 0,
         "failure": 1,
         "cancelled": 1,
         "skipped": 1,
     }
-    for count in range(4):
+    for count in range(len(result["needs"]) + 1):
         for results in itertools.product(_JOB_RESULTS, repeat=count):
             passed = bool(results) and set(results) == {"success"}
             assert _exit_status(step, results) == (0 if passed else 1), results
@@ -718,9 +740,11 @@ def test_a_release_on_the_wrong_branch_stops_before_anything_else():
     published: each job after it waits for the one before, and none has an
     if: that would run it anyway; the Publish job's only skips a dry run."""
     jobs = _workflow(_RELEASE)["jobs"]
-    assert sorted(jobs) == ["check-branch", "commit", "publish", "validate"]
+    assert sorted(jobs) == [
+        "check-branch", "commit", "minimum", "newest", "publish", "repository",
+    ]
     check = jobs["check-branch"]
-    assert check["name"] == "Check branch"
+    assert check["name"] == "Check branch and type"
     assert check["permissions"] == {}
     assert "needs" not in check
     assert "if" not in check
@@ -760,24 +784,32 @@ def test_a_release_on_the_wrong_branch_stops_before_anything_else():
                 case = (release_type, ref, draft)
                 expected = (0, False) if case in allowed else (1, True)
                 assert started(*case) == expected, case
-    assert _needs(jobs["validate"]) == ["check-branch"]
-    assert _needs(jobs["commit"]) == ["validate"]
+    groups = sorted(key for key, job in jobs.items() if "uses" in job)
+    assert groups == ["minimum", "newest", "repository"]
+    for group in groups:
+        assert _needs(jobs[group]) == ["check-branch"], group
+        assert "if" not in jobs[group], group
+    assert sorted(_needs(jobs["commit"])) == groups
     assert _needs(jobs["publish"]) == ["commit"]
-    assert "if" not in jobs["validate"]
     assert "if" not in jobs["commit"]
     assert jobs["publish"]["if"] == _NOT_A_DRY_RUN
 
 
-def test_release_always_validates_with_the_tests():
-    """No release without the complete validation: _validate.yml with the
-    tests, and no switch to leave them out. Its checks only read."""
+def test_release_always_runs_every_check():
+    """No release without the complete validation: exactly Validate's groups,
+    called the same way, with no switch to leave a check out -- so a group
+    added to Validate alone fails here. Their checks only read."""
     release = _workflow(_RELEASE)
-    validate = release["jobs"]["validate"]
-    assert validate["name"] == "Validate"
-    assert validate["uses"] == "./.github/workflows/_validate.yml"
-    assert validate["with"] == {"tests": True}
-    assert validate["with"]["tests"] is True
-    assert validate.get("permissions", release["permissions"]) == {"contents": "read"}
+
+    def called(workflow: dict) -> dict[str, tuple]:
+        return {
+            key: (job["name"], job["uses"], job.get("with"))
+            for key, job in _callers(workflow).items()
+        }
+
+    assert called(release) == called(_workflow("validate.yml"))
+    for key, job in _callers(release).items():
+        assert job.get("permissions", release["permissions"]) == {"contents": "read"}, key
 
 
 def test_release_commits_exactly_the_validated_commit():
@@ -788,7 +820,7 @@ def test_release_commits_exactly_the_validated_commit():
     job pulls, rebases, merges, resets or switches it onto another. The
     deploy key sets origin up for the pushes."""
     commit = _workflow(_RELEASE)["jobs"]["commit"]
-    assert commit["name"] == "Commit version and tag"
+    assert commit["name"] == "Set version and tag"
     [checkout] = [
         step for step in commit["steps"] if step.get("uses", "").startswith("actions/checkout@")
     ]
@@ -1094,9 +1126,7 @@ def test_only_a_release_refuses_a_plan_with_nothing_to_release(tmp_path):
     ]
     [validate_plan] = [
         step
-        for step in _jobs_by_name(_workflow("_validate.yml"))["Release script on Python 3.12"][
-            "steps"
-        ]
+        for step in _checks()["Repository / Release script"]["steps"]
         if "release.py plan" in step.get("run", "")
     ]
     assert re.search(r"release\.py plan .*--for-release", plan["run"])

@@ -1,7 +1,7 @@
 """Find the Home Assistant release CI checks against.
 
-`_validate.yml` runs the tests, mypy --strict and hassfest against one Home
-Assistant release: the newest stable one that
+`_validate_newest.yml` runs the tests, mypy --strict and hassfest against one
+Home Assistant release: the newest stable one that
 pytest-homeassistant-custom-component has been released for. A beta, a
 release candidate or a dev build never counts. The package pins Home
 Assistant exactly (`homeassistant==2026.9.4`), so its newest releases name

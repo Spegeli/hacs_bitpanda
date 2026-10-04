@@ -1006,7 +1006,7 @@ def test_the_recovery_run_plans_the_release_main_holds_without_its_tag(
 
 
 def test_validate_plans_where_a_release_finds_nothing_to_release(repository, capsys):
-    """Validate's "Release script on Python 3.12" job plans a stable release
+    """Validate's "Repository / Release script" job plans a stable release
     of whatever it checks: on dev right after main is merged back, that is
     the stable's own version commit, with no commit since its tag. The job
     passes no --for-release, so the plan goes through and the check stays

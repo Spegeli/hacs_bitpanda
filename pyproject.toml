@@ -9,7 +9,7 @@ asyncio_mode = "auto"
 
 # Strict typing of the integration (quality scale rule strict-typing):
 # `mypy --strict` over custom_components.bitpanda, run from the repository
-# root -- by CI (.github/workflows/_validate.yml) and locally alike:
+# root -- by CI (.github/workflows/_validate_newest.yml) and locally alike:
 #   python -m mypy --strict
 # The tests are not type-checked.
 #

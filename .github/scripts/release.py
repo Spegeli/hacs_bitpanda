@@ -17,8 +17,8 @@ below (spec section 12: "Release types, versioning and changelog").
 Standard library only, and 3.12-compatible: `actions/setup-python` is
 GitHub's own action, but the key job goes without it -- spec section 11
 allows that job only `actions/checkout` and shell -- so this runs on the
-Python `ubuntu-24.04` ships, 3.12. `_validate.yml`'s "Release script on
-Python 3.12" job compiles and runs it there on every change.
+Python `ubuntu-24.04` ships, 3.12. `_validate_repository.yml`'s "Release
+script" job compiles and runs it there on every change.
 """
 from __future__ import annotations
 

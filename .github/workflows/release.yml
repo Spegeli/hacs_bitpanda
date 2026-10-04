@@ -12,18 +12,18 @@ name: Create Release
 # .github/scripts/release.py computes it from the tags and the Conventional
 # Commits since the last stable release, "Version bump" can force the bump,
 # and the same script writes the release notes. Nobody bumps it by hand.
-#   Check branch           - a stable only on main, a pre-release only on dev
-#                            and never as a draft; any other start fails
-#                            here, before anything is validated, committed,
-#                            tagged or published
-#   Validate               - everything _validate.yml checks, the tests
-#                            included; a release has no switch to leave them
-#                            out
-#   Commit version and tag - only after the validation passed: plans the
+#   Check branch and type  - a stable only on main, a pre-release only on
+#                            dev and never as a draft; any other start
+#                            fails here, before anything is validated,
+#                            committed, tagged or published
+#   Newest HA, Minimum HA, - the same three groups of checks as Validate,
+#   Repository               every check included; a release has no
+#                            switch to leave one out
+#   Set version and tag    - only after every check passed: plans the
 #                            version, the tag and the notes, commits the
 #                            version on top of the validated commit and
-#                            pushes it -- to main, then the tag, or only the
-#                            tag
+#                            pushes it -- to main, then the tag, or only
+#                            the tag
 #   Publish release        - creates the GitHub release for that tag
 # main accepts pull requests only. Its ruleset lets one push through: this
 # repository's deploy key, whose private key is the secret
@@ -87,7 +87,7 @@ jobs:
   # see drafts. Every job after this one waits for it, so a run started
   # anywhere else stops here.
   check-branch:
-    name: Check branch
+    name: Check branch and type
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}
@@ -114,14 +114,23 @@ jobs:
             exit 1
           fi
 
-  # It checks github.sha, the commit this run was started on -- the one the
-  # next job commits the version on top of.
-  validate:
-    name: Validate
+  # The same three groups as Validate, side by side. They check github.sha,
+  # the commit this run was started on -- the one the next job commits the
+  # version on top of.
+  newest:
+    name: Newest HA
     needs: check-branch
-    uses: ./.github/workflows/_validate.yml
-    with:
-      tests: true
+    uses: ./.github/workflows/_validate_newest.yml
+
+  minimum:
+    name: Minimum HA
+    needs: check-branch
+    uses: ./.github/workflows/_validate_minimum.yml
+
+  repository:
+    name: Repository
+    needs: check-branch
+    uses: ./.github/workflows/_validate_repository.yml
 
   # The one job that holds the deploy key, so it runs no action but
   # actions/checkout; everything else is shell and the repository's own
@@ -129,8 +138,8 @@ jobs:
   # It hands the version, the tag, the notes and the release type to the
   # Publish job, which has no checkout.
   commit:
-    name: Commit version and tag
-    needs: validate
+    name: Set version and tag
+    needs: [newest, minimum, repository]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:

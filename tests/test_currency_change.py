@@ -16,8 +16,10 @@ statistics in the new currency.
 from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
+from awesomeversion import AwesomeVersion
 import pytest
 from homeassistant.config_entries import SOURCE_USER, ConfigEntryState
+from homeassistant.const import __version__ as HAVERSION
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
@@ -285,14 +287,22 @@ async def test_a_wallet_bought_again_after_a_currency_change_records_statistics(
     assert await statistics_units(hass, _VSN_SENSORS) == dict.fromkeys(_VSN_SENSORS, "USD")
 
 
+# Home Assistant gives a re-created entity the entity ID its user chose only
+# from 2025.7 on; before, it comes back under the integration's own ID
+# (README, "Resetting names and entity IDs").
+_RESTORES_ENTITY_IDS = AwesomeVersion(HAVERSION) >= AwesomeVersion("2025.7.0")
+
+
 async def test_a_wallet_the_user_renamed_records_statistics_after_a_currency_change(
     hass, portfolio_api, freezer
 ):
     """Home Assistant 2025.7 and later give a returning sensor the entity ID
     the user gave it, which the Portfolio's form does not match. The entity
     registry remembers that ID for the sold wallet: the change clears the
-    statistics under it too."""
+    statistics under it too. Before 2025.7 the wallet comes back under the
+    integration's ID, and records there."""
     renamed = "sensor.vsn_total"
+    returned = renamed if _RESTORES_ENTITY_IDS else _VSN_TOTAL
     entry = _portfolio(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -310,11 +320,11 @@ async def test_a_wallet_the_user_renamed_records_statistics_after_a_currency_cha
 
     portfolio_api.return_value = [position, *portfolio_api.return_value]
     await _next_refresh(hass, freezer)
-    assert er.async_get(hass).async_get(renamed) is not None
+    assert er.async_get(hass).async_get(returned) is not None
     await async_wait_recording_done(hass)
     do_adhoc_statistics(hass, start=get_start_time(dt_util.utcnow()))
     await async_wait_recording_done(hass)
-    assert await statistics_units(hass, [renamed]) == {renamed: "USD"}
+    assert await statistics_units(hass, [returned]) == {returned: "USD"}
 
 
 async def test_a_currency_change_clears_the_statistics_of_a_removed_staking_sensor(

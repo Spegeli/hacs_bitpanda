@@ -47,7 +47,8 @@ def pytest_configure(config):
     """
     if not config.pluginmanager.hasplugin("timeout"):
         raise pytest.UsageError(
-            "pytest-timeout is required; install it from tests/requirements.txt"
+            "pytest-timeout is required; install it from tests/requirements.txt "
+            "(tests/requirements-floor.txt on the minimum Home Assistant)"
         )
     # The plugin sets the SQLAlchemy engine's logger to INFO when it is
     # imported, which is after this file: every SQL statement would be
@@ -251,17 +252,28 @@ def assert_issue_texts_render(raised: dict[str, dict[str, str] | None]) -> None:
 
 def device_names_in_subentry(hass, entry_id: str, subentry_id: str | None) -> set[str]:
     """Names of the devices of config entry `entry_id` in its subentry
-    `subentry_id` -- in none, for None.
+    `subentry_id` only -- in none, for None.
 
-    Read from the device's own `config_subentry_id`, as the test image's
-    Home Assistant records it; the integration itself reads group membership
-    from the entity registry only.
+    Read from the device registry as each Home Assistant release records it
+    (_device_subentries). Only: on 2025.5 a device can be in two subentries
+    of an entry, and such a device must show in neither. The integration
+    itself reads group membership from the entity registry only.
     """
     return {
         device.name
         for device in dr.async_entries_for_config_entry(dr.async_get(hass), entry_id)
-        if device.config_subentry_id == subentry_id
+        if _device_subentries(device, entry_id) == {subentry_id}
     }
+
+
+def _device_subentries(device: dr.DeviceEntry, entry_id: str) -> set[str | None]:
+    """The subentries of config entry `entry_id` that `device` is in. Newer
+    releases record one, `config_subentry_id`; Home Assistant 2025.5, the
+    floor in hacs.json, records a set per config entry in
+    `config_entries_subentries`."""
+    if hasattr(device, "config_subentry_id"):
+        return {device.config_subentry_id}
+    return set(device.config_entries_subentries.get(entry_id, ()))
 
 
 async def recorded_history(hass, entity_id: str) -> list[tuple[str, str | None]]:

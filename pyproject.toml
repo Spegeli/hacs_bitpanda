@@ -6,6 +6,9 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Set explicitly: pytest-asyncio before 1.0 -- the minimum Home Assistant's
+# test package brings 0.26 -- warns while it is unset.
+asyncio_default_fixture_loop_scope = "function"
 
 # Strict typing of the integration (quality scale rule strict-typing):
 # `mypy --strict` over custom_components.bitpanda, run from the repository

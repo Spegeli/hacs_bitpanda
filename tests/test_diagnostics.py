@@ -109,6 +109,8 @@ def _portfolio_entry(hass, *, loaded: bool) -> MockConfigEntry:
         data.assets = {"a": {"id": "a", "group": "coin"}}
         # "b" the catalogue does not list; the lookup of "c" failed.
         data.unlisted = {"b"}
+        # Total value and Cash wait (FigureWatch): reported sorted.
+        data.waiting = frozenset({"total", "cash"})
         entry.runtime_data = SimpleNamespace(
             portfolio=_Coordinator(data),
             history=_History(
@@ -136,7 +138,8 @@ async def test_portfolio_diagnostics_report_health_and_never_the_key(hass):
     }
     assert result["coordinators"] == {
         "portfolio": {"last_update_success": True, "holdings": 3, "wallets": 1,
-                      "unnamed_holdings": 2, "unlisted_holdings": 1},
+                      "unnamed_holdings": 2, "unlisted_holdings": 1,
+                      "waiting_figures": ["cash", "total"]},
         "history": {"last_update_success": True, "timeframes": 1, "failed_timeframes": 1},
         "earn": {"last_update_success": True, "offered_assets": 1},
         "rewards": {

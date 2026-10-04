@@ -114,12 +114,15 @@ class _PortfolioFigure(TolerantEntity[PortfolioCoordinator], SensorEntity):
     """One figure of the whole account.
 
     Unavailable once a failure is confirmed (tolerance.py), not at the first
-    failed update -- an empty answer held back until it is confirmed is one
-    (PortfolioCoordinator) -- and before any answer was taken as the truth.
-    When the answer arrived but the figure cannot be told from it -- an
-    entry that could not be read, a holding not classified yet, a value
-    Bitpanda did not send -- the sensor stays available and its state is
-    unknown: never a figure that quietly leaves something out.
+    failed update, and before the first answer. Unavailable too while the
+    figure waits (PortfolioData.waiting names it by `_key`): the answers no
+    longer list the entry it depends on, and too few of them confirm that
+    yet (PortfolioCoordinator) -- a glitch at Bitpanda then leaves a gap in
+    its history, never a false 0. When the answer arrived but the figure
+    cannot be told from it -- an entry that could not be read, a holding not
+    classified yet, a value Bitpanda did not send -- the sensor stays
+    available and its state is unknown: never a figure that quietly leaves
+    something out.
     """
 
     _attr_has_entity_name = True
@@ -145,6 +148,11 @@ class _PortfolioFigure(TolerantEntity[PortfolioCoordinator], SensorEntity):
     def native_value(self) -> float | None:
         data = self.coordinator.data
         return None if data is None else self._figure(data)
+
+    @property
+    def available(self) -> bool:
+        data: PortfolioData | None = self.coordinator.data
+        return super().available and data is not None and self._key not in data.waiting
 
 
 class PortfolioTotalSensor(_PortfolioFigure):

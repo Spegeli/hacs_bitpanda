@@ -1,9 +1,9 @@
 """Tests for the Portfolio service coordinators."""
 from datetime import timedelta
+import logging
 
 import pytest
 from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -75,10 +75,9 @@ class _EarnClient:
 
 
 # The coordinators run here with their update method only: no refresh is
-# scheduled and nothing listens. The Portfolio coordinator needs a Home
-# Assistant instance and its entry (it keeps the count of empty answers, and
-# whether the account listed anything, in hass.data and looks for registered
-# wallets); the Earn coordinator needs neither.
+# scheduled and nothing listens. The Portfolio coordinator is built as setup
+# builds it, with a Home Assistant instance and its entry; the Earn
+# coordinator, with neither.
 
 
 def _entry(hass) -> MockConfigEntry:
@@ -87,9 +86,9 @@ def _entry(hass) -> MockConfigEntry:
     return entry
 
 
-def _coordinator(hass, client, directory=None, entry=None) -> PortfolioCoordinator:
+def _coordinator(hass, client, directory=None) -> PortfolioCoordinator:
     return PortfolioCoordinator(
-        hass, entry or _entry(hass), client, "cur-id", directory or _Directory({VSN: _VSN_RECORD})
+        hass, _entry(hass), client, "cur-id", directory or _Directory({VSN: _VSN_RECORD})
     )
 
 
@@ -185,235 +184,211 @@ async def test_a_failure_that_says_too_little_gets_the_plain_text(hass, error):
     assert _translation(excinfo.value) == ("bitpanda", "update_failed", None)
 
 
-# --- A completely empty /portfolio ----------------------------------------------
+# --- A Portfolio figure whose entry vanishes ------------------------------------
 
 
-def _portfolio(hass, entries=_ENTRIES, entry=None) -> tuple[_Client, PortfolioCoordinator]:
+def _portfolio(hass, entries=_ENTRIES) -> tuple[_Client, PortfolioCoordinator]:
     client = _Client(entries)
-    return client, _coordinator(hass, client, entry=entry)
+    return client, _coordinator(hass, client)
 
 
-def _register_wallet(hass, entry) -> None:
-    """A wallet of `entry` in the entity registry: the account listed
-    something before Home Assistant started -- the only sign of it that a
-    restart leaves."""
-    er.async_get(hass).async_get_or_create(
-        "sensor", DOMAIN, f"{entry.entry_id}_wallet_{VSN}", config_entry=entry
-    )
-
-
-async def _refused(coordinator: PortfolioCoordinator) -> None:
-    with pytest.raises(UpdateFailed) as excinfo:
-        await coordinator._async_update_data()
-    assert _translation(excinfo.value) == ("bitpanda", "portfolio_empty", None)
-
-
-# An empty answer is taken as the truth only once WALLET_REMOVAL_MISSES of
+# Every successful answer is taken as it is. A figure whose entry the answers
+# no longer list waits (PortfolioData.waiting) until WALLET_REMOVAL_MISSES of
 # them in a row span the time the regular pace takes for them: two update
 # intervals from the first. Home Assistant's clock is frozen here (freezer),
-# and moves on by one update interval between two regular answers.
+# and moves on by one update interval before each regular answer -- by a
+# cooldown before each answer brought by hand (bitpanda.refresh).
 _REGULAR = PORTFOLIO_UPDATE_INTERVAL
+_BY_HAND = timedelta(seconds=20)
+
+
+async def test_figures_missing_from_the_first_answer_do_not_wait(hass):
+    """No fiat entry in the first answer: nothing vanished, so Cash shows 0
+    at once and nothing waits."""
+    _, coordinator = _portfolio(hass, [_ENTRIES[0]])
+    data = await coordinator._async_update_data()
+    assert data.waiting == frozenset()
+    assert data.cash == 0.0
 
 
 async def test_an_empty_first_answer_of_a_new_account_is_the_truth(hass):
-    """No wallet registered: a new, empty account, whose setup must work."""
+    """A new, empty account, whose setup must work: every figure 0 at once."""
     _, coordinator = _portfolio(hass, [])
     data = await coordinator._async_update_data()
     assert data.holdings == {}
     assert data.total == 0.0
+    assert data.waiting == frozenset()
 
 
-async def test_an_empty_first_answer_waits_while_wallets_are_registered(hass, freezer):
-    """After a restart of an account that listed something -- nothing kept
-    of it but its registered wallets -- an empty first answer counts like any
-    sudden empty answer."""
-    entry = _entry(hass)
-    _register_wallet(hass, entry)
-    _, coordinator = _portfolio(hass, [], entry)
-    for _ in range(WALLET_REMOVAL_MISSES - 1):
-        await _refused(coordinator)
-        freezer.tick(_REGULAR)
-    assert (await coordinator._async_update_data()).total == 0.0
-
-
-async def test_the_count_of_empty_answers_goes_on_across_coordinators(hass, freezer):
-    """A reload, or a setup that is retried, starts a new coordinator: the
-    count, and the time since the first empty answer, do not start over
-    with it."""
-    entry = _entry(hass)
-    _register_wallet(hass, entry)
-    for _ in range(WALLET_REMOVAL_MISSES - 1):
-        await _refused(_portfolio(hass, [], entry)[1])
-        freezer.tick(_REGULAR)
-    assert (await _portfolio(hass, [], entry)[1]._async_update_data()).total == 0.0
-
-
-async def test_an_answer_taken_as_the_truth_clears_the_count(hass, freezer):
-    entry = _entry(hass)
-    _register_wallet(hass, entry)
-    await _refused(_portfolio(hass, [], entry)[1])
-    freezer.tick(2 * _REGULAR)
-    await _portfolio(hass, _ENTRIES, entry)[1]._async_update_data()
-    _, coordinator = _portfolio(hass, [], entry)
-    for _ in range(WALLET_REMOVAL_MISSES - 1):
-        await _refused(coordinator)
-
-
-async def test_a_sudden_empty_answer_fails_until_answers_in_a_row_confirm_it(hass, freezer):
-    """A Bitpanda glitch must not read as a sale of everything. At the
-    regular pace, the answer that makes WALLET_REMOVAL_MISSES empty ones in
-    a row is the truth, and so is every empty one after it."""
+async def test_an_empty_answer_is_the_truth_at_once(hass, freezer):
+    """No failed update: the answer is taken as it is, and Total value and
+    Cash, whose entries it no longer lists, wait. Cash Plus was never
+    there."""
     client, coordinator = _portfolio(hass)
     await coordinator._async_update_data()
     client.entries = []
-    for _ in range(WALLET_REMOVAL_MISSES - 1):
-        freezer.tick(_REGULAR)
-        await _refused(coordinator)
     freezer.tick(_REGULAR)
-    assert (await coordinator._async_update_data()).total == 0.0
-    assert (await coordinator._async_update_data()).total == 0.0
+    data = await coordinator._async_update_data()
+    assert data.total == 0.0
+    assert data.waiting == {"total", "cash"}
 
 
-async def test_an_answer_that_lists_something_starts_the_count_again(hass, freezer):
+async def test_vanished_fiat_makes_cash_wait_three_answers(hass, freezer):
+    """All fiat withdrawn, the holding kept: Cash waits through two answers
+    and shows 0 with the third, ten minutes after the first, while Total
+    value follows the answer at once."""
     client, coordinator = _portfolio(hass)
     await coordinator._async_update_data()
-    client.entries = []
-    await _refused(coordinator)
-    freezer.tick(2 * _REGULAR)
-    client.entries = _ENTRIES
-    await coordinator._async_update_data()
-    client.entries = []
-    for _ in range(WALLET_REMOVAL_MISSES - 1):
-        await _refused(coordinator)
+    client.entries = [_ENTRIES[0]]
+    for _ in range(2):
+        freezer.tick(_REGULAR)
+        data = await coordinator._async_update_data()
+        assert data.waiting == {"cash"}
+        assert data.total == 20.0
+    freezer.tick(_REGULAR)
+    data = await coordinator._async_update_data()
+    assert data.waiting == frozenset()
+    assert data.cash == 0.0
 
 
-async def test_a_failed_request_neither_counts_nor_resets_the_empty_answers(hass, freezer):
+async def test_a_failed_request_while_cash_waits_neither_counts_nor_clears(hass, freezer):
+    """Failed requests go through the failure tolerance alone -- here three
+    in a row, as many as end it at the regular pace. The next answer without
+    fiat is only the second miss, still waiting although the first was asked
+    for long ago, and the one after it the third, which shows 0."""
     client, coordinator = _portfolio(hass)
     await coordinator._async_update_data()
-    client.entries = []
-    for _ in range(WALLET_REMOVAL_MISSES - 1):
+    client.entries = [_ENTRIES[0]]
+    freezer.tick(_REGULAR)
+    assert (await coordinator._async_update_data()).waiting == {"cash"}
+    for _ in range(3):
+        freezer.tick(_REGULAR)
         client.error = BitpandaApiError("Timeout for /portfolio")
         with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()
-        client.error = None
-        await _refused(coordinator)
+    client.error = None
+    freezer.tick(_REGULAR)
+    assert (await coordinator._async_update_data()).waiting == {"cash"}
+    freezer.tick(_REGULAR)
+    assert (await coordinator._async_update_data()).waiting == frozenset()
+
+
+async def test_an_unreadable_fiat_entry_while_cash_waits_clears_the_count(hass, freezer):
+    """A fiat entry that cannot be read is a fiat entry all the same, only
+    its amount in doubt: Cash is there -- unknown, nothing waits -- and the
+    next answer without fiat starts the count afresh."""
+    client, coordinator = _portfolio(hass)
+    await coordinator._async_update_data()
+    client.entries = [_ENTRIES[0]]
+    freezer.tick(_REGULAR)
+    assert (await coordinator._async_update_data()).waiting == {"cash"}
+    client.entries = [_ENTRIES[0], {"currency_id": EUR_ID, "balance": {"value": "x"}}]
+    freezer.tick(_REGULAR)
+    data = await coordinator._async_update_data()
+    assert data.waiting == frozenset()
+    assert data.cash is None
+    client.entries = [_ENTRIES[0]]
+    for _ in range(2):
         freezer.tick(_REGULAR)
-    assert (await coordinator._async_update_data()).total == 0.0
+        assert (await coordinator._async_update_data()).waiting == {"cash"}
+    freezer.tick(_REGULAR)
+    assert (await coordinator._async_update_data()).waiting == frozenset()
 
 
-# --- Refreshes by hand never confirm an empty answer sooner ---------------------
-#
-# However many empty answers they bring, none is the truth before two update
-# intervals have passed since the first: the time the regular pace takes.
+_BCPEUR = "1edf9721-e545-644c-9796-ae5b69a774d7"
+_BCPEUR_RECORD = {"id": _BCPEUR, "symbol": "BCPEUR", "name": "Cash Plus", "group": "fiat_earn"}
+_CASH_PLUS = {
+    "asset_id": _BCPEUR,
+    "balance": {"value": "50.00000000"},
+    "available_balance": {"value": "50.00000000"},
+    "currency_balance": {"value": "50.00"},
+}
+# A holding the directory has no record of: it might be Cash Plus.
+_UNCLASSIFIED = {**_CASH_PLUS, "asset_id": "unclassified-asset-id"}
 
 
-_BY_HAND = timedelta(seconds=20)
-
-
-async def test_empty_answers_in_quick_succession_confirm_nothing(hass, freezer):
-    """Refreshes by hand (bitpanda.refresh, a cooldown apart) bring empty
-    answers far faster than the regular pace. However many there are, none
-    is the truth before two update intervals have passed since the first;
-    the first empty answer after that is."""
-    client, coordinator = _portfolio(hass)
+async def test_doubt_about_cash_plus_while_it_waits_clears_the_count(hass, freezer):
+    """A holding no record classifies yet might be the Cash Plus that
+    vanished: no miss, and the count starts afresh -- Cash Plus unknown,
+    nothing waits. Cash Plus was there before, so the answers without it
+    after the doubt wait again, from the first."""
+    client = _Client([*_ENTRIES, _CASH_PLUS])
+    coordinator = _coordinator(
+        hass, client, _Directory({VSN: _VSN_RECORD, _BCPEUR: _BCPEUR_RECORD})
+    )
     await coordinator._async_update_data()
-    client.entries = []
-    answers = WALLET_REMOVAL_MISSES + 2
-    for _ in range(answers):
-        await _refused(coordinator)
-        freezer.tick(_BY_HAND)
-    freezer.tick(2 * _REGULAR - answers * _BY_HAND - timedelta(seconds=30))
-    await _refused(coordinator)
-    freezer.tick(timedelta(seconds=30))
-    assert (await coordinator._async_update_data()).total == 0.0
-
-
-async def test_the_regular_pace_confirms_with_the_answer_it_always_did(hass, freezer):
-    """Answers asked for a hair less than an update interval apart -- the
-    wall clock may read so between two regular refreshes -- still confirm
-    with the WALLET_REMOVAL_MISSES-th."""
-    client, coordinator = _portfolio(hass)
-    await coordinator._async_update_data()
-    client.entries = []
-    for _ in range(WALLET_REMOVAL_MISSES - 1):
-        await _refused(coordinator)
-        freezer.tick(_REGULAR - timedelta(seconds=1))
-    assert (await coordinator._async_update_data()).total == 0.0
-
-
-async def test_a_reload_goes_on_timing_from_the_first_empty_answer(hass, freezer):
-    """A reload's first answer comes at once, like one refreshed by hand: it
-    counts, but the time still runs from the first empty answer."""
-    entry = _entry(hass)
-    _register_wallet(hass, entry)
-    await _refused(_portfolio(hass, [], entry)[1])
-    freezer.tick(timedelta(minutes=1))
-    for _ in range(WALLET_REMOVAL_MISSES):
-        await _refused(_portfolio(hass, [], entry)[1])
-    freezer.tick(2 * _REGULAR - timedelta(minutes=1))
-    assert (await _portfolio(hass, [], entry)[1]._async_update_data()).total == 0.0
-
-
-async def test_an_answer_taken_as_the_truth_restarts_the_time(hass, freezer):
-    """A listing answer clears the count and its time: the empty answers
-    after it start both afresh."""
-    client, coordinator = _portfolio(hass)
-    await coordinator._async_update_data()
-    client.entries = []
-    await _refused(coordinator)
-    freezer.tick(2 * _REGULAR)
     client.entries = _ENTRIES
+    freezer.tick(_REGULAR)
+    assert (await coordinator._async_update_data()).waiting == {"cash_plus"}
+    client.entries = [*_ENTRIES, _UNCLASSIFIED]
+    freezer.tick(_REGULAR)
+    data = await coordinator._async_update_data()
+    assert data.waiting == frozenset()
+    assert data.cash_plus is None
+    client.entries = _ENTRIES
+    for _ in range(2):
+        freezer.tick(_REGULAR)
+        assert (await coordinator._async_update_data()).waiting == {"cash_plus"}
+    freezer.tick(_REGULAR)
+    assert (await coordinator._async_update_data()).waiting == frozenset()
+
+
+async def test_a_change_of_the_waiting_figures_is_logged(hass, freezer, caplog):
+    """For whoever wonders why Cash shows unavailable: each change of the
+    waiting figures is one debug line, and none follows while nothing
+    changes."""
+    caplog.set_level(logging.DEBUG, logger="custom_components.bitpanda.portfolio_coordinator")
+    client, coordinator = _portfolio(hass)
     await coordinator._async_update_data()
-    client.entries = []
-    for _ in range(WALLET_REMOVAL_MISSES):
-        await _refused(coordinator)
+    client.entries = [_ENTRIES[0]]
+    for _ in range(WALLET_REMOVAL_MISSES + 1):
+        freezer.tick(PORTFOLIO_UPDATE_INTERVAL)
+        await coordinator._async_update_data()
+    assert [
+        record.getMessage()
+        for record in caplog.records
+        if record.getMessage().startswith("Portfolio figures missing")
+    ] == [
+        "Portfolio figures missing from Bitpanda's answer, unavailable until confirmed: cash",
+        "Portfolio figures missing from Bitpanda's answer, unavailable until confirmed: none",
+    ]
+
+
+async def test_misses_by_hand_never_end_the_wait_sooner(hass, freezer):
+    """Answers by hand come far faster than the regular pace. However many
+    there are, Cash waits until ten minutes have passed since the first
+    miss; the first answer then shows 0."""
+    client, coordinator = _portfolio(hass)
+    await coordinator._async_update_data()
+    client.entries = [_ENTRIES[0]]
+    freezer.tick(_REGULAR)
+    assert (await coordinator._async_update_data()).waiting == {"cash"}
+    for _ in range(5):
+        freezer.tick(_BY_HAND)
+        assert (await coordinator._async_update_data()).waiting == {"cash"}
+    freezer.tick(2 * _REGULAR - 5 * _BY_HAND)
+    assert (await coordinator._async_update_data()).waiting == frozenset()
 
 
 async def test_only_a_fiat_entry_is_not_an_empty_answer(hass):
+    """Everything sold, the money kept: Total value -- whose entry is any
+    entry at all -- is the cash at once, and nothing waits."""
     client, coordinator = _portfolio(hass)
     await coordinator._async_update_data()
     client.entries = [{"currency_id": EUR_ID, "balance": {"value": "5.00"}}]
-    assert (await coordinator._async_update_data()).total == 5.0
+    data = await coordinator._async_update_data()
+    assert data.total == 5.0
+    assert data.waiting == frozenset()
 
 
 async def test_only_entries_of_no_known_shape_are_an_empty_answer(hass):
     """parse_portfolio ignores an entry with neither asset_id nor
-    currency_id, the same as one that never existed."""
+    currency_id, the same as one that never existed: Total value and Cash
+    wait as after any empty answer."""
     client, coordinator = _portfolio(hass)
     await coordinator._async_update_data()
     client.entries = [{"something": "else"}]
-    await _refused(coordinator)
-
-
-# --- What the account listed outlives a reload -----------------------------------
-#
-# A reload starts a new coordinator for the same entry. No wallet is
-# registered in these tests, as for an account that listed fiat alone, or
-# right after a currency change has purged the wallets.
-
-
-@pytest.mark.parametrize(
-    "listed", [[_ENTRIES[0]], [_ENTRIES[1]]], ids=["holdings", "fiat_only"]
-)
-async def test_an_empty_answer_after_a_reload_waits_like_any_other(hass, freezer, listed):
-    """That the last answer taken as the truth listed something -- holdings,
-    or fiat alone -- is remembered across the reload: its empty answers count
-    and wait for their time as usual."""
-    entry = _entry(hass)
-    await _portfolio(hass, listed, entry)[1]._async_update_data()
-    _, reloaded = _portfolio(hass, [], entry)
-    for _ in range(WALLET_REMOVAL_MISSES - 1):
-        await _refused(reloaded)
-        freezer.tick(_REGULAR)
-    assert (await reloaded._async_update_data()).total == 0.0
-
-
-async def test_an_account_that_listed_nothing_is_believed_after_a_reload_too(hass):
-    """A new, empty account: its empty answers are the truth at once, before
-    a reload and after it."""
-    entry = _entry(hass)
-    for _ in range(2):
-        assert (await _portfolio(hass, [], entry)[1]._async_update_data()).total == 0.0
+    assert (await coordinator._async_update_data()).waiting == {"total", "cash"}
 
 
 async def test_earn_update_returns_the_catalogue():

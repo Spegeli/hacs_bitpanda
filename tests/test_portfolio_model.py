@@ -3,8 +3,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from custom_components.bitpanda.const import PORTFOLIO_UPDATE_INTERVAL
 from custom_components.bitpanda.portfolio_model import (
+    PORTFOLIO_FIGURES,
     EarnData,
+    FigureWatch,
     Holding,
     PortfolioData,
     PortfolioReturns,
@@ -331,6 +334,60 @@ def test_a_cash_plus_holding_without_a_value_makes_cash_plus_unknown():
     assert data.wallet_ids == [VSN]
 
 
+# --- PortfolioData: what the answer lists ------------------------------------------
+
+
+def test_the_figures_follow_what_the_answer_lists():
+    """Each figure depends on its own entry: Total value on any entry at all,
+    Cash on a fiat entry, Cash Plus on a holding of the group `fiat_earn`."""
+    nothing = {"total": False, "cash": False, "cash_plus": False}
+    empty = parse_portfolio([])
+    assert empty.figures_listed() == nothing
+    # Keyed as the figures are: the coordinator looks each one up by its key.
+    assert set(empty.figures_listed()) == set(PORTFOLIO_FIGURES)
+
+    fiat = parse_portfolio([_fiat_entry("5.00")])
+    assert fiat.figures_listed() == {"total": True, "cash": True, "cash_plus": False}
+
+    token = parse_portfolio([_asset_entry(VSN, "1.0", "1.0", "5.00")])
+    token.assets = {VSN: {"id": VSN, "group": "token"}}
+    assert token.figures_listed() == {"total": True, "cash": False, "cash_plus": False}
+
+    cash_plus = parse_portfolio([_asset_entry(BCPEUR, "1.0", "1.0", "1.00")])
+    cash_plus.assets = {BCPEUR: _cash_plus_asset(BCPEUR, "BCPEUR")}
+    assert cash_plus.figures_listed() == {"total": True, "cash": False, "cash_plus": True}
+
+    # An entry of no shape this endpoint documents is no entry at all.
+    assert parse_portfolio([{"something": "else"}]).figures_listed() == nothing
+
+
+def test_data_built_by_hand_lists_nothing_and_waits_for_nothing():
+    """What the sensors read of data built by hand, before the coordinator
+    tells which figures wait."""
+    data = PortfolioData()
+    assert data.figures_listed() == {"total": False, "cash": False, "cash_plus": False}
+    assert data.waiting == frozenset()
+
+
+def test_only_cash_plus_can_be_in_doubt():
+    """An entry that is listed but cannot be read is there for Total value,
+    and a fiat one for Cash: an unreadable entry is no sign of a sale. Cash
+    Plus alone can be in doubt (None): a holding that cannot be read, or
+    that no record classifies yet, might or might not be one. Only a holding
+    the catalogue does not list is sure to be no Cash Plus."""
+    fiat = parse_portfolio([{"currency_id": EUR_ID, "balance": {"value": "x"}}])
+    assert fiat.cash is None
+    assert fiat.listed_fiat is True
+
+    unreadable = parse_portfolio([{"asset_id": BCPEUR, "balance": {"value": "x"}}])
+    assert unreadable.figures_listed() == {"total": True, "cash": False, "cash_plus": None}
+
+    unclassified = parse_portfolio([_asset_entry(VSN, "1.0", "1.0", "5.00")])
+    assert unclassified.listed_cash_plus is None
+    unclassified.unlisted = {VSN}
+    assert unclassified.listed_cash_plus is False
+
+
 # --- Returns: a timeframe whose own request fails ----------------------------------
 
 _I = timedelta(minutes=5)
@@ -393,6 +450,120 @@ def test_an_answer_ends_a_timeframes_streak(answer):
         returns = tolerate_failed_timeframes(result, returns, streaks, _T0 + step * _I, _I)
         assert "WEEK" not in returns.failed, step
     assert returns == PortfolioReturns(values=answer)
+
+
+# --- A Portfolio figure whose entry vanishes -------------------------------------
+
+_STEP = PORTFOLIO_UPDATE_INTERVAL
+# Two refreshes by hand, one right after the other (the cooldown between them
+# is const.REFRESH_MIN_COOLDOWN, 10 seconds at the least).
+_BY_HAND = timedelta(seconds=20)
+
+
+def test_a_figure_missing_since_the_start_shows_0_at_once_and_counts_nothing():
+    """It was never there to vanish: nothing to wait for, nothing to count."""
+    watch = FigureWatch()
+    for step in range(5):
+        assert watch.observe(False, _T0 + step * _STEP) is False
+    assert watch.misses == 0
+
+
+def test_a_figure_that_disappears_waits_three_misses_ten_minutes_apart():
+    watch = FigureWatch()
+    assert watch.observe(True, _T0) is False
+    assert watch.observe(False, _T0 + _STEP) is True
+    assert watch.observe(False, _T0 + 2 * _STEP) is True
+    # The third miss, ten minutes after the first, confirms it: 0.
+    assert watch.observe(False, _T0 + 3 * _STEP) is False
+    assert watch.observe(False, _T0 + 4 * _STEP) is False
+    assert watch.misses == 0
+
+
+def test_a_figure_back_while_waiting_clears_the_count():
+    watch = FigureWatch()
+    assert watch.observe(True, _T0) is False
+    assert watch.observe(False, _T0 + _STEP) is True
+    assert watch.observe(True, _T0 + 2 * _STEP) is False
+    # Gone again: the next miss is the first, not the second.
+    assert watch.observe(False, _T0 + 3 * _STEP) is True
+    assert watch.observe(False, _T0 + 4 * _STEP) is True
+    assert watch.observe(False, _T0 + 5 * _STEP) is False
+
+
+def test_a_figure_that_came_back_counts_and_times_its_misses_afresh():
+    """Time alone confirms nothing: ten minutes after its first miss, a second
+    is still only the second. And each time the figure is back, the clock
+    starts at the first of its next misses: answers by hand right after it
+    never confirm it, however old the misses before."""
+    watch = FigureWatch()
+    assert watch.observe(True, _T0) is False
+    assert watch.observe(False, _T0 + _STEP) is True
+    assert watch.observe(True, _T0 + 2 * _STEP) is False
+    assert watch.observe(False, _T0 + 3 * _STEP) is True
+    assert watch.observe(False, _T0 + 5 * _STEP) is True
+    assert watch.observe(True, _T0 + 6 * _STEP) is False
+    for answer in range(3):
+        assert watch.observe(False, _T0 + 7 * _STEP + answer * _BY_HAND) is True
+
+
+def test_misses_by_hand_never_confirm_sooner():
+    """Refreshing by hand brings answers in faster than the regular pace:
+    however many lack the entry, 0 comes no sooner than ten minutes after
+    the first."""
+    watch = FigureWatch()
+    assert watch.observe(True, _T0) is False
+    for answer in range(6):
+        assert watch.observe(False, _T0 + _STEP + answer * _BY_HAND) is True
+    assert watch.observe(False, _T0 + 3 * _STEP) is False
+
+
+def test_answers_a_hair_less_than_an_interval_apart_confirm_at_the_regular_pace():
+    """The wall clock may read a hair less than an update interval between
+    two regular refreshes: the third miss still confirms, as it does at
+    the regular pace."""
+    watch = FigureWatch()
+    assert watch.observe(True, _T0) is False
+    hair_less = _STEP - timedelta(seconds=1)
+    assert watch.observe(False, _T0 + _STEP) is True
+    assert watch.observe(False, _T0 + _STEP + hair_less) is True
+    assert watch.observe(False, _T0 + _STEP + 2 * hair_less) is False
+
+
+def test_a_figure_confirmed_empty_waits_again_only_after_it_came_back():
+    """Once 0, it stays 0 while its entry stays missing: never `unavailable`
+    again on its own."""
+    watch = FigureWatch()
+    assert watch.observe(True, _T0) is False
+    assert watch.observe(False, _T0 + _STEP) is True
+    assert watch.observe(False, _T0 + 2 * _STEP) is True
+    assert watch.observe(False, _T0 + 3 * _STEP) is False
+    assert watch.observe(False, _T0 + 4 * _STEP) is False
+    assert watch.observe(True, _T0 + 5 * _STEP) is False
+    assert watch.observe(False, _T0 + 6 * _STEP) is True
+
+
+def test_doubt_never_makes_a_figure_there():
+    """Cash Plus beside a holding that might be one: a figure that was not
+    there before stays so -- the misses after the doubt count nothing and
+    wait for nothing."""
+    watch = FigureWatch()
+    assert watch.observe(None, _T0) is False
+    for step in range(1, 4):
+        assert watch.observe(False, _T0 + step * _STEP) is False
+    assert watch.misses == 0
+
+
+def test_doubt_clears_a_running_count():
+    """The doubt might be the entry that vanished: no miss, and the count
+    starts afresh, so nothing waits. The figure was there, so the misses
+    after the doubt wait again, from the first."""
+    watch = FigureWatch()
+    assert watch.observe(True, _T0) is False
+    assert watch.observe(False, _T0 + _STEP) is True
+    assert watch.observe(None, _T0 + 2 * _STEP) is False
+    assert watch.misses == 0
+    results = [watch.observe(False, _T0 + step * _STEP) for step in (3, 4, 5)]
+    assert results == [True, True, False]
 
 
 # --- Earn ------------------------------------------------------------------------

@@ -440,11 +440,9 @@ class RewardAnnouncer:
         switched off -- or while `texts_error` names the type of the error
         that kept them from loading: each asset announced then logs it, as a
         notification that failed does."""
+        # Never None: setup makes this announcer once the Portfolio's first
+        # refresh has succeeded.
         portfolio = self._portfolio.data
-        if portfolio is None:
-            # No /portfolio answer taken as the truth yet -- an empty one
-            # awaits confirmation: nothing names or prices an asset.
-            return
         news = [
             (asset_id, payouts)
             for asset_id, totals in (self._rewards.data or {}).items()

@@ -3,6 +3,7 @@ from homeassistant.components.sensor import SensorStateClass
 
 from custom_components.bitpanda.naming import PORTFOLIO_DEVICE_NAME
 from custom_components.bitpanda.portfolio_model import (
+    PORTFOLIO_FIGURES,
     EarnData,
     Holding,
     PortfolioData,
@@ -193,9 +194,9 @@ def test_an_entry_that_could_not_be_read_makes_total_value_and_cash_plus_unknown
 
 
 def test_a_tolerated_failure_keeps_every_figure():
-    """The last refresh failed -- the connection dropped, say, or an empty
-    answer is held back until it is confirmed -- but the failure is not
-    confirmed yet: every figure shows the last data, available."""
+    """The last refresh failed -- the connection dropped, say -- but the
+    failure is not confirmed yet: every figure shows the last data,
+    available."""
     coordinator = _Coordinator(
         _data(**{VSN["id"]: _vsn()}), last_update_success=False, data_available=True
     )
@@ -216,12 +217,43 @@ def test_a_confirmed_failure_makes_every_figure_unavailable():
         assert sensor_class(coordinator, "eid", "EUR").available is False, sensor_class
 
 
-def test_before_any_answer_was_taken_as_the_truth_the_figures_are_unavailable():
-    """An empty first answer held back at setup: no data, a failed update."""
+def test_before_the_first_answer_the_figures_are_unavailable():
+    """No answer yet, and the update failed: there is nothing to show."""
     coordinator = _Coordinator(None, last_update_success=False)
     for sensor_class in (PortfolioTotalSensor, PortfolioCashSensor, PortfolioCashPlusSensor):
         sensor = sensor_class(coordinator, "eid", "EUR")
         assert (sensor.native_value, sensor.available) == (None, False), sensor_class
+
+
+def test_without_data_the_figures_are_unavailable_even_before_any_failure():
+    """No data yet, but the update reported success: still unavailable until
+    the first answer arrives."""
+    coordinator = _Coordinator(None, last_update_success=True)
+    for sensor_class in (PortfolioTotalSensor, PortfolioCashSensor, PortfolioCashPlusSensor):
+        assert sensor_class(coordinator, "eid", "EUR").available is False, sensor_class
+
+
+def test_a_waiting_figure_is_unavailable_and_the_others_are_not():
+    """The answers no longer list Cash's entry, and that is not confirmed
+    yet (PortfolioData.waiting): Cash is unavailable -- a gap in its
+    history, never a false 0 -- while Total value and Cash Plus are
+    shown."""
+    data = _data(**{VSN["id"]: _vsn()})
+    data.waiting = frozenset({"cash"})
+    coordinator = _Coordinator(data)
+    assert PortfolioCashSensor(coordinator, "eid", "EUR").available is False
+    for sensor_class in (PortfolioTotalSensor, PortfolioCashPlusSensor):
+        assert sensor_class(coordinator, "eid", "EUR").available is True, sensor_class
+
+
+def test_the_figure_keys_are_the_sensors_keys():
+    """The coordinator names the waiting figures by these keys
+    (PORTFOLIO_FIGURES): a figure whose sensor had another key would never
+    wait."""
+    assert {
+        sensor_class._key
+        for sensor_class in (PortfolioTotalSensor, PortfolioCashSensor, PortfolioCashPlusSensor)
+    } == set(PORTFOLIO_FIGURES)
 
 
 def test_return_sensors_read_their_timeframe():

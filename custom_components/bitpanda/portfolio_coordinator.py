@@ -16,7 +16,6 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     TimestampDataUpdateCoordinator,
@@ -41,14 +40,13 @@ from .const import (
     REWARDS_UPDATE_INTERVAL,
 )
 from .portfolio_store import KnownWallets, RewardMarks
-from .naming import managed_asset_id
 from .portfolio_model import (
+    PORTFOLIO_FIGURES,
     EarnData,
+    FigureWatch,
     PortfolioData,
     PortfolioReturns,
     RewardTotals,
-    confirmed,
-    lists_nothing,
     parse_earn_configs,
     parse_portfolio,
     sum_rewards,
@@ -58,34 +56,6 @@ from .streaks import FailureStreak
 from .tolerance import TolerantCoordinator
 
 _LOGGER = logging.getLogger(__name__)
-
-# What the check of empty /portfolio answers (see PortfolioCoordinator)
-# keeps per Portfolio entry: the empty answers in a row since the last one
-# taken as the truth, an _EmptyStreak, and whether the last answer taken as
-# the truth listed anything. In hass.data rather than on the coordinator, so
-# both outlive a reload -- a currency change's included -- or a failed setup,
-# but not the entry itself (async_forget_empty_answers). Nor a restart:
-# hass.data starts empty, and until the first answer taken as the truth the
-# registered wallets alone tell whether the account listed something.
-_EMPTY_ANSWERS = f"{DOMAIN}_empty_portfolio_answers"
-_LISTED = f"{DOMAIN}_portfolio_listed"
-
-
-@dataclass
-class _EmptyStreak:
-    """Empty answers in a row, and when the first of them was asked for."""
-
-    count: int
-    since: datetime
-
-
-@callback
-def async_forget_empty_answers(hass: HomeAssistant, entry_id: str) -> None:
-    """Drop what the check of empty answers keeps of an entry that is being
-    removed: its count of empty answers, and whether its account listed
-    anything."""
-    hass.data.get(_EMPTY_ANSWERS, {}).pop(entry_id, None)
-    hass.data.get(_LISTED, {}).pop(entry_id, None)
 
 
 def _auth_failed() -> ConfigEntryAuthFailed:
@@ -134,38 +104,32 @@ class PortfolioCoordinator(TolerantCoordinator[PortfolioData]):
     Values arrive converted by Bitpanda (`equivalent_currency_id`): no
     exchange rate is derived or applied here.
 
-    A completely empty answer -- no asset and no fiat entry at all -- from
-    an account that listed something before is far more likely a glitch at
-    Bitpanda than a sale of everything. Such an answer fails the update
-    instead: a failed refresh the tolerance covers like any other
-    (tolerance.py), so the sensors keep the last figures, and the wallet
-    manager, which acts only on successful refreshes, counts no miss and
-    removes nothing. Only an empty answer that makes WALLET_REMOVAL_MISSES
-    of them in a row, WALLET_REMOVAL_TIME after the first was asked for
-    (portfolio_model.confirmed), is taken as the truth: Total 0, and from
-    then on every empty answer is too, and the wallets count as missing as
-    usual. At the regular pace the third answer confirms -- the refresh that
-    would otherwise end the tolerance -- so the figures go from the last
-    ones to 0, never unavailable; with a failed request among the empty
-    answers the tolerance can end first, and the sensors are unavailable
-    until an answer is taken as the truth. Refreshes by hand or a reload
-    bring answers sooner, and they count, but never confirm sooner. A
-    failed request neither counts nor resets the streak; any answer taken
-    as the truth clears it.
+    Every successful answer is the truth, an empty one too. Yet what an
+    answer no longer lists may be a glitch at Bitpanda rather than a sale,
+    so a figure whose entry vanished waits before it shows 0: Total value
+    once the answer lists no entry at all, Cash once it lists no fiat entry,
+    Cash Plus once it lists no Cash Plus holding (PortfolioData.
+    figures_listed). One FigureWatch per figure (PORTFOLIO_FIGURES) counts
+    the answers without its entry. While they are too few to confirm it --
+    WALLET_REMOVAL_MISSES in a row, the last WALLET_REMOVAL_TIME after the
+    first was asked for (portfolio_model.confirmed) -- the figure waits:
+    PortfolioData.waiting names it, and its sensor is unavailable. That is
+    the pace at which the wallet manager removes a sold asset's wallet;
+    refreshes by hand count, but never make it sooner. An answer that lists
+    the entry again shows its value and clears the count; one that leaves
+    Cash Plus in doubt clears it too, without making Cash Plus there
+    (FigureWatch).
 
-    Listed something before: the last answer taken as the truth for this
-    entry listed holdings or fiat. That and the streak are kept in
-    hass.data, so a reload -- a currency change's too, whose purge has just
-    removed the wallets -- or a setup that is retried goes on where the last
-    coordinator stopped. hass.data does not survive a restart, though: until
-    the first answer taken as the truth after one, the registered wallets of
-    this entry stand in, and an account that listed fiat alone has none. An
-    empty answer from an account that never listed anything -- a new, empty
-    account -- is the truth at once, so its setup works.
+    The watches live on this coordinator, so every start -- of Home
+    Assistant, or a setup or reload of the entry, a currency change's
+    included -- begins them afresh: an entry missing from the first answer
+    was never there to vanish, and its figure shows 0 at once. A failed
+    request goes through the failure tolerance (tolerance.py) alone: it
+    neither counts as an answer without the entry nor clears the count.
 
     Every answer carries the time it was asked for (PortfolioData.
-    requested_at, Home Assistant's clock), by which the wallet manager times
-    its misses the same way.
+    requested_at, Home Assistant's clock), by which the watches and the
+    wallet manager time their misses.
     """
 
     config_entry: PortfolioConfigEntry
@@ -189,6 +153,13 @@ class PortfolioCoordinator(TolerantCoordinator[PortfolioData]):
         self._client = client
         self._currency_id = currency_id
         self._directory = directory
+        # Figure key -> its wait, which only a successful answer moves on.
+        self._watches: dict[str, FigureWatch] = {
+            key: FigureWatch() for key in PORTFOLIO_FIGURES
+        }
+        # The figures that waited after the last successful answer: a change
+        # is logged, for whoever wonders why a figure shows unavailable.
+        self._waiting: frozenset[str] = frozenset()
 
     async def _async_fetch(self, requested_at: datetime) -> PortfolioData:
         try:
@@ -199,7 +170,6 @@ class PortfolioCoordinator(TolerantCoordinator[PortfolioData]):
             raise _auth_failed() from None
         except BitpandaApiError as err:
             raise _update_failed(err) from None
-        self._check_empty_answer(entries, requested_at)
         data = parse_portfolio(entries)
         data.requested_at = requested_at
         # Never raises: a failed lookup leaves the holdings not named yet
@@ -213,41 +183,20 @@ class PortfolioCoordinator(TolerantCoordinator[PortfolioData]):
         data.unlisted = {
             asset_id for asset_id in data.holdings if self._directory.is_unlisted(asset_id)
         }
-        return data
-
-    def _check_empty_answer(
-        self, entries: list[dict[str, Any]], requested_at: datetime
-    ) -> None:
-        """Raise UpdateFailed for an empty answer not confirmed yet; count
-        or clear the empty answers in a row, and remember whether the answer
-        taken as the truth listed anything (see the class docstring)."""
-        streaks: dict[str, _EmptyStreak] = self.hass.data.setdefault(_EMPTY_ANSWERS, {})
-        listed: dict[str, bool] = self.hass.data.setdefault(_LISTED, {})
-        entry_id = self.config_entry.entry_id
-        empty = lists_nothing(entries)
-        # None before the first answer taken as the truth since Home
-        # Assistant started -- hass.data does not survive a restart -- when
-        # the registered wallets stand in.
-        remembered = listed.get(entry_id)
-        if empty and (remembered if remembered is not None else self._has_wallets()):
-            streak = streaks.get(entry_id) or _EmptyStreak(count=0, since=requested_at)
-            streak.count += 1
-            if not confirmed(streak.count, streak.since, requested_at):
-                streaks[entry_id] = streak
-                raise UpdateFailed(
-                    translation_domain=DOMAIN, translation_key="portfolio_empty"
-                )
-        streaks.pop(entry_id, None)
-        listed[entry_id] = not empty
-
-    def _has_wallets(self) -> bool:
-        """Whether wallets of this entry are registered -- wallet, staking
-        or total sensors: the account listed something before."""
-        entry_id = self.config_entry.entry_id
-        return any(
-            managed_asset_id(entry_id, reg_entry.unique_id) is not None
-            for reg_entry in er.async_entries_for_config_entry(er.async_get(self.hass), entry_id)
+        # After `assets` and `unlisted`: Cash Plus's entry needs the holdings
+        # classified.
+        listed = data.figures_listed()
+        data.waiting = frozenset(
+            key for key, watch in self._watches.items() if watch.observe(listed[key], requested_at)
         )
+        if data.waiting != self._waiting:
+            _LOGGER.debug(
+                "Portfolio figures missing from Bitpanda's answer, unavailable until "
+                "confirmed: %s",
+                ", ".join(sorted(data.waiting)) or "none",
+            )
+            self._waiting = data.waiting
+        return data
 
 
 class EarnCoordinator(DataUpdateCoordinator[EarnData]):

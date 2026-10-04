@@ -20,8 +20,8 @@ DECIMALS = 8
 
 def confirmed(count: int, since: datetime, now: datetime) -> bool:
     """Whether `count` answers in a row that say the same -- no such holding,
-    or no holding at all -- confirm it, the first asked for at `since`, the
-    last at `now`.
+    or no entry of a Portfolio figure: no fiat, no Cash Plus, no entry at
+    all -- confirm it, the first asked for at `since`, the last at `now`.
 
     WALLET_REMOVAL_MISSES of them, spread over WALLET_REMOVAL_TIME: at the
     regular pace the one that completes the count confirms, while answers
@@ -31,6 +31,69 @@ def confirmed(count: int, since: datetime, now: datetime) -> bool:
     return streak_confirmed(
         count, since, now, needed=WALLET_REMOVAL_MISSES, interval=PORTFOLIO_UPDATE_INTERVAL
     )
+
+
+# The Portfolio figures that wait before they show 0 once what they show has
+# vanished from the answer, by the `_key` of the sensor that shows each: Total
+# value, Cash and Cash Plus.
+PORTFOLIO_FIGURES: tuple[str, ...] = ("total", "cash", "cash_plus")
+
+
+@dataclass
+class FigureWatch:
+    """The wait of one Portfolio figure whose entry may vanish from the
+    /portfolio answer (see PortfolioData for the entry each depends on).
+
+    `observe` takes every successful answer, and the figure is in one of
+    three states. There: the answer lists its entry. Waiting: the entry was
+    there and the answers since do not list it, too few yet to confirm it
+    (`confirmed`) -- the figure is unavailable, so that a glitch at Bitpanda
+    leaves a gap in its history, never a false 0. Confirmed empty: the figure
+    shows 0.
+
+    A watch starts out having seen nothing: an entry missing from the first
+    answer after a start -- a setup, a restart, a reload -- was never there
+    to vanish, so the figure shows 0 at once and nothing is counted. Once 0
+    it stays 0, with nothing more counted, while the entry stays missing: it
+    waits again only after the entry came back and vanished anew.
+
+    An answer may also leave the entry in doubt -- Cash Plus beside a
+    holding that cannot be read or is not classified yet, which might or
+    might not be Cash Plus. Doubt is neither there nor missing: it clears a
+    running count, so nothing waits, but never makes the figure there. Had
+    it, a figure that never was there would wait once the holding is read
+    or classified.
+
+    `seen` says the entry was there and its vanishing is not confirmed yet;
+    `misses` counts the answers without it since, the first asked for at
+    `since`.
+    """
+
+    seen: bool = False
+    misses: int = 0
+    since: datetime | None = None
+
+    def observe(self, there: bool | None, at: datetime) -> bool:
+        """Record one successful answer, asked for at `at`, that lists the
+        entry, does not, or leaves it in doubt (`there` True, False or
+        None). True while the figure waits."""
+        if there:
+            self.seen, self.misses, self.since = True, 0, None
+            return False
+        if there is None:
+            # Doubt: no miss. A running count is cleared, `seen` left as it
+            # is -- a figure not seen has nothing counted.
+            self.misses, self.since = 0, None
+            return False
+        if not self.seen:
+            # Missing since the start, or confirmed empty: 0, nothing counted.
+            return False
+        self.misses += 1
+        self.since = self.since or at
+        if confirmed(self.misses, self.since, at):
+            self.seen, self.misses, self.since = False, 0, None
+            return False
+        return True
 
 
 def to_float(container: dict[str, Any] | None, key: str = "value") -> float | None:
@@ -132,6 +195,19 @@ class PortfolioData:
     read failure into a silently low total. The same reasoning makes `cash`
     `None` when a fiat entry's balance could not be read: `None` means
     unknown, never that there was none.
+
+    Each figure depends on one kind of entry, which the answer lists or does
+    not (`figures_listed`): Total value on any entry at all, Cash on a fiat
+    entry, Cash Plus on a holding of the group `fiat_earn`. An entry that
+    cannot be read is listed all the same -- there for Total value, and a
+    fiat one for Cash: it is no sign of a sale. Cash Plus alone can be in
+    doubt: a holding that cannot be read, or is not classified yet, might or
+    might not be Cash Plus. Doubt is neither there nor missing (FigureWatch):
+    it clears a running count but never makes Cash Plus there. Either way
+    the figure shows `unknown`, neither 0 nor a wait. Only a holding the
+    catalogue does not list is sure to be no Cash Plus. `waiting` names the
+    figures whose entry vanished and whose vanishing is not confirmed yet
+    (FigureWatch).
     """
 
     holdings: dict[str, Holding] = field(default_factory=dict)
@@ -143,6 +219,15 @@ class PortfolioData:
     # times `confirmed` measures between answers. None where no request
     # made it.
     requested_at: datetime | None = None
+    # What the answer lists, as parse_portfolio finds it: any entry at all,
+    # and a fiat entry, its balance readable or not. Cash Plus's entry is
+    # `listed_cash_plus`: it needs the holdings classified.
+    listed_any: bool = False
+    listed_fiat: bool = False
+    # The figures (PORTFOLIO_FIGURES) that wait: their sensors are unavailable.
+    # Set by the coordinator, from its FigureWatch objects, after each
+    # successful answer.
+    waiting: frozenset[str] = frozenset()
 
     def is_cash_plus(self, asset_id: str) -> bool | None:
         asset = self.assets.get(asset_id)
@@ -220,6 +305,24 @@ class PortfolioData:
                 holding.balance, 2
             )
             for asset_id, holding in holdings.items()
+        }
+
+    @property
+    def listed_cash_plus(self) -> bool | None:
+        """Whether the answer lists a Cash Plus holding; None while that is
+        in doubt (`_cash_plus_holdings` is None). A holding the catalogue
+        does not list is none, as for `cash_plus`."""
+        holdings = self._cash_plus_holdings()
+        return None if holdings is None else bool(holdings)
+
+    def figures_listed(self) -> dict[str, bool | None]:
+        """Whether the answer lists the entry of each figure, by the figure's
+        key (PORTFOLIO_FIGURES) -- None for Cash Plus in doubt: what the
+        coordinator tells each FigureWatch after every successful answer."""
+        return {
+            "total": self.listed_any,
+            "cash": self.listed_fiat,
+            "cash_plus": self.listed_cash_plus,
         }
 
     @property
@@ -310,8 +413,12 @@ def parse_portfolio(entries: list[dict[str, Any]]) -> PortfolioData:
     held nothing: an unparsable holding goes into `unparsed_assets` and an
     unparsable fiat balance makes `cash` None, so the affected figure reads
     as unknown rather than quietly low.
+
+    It also notes what the answer lists -- any entry at all, and a fiat
+    entry -- the unreadable ones included: the entries Total value and Cash
+    depend on.
     """
-    data = PortfolioData()
+    data = PortfolioData(listed_any=not lists_nothing(entries))
     cash = 0.0
     cash_ok = True
     for entry in entries:
@@ -322,6 +429,7 @@ def parse_portfolio(entries: list[dict[str, Any]]) -> PortfolioData:
                 # Neither asset_id nor currency_id: not a shape this endpoint
                 # documents. Ignored, same as an entry that never existed.
                 continue
+            data.listed_fiat = True
             # `balance`, not `available_balance`: fiat reserved by a pending
             # order is still the user's cash.
             amount = to_float(entry.get("balance"))

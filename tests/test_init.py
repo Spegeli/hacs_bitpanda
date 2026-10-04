@@ -402,7 +402,7 @@ async def _next_refresh(hass, freezer) -> None:
     """The Portfolio's next regular refresh: Home Assistant's clock moves on
     past its update interval, and the refresh it scheduled runs to its end
     -- a background task, which only wait_background_tasks waits for. The
-    clock matters: an empty portfolio is believed, and a sold asset's wallet
+    clock matters: a vanished figure shows 0, and a sold asset's wallet is
     removed, only once their answers span two update intervals."""
     freezer.tick(timedelta(minutes=6))
     async_fire_time_changed(hass)
@@ -553,12 +553,15 @@ async def test_the_portfolio_keeps_its_figures_through_two_failed_refreshes(
     assert _value(hass, "sensor.bitpanda_vision_vsn_wallet_available") == 50.0
 
 
-async def test_a_sudden_empty_portfolio_changes_nothing_until_it_is_confirmed(
+async def test_an_empty_portfolio_waits_ten_minutes_then_shows_0_and_removes_the_wallets(
     hass, portfolio_api, freezer
 ):
-    """A Bitpanda glitch must not read as a sale of everything: the
-    Portfolio's figures and its wallets stay as they were until three empty
-    answers in a row confirm it. From then on the usual rules apply."""
+    """Everything sold and all money withdrawn -- or a glitch at Bitpanda,
+    which must not read as that: through two empty answers Total value, Cash
+    and the wallet are unavailable, a gap in their history. Cash Plus, never
+    there, shows 0, and the returns, which come from /portfolio-history, are
+    untouched. The third answer, ten minutes and more after the first, shows
+    0 and removes the wallet, in the same refresh."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
     portfolio_api.return_value = []
@@ -566,42 +569,113 @@ async def test_a_sudden_empty_portfolio_changes_nothing_until_it_is_confirmed(
 
     for _ in range(2):
         await _next_refresh(hass, freezer)
-        assert _value(hass, "sensor.bitpanda_portfolio_total") == 210.0
-        assert _value(hass, "sensor.bitpanda_vision_vsn_wallet_available") == 50.0
-    assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is not None
+        for entity_id in (
+            "sensor.bitpanda_portfolio_total",
+            "sensor.bitpanda_portfolio_cash",
+            "sensor.bitpanda_vision_vsn_wallet_available",
+        ):
+            assert hass.states.get(entity_id).state == "unavailable", entity_id
+        assert _value(hass, "sensor.bitpanda_portfolio_cash_plus") == 0.0
+        assert _value(hass, "sensor.bitpanda_portfolio_return_day") == 1.5
+        assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is not None
 
-    # Confirmed: the truth from here on, and the wallet's first miss.
     await _next_refresh(hass, freezer)
     assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
-    await _next_refresh(hass, freezer)
-    assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is not None
-    await _next_refresh(hass, freezer)
+    assert _value(hass, "sensor.bitpanda_portfolio_cash") == 0.0
     assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is None
+
+
+async def test_holdings_back_after_an_empty_answer_keep_their_wallets_unannounced(
+    hass, portfolio_api, freezer
+):
+    """A glitch: one empty answer, then everything back before the wallets
+    go. The wallet is unavailable in between; then it shows its value again
+    under the same entity ID, its registry entry never left, and nothing
+    announces it as new."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    added = async_capture_events(hass, "bitpanda_wallet_added")
+    ent_reg = er.async_get(hass)
+    wallet = ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available")
+    held = portfolio_api.return_value
+
+    portfolio_api.return_value = []
+    await _next_refresh(hass, freezer)
+    assert hass.states.get(wallet.entity_id).state == "unavailable"
+
+    portfolio_api.return_value = held
+    await _next_refresh(hass, freezer)
+    assert _value(hass, wallet.entity_id) == 50.0
+    assert ent_reg.async_get(wallet.entity_id).id == wallet.id
+    assert added == []
 
 
 async def test_an_empty_portfolio_mixed_with_a_timeout(hass, portfolio_api, freezer):
     """An empty answer, a request that fails (a timeout, or here a lost
-    connection), an empty answer: three failed refreshes in a row -- an
-    empty answer held back is one -- twelve minutes from the first to the
-    last, so the outage is confirmed before the empty portfolio is. The
-    figures stay through the first two and are unavailable after the third;
-    the next empty answer, the third in a row, confirms the empty
-    portfolio: 0."""
+    connection), two empty answers. The failed request neither counts nor
+    clears the count: Total value is unavailable after each of the first
+    three refreshes -- after the failed one, the last answer's Total value
+    still waits -- and the fourth, the third empty answer, shows 0."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
     portfolio_api.return_value = []
 
     await _next_refresh(hass, freezer)
-    assert _value(hass, "sensor.bitpanda_portfolio_total") == 210.0
+    assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unavailable"
     portfolio_api.side_effect = _no_connection
     await _next_refresh(hass, freezer)
-    assert _value(hass, "sensor.bitpanda_portfolio_total") == 210.0
+    assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unavailable"
     portfolio_api.side_effect = None
     await _next_refresh(hass, freezer)
     assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unavailable"
 
     await _next_refresh(hass, freezer)
     assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
+
+
+async def test_cash_waits_ten_minutes_when_all_fiat_is_gone(hass, portfolio_api, freezer):
+    """All money withdrawn, the holding kept: Cash is unavailable through
+    two answers without a fiat entry and shows 0 with the third, while Total
+    value follows the answer at once."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    vsn, _ = portfolio_api.return_value
+    portfolio_api.return_value = [vsn]
+
+    for _ in range(2):
+        await _next_refresh(hass, freezer)
+        assert hass.states.get("sensor.bitpanda_portfolio_cash").state == "unavailable"
+        assert _value(hass, "sensor.bitpanda_portfolio_total") == 200.0
+    await _next_refresh(hass, freezer)
+    assert _value(hass, "sensor.bitpanda_portfolio_cash") == 0.0
+
+
+_BCPEUR = _fixture("BCPEUR")
+
+
+async def test_cash_plus_waits_ten_minutes_when_it_is_gone(hass, portfolio_api, freezer):
+    """Cash Plus ended, the rest kept: Cash Plus is unavailable through two
+    answers without a Cash Plus holding and shows 0 with the third."""
+    held = portfolio_api.return_value
+    portfolio_api.return_value = [
+        *held,
+        {
+            "asset_id": _BCPEUR["id"],
+            "balance": {"value": "250.75000000"},
+            "available_balance": {"value": "250.75000000"},
+            "currency_balance": {"value": "250.75"},
+        },
+    ]
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    assert _value(hass, "sensor.bitpanda_portfolio_cash_plus") == 250.75
+    portfolio_api.return_value = held
+
+    for _ in range(2):
+        await _next_refresh(hass, freezer)
+        assert hass.states.get("sensor.bitpanda_portfolio_cash_plus").state == "unavailable"
+    await _next_refresh(hass, freezer)
+    assert _value(hass, "sensor.bitpanda_portfolio_cash_plus") == 0.0
 
 
 async def test_a_figure_bitpanda_leaves_unreadable_is_unknown_not_unavailable(
@@ -709,31 +783,33 @@ async def test_a_held_wallet_whose_value_cannot_be_told_is_unknown(hass, portfol
 
 def _registered_wallet(hass, entry) -> str:
     """The VSN wallet of `entry` as a restart finds it: its device and its
-    Wallet sensor in the registries, nothing loaded yet."""
+    Wallet sensor in the registries, nothing loaded yet -- the sensor's
+    state `unavailable`, as Home Assistant writes it at its start for every
+    registered entity not added yet."""
     device = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, f"{entry.entry_id}_wallet_{VSN['id']}")},
         name="Vision (VSN) Wallet",
     )
-    return er.async_get(hass).async_get_or_create(
+    wallet = er.async_get(hass).async_get_or_create(
         "sensor", DOMAIN, f"{entry.entry_id}_wallet_{VSN['id']}", config_entry=entry,
         device_id=device.id, suggested_object_id="bitpanda_vision_vsn_wallet_available",
-    ).entity_id
+    )
+    wallet.write_unavailable_state(hass)
+    return wallet.entity_id
 
 
 @pytest.mark.parametrize(
     "first_refresh", [None, "before_2026_9"], ids=["current", "before_2026_9"]
 )
-async def test_after_a_restart_an_empty_portfolio_waits_for_confirmation(
+async def test_after_a_restart_an_empty_portfolio_shows_0_at_once(
     hass, portfolio_api, caplog, first_refresh, freezer
 ):
-    """A wallet registered from before the restart: the account listed
-    something. An empty first answer loads the Portfolio with its sensors
-    unavailable -- retrying setup would bring the next answers within
-    seconds -- and nothing is removed until three empty answers in a row, at
-    the usual pace, confirm it. From then on the usual rules apply. On every
-    supported Home Assistant version: before 2026.9 the failed first refresh
-    carries its reason only through _async_first_refresh."""
+    """A wallet registered from before the restart, and an empty first
+    answer: the Portfolio loads as usual, on every supported Home Assistant
+    version, and shows 0 at once -- nothing vanished since the start. The
+    wallet stays unavailable, and goes with the third answer without its
+    asset -- setup's own being the first -- not before."""
     entry = _portfolio_entry(hass)
     wallet = _registered_wallet(hass, entry)
     portfolio_api.return_value = []
@@ -742,16 +818,13 @@ async def test_after_a_restart_an_empty_portfolio_waits_for_confirmation(
         None if first_refresh is None else _first_refresh_before_2026_9
     ):
         await _setup(hass, entry)
-    assert "Bitpanda reported an empty portfolio" in caplog.text
-    ent_reg = er.async_get(hass)
-    for _ in range(2):
-        assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unavailable"
-        assert ent_reg.async_get(wallet) is not None
-        await _next_refresh(hass, freezer)
-
-    # The third empty answer in a row: the truth, and the wallet's first miss.
+    assert "empty portfolio" not in caplog.text
     assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
+    assert hass.states.get(wallet).state == "unavailable"
+    ent_reg = er.async_get(hass)
+
     await _next_refresh(hass, freezer)
+    assert hass.states.get(wallet).state == "unavailable"
     assert ent_reg.async_get(wallet) is not None
     await _next_refresh(hass, freezer)
     assert ent_reg.async_get(wallet) is None
@@ -762,14 +835,11 @@ def _refreshed_by_hand():
     return patch("custom_components.bitpanda.monotonic", side_effect=count(1000, 60))
 
 
-async def test_refreshing_by_hand_never_confirms_an_empty_portfolio_sooner(
-    hass, portfolio_api, freezer
-):
-    """Empty answers by hand, twenty seconds apart: each fails the call, and
-    none is the truth, however many -- until two update intervals have
-    passed since the first; the first empty answer after that is. Until
-    then the figures stay: however many failed refreshes, they came too
-    quickly to confirm an outage either."""
+async def test_refreshing_by_hand_never_shows_0_sooner(hass, portfolio_api, freezer):
+    """Empty answers by hand, twenty seconds apart: each call succeeds, and
+    Total value waits, however many there are -- until two update intervals
+    have passed since the first; the first empty answer after that shows
+    0."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
     portfolio_api.return_value = []
@@ -777,9 +847,8 @@ async def test_refreshing_by_hand_never_confirms_an_empty_portfolio_sooner(
     with _refreshed_by_hand():
         for _ in range(4):
             freezer.tick(timedelta(seconds=20))
-            with pytest.raises(HomeAssistantError):
-                await _refresh(hass)
-        assert _value(hass, "sensor.bitpanda_portfolio_total") == 210.0
+            await _refresh(hass)
+            assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unavailable"
         assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is not None
 
         freezer.tick(2 * PORTFOLIO_UPDATE_INTERVAL)
@@ -848,12 +917,20 @@ async def test_cash_plus_has_its_value_beside_a_holding_the_catalogue_does_not_l
     assert er.async_get(hass).async_get("sensor.bitpanda_vision_vsn_wallet_available") is None
 
 
-async def test_cash_plus_is_unknown_while_a_holding_cannot_be_looked_up(hass, portfolio_api):
-    """A failed lookup tells nothing: the holding might be Cash Plus."""
+async def test_cash_plus_is_unknown_while_a_holding_cannot_be_looked_up(
+    hass, portfolio_api, freezer
+):
+    """A failed lookup tells nothing: the holding might be Cash Plus. That
+    doubt never makes Cash Plus there, though: once the lookup works and
+    tells the holding is none, Cash Plus shows 0 at once, never
+    `unavailable`."""
     failing = AsyncMock(side_effect=BitpandaApiError("HTTP 503 from /assets"))
     with patch(f"{_CLIENT}async_get_assets", failing):
         await _setup(hass, _portfolio_entry(hass))
     assert hass.states.get("sensor.bitpanda_portfolio_cash_plus").state == "unknown"
+
+    await _next_refresh(hass, freezer)
+    assert _value(hass, "sensor.bitpanda_portfolio_cash_plus") == 0.0
 
 
 async def test_a_holding_the_catalogue_lists_later_gets_its_wallet_within_a_day(
@@ -904,88 +981,28 @@ async def test_refreshing_by_hand_never_removes_a_sold_wallet_sooner(
 
 
 async def test_a_new_empty_account_is_set_up_at_once(hass, portfolio_api):
-    """No wallet registered: nothing to hold back."""
+    """Nothing was ever there to vanish: every figure shows 0 at once."""
     portfolio_api.return_value = []
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
     assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
 
 
-async def test_the_count_of_empty_answers_survives_a_reload(hass, portfolio_api, freezer):
-    """The reload's first answer, at once, is the third empty one in a row,
-    not a first -- yet the ten minutes still run from the first: the next
-    regular answer, twelve minutes after it, is the truth. Had the reload
-    started over, that one would be only the second."""
+async def test_a_reload_while_figures_wait_shows_0_at_once(hass, portfolio_api, freezer):
+    """The waits live on the coordinator, which a reload -- a change of
+    options, say -- starts afresh: its first answer, empty, is nothing that
+    vanished since that start, so it shows 0 at once, never an
+    `unavailable` left over from before."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
     portfolio_api.return_value = []
     await _next_refresh(hass, freezer)
-    await _next_refresh(hass, freezer)
+    assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unavailable"
 
     await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     assert entry.state is ConfigEntryState.LOADED
-    assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unavailable"
-
-    await _next_refresh(hass, freezer)
     assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
-
-
-_BCPEUR = _fixture("BCPEUR")
-# Answers of accounts that have no wallet registered although they list
-# something: holdings of Cash Plus alone, which gets no wallet, or fiat alone.
-_WALLETLESS_ANSWERS = {
-    "cash_plus_holdings": [
-        {
-            "asset_id": _BCPEUR["id"],
-            "balance": {"value": "250.75000000"},
-            "available_balance": {"value": "250.75000000"},
-            "currency_balance": {"value": "250.75"},
-        },
-    ],
-    "fiat_only": [{"currency_id": _EUR_ID, "balance": {"value": "10.00"}}],
-}
-
-
-@pytest.mark.parametrize("listed", list(_WALLETLESS_ANSWERS))
-async def test_an_empty_answer_after_a_reload_waits_although_no_wallet_is_registered(
-    hass, portfolio_api, freezer, listed
-):
-    """What the account listed before the reload is remembered, wallets or
-    none: an empty answer after it leaves the Portfolio unavailable until
-    three answers in a row, at the usual pace, confirm it."""
-    portfolio_api.return_value = _WALLETLESS_ANSWERS[listed]
-    entry = _portfolio_entry(hass)
-    await _setup(hass, entry)
-    assert _value(hass, "sensor.bitpanda_portfolio_total") > 0
-    devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
-    assert [device.name for device in devices] == ["Portfolio"]
-    portfolio_api.return_value = []
-
-    await hass.config_entries.async_reload(entry.entry_id)
-    await hass.async_block_till_done()
-    for _ in range(2):
-        assert hass.states.get("sensor.bitpanda_portfolio_total").state == "unavailable"
-        await _next_refresh(hass, freezer)
-    assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
-
-
-async def test_removing_the_portfolio_forgets_its_empty_answers_and_what_it_listed(
-    hass, portfolio_api, freezer
-):
-    """Both outlive reloads and retried setups, not the entry."""
-    entry = _portfolio_entry(hass)
-    await _setup(hass, entry)
-    portfolio_api.return_value = []
-    await _next_refresh(hass, freezer)
-    assert hass.data["bitpanda_empty_portfolio_answers"][entry.entry_id].count == 1
-    assert hass.data["bitpanda_portfolio_listed"][entry.entry_id] is True
-
-    await hass.config_entries.async_remove(entry.entry_id)
-    await hass.async_block_till_done()
-
-    assert entry.entry_id not in hass.data["bitpanda_empty_portfolio_answers"]
-    assert entry.entry_id not in hass.data["bitpanda_portfolio_listed"]
 
 
 async def test_removing_the_portfolio_deletes_its_known_wallets(
@@ -1009,12 +1026,12 @@ async def test_removing_the_portfolio_deletes_its_known_wallets(
     assert (await async_get_portfolio_store(hass, entry.entry_id)).known_wallets.first_run is True
 
 
-async def test_a_wallet_may_be_deleted_while_an_empty_answer_awaits_confirmation(
+async def test_a_wallet_an_empty_answer_no_longer_lists_may_be_deleted(
     hass, portfolio_api
 ):
-    """Before any answer is taken as the truth nothing tells whether the
-    asset is held, and no wallet was added in this run: it may go, without
-    a reload."""
+    """A wallet registered from before a restart whose first answer is
+    empty: its asset is no longer held, so it may go -- with the one reload
+    that deleting any such wallet brings."""
     entry = _portfolio_entry(hass)
     _registered_wallet(hass, entry)
     portfolio_api.return_value = []
@@ -1023,7 +1040,7 @@ async def test_a_wallet_may_be_deleted_while_an_empty_answer_awaits_confirmation
         assert await async_remove_config_entry_device(
             hass, entry, _own_device(hass, entry, "wallet", VSN)
         )
-    reload.assert_not_called()
+    reload.assert_called_once_with(entry.entry_id)
 
 
 @pytest.mark.parametrize(
@@ -1941,15 +1958,15 @@ async def test_a_failed_refresh_fails_the_action_and_names_the_service(
     assert _value(hass, "sensor.bitpanda_bitcoin_btc_price_tracker_eur") == 100.0
 
 
-async def test_an_empty_portfolio_held_back_fails_the_refresh_action(hass, portfolio_api):
-    """An empty answer awaiting confirmation is a failed update, so the call
-    fails too -- while the Portfolio's sensors keep their values."""
+async def test_the_refresh_action_succeeds_with_an_empty_portfolio(hass, portfolio_api):
+    """An empty answer is an answer like any other: the refresh it brings
+    succeeds, and so does the call."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
+    calls = portfolio_api.call_count
     portfolio_api.return_value = []
-    with pytest.raises(HomeAssistantError) as excinfo:
-        await _refresh(hass)
-    assert excinfo.value.translation_key == "refresh_failed"
+    await _refresh(hass)
+    assert portfolio_api.call_count == calls + 1
 
 
 async def test_continue_on_error_carries_a_script_past_a_failed_refresh(hass, portfolio_api):

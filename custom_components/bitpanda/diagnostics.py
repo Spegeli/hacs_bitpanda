@@ -103,6 +103,9 @@ def _portfolio(
             # Of those, the ones the catalogue does not list: no Cash Plus,
             # unlike a lookup that failed, which leaves Cash Plus unknown.
             "unlisted_holdings": len(data.unlisted) if data else 0,
+            # Figures whose entry vanished, unavailable until confirmed
+            # (portfolio_model.FigureWatch): keys only, never an amount.
+            "waiting_figures": sorted(data.waiting) if data else [],
         },
         "history": {
             **_health(runtime.history),

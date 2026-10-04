@@ -61,7 +61,6 @@ from .portfolio_coordinator import (
     PortfolioCoordinator,
     PortfolioRuntime,
     RewardsCoordinator,
-    async_forget_empty_answers,
 )
 from .price_coordinator import (
     EcbCoordinator,
@@ -173,20 +172,7 @@ async def _async_start_portfolio(
         known_wallets=store.known_wallets,
         reward_marks=store.reward_marks,
     )
-    try:
-        await _async_first_refresh(runtime.portfolio)
-    except ConfigEntryNotReady as err:
-        # An empty answer that awaits confirmation (PortfolioCoordinator) is
-        # no reason to retry setup: Home Assistant retries after 5 s, then
-        # 10 s, so the next answers -- which confirm it -- would come within
-        # seconds instead of at the usual pace. The entry loads with its
-        # sensors unavailable, and the regular refreshes confirm or refute it.
-        if err.translation_key != "portfolio_empty":
-            raise
-        _LOGGER.warning(
-            "Bitpanda reported an empty portfolio; the Portfolio's sensors stay "
-            "unavailable until the next answers list its holdings again or confirm it"
-        )
+    await _async_first_refresh(runtime.portfolio)
     # New staking payouts are announced after every successful refresh of
     # the rewards, the first one below included (announcements.py). The
     # coordinators are handed over: entry.runtime_data is set only once this
@@ -423,21 +409,19 @@ async def async_unload_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) ->
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> None:
-    """Forget what outlived the entry's setups: its count of empty
-    /portfolio answers and whether its account listed anything, kept in
-    hass.data across reloads; the Portfolio's store of known wallets and
-    staking reward marks, with its file (portfolio_store.py); the Price
-    Tracker's slow-interval repair issue with the Price Tracker; the repair
-    issue for the entities the upgrade left alone with the Portfolio, whose
-    entities they were; each repair issue about what blocks the upgrade of a
-    version 1 entry, once its cause went with this entry -- and, with the
-    last Bitpanda entry, the upgrade's repair issues (migration.py).
+    """Forget what outlived the entry's setups: the Portfolio's store of
+    known wallets and staking reward marks, with its file
+    (portfolio_store.py); the Price Tracker's slow-interval repair issue
+    with the Price Tracker; the repair issue for the entities the upgrade
+    left alone with the Portfolio, whose entities they were; each repair
+    issue about what blocks the upgrade of a version 1 entry, once its cause
+    went with this entry -- and, with the last Bitpanda entry, the upgrade's
+    repair issues (migration.py).
 
     The entry itself is left out when looking for another one: Home
     Assistant 2025.5 has already dropped it from its entries when this
     runs, and nothing here depends on that order.
     """
-    async_forget_empty_answers(hass, entry.entry_id)
     if entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER:
         async_delete_price_interval_issue(hass)
     else:
@@ -493,15 +477,10 @@ async def async_remove_config_entry_device(
     )
     if not wallets or config_entry.state is not ConfigEntryState.LOADED:
         return True
-    # The Price Tracker's entry returned above: this is the Portfolio's.
+    # The Price Tracker's entry returned above: this is the Portfolio's,
+    # loaded -- its first refresh succeeded, so `data` holds an answer.
     runtime = cast(PortfolioRuntime, config_entry.runtime_data)
     data = runtime.portfolio.data
-    if data is None:
-        # No answer taken as the truth yet -- an empty one awaits
-        # confirmation: nothing tells whether the asset is held, and the
-        # wallet manager has added no wallet in this run. Should the asset
-        # still be held, its wallet comes back with the answer listing it.
-        return True
     for asset_id in wallets:
         if asset_id not in data.held:
             continue

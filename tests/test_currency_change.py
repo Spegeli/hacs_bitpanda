@@ -196,15 +196,12 @@ async def _next_refresh(hass, freezer) -> None:
     await hass.async_block_till_done(wait_background_tasks=True)
 
 
-async def test_an_empty_answer_right_after_a_currency_change_waits_for_confirmation(
-    hass, portfolio_api, freezer
+async def test_an_empty_answer_right_after_a_currency_change_shows_0_at_once(
+    hass, portfolio_api
 ):
-    """The purge has just removed the wallets when the reload asks, so none
-    is registered; that the account listed something is remembered all the
-    same. An empty answer then -- as likely a glitch at Bitpanda as ever --
-    leaves the Portfolio unavailable until three answers in a row, at the
-    usual pace, confirm it, rather than start the new currency's history
-    with a 0."""
+    """The change reloads the Portfolio, which starts afresh, its purge
+    having just removed the wallets: an empty first answer then is nothing
+    that vanished, and the new currency's history starts with 0 at once."""
     entry = _portfolio(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await async_wait_recording_done(hass)
@@ -213,9 +210,6 @@ async def test_an_empty_answer_right_after_a_currency_change_waits_for_confirmat
     await _change_currency_to_usd(hass, entry)
 
     assert er.async_get(hass).async_get(_WALLET) is None
-    for _ in range(2):
-        assert hass.states.get(_TOTAL).state == "unavailable"
-        await _next_refresh(hass, freezer)
     assert float(hass.states.get(_TOTAL).state) == 0.0
 
 

@@ -1,7 +1,8 @@
 """Pure rule for confirming a streak of same answers by count and time: no
-Home Assistant, no network. A wallet's empty answers and a coordinator's
-failed refreshes are both counted this way -- portfolio_model.confirmed is
-this module's rule under the wallet's own names.
+Home Assistant, no network. Missing holdings, missing Portfolio figures and
+a coordinator's failed refreshes are all counted this way --
+portfolio_model.confirmed is this module's rule under the wallet's own
+names.
 """
 from __future__ import annotations
 

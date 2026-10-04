@@ -95,7 +95,7 @@ Everything lives in `custom_components/bitpanda/`:
 | `migration.py` | Migration of version 1 (legacy API) entries to version 3; tells the user what changed, and what keeps an entry from being upgraded, as repair issues; finds the entities it left in place and, for `repairs.py`, deletes them |
 | `naming.py` | Labels, device names, entity IDs, unique_ids, device identifiers |
 | `portfolio_coordinator.py` | Portfolio, History, Earn and Rewards coordinators |
-| `portfolio_model.py` | Pure data model: holdings, value split, Cash Plus, Earn, rewards |
+| `portfolio_model.py` | Pure data model: holdings, value split, Cash Plus, Earn, rewards, and the wait of a Portfolio figure whose entry vanished (`FigureWatch`) |
 | `portfolio_sensor.py` | Portfolio sensors and the wallet lifecycle manager, which also keeps the wallet groups |
 | `portfolio_store.py` | What each Portfolio remembers, in `.storage/bitpanda.portfolio.<entry_id>`, one section per feature: the assets known — announced, or there when the list began — (`known_wallets`), and the newest announced staking payout per asset (`known_rewards`) |
 | `price_coordinator.py` | Keyless ticker coordinator with its request budget, and the repair issue while that stretches its interval past 30 minutes; ECB coordinator |
@@ -103,7 +103,7 @@ Everything lives in `custom_components/bitpanda/`:
 | `purge.py` | On a currency change, deletes the Portfolio's sensors and devices with their history and long-term statistics, and the history and statistics of its sensors removed earlier; at setup, the history and statistics an earlier Portfolio left in another currency |
 | `repairs.py` | The fix flow of the upgrade's repair issue for entities not migrated: after a confirmation, deletes them and each old device left empty |
 | `sensor.py` | Dispatches the sensor platform to the service |
-| `streaks.py` | The rule for things in a row — failed refreshes, empty answers, missing holdings — confirmed by count and time |
+| `streaks.py` | The rule for things in a row — failed refreshes, missing holdings, missing Portfolio figures — confirmed by count and time |
 | `strings.json`, `translations/` | UI strings, seven languages (see [Translations](#translations)) |
 | `tolerance.py` | `TolerantCoordinator` and `TolerantEntity`: sensors keep their last data through short outages |
 

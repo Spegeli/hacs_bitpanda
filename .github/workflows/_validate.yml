@@ -6,21 +6,25 @@ name: Validate (internal)
 #   always       - hassfest, HACS, the Python 3.13 checks and the release
 #                  script on Python 3.12: quick checks of what ships and of
 #                  what releases it
-#   inputs.tests - the tests with their coverage and mypy --strict, minutes
-#                  each. Only a manual Validate run can switch them off; a
-#                  release never does.
+#   inputs.tests - the tests with their coverage, the tests on the minimum
+#                  Home Assistant and mypy --strict, minutes each. Only a
+#                  manual Validate run can switch them off; a release never
+#                  does.
 # hassfest, the tests and mypy check against one Home Assistant release: the
 # newest stable one with a pytest-homeassistant-custom-component release,
 # never a beta. Each of the three jobs finds it first
 # (.github/scripts/ha_version.py), so a new stable release reaches them
-# without a change here -- and can turn a run red without one.
+# without a change here -- and can turn a run red without one. The tests run
+# a second time against the minimum release, "homeassistant" in hacs.json
+# (tests/requirements-floor.txt), without the coverage gate: a change or a
+# test that works only on newer releases turns the run red there.
 # Callers set permissions: contents: read.
 
 on:
   workflow_call:
     inputs:
       tests:
-        description: "Run the tests with coverage and mypy --strict"
+        description: "Run the tests (with coverage, and on the minimum Home Assistant) and mypy --strict"
         required: false
         default: true
         type: boolean
@@ -54,10 +58,10 @@ jobs:
         with:
           category: integration
 
-  # Home Assistant 2025.5, the floor (hacs.json), runs on Python 3.13, the
-  # tests and mypy below on 3.14 only. Compiling needs no Home Assistant and
-  # fails on any syntax newer than 3.13; CONTRIBUTING.md names what else the
-  # floor's Python asks of the code.
+  # Home Assistant 2025.5, the floor (hacs.json), runs on Python 3.13; the
+  # tests with coverage and mypy run on 3.14. Compiling needs no Home
+  # Assistant and fails on any syntax newer than 3.13; CONTRIBUTING.md names
+  # what else the floor's Python asks of the code.
   python-floor:
     name: Python 3.13 syntax
     runs-on: ubuntu-24.04
@@ -128,6 +132,42 @@ jobs:
           --cov=custom_components.bitpanda
           --cov-report=term-missing
           --cov-fail-under=95
+
+  pytest-minimum:
+    name: Tests on the minimum Home Assistant
+    if: inputs.tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: tests/requirements-floor.txt
+      - name: Install the test requirements of the minimum Home Assistant
+        run: python -m pip install -r tests/requirements-floor.txt
+      # The package in tests/requirements-floor.txt pins one release; it must
+      # be the one hacs.json promises, or this job tests another minimum.
+      - name: Check that this is the minimum Home Assistant in hacs.json
+        run: |
+          python - <<'PY'
+          import json
+          from homeassistant.const import __version__ as installed
+          with open("hacs.json", encoding="utf-8") as file:
+              minimum = json.load(file)["homeassistant"]
+          if installed != minimum:
+              # On stdout: GitHub reads workflow commands such as ::error:: there.
+              print(
+                  f"::error::tests/requirements-floor.txt installs Home Assistant {installed}, "
+                  f"but hacs.json names {minimum} as the minimum: pin the test package of "
+                  f"{minimum} there, or raise both together."
+              )
+              raise SystemExit(1)
+          print(f"Home Assistant {installed}, the minimum in hacs.json")
+          PY
+      - name: Run the tests
+        run: python -m pytest tests/ -q
 
   mypy:
     name: Strict typing

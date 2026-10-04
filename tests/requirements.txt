@@ -11,6 +11,8 @@ pytest-asyncio>=0.24.0
 # floors only. The suite mocks HTTP through homeassistant's own
 # AiohttpClientMocker, which ships inside that package, so there is no
 # separate mocking library to keep in step with aiohttp.
+# The tests on the minimum Home Assistant in hacs.json install
+# tests/requirements-floor.txt instead.
 # Declared explicitly although pytest-homeassistant-custom-component pulls it
 # in today. The
 # stuck-cursor pagination test is guarded by @pytest.mark.timeout, and an

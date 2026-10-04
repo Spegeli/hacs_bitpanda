@@ -174,10 +174,10 @@ def test_internal_validation_always_runs_hassfest_hacs_and_the_floor_checks():
     """hassfest and HACS check what ships, the floor checks what Home
     Assistant 2025.5's Python needs, and the release script is checked on
     the Python the release runs it with; each is quick, and no caller can
-    skip one. Only the tests and mypy, minutes each, can be switched off --
-    and only as whole jobs: no step is skipped on a condition of its own,
-    and no job waits for another, which a switched-off one would skip with
-    it."""
+    skip one. Only the tests -- on the newest and on the minimum Home
+    Assistant -- and mypy, minutes each, can be switched off -- and only as
+    whole jobs: no step is skipped on a condition of its own, and no job
+    waits for another, which a switched-off one would skip with it."""
     workflow = _workflow("_validate.yml")
     assert sorted(job["name"] for job in workflow["jobs"].values()) == [
         "HACS validation",
@@ -185,6 +185,7 @@ def test_internal_validation_always_runs_hassfest_hacs_and_the_floor_checks():
         "Python 3.13 syntax",
         "Release script on Python 3.12",
         "Strict typing",
+        "Tests on the minimum Home Assistant",
         "Tests with coverage",
     ]
     jobs = _jobs_by_name(workflow)
@@ -195,7 +196,7 @@ def test_internal_validation_always_runs_hassfest_hacs_and_the_floor_checks():
         "Release script on Python 3.12",
     ):
         assert "if" not in jobs[name], name
-    for name in ("Tests with coverage", "Strict typing"):
+    for name in ("Tests with coverage", "Tests on the minimum Home Assistant", "Strict typing"):
         assert jobs[name]["if"] in ("inputs.tests", "${{ inputs.tests }}"), name
     assert [name for name, job in jobs.items() if "needs" in job] == []
     assert [
@@ -224,12 +225,12 @@ def test_internal_validation_checks_the_commit_its_caller_runs_for():
 
 
 def test_the_checks_run_what_ci_promises():
-    """The gates and commands CONTRIBUTING.md names. The tests and mypy run
-    on 3.14, which the newest Home Assistant needs, and install from
+    """The gates and commands CONTRIBUTING.md names. The tests with coverage
+    and mypy run on 3.14, which the newest Home Assistant needs, and install from
     tests/requirements.txt -- another mypy release can find errors in
     unchanged code -- with the test package of the Home Assistant release
-    the run found (see the test below). The floor job runs on 3.13, Home
-    Assistant 2025.5's.
+    the run found (see the test below). The floor job and the tests on the
+    minimum Home Assistant run on 3.13, Home Assistant 2025.5's.
     The release script runs on 3.12, the key job's system Python, which the
     tests and mypy never use: it must compile there, and plan a release
     from the whole history, tags included."""
@@ -265,6 +266,12 @@ def test_the_checks_run_what_ci_promises():
     assert _python(floor) == "3.13"
     assert "python -m compileall" in _script(floor)
     assert "from __future__ import annotations" in _script(floor)
+    minimum = jobs["Tests on the minimum Home Assistant"]
+    assert _python(minimum) == "3.13"
+    assert "python -m pip install -r tests/requirements-floor.txt" in _script(minimum)
+    assert "tests/requirements.txt" not in _script(minimum)
+    assert "python -m pytest tests/" in _script(minimum)
+    assert "--cov" not in _script(minimum)
 
 
 # The step every job that depends on Home Assistant starts with: it names the
@@ -302,6 +309,60 @@ def test_hassfest_the_tests_and_mypy_check_one_home_assistant_release():
         ' "ghcr.io/home-assistant/hassfest:${HOME_ASSISTANT}"'
     ) in run["run"]
     assert 'echo "::add-matcher::${GITHUB_WORKSPACE}/.github/hassfest-matcher.json"' in run["run"]
+
+
+_FLOOR_REQUIREMENTS = Path(__file__).parent / "requirements-floor.txt"
+_FLOOR_CHECK = "Check that this is the minimum Home Assistant in hacs.json"
+
+
+def _minimum_job() -> dict:
+    return _jobs_by_name(_workflow("_validate.yml"))["Tests on the minimum Home Assistant"]
+
+
+def test_the_tests_also_run_on_the_minimum_home_assistant_in_hacs_json():
+    """The suite runs a second time against the oldest release the
+    integration supports -- hacs.json's "homeassistant" --, so that a test
+    or a change that works only on newer releases turns the run red. Its
+    test package comes from tests/requirements-floor.txt, never from
+    ha_version.py, and a step checks the installed release against
+    hacs.json before the tests run."""
+    job = _minimum_job()
+    assert _FIND_HOME_ASSISTANT not in job["steps"]
+    assert "ha_version.py" not in _script(job)
+    [setup] = [
+        step for step in job["steps"] if step.get("uses", "").startswith("actions/setup-python@")
+    ]
+    assert setup["with"]["cache-dependency-path"] == "tests/requirements-floor.txt"
+    names = [step.get("name") for step in job["steps"]]
+    assert names.index(_FLOOR_CHECK) < names.index("Run the tests")
+    pins = [
+        line
+        for line in _FLOOR_REQUIREMENTS.read_text(encoding="utf-8").splitlines()
+        if line.startswith("pytest-homeassistant-custom-component")
+    ]
+    assert len(pins) == 1
+    assert re.fullmatch(r"pytest-homeassistant-custom-component==\d+\.\d+\.\d+", pins[0])
+
+
+def test_the_minimum_check_compares_the_installed_release_with_hacs_json(tmp_path):
+    """It passes only when the installed Home Assistant is exactly the
+    release hacs.json names: a test package pinned for another release
+    would test another minimum than the one users are promised."""
+    from homeassistant.const import __version__ as installed
+
+    [check] = [step for step in _minimum_job()["steps"] if step.get("name") == _FLOOR_CHECK]
+    hacs_json = tmp_path / "hacs.json"
+    hacs_json.write_text(json.dumps({"homeassistant": installed}), encoding="utf-8")
+    assert _run_step(check, cwd=tmp_path).returncode == 0
+
+    hacs_json.write_text(json.dumps({"homeassistant": "1999.1.0"}), encoding="utf-8")
+    failed = _run_step(check, cwd=tmp_path)
+    assert failed.returncode != 0
+    # On stdout, where GitHub reads workflow commands such as ::error::.
+    assert failed.stdout.startswith(
+        f"::error::tests/requirements-floor.txt installs Home Assistant {installed}, "
+        "but hacs.json names 1999.1.0"
+    )
 
 
 def test_hassfest_findings_turn_into_annotations():

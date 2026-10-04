@@ -2,7 +2,8 @@ name: Validate
 
 # Checks a change without publishing anything: hassfest, HACS, the Python
 # 3.13 checks, the release script on Python 3.12, the tests with their
-# coverage and mypy --strict (all in _validate.yml).
+# coverage, the tests on the minimum Home Assistant and mypy --strict (all in
+# _validate.yml).
 #   push to any branch but main - everything, on every topic branch and dev;
 #                                 summed up as "Validation summary"
 #   pull request to main        - everything, summed up as "Validation
@@ -36,7 +37,7 @@ on:
   workflow_dispatch:
     inputs:
       tests:
-        description: "Also run the tests with coverage and mypy --strict"
+        description: "Also run the tests (with coverage, and on the minimum Home Assistant) and mypy --strict"
         type: boolean
         default: true
 

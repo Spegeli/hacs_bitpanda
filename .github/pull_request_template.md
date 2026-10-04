@@ -37,8 +37,9 @@ Wallet value bugs are easy to miss — state the numbers you verified.
 
 <!--
 A pull request to dev or main is validated by CI: hassfest, HACS validation,
-the tests (≥ 95 % coverage), mypy --strict, the Python 3.13 checks and the
-release script on Python 3.12. A pull request to dev merges once that run is
-green; one to main merges only with a green "Validation result".
+the tests (≥ 95 % coverage, and on the minimum Home Assistant), mypy --strict,
+the Python 3.13 checks and the release script on Python 3.12. A pull request
+to dev merges once that run is green; one to main merges only with a green
+"Validation result".
 Do NOT bump the version in manifest.json — the release workflow sets it.
 -->

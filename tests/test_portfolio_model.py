@@ -8,10 +8,12 @@ from custom_components.bitpanda.portfolio_model import (
     Holding,
     PortfolioData,
     PortfolioReturns,
+    RewardPayout,
     _is_later,
     lists_nothing,
     parse_earn_configs,
     parse_portfolio,
+    payouts_after,
     staking_applies,
     sum_rewards,
     tolerate_failed_timeframes,
@@ -457,6 +459,39 @@ def _reward(asset_id, gross, fee, credited_at, owner="staking-service"):
             }
         ],
     }
+
+
+def test_sum_rewards_lists_each_payout_oldest_first():
+    """Each payout of an asset, oldest first by time -- not by text: the
+    API sends timestamps with and without milliseconds."""
+    ops = [
+        _reward("vsn", "10", "2", "2026-09-22T17:16:35Z"),
+        _reward("vsn", "20", "4", "2026-09-09T18:31:22.080Z"),
+        _reward("vsn", "30", "6", "2026-09-15T16:20:00Z"),
+    ]
+    totals = sum_rewards(ops)["vsn"]
+    assert totals.payouts == (
+        RewardPayout("2026-09-09T18:31:22.080Z", 20.0, 4.0, 16.0),
+        RewardPayout("2026-09-15T16:20:00Z", 30.0, 6.0, 24.0),
+        RewardPayout("2026-09-22T17:16:35Z", 10.0, 2.0, 8.0),
+    )
+    assert (totals.gross, totals.count, totals.last_at) == (60.0, 3, "2026-09-22T17:16:35Z")
+
+
+def test_a_reward_without_credited_at_counts_in_the_totals_but_lists_no_payout():
+    """A payout that cannot be placed in time cannot be told new or old."""
+    totals = sum_rewards([_reward("vsn", "1", "0", None)])["vsn"]
+    assert (totals.count, totals.payouts) == (1, ())
+
+
+def test_payouts_after_compares_times_not_text():
+    """35.080Z is after 35Z, though "." sorts before "Z"; no mark: all."""
+    early = RewardPayout("2026-09-22T17:16:34.999Z", 1.0, 0.0, 1.0)
+    later = RewardPayout("2026-09-22T17:16:35.080Z", 1.0, 0.0, 1.0)
+    latest = RewardPayout("2026-09-22T17:17:00Z", 1.0, 0.0, 1.0)
+    payouts = (early, later, latest)
+    assert payouts_after(payouts, "2026-09-22T17:16:35Z") == [later, latest]
+    assert payouts_after(payouts, None) == [early, later, latest]
 
 
 def test_sum_rewards_totals_gross_fee_and_net():

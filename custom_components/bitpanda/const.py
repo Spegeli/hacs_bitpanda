@@ -116,6 +116,15 @@ CONF_NOTIFY_NEW_WALLETS = "notify_new_wallets"
 DEFAULT_NOTIFY_NEW_WALLETS = True
 EVENT_WALLET_ADDED = f"{DOMAIN}_wallet_added"
 
+# Portfolio option: whether new staking payouts bring a notification
+# (announcements.RewardAnnouncer). Set at setup and under Configure; off for
+# an entry without it. The event EVENT_STAKING_REWARD_RECEIVED fires either
+# way -- for an asset whose Balance (staking) sensor is enabled, as the
+# notification.
+CONF_NOTIFY_STAKING_REWARDS = "notify_staking_rewards"
+DEFAULT_NOTIFY_STAKING_REWARDS = False
+EVENT_STAKING_REWARD_RECEIVED = f"{DOMAIN}_staking_reward_received"
+
 # The Price Tracker keeps its assets in groups by asset type (groups.py): one
 # config subentry per category, keyed by the category, whose data holds the
 # category and the slim records of its assets by asset id.
@@ -179,6 +188,16 @@ def notifies_new_wallets(entry: ConfigEntry) -> bool:
     """Whether a wallet new to the Portfolio `entry` brings a notification:
     its CONF_NOTIFY_NEW_WALLETS option, on for an entry without it."""
     enabled: bool = entry.options.get(CONF_NOTIFY_NEW_WALLETS, DEFAULT_NOTIFY_NEW_WALLETS)
+    return enabled
+
+
+def notifies_staking_rewards(entry: ConfigEntry) -> bool:
+    """Whether new staking payouts of the Portfolio `entry` bring a
+    notification: its CONF_NOTIFY_STAKING_REWARDS option, off for an entry
+    without it."""
+    enabled: bool = entry.options.get(
+        CONF_NOTIFY_STAKING_REWARDS, DEFAULT_NOTIFY_STAKING_REWARDS
+    )
     return enabled
 
 

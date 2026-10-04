@@ -1,11 +1,16 @@
 """Tests for reward aggregation."""
 import asyncio
 import base64
+from datetime import timedelta
+from unittest.mock import Mock
 
 import pytest
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client
 
 from custom_components.bitpanda.api import (
@@ -68,6 +73,40 @@ async def test_rewards_coordinator_returns_totals_from_operations():
     data = await coordinator._async_update_data()
 
     assert data["vsn"].gross == 1.0
+
+
+async def test_the_rewards_coordinator_calls_back_after_each_successful_refresh_only(hass):
+    """The announcer's call (announcements.RewardAnnouncer) comes after a
+    refresh that succeeded, never after a failed one."""
+    entry = MockConfigEntry(domain=DOMAIN, data={"api_key": "key", "currency": "EUR"})
+    entry.add_to_hass(hass)
+    client = _FakeClient(operations=[_reward("vsn", "1", "0", "2026-09-22T17:16:35Z")])
+    coordinator = RewardsCoordinator(hass, entry, client)
+    coordinator.on_refreshed = Mock()
+
+    await coordinator.async_refresh()
+    assert coordinator.on_refreshed.call_count == 1
+
+    client._error = BitpandaApiError("down", path="/operations")
+    await coordinator.async_refresh()
+    assert coordinator.on_refreshed.call_count == 1
+
+
+async def test_the_callback_schedules_no_refresh_without_a_listener(hass, freezer):
+    """The call is no listener: without a Staking sensor listening, the
+    whole history is not read again an hour later (spec D12)."""
+    entry = MockConfigEntry(domain=DOMAIN, data={"api_key": "key", "currency": "EUR"})
+    entry.add_to_hass(hass)
+    client = _FakeClient(operations=[_reward("vsn", "1", "0", "2026-09-22T17:16:35Z")])
+    coordinator = RewardsCoordinator(hass, entry, client)
+    coordinator.on_refreshed = Mock()
+
+    await coordinator.async_refresh()
+    freezer.tick(timedelta(hours=2))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert (client.calls, coordinator.on_refreshed.call_count) == (1, 1)
 
 
 async def test_rewards_coordinator_raises_config_entry_auth_failed_on_401():

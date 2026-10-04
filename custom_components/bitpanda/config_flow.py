@@ -43,9 +43,11 @@ from .const import (
     CONF_LANGUAGE,
     CONF_LEGACY_ADOPT,
     CONF_NOTIFY_NEW_WALLETS,
+    CONF_NOTIFY_STAKING_REWARDS,
     DEFAULT_CURRENCY,
     DEFAULT_LANGUAGE,
     DEFAULT_NOTIFY_NEW_WALLETS,
+    DEFAULT_NOTIFY_STAKING_REWARDS,
     DOMAIN,
     ENTRY_TYPE,
     ENTRY_TYPE_PORTFOLIO,
@@ -60,6 +62,7 @@ from .const import (
     TROUBLESHOOTING_URL,
     entry_type,
     notifies_new_wallets,
+    notifies_staking_rewards,
 )
 from .groups import async_group_titles, price_group_subentries
 from .language import async_shipped_languages, entry_language, preselected_language
@@ -186,14 +189,29 @@ def _language_section(languages: list[str], current: str) -> dict[vol.Required, 
     }
 
 
-def _notifications_section(enabled: bool) -> dict[vol.Required, section]:
-    """The Portfolio's notification switch, in its open section; `enabled`
-    is what it shows."""
+def _notifications_section(wallets: bool, rewards: bool) -> dict[vol.Required, section]:
+    """The Portfolio's notification switches, in their open section -- new
+    wallets, then staking rewards; `wallets` and `rewards` are what they
+    show."""
     return {
         vol.Required(_SECTION_NOTIFICATIONS): section(
-            vol.Schema({vol.Required(CONF_NOTIFY_NEW_WALLETS, default=enabled): BooleanSelector()}),
+            vol.Schema(
+                {
+                    vol.Required(CONF_NOTIFY_NEW_WALLETS, default=wallets): BooleanSelector(),
+                    vol.Required(CONF_NOTIFY_STAKING_REWARDS, default=rewards): BooleanSelector(),
+                }
+            ),
             _OPEN,
         )
+    }
+
+
+def _notification_options(user_input: dict[str, Any]) -> dict[str, bool]:
+    """The switches of the notifications section, stored flat."""
+    switches: dict[str, bool] = user_input[_SECTION_NOTIFICATIONS]
+    return {
+        CONF_NOTIFY_NEW_WALLETS: switches[CONF_NOTIFY_NEW_WALLETS],
+        CONF_NOTIFY_STAKING_REWARDS: switches[CONF_NOTIFY_STAKING_REWARDS],
     }
 
 
@@ -315,9 +333,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
             self._portfolio_options = {
                 CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE],
-                CONF_NOTIFY_NEW_WALLETS: user_input[_SECTION_NOTIFICATIONS][
-                    CONF_NOTIFY_NEW_WALLETS
-                ],
+                **_notification_options(user_input),
             }
             self._old_statistics = await async_find_old_statistics(self.hass, currency)
             if self._old_statistics.entity_ids:
@@ -332,7 +348,9 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required(_SECTION_CURRENCY): section(currency, _OPEN),
-                    **_notifications_section(DEFAULT_NOTIFY_NEW_WALLETS),
+                    **_notifications_section(
+                        DEFAULT_NOTIFY_NEW_WALLETS, DEFAULT_NOTIFY_STAKING_REWARDS
+                    ),
                     # The language last, as in every form.
                     **await self._async_language_section(),
                 }
@@ -736,16 +754,17 @@ class BitpandaOptionsFlow(config_entries.OptionsFlow):
                 data={
                     **self.config_entry.options,
                     CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE],
-                    CONF_NOTIFY_NEW_WALLETS: user_input[_SECTION_NOTIFICATIONS][
-                        CONF_NOTIFY_NEW_WALLETS
-                    ],
+                    **_notification_options(user_input),
                 }
             )
         return self.async_show_form(
             step_id="portfolio",
             data_schema=vol.Schema(
                 {
-                    **_notifications_section(notifies_new_wallets(self.config_entry)),
+                    **_notifications_section(
+                        notifies_new_wallets(self.config_entry),
+                        notifies_staking_rewards(self.config_entry),
+                    ),
                     **await self._async_language_section(),
                 }
             ),

@@ -233,16 +233,21 @@ async def test_a_language_chosen_before_the_upgrade_is_kept(hass, legacy_api, no
     assert result["step_id"] == "portfolio"
     await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {"language": {"language": "de"}, "notifications": {"notify_new_wallets": False}},
+        {
+            "language": {"language": "de"},
+            "notifications": {"notify_new_wallets": False, "notify_staking_rewards": True},
+        },
     )
     assert dict(entry.options) == {
         "tracked_assets": [], "tracked_wallets": ["cryptocoin_BTC"], "language": "de",
-        "notify_new_wallets": False,
+        "notify_new_wallets": False, "notify_staking_rewards": True,
     }
 
     assert await async_migrate_entry(hass, entry)
 
-    assert dict(entry.options) == {"language": "de", "notify_new_wallets": False}
+    assert dict(entry.options) == {
+        "language": "de", "notify_new_wallets": False, "notify_staking_rewards": True,
+    }
 
 
 async def test_public_lookups_never_carry_the_legacy_key(hass, no_setup):

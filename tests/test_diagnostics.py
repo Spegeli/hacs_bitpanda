@@ -9,6 +9,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.diagnostics import async_get_config_entry_diagnostics
 from custom_components.bitpanda.ecb import EcbRates
+from custom_components.bitpanda.portfolio_store import RewardMarks
 from custom_components.bitpanda.portfolio_model import (
     EarnData,
     Holding,
@@ -116,6 +117,10 @@ def _portfolio_entry(hass, *, loaded: bool) -> MockConfigEntry:
             ),
             earn=_Coordinator(EarnData(apr={}, offered=frozenset({"a"}))),
             rewards=_Coordinator(None, success=False),
+            # Marks for two assets, read from the file: no write happens.
+            reward_marks=RewardMarks(
+                None, {"a": "2026-09-22T17:16:35Z", "b": "2024-06-25T16:28:16Z"}, None
+            ),
         )
         entry.mock_state(hass, ConfigEntryState.LOADED)
     return entry
@@ -125,13 +130,19 @@ async def test_portfolio_diagnostics_report_health_and_never_the_key(hass):
     result = await async_get_config_entry_diagnostics(hass, _portfolio_entry(hass, loaded=True))
     assert _SECRET not in repr(result)
     assert result["service"] == "portfolio"
-    assert result["config"] == {"api_key": "**REDACTED**", "currency": "EUR"}
+    assert result["config"] == {
+        "api_key": "**REDACTED**", "currency": "EUR",
+        "notify_new_wallets": True, "notify_staking_rewards": False,
+    }
     assert result["coordinators"] == {
         "portfolio": {"last_update_success": True, "holdings": 3, "wallets": 1,
                       "unnamed_holdings": 2, "unlisted_holdings": 1},
         "history": {"last_update_success": True, "timeframes": 1, "failed_timeframes": 1},
         "earn": {"last_update_success": True, "offered_assets": 1},
-        "rewards": {"last_update_success": False, "assets_with_rewards": 0},
+        "rewards": {
+            "last_update_success": False, "assets_with_rewards": 0,
+            "marked_assets": 2, "first_run": False,
+        },
     }
 
 
@@ -163,9 +174,36 @@ async def test_portfolio_that_is_not_loaded_reports_its_config_only(hass):
     assert _SECRET not in repr(result)
     assert result == {
         "service": "portfolio",
-        "config": {"api_key": "**REDACTED**", "currency": "EUR"},
+        "config": {
+            "api_key": "**REDACTED**", "currency": "EUR",
+            "notify_new_wallets": True, "notify_staking_rewards": False,
+        },
         "groups": _WALLET_GROUPS,
     }
+
+
+async def test_portfolio_diagnostics_report_the_notification_options_as_set(hass):
+    """The switches as the entry holds them -- what decides whether a new
+    wallet or a staking payout brings a notification."""
+    entry = _portfolio_entry(hass, loaded=False)
+    hass.config_entries.async_update_entry(
+        entry, options={"notify_new_wallets": False, "notify_staking_rewards": True}
+    )
+    result = await async_get_config_entry_diagnostics(hass, entry)
+    assert (
+        result["config"]["notify_new_wallets"], result["config"]["notify_staking_rewards"]
+    ) == (False, True)
+
+
+async def test_portfolio_diagnostics_before_the_first_rewards_refresh(hass):
+    """No marks yet: none counted, the first run still to come."""
+    entry = _portfolio_entry(hass, loaded=True)
+    entry.runtime_data.reward_marks = RewardMarks(None, None, None)
+    result = await async_get_config_entry_diagnostics(hass, entry)
+    assert (
+        result["coordinators"]["rewards"]["marked_assets"],
+        result["coordinators"]["rewards"]["first_run"],
+    ) == (0, True)
 
 
 _BTC = {"id": "uuid-btc", "symbol": "BTC", "name": "Bitcoin", "type": "cryptocoin",

@@ -1,8 +1,9 @@
 """Pure data model of the Portfolio service: no Home Assistant, no network."""
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 import logging
 import math
 from typing import Any, cast
@@ -378,15 +379,45 @@ def _is_later(candidate: str | None, current: str | None) -> bool:
         return str(candidate) > str(current)
 
 
+@dataclass(frozen=True)
+class RewardPayout:
+    """One staking payout, in its asset's own units: what announcements.py
+    tells as new, after the asset's mark (portfolio_store.RewardMarks)."""
+
+    credited_at: str
+    gross: float
+    fee: float
+    net: float
+
+
 @dataclass
 class RewardTotals:
-    """Lifetime Earn rewards for one asset, in that asset's own units."""
+    """Lifetime Earn rewards for one asset, in that asset's own units, and
+    each payout that carries the time it was credited, oldest first."""
 
     gross: float = 0.0
     fee: float = 0.0
     net: float = 0.0
     count: int = 0
     last_at: str | None = None
+    payouts: tuple[RewardPayout, ...] = ()
+
+
+def time_key(timestamp: str) -> tuple[int, datetime | str]:
+    """Sort key of an API timestamp: by time, as _is_later compares them; one
+    that does not parse after all that do, by its text. A time without an
+    offset counts as UTC, so that sorting never compares it with one that
+    has one -- which would raise."""
+    try:
+        parsed = datetime.fromisoformat(timestamp)
+    except ValueError:
+        return (1, timestamp)
+    return (0, parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC))
+
+
+def payouts_after(payouts: Sequence[RewardPayout], mark: str | None) -> list[RewardPayout]:
+    """The payouts credited after `mark` -- all of them without one."""
+    return [payout for payout in payouts if _is_later(payout.credited_at, mark)]
 
 
 def sum_rewards(operations: list[dict[str, Any]]) -> dict[str, RewardTotals]:
@@ -402,6 +433,7 @@ def sum_rewards(operations: list[dict[str, Any]]) -> dict[str, RewardTotals]:
     read `fee_amount`.
     """
     totals: dict[str, RewardTotals] = {}
+    payouts: dict[str, list[RewardPayout]] = {}
 
     for operation in operations:
         if operation.get("operation_type") != "reward":
@@ -424,13 +456,27 @@ def sum_rewards(operations: list[dict[str, Any]]) -> dict[str, RewardTotals]:
             credited = tx.get("credited_at")
             if _is_later(credited, entry.last_at):
                 entry.last_at = credited
+            # Only a payout placed in time can be told new or old: one without
+            # its time counts in the totals alone.
+            if isinstance(credited, str) and credited:
+                payouts.setdefault(asset_id, []).append(
+                    RewardPayout(
+                        credited,
+                        round(gross, DECIMALS),
+                        round(fee, DECIMALS),
+                        round(gross - fee, DECIMALS),
+                    )
+                )
 
     # The amounts are 8-decimal strings; summing them as floats leaves noise
     # such as 751.4920099999999. Rounded once, at the end, not per step.
-    for entry in totals.values():
+    for asset_id, entry in totals.items():
         entry.gross = round(entry.gross, DECIMALS)
         entry.fee = round(entry.fee, DECIMALS)
         entry.net = round(entry.net, DECIMALS)
+        entry.payouts = tuple(
+            sorted(payouts.get(asset_id, ()), key=lambda payout: time_key(payout.credited_at))
+        )
 
     return totals
 

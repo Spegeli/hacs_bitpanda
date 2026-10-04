@@ -33,10 +33,12 @@
             "name": "Notificaciones",
             "description": "Puedes cambiar los ajustes de notificación más adelante con \"Configurar\" (⚙) en la entrada \"Bitpanda Portfolio\" de la página de la integración Bitpanda.",
             "data": {
-              "notify_new_wallets": "Avisar de los wallets nuevos"
+              "notify_new_wallets": "Avisar de los wallets nuevos",
+              "notify_staking_rewards": "Avisar de las recompensas de staking"
             },
             "data_description": {
-              "notify_new_wallets": "Cuando aparece un wallet nuevo en el Portfolio, por ejemplo después de comprar un activo, Home Assistant muestra una notificación en \"Notificaciones\". Los wallets que ya existían al configurar el Portfolio no cuentan. Las automatizaciones pueden reaccionar al evento `bitpanda_wallet_added` en cualquier caso."
+              "notify_new_wallets": "Cuando aparece un wallet nuevo en el Portfolio, por ejemplo después de comprar un activo, Home Assistant muestra una notificación en \"Notificaciones\". Los wallets que ya existían al configurar el Portfolio no cuentan. Las automatizaciones pueden reaccionar al evento `bitpanda_wallet_added` en cualquier caso.",
+              "notify_staking_rewards": "Cuando Bitpanda paga una recompensa de staking, Home Assistant muestra una notificación en \"Notificaciones\": una por activo, que el siguiente pago sustituye. Los pagos que Home Assistant se perdió mientras estaba apagado se suman en una sola notificación por activo. Solo cuentan los activos con el sensor \"Saldo (staking)\" habilitado. Las automatizaciones pueden reaccionar al evento `bitpanda_staking_reward_received` en cualquier caso."
             }
           },
           "language": {
@@ -165,10 +167,12 @@
           "notifications": {
             "name": "Notificaciones",
             "data": {
-              "notify_new_wallets": "Avisar de los wallets nuevos"
+              "notify_new_wallets": "Avisar de los wallets nuevos",
+              "notify_staking_rewards": "Avisar de las recompensas de staking"
             },
             "data_description": {
-              "notify_new_wallets": "Cuando aparece un wallet nuevo en el Portfolio, por ejemplo después de comprar un activo, Home Assistant muestra una notificación en \"Notificaciones\". Los wallets que ya existían al configurar el Portfolio no cuentan. Las automatizaciones pueden reaccionar al evento `bitpanda_wallet_added` en cualquier caso."
+              "notify_new_wallets": "Cuando aparece un wallet nuevo en el Portfolio, por ejemplo después de comprar un activo, Home Assistant muestra una notificación en \"Notificaciones\". Los wallets que ya existían al configurar el Portfolio no cuentan. Las automatizaciones pueden reaccionar al evento `bitpanda_wallet_added` en cualquier caso.",
+              "notify_staking_rewards": "Cuando Bitpanda paga una recompensa de staking, Home Assistant muestra una notificación en \"Notificaciones\": una por activo, que el siguiente pago sustituye. Los pagos que Home Assistant se perdió mientras estaba apagado se suman en una sola notificación por activo. Solo cuentan los activos con el sensor \"Saldo (staking)\" habilitado. Las automatizaciones pueden reaccionar al evento `bitpanda_staking_reward_received` en cualquier caso."
             }
           },
           "language": {
@@ -520,6 +524,18 @@
     },
     "wallet_added_sensors_disabled": {
       "message": "Sus sensores están deshabilitados. Puedes habilitarlos en su [página de dispositivo]({link})."
+    },
+    "staking_reward_title": {
+      "message": "Nueva recompensa de staking de Bitpanda"
+    },
+    "staking_reward": {
+      "message": "**[{wallet}]({link})** ha recibido una recompensa de staking de **{net} {symbol}**."
+    },
+    "staking_rewards": {
+      "message": "**[{wallet}]({link})** ha recibido {count} recompensas de staking, en total **{net} {symbol}**."
+    },
+    "staking_reward_value": {
+      "message": "Valor actual: unos {value} {currency}."
     }
   },
   "issues": {

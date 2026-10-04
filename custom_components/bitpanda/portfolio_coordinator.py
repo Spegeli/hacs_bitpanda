@@ -6,6 +6,7 @@ Home Assistant turns into the reauth dialog.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 import logging
@@ -39,7 +40,7 @@ from .const import (
     PORTFOLIO_UPDATE_INTERVAL,
     REWARDS_UPDATE_INTERVAL,
 )
-from .known_wallets import KnownWallets
+from .portfolio_store import KnownWallets, RewardMarks
 from .naming import managed_asset_id
 from .portfolio_model import (
     EarnData,
@@ -300,6 +301,11 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]
 
     Like every DataUpdateCoordinator it polls only while something listens,
     and only Staking sensors do: see async_refresh_if_stale.
+
+    After every successful refresh it calls `on_refreshed`, the announcement
+    of new payouts (announcements.RewardAnnouncer). That call is no listener:
+    a listener would keep the coordinator reading the whole history every
+    hour even with every Staking sensor disabled.
     """
 
     config_entry: PortfolioConfigEntry
@@ -315,6 +321,8 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]
             config_entry=entry,
         )
         self._client = client
+        # Set by the announcer of new payouts; None where nothing announces.
+        self.on_refreshed: Callable[[], None] | None = None
 
     async def _async_update_data(self) -> dict[str, RewardTotals]:
         try:
@@ -324,6 +332,15 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]
         except BitpandaApiError as err:
             raise _update_failed(err) from None
         return sum_rewards(operations)
+
+    @callback
+    def _async_refresh_finished(self) -> None:
+        """Home Assistant's hook after every refresh, before the listeners
+        are told (2025.5.0 and 2026.9.4 alike): the announcer runs after a
+        successful one only."""
+        super()._async_refresh_finished()
+        if self.last_update_success and self.on_refreshed is not None:
+            self.on_refreshed()
 
     @callback
     def async_refresh_if_stale(self) -> None:
@@ -507,9 +524,11 @@ class PortfolioRuntime:
     data_at_setup: dict[str, Any] = field(repr=False)
     options_at_setup: dict[str, Any] = field(repr=False)
     # The assets the Portfolio knows -- announced, or there when the list
-    # began (known_wallets.py): set at setup, None where a test builds a
-    # runtime without it.
+    # began -- and when the newest staking payout announced per asset was
+    # credited (portfolio_store.py): set at setup, None where a test builds a
+    # runtime without them.
     known_wallets: KnownWallets | None = field(default=None, repr=False)
+    reward_marks: RewardMarks | None = field(default=None, repr=False)
 
 
 # A Portfolio config entry, its runtime data typed.

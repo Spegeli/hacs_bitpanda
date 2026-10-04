@@ -477,7 +477,7 @@ class PortfolioEntityManager:
     entity IDs, without reloading the entry.
 
     With an announcer, a wallet it creates for an asset the Portfolio does
-    not know (known_wallets.py) is marked as new, with the category of the
+    not know (portfolio_store.py) is marked as new, with the category of the
     group it goes into, before its sensors go to Home Assistant: the
     creation of the wallet's device announces it (announcements.py), and a
     device already there announces it at once. A wallet created again -- at

@@ -33,10 +33,12 @@
             "name": "Notifications",
             "description": "You can change the notification settings later with \"Configure\" (⚙) on the \"Bitpanda Portfolio\" entry of the Bitpanda integration page.",
             "data": {
-              "notify_new_wallets": "Notify about new wallets"
+              "notify_new_wallets": "Notify about new wallets",
+              "notify_staking_rewards": "Notify about staking rewards"
             },
             "data_description": {
-              "notify_new_wallets": "When a new wallet appears in the Portfolio, after you buy an asset for example, Home Assistant shows a notification under \"Notifications\". Wallets present when the Portfolio was set up do not count. Automations can react to the event `bitpanda_wallet_added` either way."
+              "notify_new_wallets": "When a new wallet appears in the Portfolio, after you buy an asset for example, Home Assistant shows a notification under \"Notifications\". Wallets present when the Portfolio was set up do not count. Automations can react to the event `bitpanda_wallet_added` either way.",
+              "notify_staking_rewards": "When Bitpanda pays out a staking reward, Home Assistant shows a notification under \"Notifications\": one per asset, which the next payout replaces. Payouts missed while Home Assistant was off are added up in one notification per asset. Only assets with an enabled Balance (staking) sensor count. Automations can react to the event `bitpanda_staking_reward_received` either way."
             }
           },
           "language": {
@@ -165,10 +167,12 @@
           "notifications": {
             "name": "Notifications",
             "data": {
-              "notify_new_wallets": "Notify about new wallets"
+              "notify_new_wallets": "Notify about new wallets",
+              "notify_staking_rewards": "Notify about staking rewards"
             },
             "data_description": {
-              "notify_new_wallets": "When a new wallet appears in the Portfolio, after you buy an asset for example, Home Assistant shows a notification under \"Notifications\". Wallets present when the Portfolio was set up do not count. Automations can react to the event `bitpanda_wallet_added` either way."
+              "notify_new_wallets": "When a new wallet appears in the Portfolio, after you buy an asset for example, Home Assistant shows a notification under \"Notifications\". Wallets present when the Portfolio was set up do not count. Automations can react to the event `bitpanda_wallet_added` either way.",
+              "notify_staking_rewards": "When Bitpanda pays out a staking reward, Home Assistant shows a notification under \"Notifications\": one per asset, which the next payout replaces. Payouts missed while Home Assistant was off are added up in one notification per asset. Only assets with an enabled Balance (staking) sensor count. Automations can react to the event `bitpanda_staking_reward_received` either way."
             }
           },
           "language": {
@@ -520,6 +524,18 @@
     },
     "wallet_added_sensors_disabled": {
       "message": "Its sensors are disabled. You can enable them on its [device page]({link})."
+    },
+    "staking_reward_title": {
+      "message": "New Bitpanda staking reward"
+    },
+    "staking_reward": {
+      "message": "**[{wallet}]({link})** received a staking reward of **{net} {symbol}**."
+    },
+    "staking_rewards": {
+      "message": "**[{wallet}]({link})** received {count} staking rewards, together **{net} {symbol}**."
+    },
+    "staking_reward_value": {
+      "message": "Worth about {value} {currency} today."
     }
   },
   "issues": {

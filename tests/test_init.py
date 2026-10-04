@@ -57,7 +57,7 @@ from custom_components.bitpanda.const import (
 from custom_components.bitpanda.devices import find_entry_device
 from custom_components.bitpanda.ecb import EcbError, EcbRates
 from custom_components.bitpanda.groups import async_add_asset_to_group
-from custom_components.bitpanda.known_wallets import async_get_known_wallets
+from custom_components.bitpanda.portfolio_store import async_get_portfolio_store
 from custom_components.bitpanda.naming import (
     PORTFOLIO_KEYS,
     portfolio_device_identifier,
@@ -176,16 +176,19 @@ def test_the_sensor_platform_sets_no_limit_on_parallel_updates():
     assert sensor.PARALLEL_UPDATES == 0
 
 
-async def test_the_portfolio_keeps_its_known_wallets_on_its_runtime(hass, portfolio_api):
-    """Loaded before the first refresh, the one list of the entry
-    (known_wallets.async_get_known_wallets): its reloads keep using it."""
+async def test_the_portfolio_keeps_its_store_sections_on_its_runtime(hass, portfolio_api):
+    """Loaded before the first refresh, the one store of the entry
+    (portfolio_store.async_get_portfolio_store): its reloads keep using its
+    sections."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
-    known = entry.runtime_data.known_wallets
-    assert known is await async_get_known_wallets(hass, entry.entry_id)
+    store = await async_get_portfolio_store(hass, entry.entry_id)
+    known, marks = entry.runtime_data.known_wallets, entry.runtime_data.reward_marks
+    assert known is store.known_wallets and marks is store.reward_marks
     await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     assert entry.runtime_data.known_wallets is known
+    assert entry.runtime_data.reward_marks is marks
 
 
 async def test_portfolio_setup_creates_its_devices_and_sensors(hass, portfolio_api):
@@ -989,7 +992,7 @@ async def test_removing_the_portfolio_deletes_its_known_wallets(
     hass, portfolio_api, hass_storage, freezer
 ):
     """The list goes with the entry, its file too: a new setup starts
-    without one (known_wallets.py)."""
+    without one (portfolio_store.py)."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
     entry.runtime_data.known_wallets.seed({"BTC"})
@@ -1003,7 +1006,7 @@ async def test_removing_the_portfolio_deletes_its_known_wallets(
     await hass.async_block_till_done()
 
     assert key not in hass_storage
-    assert (await async_get_known_wallets(hass, entry.entry_id)).first_run is True
+    assert (await async_get_portfolio_store(hass, entry.entry_id)).known_wallets.first_run is True
 
 
 async def test_a_wallet_may_be_deleted_while_an_empty_answer_awaits_confirmation(
@@ -2164,7 +2167,9 @@ async def test_switching_the_portfolios_language_retitles_its_wallet_groups(
     )
 
     assert entry.state is ConfigEntryState.LOADED
-    assert dict(entry.options) == {"language": "en", "notify_new_wallets": True}
+    assert dict(entry.options) == {
+        "language": "en", "notify_new_wallets": True, "notify_staking_rewards": False,
+    }
     assert _group(entry, "crypto").title == "Cryptocurrencies"
     assert portfolio_api.call_count == calls + 1
 

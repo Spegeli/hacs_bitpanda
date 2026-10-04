@@ -22,6 +22,7 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from . import migration
+from .announcements import RewardAnnouncer
 from .api import BitpandaApiClient
 from .assets import AssetDirectory
 from .const import (
@@ -45,7 +46,7 @@ from .groups import (
     groups_of_type,
     tracked_assets,
 )
-from .known_wallets import async_get_known_wallets, async_remove_known_wallets
+from .portfolio_store import async_get_portfolio_store, async_remove_portfolio_store
 from .language import entry_language
 from .naming import (
     asset_display_label,
@@ -158,6 +159,9 @@ async def _async_start_portfolio(
         BitpandaApiClient(None, session), hass.data.setdefault(_ASSET_DIRECTORY_KEY, {})
     )
     currency_id = entry.data[CONF_CURRENCY_ID]
+    # Before the first refreshes: the wallets' reconcile reads the list, and
+    # the rewards' first refresh may set the marks.
+    store = await async_get_portfolio_store(hass, entry.entry_id)
     runtime = PortfolioRuntime(
         portfolio=PortfolioCoordinator(hass, entry, client, currency_id, directory),
         history=HistoryCoordinator(hass, entry, client, currency_id),
@@ -166,8 +170,8 @@ async def _async_start_portfolio(
         group_titles=group_titles,
         data_at_setup=dict(entry.data),
         options_at_setup=dict(entry.options),
-        # Before the first refresh: its reconcile reads the list.
-        known_wallets=await async_get_known_wallets(hass, entry.entry_id),
+        known_wallets=store.known_wallets,
+        reward_marks=store.reward_marks,
     )
     try:
         await _async_first_refresh(runtime.portfolio)
@@ -183,6 +187,14 @@ async def _async_start_portfolio(
             "Bitpanda reported an empty portfolio; the Portfolio's sensors stay "
             "unavailable until the next answers list its holdings again or confirm it"
         )
+    # New staking payouts are announced after every successful refresh of
+    # the rewards, the first one below included (announcements.py). The
+    # coordinators are handed over: entry.runtime_data is set only once this
+    # start returns.
+    announcer = RewardAnnouncer(
+        hass, entry, store.reward_marks, runtime.rewards, runtime.portfolio
+    )
+    runtime.rewards.on_refreshed = announcer.async_rewards_refreshed
     # Earn, rewards and history are additive: a failure there must not block
     # setup, so they refresh with async_refresh(), which never raises
     # ConfigEntryNotReady. A 401 from any of them still reaches the reauth
@@ -413,13 +425,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) ->
 async def async_remove_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> None:
     """Forget what outlived the entry's setups: its count of empty
     /portfolio answers and whether its account listed anything, kept in
-    hass.data across reloads; the Portfolio's list of known wallets, with its
-    file (known_wallets.py); the Price Tracker's slow-interval repair issue
-    with the Price Tracker; the repair issue for the entities the upgrade
-    left alone with the Portfolio, whose entities they were; each repair
-    issue about what blocks the upgrade of a version 1 entry, once its cause
-    went with this entry -- and, with the last Bitpanda entry, the upgrade's
-    repair issues (migration.py).
+    hass.data across reloads; the Portfolio's store of known wallets and
+    staking reward marks, with its file (portfolio_store.py); the Price
+    Tracker's slow-interval repair issue with the Price Tracker; the repair
+    issue for the entities the upgrade left alone with the Portfolio, whose
+    entities they were; each repair issue about what blocks the upgrade of a
+    version 1 entry, once its cause went with this entry -- and, with the
+    last Bitpanda entry, the upgrade's repair issues (migration.py).
 
     The entry itself is left out when looking for another one: Home
     Assistant 2025.5 has already dropped it from its entries when this
@@ -430,7 +442,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) ->
         async_delete_price_interval_issue(hass)
     else:
         migration.async_delete_not_migrated_issue(hass)
-        await async_remove_known_wallets(hass, entry.entry_id)
+        await async_remove_portfolio_store(hass, entry.entry_id)
     migration.async_update_blocker_issues(hass, entry.entry_id)
     if not any(
         other.entry_id != entry.entry_id

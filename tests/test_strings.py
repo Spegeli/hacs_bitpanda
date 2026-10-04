@@ -628,25 +628,94 @@ _NOTIFICATIONS_SECTION = {
 }
 
 
+# The staking reward switch, after the wallet switch in the same section
+# (docs/superpowers/specs/2026-10-04-staking-reward-notifications-design.md).
+_STAKING_SWITCH = {
+    "en": (
+        "Notify about staking rewards",
+        'When Bitpanda pays out a staking reward, Home Assistant shows a notification under '
+        '"Notifications": one per asset, which the next payout replaces. Payouts missed while '
+        "Home Assistant was off are added up in one notification per asset. Only assets with an "
+        "enabled Balance (staking) sensor count. Automations can react to the event "
+        "`bitpanda_staking_reward_received` either way.",
+    ),
+    "de": (
+        "Bei Staking-Belohnungen benachrichtigen",
+        "Zahlt Bitpanda eine Staking-Belohnung aus, zeigt Home Assistant eine Benachrichtigung "
+        "unter „Benachrichtigungen“: eine pro Asset, die nächste Auszahlung ersetzt sie. "
+        "Auszahlungen, die Home Assistant verpasst hat, weil es aus war, fasst es pro Asset in "
+        "einer Benachrichtigung zusammen. Es zählen nur Assets mit aktiviertem Sensor "
+        "„Guthaben (Staking)“. Automationen können in jedem Fall auf das Ereignis "
+        "`bitpanda_staking_reward_received` reagieren.",
+    ),
+    "fr": (
+        "Signaler les récompenses de staking",
+        "Lorsque Bitpanda verse une récompense de staking, Home Assistant affiche une "
+        "notification dans «\u00a0Notifications\u00a0»\u00a0: une par actif, que le versement "
+        "suivant remplace. Les versements manqués pendant que Home Assistant était éteint sont "
+        "additionnés dans une seule notification par actif. Seuls les actifs dont le capteur "
+        "«\u00a0Solde (staking)\u00a0» est activé comptent. Les automatisations peuvent réagir à "
+        "l'événement `bitpanda_staking_reward_received` dans tous les cas.",
+    ),
+    "nl": (
+        "Melding bij stakingbeloningen",
+        'Keert Bitpanda een stakingbeloning uit, dan toont Home Assistant een melding onder '
+        '"Meldingen": één per asset, en de volgende uitbetaling vervangt die. Uitbetalingen die '
+        "Home Assistant heeft gemist omdat het uit stond, worden per asset in één melding "
+        'opgeteld. Alleen assets met een ingeschakelde sensor "Saldo (staking)" tellen mee. '
+        "Automatiseringen kunnen in elk geval reageren op de gebeurtenis "
+        "`bitpanda_staking_reward_received`.",
+    ),
+    "it": (
+        "Notifica per le ricompense di staking",
+        "Quando Bitpanda accredita una ricompensa di staking, Home Assistant mostra una notifica "
+        'in "Notifiche": una per asset, che l\'accredito successivo sostituisce. Gli accrediti '
+        "persi mentre Home Assistant era spento vengono sommati in una sola notifica per asset. "
+        'Contano solo gli asset con il sensore "Saldo (staking)" abilitato. Le automazioni '
+        "possono reagire in ogni caso all'evento `bitpanda_staking_reward_received`.",
+    ),
+    "es": (
+        "Avisar de las recompensas de staking",
+        "Cuando Bitpanda paga una recompensa de staking, Home Assistant muestra una notificación "
+        'en "Notificaciones": una por activo, que el siguiente pago sustituye. Los pagos que Home '
+        "Assistant se perdió mientras estaba apagado se suman en una sola notificación por "
+        'activo. Solo cuentan los activos con el sensor "Saldo (staking)" habilitado. Las '
+        "automatizaciones pueden reaccionar al evento `bitpanda_staking_reward_received` en "
+        "cualquier caso.",
+    ),
+    "pl": (
+        "Powiadamiaj o nagrodach za staking",
+        "Gdy Bitpanda wypłaci nagrodę za staking, Home Assistant wyświetli powiadomienie w panelu "
+        "„Powiadomienia”: jedno na aktywo, a następna wypłata je zastępuje. Wypłaty pominięte, gdy "
+        "Home Assistant był wyłączony, są sumowane w jednym powiadomieniu na aktywo. Liczą się "
+        "tylko aktywa z włączonym sensorem „Saldo (staking)”. Automatyzacje mogą w każdym "
+        "przypadku reagować na zdarzenie `bitpanda_staking_reward_received`.",
+    ),
+}
+
+
 def test_the_notifications_section_says_what_it_switches():
-    """One switch in a section of its own, worded alike in setup and in
-    Configure; the setup's section adds where to change the notification
-    settings later, once for every switch it may hold."""
-    assert sorted(_NOTIFICATIONS_SECTION) == _LANGUAGES
+    """Two switches in a section of its own -- new wallets, then staking
+    rewards --, worded alike in setup and in Configure; the setup's section
+    adds where to change the notification settings later, once for every
+    switch it holds."""
+    assert sorted(_NOTIFICATIONS_SECTION) == sorted(_STAKING_SWITCH) == _LANGUAGES
     for language, (name, label, help_text, later) in _NOTIFICATIONS_SECTION.items():
+        staking_label, staking_help = _STAKING_SWITCH[language]
         strings = _load(f"translations/{language}.json")
         configure = strings["options"]["step"]["portfolio"]["sections"]["notifications"]
         setup = strings["config"]["step"]["currency"]["sections"]["notifications"]
+        data = {"notify_new_wallets": label, "notify_staking_rewards": staking_label}
+        descriptions = {
+            "notify_new_wallets": help_text, "notify_staking_rewards": staking_help,
+        }
+        for section in (configure, setup):
+            assert list(section["data"]) == list(section["data_description"]) == list(data)
         assert configure == {
-            "name": name,
-            "data": {"notify_new_wallets": label},
-            "data_description": {"notify_new_wallets": help_text},
+            "name": name, "data": data, "data_description": descriptions,
         }, language
         assert setup == {
-            "name": name,
-            "description": later,
-            "data": {"notify_new_wallets": label},
-            "data_description": {"notify_new_wallets": help_text},
+            "name": name, "description": later, "data": data, "data_description": descriptions,
         }, language
 
 
@@ -724,6 +793,74 @@ def test_the_new_wallet_notification_texts():
         assert (
             exceptions["wallet_added_title"]["message"], exceptions["wallet_added"]["message"]
         ) == (title, message), language
+
+
+# The notification about new staking payouts: one, or several added up; the
+# value of the net amount only where a price is known
+# (docs/superpowers/specs/2026-10-04-staking-reward-notifications-design.md).
+_STAKING_REWARD = {
+    "en": (
+        "New Bitpanda staking reward",
+        "**[{wallet}]({link})** received a staking reward of **{net} {symbol}**.",
+        "**[{wallet}]({link})** received {count} staking rewards, together **{net} {symbol}**.",
+        "Worth about {value} {currency} today.",
+    ),
+    "de": (
+        "Neue Bitpanda-Staking-Belohnung",
+        "**[{wallet}]({link})** hat eine Staking-Belohnung von **{net} {symbol}** erhalten.",
+        "**[{wallet}]({link})** hat {count} Staking-Belohnungen erhalten, zusammen "
+        "**{net} {symbol}**.",
+        "Heute etwa {value} {currency} wert.",
+    ),
+    "fr": (
+        "Nouvelle récompense de staking Bitpanda",
+        "**[{wallet}]({link})** a reçu une récompense de staking de **{net} {symbol}**.",
+        "**[{wallet}]({link})** a reçu {count} récompenses de staking, au total "
+        "**{net} {symbol}**.",
+        "Valeur actuelle\u00a0: environ {value} {currency}.",
+    ),
+    "nl": (
+        "Nieuwe Bitpanda-stakingbeloning",
+        "**[{wallet}]({link})** heeft een stakingbeloning van **{net} {symbol}** ontvangen.",
+        "**[{wallet}]({link})** heeft {count} stakingbeloningen ontvangen, samen "
+        "**{net} {symbol}**.",
+        "Vandaag ongeveer {value} {currency} waard.",
+    ),
+    "it": (
+        "Nuova ricompensa di staking Bitpanda",
+        "**[{wallet}]({link})** ha ricevuto una ricompensa di staking di **{net} {symbol}**.",
+        "**[{wallet}]({link})** ha ricevuto {count} ricompense di staking, in totale "
+        "**{net} {symbol}**.",
+        "Valore attuale: circa {value} {currency}.",
+    ),
+    "es": (
+        "Nueva recompensa de staking de Bitpanda",
+        "**[{wallet}]({link})** ha recibido una recompensa de staking de **{net} {symbol}**.",
+        "**[{wallet}]({link})** ha recibido {count} recompensas de staking, en total "
+        "**{net} {symbol}**.",
+        "Valor actual: unos {value} {currency}.",
+    ),
+    "pl": (
+        "Nowa nagroda za staking Bitpanda",
+        "**[{wallet}]({link})** otrzymał nagrodę za staking: **{net} {symbol}**.",
+        "**[{wallet}]({link})** otrzymał nagrody za staking (liczba wypłat: {count}), łącznie "
+        "**{net} {symbol}**.",
+        "Obecna wartość: około {value} {currency}.",
+    ),
+}
+
+
+def test_the_staking_reward_notification_texts():
+    assert sorted(_STAKING_REWARD) == _LANGUAGES
+    for language, texts in _STAKING_REWARD.items():
+        exceptions = _load(f"translations/{language}.json")["exceptions"]
+        assert tuple(
+            exceptions[key]["message"]
+            for key in (
+                "staking_reward_title", "staking_reward", "staking_rewards",
+                "staking_reward_value",
+            )
+        ) == texts, language
 
 
 # The notification's second paragraph when all of the new wallet's sensors are

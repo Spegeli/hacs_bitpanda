@@ -142,7 +142,7 @@ async def _next_refresh(hass, freezer) -> None:
 
 async def _flush(hass, freezer) -> None:
     """Let the list's delayed save run. Only the freezer moves the event
-    loop's clock, which the save waits for (tests/test_known_wallets.py)."""
+    loop's clock, which the save waits for (tests/test_portfolio_store.py)."""
     freezer.tick(timedelta(seconds=2))
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
@@ -150,12 +150,12 @@ async def _flush(hass, freezer) -> None:
 
 async def _restart(hass, entry, freezer) -> None:
     """Home Assistant stopped and started again: the list's last change is
-    written as it stops, and the lists known_wallets.py keeps in memory are
+    written as it stops, and the stores portfolio_store.py keeps in memory are
     gone; the registries and the files stay."""
     await _flush(hass, freezer)
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
-    del hass.data[f"{DOMAIN}_known_wallets"]
+    del hass.data[f"{DOMAIN}_portfolio_stores"]
     await _setup(hass, entry)
 
 
@@ -166,7 +166,7 @@ async def _update_from_a_version_without_the_list(hass, entry, hass_storage, fre
     await _flush(hass, freezer)
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
-    del hass.data[f"{DOMAIN}_known_wallets"]
+    del hass.data[f"{DOMAIN}_portfolio_stores"]
     del hass.data[f"{DOMAIN}_asset_directory"]
     del hass_storage[f"{DOMAIN}.portfolio.{entry.entry_id}"]
     await _setup(hass, entry)

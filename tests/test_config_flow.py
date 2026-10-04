@@ -100,10 +100,10 @@ def _setup_language(language: str) -> dict:
     return {"language": {"language": language}}
 
 
-def _notifications(enabled: bool = True) -> dict:
+def _notifications(enabled: bool = True, rewards: bool = False) -> dict:
     """What the Portfolio's notifications section sends, in setup and in
-    Configure."""
-    return {"notifications": {"notify_new_wallets": enabled}}
+    Configure: new wallets, then staking rewards."""
+    return {"notifications": {"notify_new_wallets": enabled, "notify_staking_rewards": rewards}}
 
 
 # --- Service menu -------------------------------------------------------------
@@ -301,26 +301,35 @@ async def test_portfolio_creates_the_entry(hass):
         "currency_id": _USD_ID,
     }
     # Flat, as Configure stores it.
-    assert dict(entry.options) == {"language": "it", "notify_new_wallets": True}
+    assert dict(entry.options) == {
+        "language": "it", "notify_new_wallets": True, "notify_staking_rewards": False,
+    }
     assert "good" not in entry.title
 
 
-async def test_the_setup_asks_about_new_wallet_notifications_on_by_default(hass):
+async def test_the_setup_asks_about_new_wallets_on_and_staking_rewards_off(hass):
     """A section of its own between the currency and the language -- the
-    language comes last in every form -- open, its switch on; the choice is
-    stored flat beside the language, as Configure stores it."""
+    language comes last in every form -- open, the wallet switch on and the
+    staking reward switch off; the choices are stored flat beside the
+    language, as Configure stores them."""
     result = await _submit_key(hass, await _portfolio_form(hass), "good")
     schema = result["data_schema"]
     assert list(schema.schema) == ["currency", "notifications", "language"]
     assert dict(schema.schema)["notifications"].options == {"collapsed": False}
-    assert list(_section_schema(schema, "notifications").schema) == ["notify_new_wallets"]
-    assert _section_schema(schema, "notifications")({}) == {"notify_new_wallets": True}
+    assert list(_section_schema(schema, "notifications").schema) == [
+        "notify_new_wallets", "notify_staking_rewards",
+    ]
+    assert _section_schema(schema, "notifications")({}) == {
+        "notify_new_wallets": True, "notify_staking_rewards": False,
+    }
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"currency": {"currency": "usd"}, **_setup_language("en"), **_notifications(False)},
     )
     assert result["type"] == _FLOW.CREATE_ENTRY
-    assert dict(result["result"].options) == {"language": "en", "notify_new_wallets": False}
+    assert dict(result["result"].options) == {
+        "language": "en", "notify_new_wallets": False, "notify_staking_rewards": False,
+    }
 
 
 # --- Old statistics at setup ---------------------------------------------------------
@@ -349,7 +358,9 @@ def _assert_portfolio_created(result) -> None:
     assert dict(result["result"].data) == {
         "entry_type": "portfolio", "api_key": "good", "currency": "USD", "currency_id": _USD_ID,
     }
-    assert dict(result["result"].options) == {"language": "en", "notify_new_wallets": True}
+    assert dict(result["result"].options) == {
+        "language": "en", "notify_new_wallets": True, "notify_staking_rewards": False,
+    }
 
 
 async def test_the_setup_looks_for_old_statistics_in_the_chosen_currency(hass):
@@ -1136,9 +1147,9 @@ def _price_tracker_input(extra: list[str], language: str) -> dict:
     return {"currencies": {"extra_currencies": extra}, "language": {"language": language}}
 
 
-def _portfolio_input(language: str, notify: bool = True) -> dict:
+def _portfolio_input(language: str, notify: bool = True, rewards: bool = False) -> dict:
     """What the Portfolio's Configure form sends: its two sections."""
-    return {"language": {"language": language}, **_notifications(notify)}
+    return {"language": {"language": language}, **_notifications(notify, rewards)}
 
 
 def _form_defaults(result) -> dict:
@@ -1280,7 +1291,10 @@ async def test_the_frontend_gets_the_portfolio_language_open_and_filled_in(hass,
     assert [
         [(inner["name"], inner["default"]) for inner in field["schema"]]
         for field in shown["data_schema"]
-    ] == [[("notify_new_wallets", True)], [("language", "de")]]
+    ] == [
+        [("notify_new_wallets", True), ("notify_staking_rewards", False)],
+        [("language", "de")],
+    ]
 
 
 async def test_the_portfolio_options_store_the_language_flat_and_reload(hass):
@@ -1297,7 +1311,10 @@ async def test_the_portfolio_options_store_the_language_flat_and_reload(hass):
     )
     await hass.async_block_till_done()
     assert result["type"] == _FLOW.CREATE_ENTRY
-    assert dict(entry.options) == {"language": "fr", "notify_new_wallets": True, "other": "kept"}
+    assert dict(entry.options) == {
+        "language": "fr", "notify_new_wallets": True, "notify_staking_rewards": False,
+        "other": "kept",
+    }
     # The key and the currency stay where they are.
     assert dict(entry.data) == dict(_portfolio_entry().data)
     listener.assert_called_once()
@@ -1308,14 +1325,29 @@ async def test_configure_switches_the_new_wallet_notification(hass):
     stored flat beside the language, like every other option."""
     entry = _portfolio_entry()
     result = await _options_form(hass, entry)
-    assert _form_defaults(result)["notifications"] == {"notify_new_wallets": True}
+    assert _form_defaults(result)["notifications"] == _notifications()["notifications"]
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], _portfolio_input("en", notify=False)
     )
     assert result["type"] == _FLOW.CREATE_ENTRY
     assert dict(entry.options)["notify_new_wallets"] is False
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert _form_defaults(result)["notifications"] == {"notify_new_wallets": False}
+    assert _form_defaults(result)["notifications"] == _notifications(False)["notifications"]
+
+
+async def test_configure_switches_the_staking_reward_notification_on(hass):
+    """Off for an entry that never had the switch; switched on, stored flat
+    and shown as stored."""
+    entry = _portfolio_entry()
+    result = await _options_form(hass, entry)
+    assert _form_defaults(result)["notifications"]["notify_staking_rewards"] is False
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], _portfolio_input("en", rewards=True)
+    )
+    assert result["type"] == _FLOW.CREATE_ENTRY
+    assert dict(entry.options)["notify_staking_rewards"] is True
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert _form_defaults(result)["notifications"] == _notifications(True, True)["notifications"]
 
 
 def _shown_language(result) -> str:
@@ -1358,7 +1390,10 @@ async def test_a_language_the_integration_does_not_ship_is_refused(hass, service
         result["flow_id"], _language_input(service, "nl")
     )
     assert result["type"] == _FLOW.CREATE_ENTRY
-    switch = {"notify_new_wallets": True} if service == "portfolio" else {}
+    switch = (
+        {"notify_new_wallets": True, "notify_staking_rewards": False}
+        if service == "portfolio" else {}
+    )
     assert dict(entry.options) == {**before, "language": "nl", **switch}
 
 

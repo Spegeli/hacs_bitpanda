@@ -22,6 +22,8 @@ from .const import (
     SUBENTRY_TYPE_PRICE_GROUP,
     SUBENTRY_TYPE_WALLET_GROUP,
     entry_type,
+    notifies_new_wallets,
+    notifies_staking_rewards,
 )
 from .groups import entities_by_group, groups_of_type
 from .portfolio_coordinator import PortfolioRuntime
@@ -60,12 +62,28 @@ def _wallet_groups(hass: HomeAssistant, entry: ConfigEntry) -> list[dict[str, An
     ]
 
 
+def _marks(runtime: PortfolioRuntime) -> dict[str, Any]:
+    """How many assets have a staking reward mark, and whether the marks are
+    still to begin (portfolio_store.RewardMarks): counts only, no asset."""
+    marks = runtime.reward_marks
+    if marks is None:
+        return {}
+    return {"marked_assets": len(marks), "first_run": marks.first_run}
+
+
 def _portfolio(
     hass: HomeAssistant, entry: ConfigEntry, runtime: PortfolioRuntime | None
 ) -> dict[str, Any]:
     out: dict[str, Any] = {
         "service": "portfolio",
-        "config": {"api_key": _REDACTED, "currency": entry.data.get(CONF_CURRENCY)},
+        "config": {
+            "api_key": _REDACTED,
+            "currency": entry.data.get(CONF_CURRENCY),
+            # Whether a new wallet and a new staking payout bring a
+            # notification: the first thing to look at when one did not.
+            "notify_new_wallets": notifies_new_wallets(entry),
+            "notify_staking_rewards": notifies_staking_rewards(entry),
+        },
         "groups": _wallet_groups(hass, entry),
     }
     if runtime is None:
@@ -95,6 +113,7 @@ def _portfolio(
         "rewards": {
             **_health(runtime.rewards),
             "assets_with_rewards": len(runtime.rewards.data or {}),
+            **_marks(runtime),
         },
     }
     return out

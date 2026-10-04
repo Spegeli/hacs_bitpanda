@@ -57,6 +57,7 @@ from .const import (
     CONF_LANGUAGE,
     CONF_LEGACY_ADOPT,
     CONF_NOTIFY_NEW_WALLETS,
+    CONF_NOTIFY_STAKING_REWARDS,
     CONF_TRACKED_ASSETS,
     CONF_TRACKED_WALLETS,
     DEFAULT_CURRENCY,
@@ -1054,7 +1055,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # stays.
         options={
             key: entry.options[key]
-            for key in (CONF_LANGUAGE, CONF_NOTIFY_NEW_WALLETS)
+            for key in (CONF_LANGUAGE, CONF_NOTIFY_NEW_WALLETS, CONF_NOTIFY_STAKING_REWARDS)
             if key in entry.options
         },
         version=3,

@@ -33,10 +33,12 @@
             "name": "Meldingen",
             "description": "Je kunt de meldingsinstellingen later wijzigen via \"Configureren\" (⚙) bij de invoer \"Bitpanda Portfolio\" op de integratiepagina van Bitpanda.",
             "data": {
-              "notify_new_wallets": "Melding bij nieuwe wallets"
+              "notify_new_wallets": "Melding bij nieuwe wallets",
+              "notify_staking_rewards": "Melding bij stakingbeloningen"
             },
             "data_description": {
-              "notify_new_wallets": "Komt er een nieuwe wallet bij in het Portfolio, bijvoorbeeld nadat je een asset hebt gekocht, dan toont Home Assistant een melding onder \"Meldingen\". Wallets die er al waren toen het Portfolio werd ingesteld, tellen niet mee. Automatiseringen kunnen in elk geval reageren op de gebeurtenis `bitpanda_wallet_added`."
+              "notify_new_wallets": "Komt er een nieuwe wallet bij in het Portfolio, bijvoorbeeld nadat je een asset hebt gekocht, dan toont Home Assistant een melding onder \"Meldingen\". Wallets die er al waren toen het Portfolio werd ingesteld, tellen niet mee. Automatiseringen kunnen in elk geval reageren op de gebeurtenis `bitpanda_wallet_added`.",
+              "notify_staking_rewards": "Keert Bitpanda een stakingbeloning uit, dan toont Home Assistant een melding onder \"Meldingen\": één per asset, en de volgende uitbetaling vervangt die. Uitbetalingen die Home Assistant heeft gemist omdat het uit stond, worden per asset in één melding opgeteld. Alleen assets met een ingeschakelde sensor \"Saldo (staking)\" tellen mee. Automatiseringen kunnen in elk geval reageren op de gebeurtenis `bitpanda_staking_reward_received`."
             }
           },
           "language": {
@@ -165,10 +167,12 @@
           "notifications": {
             "name": "Meldingen",
             "data": {
-              "notify_new_wallets": "Melding bij nieuwe wallets"
+              "notify_new_wallets": "Melding bij nieuwe wallets",
+              "notify_staking_rewards": "Melding bij stakingbeloningen"
             },
             "data_description": {
-              "notify_new_wallets": "Komt er een nieuwe wallet bij in het Portfolio, bijvoorbeeld nadat je een asset hebt gekocht, dan toont Home Assistant een melding onder \"Meldingen\". Wallets die er al waren toen het Portfolio werd ingesteld, tellen niet mee. Automatiseringen kunnen in elk geval reageren op de gebeurtenis `bitpanda_wallet_added`."
+              "notify_new_wallets": "Komt er een nieuwe wallet bij in het Portfolio, bijvoorbeeld nadat je een asset hebt gekocht, dan toont Home Assistant een melding onder \"Meldingen\". Wallets die er al waren toen het Portfolio werd ingesteld, tellen niet mee. Automatiseringen kunnen in elk geval reageren op de gebeurtenis `bitpanda_wallet_added`.",
+              "notify_staking_rewards": "Keert Bitpanda een stakingbeloning uit, dan toont Home Assistant een melding onder \"Meldingen\": één per asset, en de volgende uitbetaling vervangt die. Uitbetalingen die Home Assistant heeft gemist omdat het uit stond, worden per asset in één melding opgeteld. Alleen assets met een ingeschakelde sensor \"Saldo (staking)\" tellen mee. Automatiseringen kunnen in elk geval reageren op de gebeurtenis `bitpanda_staking_reward_received`."
             }
           },
           "language": {
@@ -520,6 +524,18 @@
     },
     "wallet_added_sensors_disabled": {
       "message": "De sensoren van deze wallet zijn uitgeschakeld. Je kunt ze inschakelen op de [apparaatpagina]({link})."
+    },
+    "staking_reward_title": {
+      "message": "Nieuwe Bitpanda-stakingbeloning"
+    },
+    "staking_reward": {
+      "message": "**[{wallet}]({link})** heeft een stakingbeloning van **{net} {symbol}** ontvangen."
+    },
+    "staking_rewards": {
+      "message": "**[{wallet}]({link})** heeft {count} stakingbeloningen ontvangen, samen **{net} {symbol}**."
+    },
+    "staking_reward_value": {
+      "message": "Vandaag ongeveer {value} {currency} waard."
     }
   },
   "issues": {

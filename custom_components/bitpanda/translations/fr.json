@@ -33,10 +33,12 @@
             "name": "Notifications",
             "description": "Vous pourrez modifier les paramètres de notification plus tard avec « Configurer » (⚙) sur l'entrée « Bitpanda Portfolio » de la page de l'intégration Bitpanda.",
             "data": {
-              "notify_new_wallets": "Signaler les nouveaux wallets"
+              "notify_new_wallets": "Signaler les nouveaux wallets",
+              "notify_staking_rewards": "Signaler les récompenses de staking"
             },
             "data_description": {
-              "notify_new_wallets": "Lorsqu'un nouveau wallet apparaît dans le Portfolio, par exemple après l'achat d'un actif, Home Assistant affiche une notification dans « Notifications ». Les wallets présents lors de la configuration du Portfolio ne comptent pas. Les automatisations peuvent réagir à l'événement `bitpanda_wallet_added` dans tous les cas."
+              "notify_new_wallets": "Lorsqu'un nouveau wallet apparaît dans le Portfolio, par exemple après l'achat d'un actif, Home Assistant affiche une notification dans « Notifications ». Les wallets présents lors de la configuration du Portfolio ne comptent pas. Les automatisations peuvent réagir à l'événement `bitpanda_wallet_added` dans tous les cas.",
+              "notify_staking_rewards": "Lorsque Bitpanda verse une récompense de staking, Home Assistant affiche une notification dans « Notifications » : une par actif, que le versement suivant remplace. Les versements manqués pendant que Home Assistant était éteint sont additionnés dans une seule notification par actif. Seuls les actifs dont le capteur « Solde (staking) » est activé comptent. Les automatisations peuvent réagir à l'événement `bitpanda_staking_reward_received` dans tous les cas."
             }
           },
           "language": {
@@ -165,10 +167,12 @@
           "notifications": {
             "name": "Notifications",
             "data": {
-              "notify_new_wallets": "Signaler les nouveaux wallets"
+              "notify_new_wallets": "Signaler les nouveaux wallets",
+              "notify_staking_rewards": "Signaler les récompenses de staking"
             },
             "data_description": {
-              "notify_new_wallets": "Lorsqu'un nouveau wallet apparaît dans le Portfolio, par exemple après l'achat d'un actif, Home Assistant affiche une notification dans « Notifications ». Les wallets présents lors de la configuration du Portfolio ne comptent pas. Les automatisations peuvent réagir à l'événement `bitpanda_wallet_added` dans tous les cas."
+              "notify_new_wallets": "Lorsqu'un nouveau wallet apparaît dans le Portfolio, par exemple après l'achat d'un actif, Home Assistant affiche une notification dans « Notifications ». Les wallets présents lors de la configuration du Portfolio ne comptent pas. Les automatisations peuvent réagir à l'événement `bitpanda_wallet_added` dans tous les cas.",
+              "notify_staking_rewards": "Lorsque Bitpanda verse une récompense de staking, Home Assistant affiche une notification dans « Notifications » : une par actif, que le versement suivant remplace. Les versements manqués pendant que Home Assistant était éteint sont additionnés dans une seule notification par actif. Seuls les actifs dont le capteur « Solde (staking) » est activé comptent. Les automatisations peuvent réagir à l'événement `bitpanda_staking_reward_received` dans tous les cas."
             }
           },
           "language": {
@@ -520,6 +524,18 @@
     },
     "wallet_added_sensors_disabled": {
       "message": "Ses capteurs sont désactivés. Vous pouvez les activer sur sa [page d'appareil]({link})."
+    },
+    "staking_reward_title": {
+      "message": "Nouvelle récompense de staking Bitpanda"
+    },
+    "staking_reward": {
+      "message": "**[{wallet}]({link})** a reçu une récompense de staking de **{net} {symbol}**."
+    },
+    "staking_rewards": {
+      "message": "**[{wallet}]({link})** a reçu {count} récompenses de staking, au total **{net} {symbol}**."
+    },
+    "staking_reward_value": {
+      "message": "Valeur actuelle : environ {value} {currency}."
     }
   },
   "issues": {

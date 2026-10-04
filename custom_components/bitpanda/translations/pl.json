@@ -33,10 +33,12 @@
             "name": "Powiadomienia",
             "description": "Ustawienia powiadomień możesz później zmienić, klikając „Konfiguruj” (⚙) przy wpisie „Bitpanda Portfolio” na stronie integracji Bitpanda.",
             "data": {
-              "notify_new_wallets": "Powiadamiaj o nowych portfelach"
+              "notify_new_wallets": "Powiadamiaj o nowych portfelach",
+              "notify_staking_rewards": "Powiadamiaj o nagrodach za staking"
             },
             "data_description": {
-              "notify_new_wallets": "Gdy w Portfolio pojawi się nowy portfel, na przykład po zakupie aktywa, Home Assistant wyświetli powiadomienie w panelu „Powiadomienia”. Portfele istniejące w chwili konfiguracji Portfolio się nie liczą. Automatyzacje mogą w każdym przypadku reagować na zdarzenie `bitpanda_wallet_added`."
+              "notify_new_wallets": "Gdy w Portfolio pojawi się nowy portfel, na przykład po zakupie aktywa, Home Assistant wyświetli powiadomienie w panelu „Powiadomienia”. Portfele istniejące w chwili konfiguracji Portfolio się nie liczą. Automatyzacje mogą w każdym przypadku reagować na zdarzenie `bitpanda_wallet_added`.",
+              "notify_staking_rewards": "Gdy Bitpanda wypłaci nagrodę za staking, Home Assistant wyświetli powiadomienie w panelu „Powiadomienia”: jedno na aktywo, a następna wypłata je zastępuje. Wypłaty pominięte, gdy Home Assistant był wyłączony, są sumowane w jednym powiadomieniu na aktywo. Liczą się tylko aktywa z włączonym sensorem „Saldo (staking)”. Automatyzacje mogą w każdym przypadku reagować na zdarzenie `bitpanda_staking_reward_received`."
             }
           },
           "language": {
@@ -165,10 +167,12 @@
           "notifications": {
             "name": "Powiadomienia",
             "data": {
-              "notify_new_wallets": "Powiadamiaj o nowych portfelach"
+              "notify_new_wallets": "Powiadamiaj o nowych portfelach",
+              "notify_staking_rewards": "Powiadamiaj o nagrodach za staking"
             },
             "data_description": {
-              "notify_new_wallets": "Gdy w Portfolio pojawi się nowy portfel, na przykład po zakupie aktywa, Home Assistant wyświetli powiadomienie w panelu „Powiadomienia”. Portfele istniejące w chwili konfiguracji Portfolio się nie liczą. Automatyzacje mogą w każdym przypadku reagować na zdarzenie `bitpanda_wallet_added`."
+              "notify_new_wallets": "Gdy w Portfolio pojawi się nowy portfel, na przykład po zakupie aktywa, Home Assistant wyświetli powiadomienie w panelu „Powiadomienia”. Portfele istniejące w chwili konfiguracji Portfolio się nie liczą. Automatyzacje mogą w każdym przypadku reagować na zdarzenie `bitpanda_wallet_added`.",
+              "notify_staking_rewards": "Gdy Bitpanda wypłaci nagrodę za staking, Home Assistant wyświetli powiadomienie w panelu „Powiadomienia”: jedno na aktywo, a następna wypłata je zastępuje. Wypłaty pominięte, gdy Home Assistant był wyłączony, są sumowane w jednym powiadomieniu na aktywo. Liczą się tylko aktywa z włączonym sensorem „Saldo (staking)”. Automatyzacje mogą w każdym przypadku reagować na zdarzenie `bitpanda_staking_reward_received`."
             }
           },
           "language": {
@@ -520,6 +524,18 @@
     },
     "wallet_added_sensors_disabled": {
       "message": "Jego sensory są wyłączone. Możesz je włączyć na jego [stronie urządzenia]({link})."
+    },
+    "staking_reward_title": {
+      "message": "Nowa nagroda za staking Bitpanda"
+    },
+    "staking_reward": {
+      "message": "**[{wallet}]({link})** otrzymał nagrodę za staking: **{net} {symbol}**."
+    },
+    "staking_rewards": {
+      "message": "**[{wallet}]({link})** otrzymał nagrody za staking (liczba wypłat: {count}), łącznie **{net} {symbol}**."
+    },
+    "staking_reward_value": {
+      "message": "Obecna wartość: około {value} {currency}."
     }
   },
   "issues": {

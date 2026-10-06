@@ -1,6 +1,6 @@
 """Unit tests for `.github/scripts/release.py` -- the version and release
-notes computation the release workflow's key job calls (spec section 12,
-CONTRIBUTING.md "Releases"). Imported by path: `.github/scripts` is not a
+notes computation the release workflow's key job calls (CONTRIBUTING.md
+"Releases"). Imported by path: `.github/scripts` is not a
 package (there is no `scripts/__init__.py`), so a normal `import` cannot
 reach it.
 """
@@ -307,8 +307,7 @@ def test_prerelease_after_a_stable_targets_the_next_stable():
 def test_prerelease_numbering_ignores_betas_of_a_different_target():
     """Existing betas that target a different stable (2.1.0) must not
     affect the count for this one (3.0.0, from a major bump) -- otherwise
-    a stray 2.1.0-beta.* would push 3.0.0's own numbering ahead. Review
-    Important 3 (named risk 2)."""
+    a stray 2.1.0-beta.* would push 3.0.0's own numbering ahead."""
     tags = ["v2.0.0_redesign", "v2.1.0-beta.1", "v2.1.0-beta.2"]
     assert next_prerelease_version(tags, "major") == (Version(3, 0, 0), 1)
 
@@ -346,8 +345,8 @@ def test_previous_ref_stable_with_no_tags_at_all_is_none():
 
 
 def test_previous_ref_prerelease_is_the_newest_of_either_semver_kind():
-    # A pre-release of the next stable outranks the current stable (spec
-    # 12.4's verified ordering: 2.1.0-beta.1 > 2.0.0).
+    # A pre-release of the next stable outranks the current stable
+    # (2.1.0-beta.1 > 2.0.0, as CONTRIBUTING.md "Releases" describes).
     assert previous_ref(["v2.0.0_redesign", "v2.1.0-beta.1"], "prerelease") == "v2.1.0-beta.1"
     # A published stable outranks a pre-release of that same version.
     assert previous_ref(["v2.1.0-beta.1", "v2.1.0"], "prerelease") == "v2.1.0"

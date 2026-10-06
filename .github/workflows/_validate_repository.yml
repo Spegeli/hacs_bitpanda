@@ -26,7 +26,7 @@ jobs:
 
   # The release's key job runs .github/scripts/release.py on the runner's own
   # python3 -- 3.12 on ubuntu-24.04 -- because it may run no action but
-  # actions/checkout (spec section 11). The tests run on 3.14 and 3.13 and
+  # actions/checkout (CONTRIBUTING.md, "Releases"). The tests run on 3.14 and 3.13 and
   # mypy on 3.14, so a change that needs a Python newer than 3.12 would
   # otherwise show only at release time. This job compiles it with 3.12 and
   # plans a release from the whole history and its tags, which the plan

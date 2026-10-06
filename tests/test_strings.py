@@ -546,10 +546,9 @@ def test_the_language_field_says_what_it_sets_for_each_service():
     }
 
 
-# The Portfolio's notifications, as approved on 2026-10-03
-# (docs/superpowers/specs/2026-10-03-new-wallet-notifications-design.md): the
-# section's name -- Home Assistant's own name for its notification drawer in
-# each language -- the switch's label, its help text, alike in setup and in
+# The Portfolio's notifications, as approved on 2026-10-03: the section's
+# name -- Home Assistant's own name for its notification drawer in each
+# language -- the switch's label, its help text, alike in setup and in
 # Configure, and the setup section's description: where to change the
 # notification settings later, once for every switch the section may hold.
 _NOTIFICATIONS_SECTION = {
@@ -629,7 +628,7 @@ _NOTIFICATIONS_SECTION = {
 
 
 # The staking reward switch, after the wallet switch in the same section
-# (docs/superpowers/specs/2026-10-04-staking-reward-notifications-design.md).
+# (issue #13).
 _STAKING_SWITCH = {
     "en": (
         "Notify about staking rewards",
@@ -796,8 +795,7 @@ def test_the_new_wallet_notification_texts():
 
 
 # The notification about new staking payouts: one, or several added up; the
-# value of the net amount only where a price is known
-# (docs/superpowers/specs/2026-10-04-staking-reward-notifications-design.md).
+# value of the net amount only where a price is known (issue #13).
 _STAKING_REWARD = {
     "en": (
         "New Bitpanda staking reward",
@@ -864,9 +862,8 @@ def test_the_staking_reward_notification_texts():
 
 
 # The notification's second paragraph when all of the new wallet's sensors are
-# disabled (docs/superpowers/specs/2026-10-03-announce-on-wallet-device-design.md):
-# Home Assistant's own word for enabling an entity, and the words the texts
-# already use for sensors and a device page.
+# disabled: Home Assistant's own word for enabling an entity, and the words
+# the texts already use for sensors and a device page.
 _SENSORS_DISABLED = {
     "en": "Its sensors are disabled. You can enable them on its [device page]({link}).",
     "de": "Seine Sensoren sind deaktiviert. Du kannst sie auf seiner [Geräteseite]({link}) "

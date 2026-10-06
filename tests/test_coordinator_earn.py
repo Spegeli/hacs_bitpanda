@@ -94,7 +94,7 @@ async def test_the_rewards_coordinator_calls_back_after_each_successful_refresh_
 
 async def test_the_callback_schedules_no_refresh_without_a_listener(hass, freezer):
     """The call is no listener: without a Staking sensor listening, the
-    whole history is not read again an hour later (spec D12)."""
+    whole history is not read again an hour later (issue #13)."""
     entry = MockConfigEntry(domain=DOMAIN, data={"api_key": "key", "currency": "EUR"})
     entry.add_to_hass(hass)
     client = _FakeClient(operations=[_reward("vsn", "1", "0", "2026-09-22T17:16:35Z")])

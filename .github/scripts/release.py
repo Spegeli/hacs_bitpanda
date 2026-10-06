@@ -12,13 +12,14 @@ through the shell, never imports it:
 `--for-release`, which only the release passes, makes it refuse a plan the
 release must not publish (see `plan`). `notes` prints the Markdown release
 notes for a commit range. Both are thin wrappers around the pure functions
-below (spec section 12: "Release types, versioning and changelog").
+below (CONTRIBUTING.md, "Releases").
 
 Standard library only, and 3.12-compatible: `actions/setup-python` is
-GitHub's own action, but the key job goes without it -- spec section 11
-allows that job only `actions/checkout` and shell -- so this runs on the
-Python `ubuntu-24.04` ships, 3.12. `_validate_repository.yml`'s "Release
-script" job compiles and runs it there on every change.
+GitHub's own action, but the key job goes without it -- the release allows
+that job only `actions/checkout` and shell (CONTRIBUTING.md, "Releases") --
+so this runs on the Python `ubuntu-24.04` ships, 3.12.
+`_validate_repository.yml`'s "Release script" job compiles and runs it
+there on every change.
 """
 from __future__ import annotations
 
@@ -54,9 +55,10 @@ class Version:
 #
 # Three kinds of tag, tried in this order, each returning None when a tag
 # is not its kind:
-#   - legacy date tags (v2026.06.04, v2026.06.04-1, or -- one straggler
-#     from before the "v" convention -- 2025.10.06): this project's
-#     versioning before Semantic Versioning, now the 1.x line.
+#   - legacy date tags (v2026.06.04; the pattern also takes a same-day
+#     suffix, v2026.06.04-1, and -- one straggler from before the "v"
+#     convention -- 2025.10.06): this project's versioning before Semantic
+#     Versioning, now the 1.x line.
 #   - stable SemVer tags (v2.0.0, and the one-time v2.0.0_redesign).
 #   - pre-release SemVer tags (v2.1.0-beta.2).
 # A legacy tag is checked first because its numbers would otherwise also
@@ -141,8 +143,8 @@ def apply_bump(base: Version, bump: Bump) -> Version:
 def compute_bump(commits: Sequence[Commit], override: str) -> Bump:
     """The SemVer bump: `override` wins when it names one; otherwise
     ("auto") it comes from the Conventional Commits: any breaking commit
-    makes it major, else any `feat` makes it minor, else patch (spec
-    12.4)."""
+    makes it major, else any `feat` makes it minor, else patch
+    (CONTRIBUTING.md, "Releases")."""
     if override == "major":
         return "major"
     if override == "minor":
@@ -279,8 +281,7 @@ _HEADER_RE = re.compile(
 # The Conventional Commits footer, anchored to the start of a line: a
 # mid-sentence mention -- "This is not a BREAKING CHANGE: ...", or a docs
 # commit explaining the convention itself -- must never be mistaken for
-# the real thing. Not anchored to the end: every
-# commit in this repository ends with a Co-Authored-By: trailer, which can
+# the real thing. Not anchored to the end: a Co-Authored-By: trailer can
 # follow the footer in its own paragraph. "BREAKING-CHANGE" is
 # Conventional Commits' own hyphenated synonym.
 _BREAKING_FOOTER_RE = re.compile(r"^BREAKING[ -]CHANGE: ", re.MULTILINE)

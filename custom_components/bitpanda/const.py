@@ -172,8 +172,8 @@ UNKNOWN_ASSET_RETRY = timedelta(days=1)
 
 # Failed refreshes in a row, spread over (FAILURE_TOLERANCE - 1) regular
 # intervals at the least, that make a coordinator's sensors unavailable
-# rather than clearing them at the first failure (spec §3.1). The same rule
-# as WALLET_REMOVAL_MISSES, applied to failures by streaks.FailureStreak.
+# rather than clearing them at the first failure. The same rule as
+# WALLET_REMOVAL_MISSES, applied to failures by streaks.FailureStreak.
 FAILURE_TOLERANCE = 3
 
 # The asset group of Bitpanda's Cash Plus products. They count towards the

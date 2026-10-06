@@ -478,7 +478,7 @@ async def test_statistics_of_another_source_do_not_count(hass):
     """Home Assistant gives every sensor.* statistic the source "recorder"
     (async_import_statistics refuses another; external statistics are keyed
     domain:id), so this listing does not occur: the test pins the source
-    check the spec asks for."""
+    check all the same."""
     hass.config.components.add("recorder")
     listed = [{"statistic_id": "sensor.bitpanda_portfolio_total", "source": "other",
                "statistics_unit_of_measurement": "USD"}]

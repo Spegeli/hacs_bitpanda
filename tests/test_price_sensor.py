@@ -1,0 +1,277 @@
+"""Tests for the Price Tracker sensors."""
+from homeassistant.components.sensor import SensorStateClass
+from homeassistant.config_entries import ConfigSubentryData
+from homeassistant.helpers import device_registry as dr, entity_registry as er
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.bitpanda.const import DOMAIN
+from custom_components.bitpanda.ecb import EcbRates
+from custom_components.bitpanda.price_coordinator import PriceTrackerRuntime
+from custom_components.bitpanda.price_sensor import (
+    PriceSensor,
+    async_setup_price_entities,
+    display_precision,
+    price_device_info,
+)
+
+from tests.conftest import manifest_version, price_group
+
+BTC = {"id": "b86c034b-efe3-11eb-b56f-0691764446a7", "symbol": "BTC", "name": "Bitcoin",
+       "type": "cryptocoin", "group": "coin"}
+SOL = {"id": "b86da33d-efe3-11eb-b56f-0691764446a7", "symbol": "SOL", "name": "Solana",
+       "type": "cryptocoin", "group": "coin"}
+GOLD = {"id": "b86c88d4-efe3-11eb-b56f-0691764446a7", "symbol": "XAU", "name": "Gold",
+        "type": "commodity", "group": "metal"}
+_RATES = EcbRates(date="2026-09-24", rates={"USD": 1.1367})
+
+
+class _Coordinator:
+    """Duck-typed coordinator: what the entities read. `data_available`
+    follows the outcome of the last refresh unless given: a failed refresh
+    whose failure is not confirmed yet leaves it True (tolerance.py)."""
+
+    def __init__(self, data=None, last_update_success=True, data_available=None):
+        self.data = data
+        self.last_update_success = last_update_success
+        self.data_available = last_update_success if data_available is None else data_available
+
+
+def _sensor(currency="EUR", prices=None, rates=_RATES, ecb=True):
+    tickers = _Coordinator({BTC["id"]: 73188.51648958} if prices is None else prices)
+    return PriceSensor(tickers, _Coordinator(rates) if ecb else None, "eid", BTC, currency)
+
+
+def test_ids_names_and_device():
+    sensor = _sensor("USD")
+    assert sensor.entity_id == "sensor.bitpanda_bitcoin_btc_price_tracker_usd"
+    assert sensor.unique_id == f"eid_{BTC['id']}_price_USD"
+    assert sensor.name == "USD"
+    assert sensor.translation_key == "price"
+    assert sensor.has_entity_name is True
+    assert sensor.native_unit_of_measurement == "USD"
+    # Long-term statistics: Home Assistant allows only `total` for money.
+    assert (sensor.device_class, sensor.state_class) == ("monetary", SensorStateClass.TOTAL)
+    info = price_device_info("eid", BTC)
+    # English, like the wallet's "… Wallet": Home Assistant lists an entity
+    # under its device's name, and this one says what the sensor is.
+    assert info["name"] == "Bitcoin (BTC) Price Tracker"
+    assert info["identifiers"] == {("bitpanda", f"eid_price_{BTC['id']}")}
+
+
+def test_a_price_device_shows_the_assets_id_and_leads_to_bitpandas_prices():
+    """As a wallet device: Bitpanda's price overview, the asset's ID as the
+    serial number, the integration's version."""
+    info = price_device_info("eid", BTC)
+    assert info["configuration_url"] == "https://www.bitpanda.com/en/prices"
+    assert info["serial_number"] == BTC["id"]
+    assert info["sw_version"] == manifest_version()
+
+
+def test_eur_is_the_ticker_price():
+    sensor = _sensor("EUR", ecb=False)
+    assert sensor.native_value == 73188.51648958
+    assert sensor.extra_state_attributes == {
+        "asset": "BTC", "asset_name": "Bitcoin",
+    }
+
+
+def test_a_stock_etf_or_etc_shows_its_isin():
+    """Beside `asset` and `asset_name`; any other asset has no such key at
+    all (see test_eur_is_the_ticker_price)."""
+    etf = {"id": "1f0ed6c9-ee10-68c6-8a0e-55a29b7757fe", "symbol": "LYY1",
+           "name": "Amundi PEA S&P 500 UCITS ETF", "isin": "FR0011871136",
+           "type": "equity_security", "group": "equity_etf"}
+    sensor = PriceSensor(_Coordinator({etf["id"]: 540.5}), None, "eid", etf, "EUR")
+    assert sensor.extra_state_attributes == {
+        "asset": "LYY1", "asset_name": "Amundi PEA S&P 500 UCITS ETF",
+        "asset_isin": "FR0011871136",
+    }
+
+
+def test_other_currencies_are_converted_with_the_ecb_rate():
+    sensor = _sensor("USD")
+    assert sensor.native_value == round(73188.51648958 * 1.1367, 8)
+    assert sensor.extra_state_attributes == {
+        "asset": "BTC", "asset_name": "Bitcoin",
+        "conversion_rate": 1.1367, "rate_date": "2026-09-24", "rate_source": "ECB",
+    }
+
+
+def test_last_rates_are_used_after_a_failed_ecb_refresh():
+    sensor = PriceSensor(
+        _Coordinator({BTC["id"]: 100.0}), _Coordinator(_RATES, last_update_success=False),
+        "eid", BTC, "USD",
+    )
+    assert sensor.native_value == 113.67
+    assert sensor.extra_state_attributes["rate_date"] == "2026-09-24"
+
+
+def test_without_rates_the_sensor_publishes_a_status_key_instead_of_a_value():
+    sensor = _sensor("USD", rates=None)
+    assert sensor.available is True
+    assert sensor.native_value is None
+    assert "conversion_rate" not in sensor.extra_state_attributes
+    # A status key, translated through state_attributes.conversion.state --
+    # never a raw English sentence.
+    assert sensor.extra_state_attributes["conversion"] == "no_rate"
+
+
+def test_a_failing_ticker_makes_only_that_asset_unavailable():
+    assert _sensor("EUR", prices={GOLD["id"]: 1.0}).available is False
+    assert _sensor("EUR", prices={BTC["id"]: 1.0}).available is True
+
+
+def test_a_tolerated_failure_keeps_the_price():
+    """The ticker update failed, but its failure is not confirmed yet
+    (tolerance.py): the sensor goes on showing the last price."""
+    tickers = _Coordinator(
+        {BTC["id"]: 73188.51648958}, last_update_success=False, data_available=True
+    )
+    sensor = PriceSensor(tickers, None, "eid", BTC, "EUR")
+    assert (sensor.available, sensor.native_value) == (True, 73188.51648958)
+
+
+def test_a_confirmed_failure_makes_the_price_unavailable():
+    tickers = _Coordinator(
+        {BTC["id"]: 73188.51648958}, last_update_success=False, data_available=False
+    )
+    assert PriceSensor(tickers, None, "eid", BTC, "EUR").available is False
+
+
+def test_change_24h_attributes_from_the_recorded_price():
+    sensor = _sensor("EUR", prices={BTC["id"]: 110.0}, ecb=False)
+    sensor._price_24h_ago = 100.0
+    attrs = sensor.extra_state_attributes
+    assert attrs["change_24h_pct"] == 10.0
+    assert attrs["price_24h_ago"] == 100.0
+
+
+def test_precision_follows_the_magnitude():
+    assert _sensor("EUR", prices={BTC["id"]: 73188.5}, ecb=False).suggested_display_precision == 2
+    assert _sensor("EUR", prices={BTC["id"]: 0.00000032}, ecb=False).suggested_display_precision == 8
+
+
+# --- Platform setup ------------------------------------------------------------------
+
+
+def _price_tracker(hass, extra: list[str], *groups: ConfigSubentryData) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=3, data={"entry_type": "price_tracker"},
+        options={"extra_currencies": extra}, subentries_data=list(groups),
+    )
+    entry.add_to_hass(hass)
+    entry.runtime_data = PriceTrackerRuntime(tickers=_Coordinator({}), ecb=_Coordinator(_RATES))
+    return entry
+
+
+def _price_entity(hass, entry, asset: dict, currency: str, device_id=None) -> str:
+    return er.async_get(hass).async_get_or_create(
+        "sensor", DOMAIN, f"{entry.entry_id}_{asset['id']}_price_{currency}",
+        config_entry=entry, device_id=device_id,
+    ).entity_id
+
+
+def _price_device(hass, entry, asset: dict) -> str:
+    return dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"{entry.entry_id}_price_{asset['id']}")},
+    ).id
+
+
+async def test_each_group_adds_the_sensors_of_its_assets_under_its_subentry(hass):
+    entry = _price_tracker(
+        hass, ["USD"], price_group("crypto", BTC, SOL), price_group("metal", GOLD)
+    )
+    calls: list = []
+    await async_setup_price_entities(
+        hass, entry, lambda entities, **kwargs: calls.append((entities, kwargs))
+    )
+    by_subentry = {
+        kwargs["config_subentry_id"]: [e.entity_id for e in entities] for entities, kwargs in calls
+    }
+    subentry_ids = {s.unique_id: s.subentry_id for s in entry.subentries.values()}
+    assert by_subentry == {
+        subentry_ids["crypto"]: [
+            "sensor.bitpanda_bitcoin_btc_price_tracker_eur", "sensor.bitpanda_bitcoin_btc_price_tracker_usd",
+            "sensor.bitpanda_solana_sol_price_tracker_eur", "sensor.bitpanda_solana_sol_price_tracker_usd",
+        ],
+        subentry_ids["metal"]: ["sensor.bitpanda_gold_xau_price_tracker_eur", "sensor.bitpanda_gold_xau_price_tracker_usd"],
+    }
+
+
+async def test_setup_removes_sensors_of_a_dropped_currency(hass):
+    entry = _price_tracker(hass, [], price_group("crypto", BTC))
+    usd = _price_entity(hass, entry, BTC, "USD")
+    eur = _price_entity(hass, entry, BTC, "EUR")
+    await async_setup_price_entities(hass, entry, lambda entities, **kwargs: None)
+    ent_reg = er.async_get(hass)
+    assert ent_reg.async_get(usd) is None
+    assert ent_reg.async_get(eur) is not None
+
+
+async def test_setup_removes_the_sensors_and_device_of_an_asset_no_longer_tracked(hass):
+    """Gold's sensors and device are registered apart, so neither removal
+    rides on the other."""
+    entry = _price_tracker(hass, ["USD"], price_group("crypto", BTC))
+    gold_eur = _price_entity(hass, entry, GOLD, "EUR")
+    gold_usd = _price_entity(hass, entry, GOLD, "USD")
+    gold_device = _price_device(hass, entry, GOLD)
+    btc_device = _price_device(hass, entry, BTC)
+    btc_eur = _price_entity(hass, entry, BTC, "EUR", btc_device)
+
+    await async_setup_price_entities(hass, entry, lambda entities, **kwargs: None)
+
+    ent_reg, dev_reg = er.async_get(hass), dr.async_get(hass)
+    assert ent_reg.async_get(gold_eur) is None
+    assert ent_reg.async_get(gold_usd) is None
+    assert dev_reg.async_get(gold_device) is None
+    assert ent_reg.async_get(btc_eur) is not None
+    assert dev_reg.async_get(btc_device) is not None
+
+
+async def test_setup_keeps_a_device_that_still_names_a_tracked_asset(hass):
+    """A device is judged by every identifier it carries, never by one picked
+    at random: one that names a tracked asset stays, whatever untracked
+    assets it names besides."""
+    entry = _price_tracker(hass, [], price_group("crypto", BTC))
+    btc_device = _price_device(hass, entry, BTC)
+    untracked = {
+        (DOMAIN, f"{entry.entry_id}_price_{number:08d}-0000-0000-0000-000000000000")
+        for number in range(15)
+    }
+    dev_reg = dr.async_get(hass)
+    dev_reg.async_update_device(
+        btc_device, new_identifiers={*dev_reg.async_get(btc_device).identifiers, *untracked}
+    )
+
+    await async_setup_price_entities(hass, entry, lambda entities, **kwargs: None)
+
+    assert dr.async_get(hass).async_get(btc_device) is not None
+
+
+# --- display_precision -----------------------------------------------------------------
+
+
+def test_precision_for_large_values():
+    assert display_precision(73331.48806018) == 2
+    assert display_precision(29955.20592928) == 2
+    assert display_precision(23.395) == 2
+    assert display_precision(10.0) == 2
+
+
+def test_precision_scales_down_for_small_values():
+    assert display_precision(5.0) == 4
+    assert display_precision(0.5) == 5
+    assert display_precision(0.05810025) == 6
+    assert display_precision(0.0005) == 7
+    assert display_precision(0.00000032) == 8
+
+
+def test_precision_never_derived_from_decimal_count():
+    """Every API price has exactly 8 decimals, so counting them is useless."""
+    assert display_precision(90.93000000) == 2
+
+
+def test_precision_handles_zero_and_none():
+    assert display_precision(0.0) == 2
+    assert display_precision(None) == 2

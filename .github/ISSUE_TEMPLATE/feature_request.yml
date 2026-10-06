@@ -7,10 +7,6 @@ body:
       value: |
         Have an idea to improve this integration? Fill out the form below.
 
-        > [!IMPORTANT]
-        > **Stocks, ETFs and commodities cannot be added.** They are not part of the public Bitpanda
-        > Price Ticker API, so there is no price data to build on. Requests for these will be closed.
-
   - type: checkboxes
     id: preflight
     attributes:
@@ -18,7 +14,7 @@ body:
       options:
         - label: I searched [existing issues](https://github.com/Spegeli/hacs_bitpanda/issues?q=is%3Aissue) and this is not a duplicate.
           required: true
-        - label: This is not a request for stocks, ETFs or commodities.
+        - label: I read the [Known limitations](https://github.com/Spegeli/hacs_bitpanda#%EF%B8%8F-known-limitations) — some wishes need data the Bitpanda API does not provide.
           required: true
 
   - type: dropdown
@@ -26,11 +22,12 @@ body:
     attributes:
       label: Which area does this affect?
       options:
-        - Price Tracker (asset price sensor)
-        - Wallet Monitor (wallet balance sensor)
-        - Portfolio Total
-        - Setup / Configuration flow
-        - Services / automations
+        - Price Tracker (price sensors, currencies, Add price tracker)
+        - Portfolio (wallet, staking and total sensors)
+        - Portfolio (total value, cash, Cash Plus, returns)
+        - Dialogs (setup, Configure, Reconfigure, new API key)
+        - Refresh action (bitpanda.refresh)
+        - Upgrade from a date version
         - Documentation
         - Other
     validations:
@@ -56,7 +53,7 @@ body:
     id: api_reference
     attributes:
       label: Bitpanda API reference
-      description: If this needs data from the Bitpanda API, link the relevant endpoint in the [API docs](https://developers.bitpanda.com/platform).
+      description: If this needs data from the Bitpanda API, link the relevant endpoint in the [API docs](https://docs.public.bitpanda.com).
     validations:
       required: false
 

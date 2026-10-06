@@ -1,3 +1,2 @@
+# Name and description are translations: services.refresh in strings.json.
 refresh:
-  name: Refresh
-  description: Manually trigger an immediate refresh of all Bitpanda price and wallet data.

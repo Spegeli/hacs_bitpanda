@@ -1,0 +1,41 @@
+"""Device lookups that work on every supported Home Assistant version."""
+from __future__ import annotations
+
+from homeassistant.helpers import device_registry as dr
+
+from .const import DOMAIN
+
+
+def device_identifiers(device: dr.DeviceEntry) -> set[str]:
+    """Every identifier this integration gave `device`: the second half of
+    each of its (DOMAIN, identifier) pairs.
+
+    Every device the integration creates carries exactly one, yet a device is
+    judged by all of them: one pair picked from the set at random could be
+    the one that does not tell.
+    """
+    return {identifier for domain, identifier in device.identifiers if domain == DOMAIN}
+
+
+def find_entry_device(
+    dev_reg: dr.DeviceRegistry, entry_id: str, identifier: str
+) -> dr.DeviceEntry | None:
+    """The device of config entry `entry_id` that carries (DOMAIN, identifier).
+
+    Scoped to the entry on purpose: device identifiers are no longer unique
+    across config entries, which is why DeviceRegistry.async_get_device is
+    deprecated (it stops working in Home Assistant 2027.8). Its replacements
+    (async_get_device_by_identifier and its siblings) do not exist at this
+    integration's 2025.5 floor; listing the entry's own devices works on
+    every version. Takes the registry the caller already holds, typically to
+    remove what it finds.
+    """
+    wanted = (DOMAIN, identifier)
+    return next(
+        (
+            device
+            for device in dr.async_entries_for_config_entry(dev_reg, entry_id)
+            if wanted in device.identifiers
+        ),
+        None,
+    )

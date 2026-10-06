@@ -1,302 +1,771 @@
-"""Config flow for Bitpanda integration."""
+"""Config flow for the Bitpanda integration.
+
+One integration, two services, one config entry each: Bitpanda Portfolio
+(needs an API key) and Bitpanda Price Tracker (no key). Each entry carries
+its service as its unique_id, so neither can exist twice -- not even when two
+setup dialogs race each other.
+"""
 from __future__ import annotations
 
-import asyncio
+from collections.abc import Iterable, Mapping
 import logging
-from typing import Any
+from typing import Any, cast
 
-import aiohttp
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlowResult,
+    ConfigSubentryFlow,
+)
 from homeassistant.core import callback
+from homeassistant.data_entry_flow import SectionConfig, section
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig
-import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.selector import (
+    BooleanSelector,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
 
-from .api import BitpandaApiClient
+from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
+from .asset_flow import PriceTrackerSubentryFlow
 from .const import (
+    API_KEY_URL,
     CONF_API_KEY,
     CONF_CURRENCY,
-    CONF_TRACKED_ASSETS,
-    CONF_TRACKED_WALLETS,
+    CONF_CURRENCY_ID,
+    CONF_EXTRA_CURRENCIES,
+    CONF_LANGUAGE,
+    CONF_LEGACY_ADOPT,
+    CONF_NOTIFY_NEW_WALLETS,
+    CONF_NOTIFY_STAKING_REWARDS,
     DEFAULT_CURRENCY,
+    DEFAULT_LANGUAGE,
+    DEFAULT_NOTIFY_NEW_WALLETS,
+    DEFAULT_NOTIFY_STAKING_REWARDS,
     DOMAIN,
+    ENTRY_TYPE,
+    ENTRY_TYPE_PORTFOLIO,
+    ENTRY_TYPE_PRICE_TRACKER,
+    EXTRA_CURRENCIES,
+    IMPORT_ASSETS,
+    PORTFOLIO_TITLE,
+    PRICE_TRACKER_TITLE,
+    REQUIRED_SCOPES,
+    SUBENTRY_TYPE_PRICE_GROUP,
+    SUPPORTED_CURRENCIES,
+    TROUBLESHOOTING_URL,
+    entry_type,
+    notifies_new_wallets,
+    notifies_staking_rewards,
+)
+from .groups import async_group_titles, price_group_subentries
+from .language import async_shipped_languages, entry_language, preselected_language
+from .migration import ISSUE_CURRENCY_DROPPED
+from .purge import (
+    OldStatistics,
+    async_find_old_statistics,
+    async_purge_portfolio,
+    async_purge_recorded,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
+_SERVICES = (ENTRY_TYPE_PORTFOLIO, ENTRY_TYPE_PRICE_TRACKER)
 
-_METAL_NAMES: dict[str, str] = {
-    "XAU": "Gold (XAU)",
-    "XAG": "Silver (XAG)",
-    "XPT": "Platinum (XPT)",
-    "XPD": "Palladium (XPD)",
-}
-
-_CATEGORY_PREFIXES: dict[str, str] = {
-    "crypto": "cryptocoin_",
-    "fiat": "fiat_",
-    "metal": "commodity_metal_",
-    "index": "index_",
-}
+# The key is typed into a password field and never sent back to the browser:
+# no form ever carries it as a default or a placeholder.
+_KEY_SCHEMA = vol.Schema(
+    {vol.Required(CONF_API_KEY): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))}
+)
 
 
-async def _async_build_wallet_options(client: BitpandaApiClient, category: str | None = None) -> list[dict]:
-    """Build wallet options list from Bitpanda API."""
-    wallet_options = []
+def _log_unexpected(step: str, err: Exception) -> None:
+    """Log an unexpected error by its type alone.
 
-    def process_wallet_collection(
-        parent_category: str, sub_category: str | None, wallets_data: list
-    ) -> None:
-        if not isinstance(wallets_data, list):
-            return
-        for wallet in wallets_data:
-            if "attributes" not in wallet:
-                continue
-            symbol = wallet["attributes"].get("cryptocoin_symbol", "")
-            if not symbol:
-                continue
-            full_category = (
-                f"{parent_category}_{sub_category}" if sub_category else parent_category
+    Its message or a traceback could carry request data, the API key among
+    it, so neither is ever logged -- no exc_info either.
+    """
+    _LOGGER.error(
+        "Unexpected %s while checking the API key in the %s step",
+        type(err).__name__,
+        step,
+    )
+
+
+def _currency_select(options: list[str], *, multiple: bool = False) -> SelectSelector:
+    """Currency codes labelled with their names through `selector.currency`.
+
+    hassfest's translation-key validator accepts lowercase selector option
+    keys only, so the options travel to and from the frontend lowercase;
+    everything stored (entry data/options, `self._currency_ids`) stays
+    uppercase -- see `async_step_currency` and `extra_currencies` below,
+    which convert back at the boundary.
+    """
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=[currency.lower() for currency in options],
+            translation_key="currency",
+            multiple=multiple,
+            mode=SelectSelectorMode.LIST if multiple else SelectSelectorMode.DROPDOWN,
+        )
+    )
+
+
+def extra_currencies(values: Iterable[str] | None) -> list[str]:
+    """The supported extra currencies among `values`, in one fixed order.
+
+    `values` arrives lowercase from the selector form; upper-cased here
+    before matching EXTRA_CURRENCIES, which -- like every other stored
+    currency -- stays uppercase.
+    """
+    chosen = {str(value).upper() for value in values or []}
+    return [currency for currency in EXTRA_CURRENCIES if currency in chosen]
+
+
+def extra_currencies_schema(selected: list[str]) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Optional(
+                CONF_EXTRA_CURRENCIES,
+                default=[currency.lower() for currency in selected],
+            ): _currency_select(list(EXTRA_CURRENCIES), multiple=True)
+        }
+    )
+
+
+def _language_field(languages: list[str], current: str) -> dict[vol.Required, SelectSelector]:
+    """The language of an entry's own texts (language.py), one of `languages`,
+    each labelled with its own name through `selector.language`.
+
+    `current` is the one the form shows first: the stored one under
+    Configure, the preselected one at setup. English stands in for a stored
+    language no longer among `languages`, which the form would refuse to save
+    unchanged.
+    """
+    return {
+        vol.Required(
+            CONF_LANGUAGE, default=current if current in languages else DEFAULT_LANGUAGE
+        ): SelectSelector(
+            SelectSelectorConfig(
+                options=languages,
+                translation_key="language",
+                mode=SelectSelectorMode.DROPDOWN,
             )
-            if parent_category == "commodity" and sub_category == "metal":
-                label = _METAL_NAMES.get(symbol, symbol)
-            else:
-                label = symbol
-            wallet_options.append({"value": f"{full_category}_{symbol}", "label": label})
+        )
+    }
 
-    try:
-        asset_wallets = await client.async_get_asset_wallets()
-        if "data" in asset_wallets and "attributes" in asset_wallets["data"]:
-            for cat, data in asset_wallets["data"]["attributes"].items():
-                if cat in ("security", "equity_security"):
-                    _LOGGER.debug("Skipping category: %s (no prices available)", cat)
-                    continue
-                if isinstance(data, dict) and "attributes" in data and "wallets" in data["attributes"]:
-                    process_wallet_collection(cat, None, data["attributes"]["wallets"])
-                elif isinstance(data, dict):
-                    for sub_category, sub_data in data.items():
-                        if isinstance(sub_data, dict) and "attributes" in sub_data and "wallets" in sub_data["attributes"]:
-                            process_wallet_collection(cat, sub_category, sub_data["attributes"]["wallets"])
 
-        fiat_wallets = await client.async_get_fiat_wallets()
-        if "data" in fiat_wallets:
-            for wallet in fiat_wallets["data"]:
-                if "attributes" not in wallet:
-                    continue
-                symbol = wallet["attributes"].get("fiat_symbol", "")
-                if symbol:
-                    wallet_options.append({"value": f"fiat_{symbol}", "label": symbol})
+# The sections of the forms. The Price Tracker's two, in their order, at
+# setup as under Configure; the Portfolio's notifications and language, each
+# in one of its own -- at setup below its currency, which has a section of
+# its own there. The language comes last in every form. Their names and
+# their fields' texts are `<flow>.step.<step id>.sections`.
+_SECTION_CURRENCIES = "currencies"
+_SECTION_CURRENCY = "currency"
+_SECTION_LANGUAGE = "language"
+_SECTION_NOTIFICATIONS = "notifications"
+# Every one open: a section is the only way a Home Assistant form sets fields
+# apart, not a place to hide them.
+_OPEN: SectionConfig = {"collapsed": False}
 
-    except Exception as err:
-        _LOGGER.error("Error fetching wallets: %s", err)
 
-    wallet_options.sort(key=lambda x: x["label"])
+def _currencies_section(selected: list[str]) -> dict[vol.Required, section]:
+    """The extra currencies (extra_currencies_schema) in their open section."""
+    return {vol.Required(_SECTION_CURRENCIES): section(extra_currencies_schema(selected), _OPEN)}
 
-    if category is not None:
-        prefix = _CATEGORY_PREFIXES.get(category, "")
-        wallet_options = [o for o in wallet_options if o["value"].startswith(prefix)]
 
-    _LOGGER.debug("Found %s wallet options (category: %s)", len(wallet_options), category or "all")
-    return wallet_options
+def _language_section(languages: list[str], current: str) -> dict[vol.Required, section]:
+    """The language field (see _language_field) in its open section."""
+    return {
+        vol.Required(_SECTION_LANGUAGE): section(
+            vol.Schema(_language_field(languages, current)), _OPEN
+        )
+    }
+
+
+def _notifications_section(wallets: bool, rewards: bool) -> dict[vol.Required, section]:
+    """The Portfolio's notification switches, in their open section -- new
+    wallets, then staking rewards; `wallets` and `rewards` are what they
+    show."""
+    return {
+        vol.Required(_SECTION_NOTIFICATIONS): section(
+            vol.Schema(
+                {
+                    vol.Required(CONF_NOTIFY_NEW_WALLETS, default=wallets): BooleanSelector(),
+                    vol.Required(CONF_NOTIFY_STAKING_REWARDS, default=rewards): BooleanSelector(),
+                }
+            ),
+            _OPEN,
+        )
+    }
+
+
+def _notification_options(user_input: dict[str, Any]) -> dict[str, bool]:
+    """The switches of the notifications section, stored flat."""
+    switches: dict[str, bool] = user_input[_SECTION_NOTIFICATIONS]
+    return {
+        CONF_NOTIFY_NEW_WALLETS: switches[CONF_NOTIFY_NEW_WALLETS],
+        CONF_NOTIFY_STAKING_REWARDS: switches[CONF_NOTIFY_STAKING_REWARDS],
+    }
 
 
 class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Bitpanda."""
+    """Set up one of the two services."""
 
-    VERSION = 1
+    VERSION = 3
 
     def __init__(self) -> None:
-        """Initialize the config flow."""
         self._api_key: str | None = None
-        self._currency: str | None = None
-        self._available_currencies: list[str] = []
+        self._currency_ids: dict[str, str] = {}
+        self._pending_currency: str | None = None
+        # The Portfolio entry to create, kept while setup asks about old
+        # statistics (async_step_old_statistics).
+        self._portfolio_data: dict[str, Any] = {}
+        self._portfolio_options: dict[str, Any] = {}
+        self._old_statistics = OldStatistics(entity_ids=[], currencies=[])
+
+    # --- Service menu -----------------------------------------------------
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle the initial step."""
+        configured = {
+            entry_type(entry)
+            for entry in self._async_current_entries(include_ignore=False)
+        }
+        available = [service for service in _SERVICES if service not in configured]
+        if not available:
+            return self.async_abort(reason="all_configured")
+        return self.async_show_menu(step_id="user", menu_options=available)
+
+    # --- Shared helpers -----------------------------------------------------
+
+    async def _async_validate_key(
+        self, api_key: str
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        """Probe every required scope. Returns (errors, placeholders)."""
+        client = BitpandaApiClient(api_key, async_get_clientsession(self.hass))
+        try:
+            missing = await client.async_missing_scopes()
+        except BitpandaRateLimitError:
+            return {"base": "rate_limited"}, {}
+        except BitpandaApiError:
+            return {"base": "cannot_connect"}, {}
+        if len(missing) == len(REQUIRED_SCOPES):
+            return {"base": "invalid_auth"}, {}
+        if missing:
+            # A mark per scope; the texts name the permissions in their own
+            # language, so the placeholders carry no words.
+            return {"base": "missing_scopes"}, {
+                scope: "✗" if scope in missing else "✓" for scope in REQUIRED_SCOPES
+            }
+        return {}, {}
+
+    async def _async_currency_ids(self) -> dict[str, str]:
+        """Symbol -> Bitpanda currency id. /currencies is public: no key sent."""
+        client = BitpandaApiClient(None, async_get_clientsession(self.hass))
+        return {
+            currency["symbol"]: currency["id"]
+            for currency in await client.async_get_currencies()
+            if currency.get("symbol") in SUPPORTED_CURRENCIES and currency.get("id")
+        }
+
+    async def _async_language_section(self) -> dict[vol.Required, section]:
+        """The new entry's language (language.py), in its open section, the
+        last of the form: Home Assistant's system language first,
+        where this integration ships it (language.preselected_language).
+        Stored flat in the entry's options, as Configure stores it."""
+        languages = await async_shipped_languages(self.hass)
+        return _language_section(languages, preselected_language(self.hass, languages))
+
+    # --- Portfolio ------------------------------------------------------------
+
+    async def async_step_portfolio(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        await self.async_set_unique_id(ENTRY_TYPE_PORTFOLIO)
+        self._abort_if_unique_id_configured()
         errors: dict[str, str] = {}
-
+        placeholders: dict[str, str] = {}
         if user_input is not None:
-            self._api_key = user_input[CONF_API_KEY]
-            session = async_get_clientsession(self.hass)
-            client = BitpandaApiClient(self._api_key, session)
-
+            api_key = user_input[CONF_API_KEY].strip()
             try:
-                await client.async_get_fiat_wallets()
-                self._available_currencies = await client.get_available_currencies()
+                errors, placeholders = await self._async_validate_key(api_key)
+                if not errors:
+                    self._currency_ids = await self._async_currency_ids()
+                    if not self._currency_ids:
+                        errors = {"base": "cannot_connect"}
+            except BitpandaRateLimitError:
+                errors = {"base": "rate_limited"}
+            except BitpandaApiError:
+                errors = {"base": "cannot_connect"}
+            except Exception as err:  # noqa: BLE001 - a form error, never a traceback
+                _log_unexpected("portfolio", err)
+                errors = {"base": "unknown"}
+            if not errors:
+                self._api_key = api_key
                 return await self.async_step_currency()
-            except aiohttp.ClientResponseError as err:
-                errors["base"] = "invalid_auth" if err.status in (401, 403) else "cannot_connect"
-            except (aiohttp.ClientError, asyncio.TimeoutError):
-                errors["base"] = "cannot_connect"
-            except Exception:  # noqa: BLE001
-                errors["base"] = "unknown"
-
         return self.async_show_form(
-            step_id="user",
-            data_schema=vol.Schema({vol.Required(CONF_API_KEY): cv.string}),
+            step_id="portfolio",
+            data_schema=_KEY_SCHEMA,
             errors=errors,
-            description_placeholders={"api_key_url": "https://web.bitpanda.com/apikey"},
+            description_placeholders={"api_key_url": API_KEY_URL, **placeholders},
         )
 
     async def async_step_currency(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle currency selection."""
         if user_input is not None:
-            self._currency = user_input[CONF_CURRENCY]
-            return self.async_create_entry(
-                title=f"Bitpanda ({self._currency})",
-                data={
-                    CONF_API_KEY: self._api_key,
-                    CONF_CURRENCY: self._currency,
-                },
-                options={
-                    CONF_TRACKED_ASSETS: [],
-                    CONF_TRACKED_WALLETS: [],
-                },
-            )
-
+            await self._async_abort_if_portfolio_set_up()
+            # The form value travels lowercase (hassfest); stored upper again.
+            currency = user_input[_SECTION_CURRENCY][CONF_CURRENCY].upper()
+            self._portfolio_data = {
+                ENTRY_TYPE: ENTRY_TYPE_PORTFOLIO,
+                CONF_API_KEY: self._api_key,
+                CONF_CURRENCY: currency,
+                CONF_CURRENCY_ID: self._currency_ids[currency],
+            }
+            self._portfolio_options = {
+                CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE],
+                **_notification_options(user_input),
+            }
+            self._old_statistics = await async_find_old_statistics(self.hass, currency)
+            if self._old_statistics.entity_ids:
+                return await self.async_step_old_statistics()
+            return self._async_create_portfolio()
+        options = [c for c in SUPPORTED_CURRENCIES if c in self._currency_ids]
+        currency = vol.Schema(
+            {vol.Required(CONF_CURRENCY, default=DEFAULT_CURRENCY.lower()): _currency_select(options)}
+        )
         return self.async_show_form(
             step_id="currency",
-            data_schema=vol.Schema({
-                vol.Required(CONF_CURRENCY, default=DEFAULT_CURRENCY): SelectSelector(
-                    SelectSelectorConfig(
-                        options=self._available_currencies,
-                        mode="dropdown",
-                    )
-                ),
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Required(_SECTION_CURRENCY): section(currency, _OPEN),
+                    **_notifications_section(
+                        DEFAULT_NOTIFY_NEW_WALLETS, DEFAULT_NOTIFY_STAKING_REWARDS
+                    ),
+                    # The language last, as in every form.
+                    **await self._async_language_section(),
+                }
+            ),
         )
+
+    async def async_step_old_statistics(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask about the statistics an earlier Portfolio left in another
+        currency: under them, the new sensors would record none
+        (purge.async_find_old_statistics). Cancel, or closing the dialog,
+        changes nothing."""
+        return self.async_show_menu(
+            step_id="old_statistics",
+            menu_options=["delete_statistics", "keep_statistics", "cancel_setup"],
+            description_placeholders={
+                "old": ", ".join(self._old_statistics.currencies),
+                "new": self._portfolio_data[CONF_CURRENCY],
+                "troubleshooting_url": TROUBLESHOOTING_URL,
+            },
+        )
+
+    async def async_step_delete_statistics(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Delete their history and statistics, then set up. The check for an
+        existing Portfolio comes first: one that exists by then records under
+        the same IDs, and its data must stay."""
+        await self._async_abort_if_portfolio_set_up()
+        await async_purge_recorded(self.hass, self._old_statistics.entity_ids)
+        return self._async_create_portfolio()
+
+    async def async_step_keep_statistics(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Set up and delete nothing: the README's Troubleshooting says how
+        to delete the old statistics by hand."""
+        await self._async_abort_if_portfolio_set_up()
+        return self._async_create_portfolio()
+
+    async def async_step_cancel_setup(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Set up nothing and delete nothing -- for example to choose another
+        currency in a new setup."""
+        return self.async_abort(reason="setup_cancelled")
+
+    async def _async_abort_if_portfolio_set_up(self) -> None:
+        """Checked again before anything is created or deleted. Home
+        Assistant already stops a second setup dialog at its key step
+        (already_in_progress), so this is a safety net: a Portfolio entry
+        that exists by then stays the only one, with its data."""
+        await self.async_set_unique_id(ENTRY_TYPE_PORTFOLIO)
+        self._abort_if_unique_id_configured()
+
+    @callback
+    def _async_create_portfolio(self) -> ConfigFlowResult:
+        """The Portfolio entry, from what the currency step stored."""
+        return self.async_create_entry(
+            title=PORTFOLIO_TITLE,
+            data=self._portfolio_data,
+            options=self._portfolio_options,
+        )
+
+    # --- Price Tracker ------------------------------------------------------------
+
+    async def async_step_price_tracker(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        await self.async_set_unique_id(ENTRY_TYPE_PRICE_TRACKER)
+        self._abort_if_unique_id_configured()
+        if user_input is not None:
+            return self.async_create_entry(
+                title=PRICE_TRACKER_TITLE,
+                data={ENTRY_TYPE: ENTRY_TYPE_PRICE_TRACKER},
+                options={
+                    CONF_EXTRA_CURRENCIES: extra_currencies(
+                        user_input[_SECTION_CURRENCIES].get(CONF_EXTRA_CURRENCIES)
+                    ),
+                    CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE],
+                },
+            )
+        return self.async_show_form(
+            step_id="price_tracker",
+            data_schema=vol.Schema(
+                {**_currencies_section([]), **await self._async_language_section()}
+            ),
+        )
+
+    async def async_step_import(self, import_data: dict[str, Any]) -> ConfigFlowResult:
+        """The Price Tracker of a migrated version 1 entry (see migration.py),
+        its assets in one group per asset type -- titled in English: the new
+        entry has no language option yet (language.entry_language)."""
+        titles = await async_group_titles(self.hass, DEFAULT_LANGUAGE)
+        await self.async_set_unique_id(ENTRY_TYPE_PRICE_TRACKER)
+        self._abort_if_unique_id_configured()
+        data: dict[str, Any] = {ENTRY_TYPE: ENTRY_TYPE_PRICE_TRACKER}
+        if import_data.get(CONF_LEGACY_ADOPT):
+            data[CONF_LEGACY_ADOPT] = import_data[CONF_LEGACY_ADOPT]
+        return self.async_create_entry(
+            title=PRICE_TRACKER_TITLE,
+            data=data,
+            options={
+                CONF_EXTRA_CURRENCIES: extra_currencies(
+                    import_data.get(CONF_EXTRA_CURRENCIES)
+                )
+            },
+            subentries=price_group_subentries(import_data.get(IMPORT_ASSETS, []), titles),
+        )
+
+    # --- Reauth (Portfolio only: the Price Tracker has no key) -------------------
+
+    def _async_replace_key(
+        self, entry: ConfigEntry, api_key: str, reason: str
+    ) -> ConfigFlowResult:
+        """Store the key and get it into effect with exactly one reload.
+
+        An entry that finished setup has an update listener that reloads it
+        once its data changed; Home Assistant wants that listener to do the
+        reloading and warns when async_update_reload_and_abort reloads a
+        second time. A key re-entered unchanged changes nothing, though, so
+        the listener never fires -- and a coordinator stopped by a 401 never
+        restarts by itself -- so that case reloads explicitly. An entry whose
+        setup failed -- the typical reauth case, a key rejected on the first
+        portfolio refresh -- never registered the listener, so there the
+        explicit reload is the only one.
+        """
+        if entry.update_listeners:
+            if not self.hass.config_entries.async_update_entry(
+                entry, data={**entry.data, CONF_API_KEY: api_key}
+            ):
+                # Nothing changed, so no listener fires: reload explicitly, once.
+                self.hass.config_entries.async_schedule_reload(entry.entry_id)
+            return self.async_abort(reason=reason)
+        return self.async_update_reload_and_abort(
+            entry, data_updates={CONF_API_KEY: api_key}, reason=reason
+        )
+
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        placeholders: dict[str, str] = {"api_key_url": API_KEY_URL}
+        if user_input is not None:
+            api_key = user_input[CONF_API_KEY].strip()
+            try:
+                errors, extra = await self._async_validate_key(api_key)
+            except Exception as err:  # noqa: BLE001 - a form error, never a traceback
+                _log_unexpected("reauth", err)
+                errors, extra = {"base": "unknown"}, {}
+            placeholders.update(extra)
+            if not errors:
+                return self._async_replace_key(
+                    self._get_reauth_entry(), api_key, "reauth_successful"
+                )
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=_KEY_SCHEMA,
+            errors=errors,
+            description_placeholders=placeholders,
+        )
+
+    # --- Reconfigure (Portfolio only) ------------------------------------------------
+
+    def _reconfigure_schema(self, currency: str) -> vol.Schema:
+        """Key optional and never pre-filled; currency pre-filled.
+
+        `currency` arrives upper (stored form); the selector itself works in
+        lowercase (hassfest), so the default passed here is lower-cased too --
+        otherwise the pre-filled value would not match any option.
+        """
+        return vol.Schema(
+            {
+                vol.Optional(CONF_API_KEY): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                ),
+                vol.Required(CONF_CURRENCY, default=currency.lower()): _currency_select(
+                    list(SUPPORTED_CURRENCIES)
+                ),
+            }
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Replace the key, change the currency, or both.
+
+        A currency change goes through async_step_confirm_currency: it
+        deletes every Portfolio sensor with its history.
+        """
+        entry = self._get_reconfigure_entry()
+        if entry_type(entry) != ENTRY_TYPE_PORTFOLIO:
+            return self.async_abort(reason="no_reconfigure")
+        stored = entry.data[CONF_CURRENCY]
+        # The currency the form shows: the stored one at first, the one just
+        # submitted when the form comes back with an error.
+        shown = stored
+        errors: dict[str, str] = {}
+        placeholders: dict[str, str] = {"api_key_url": API_KEY_URL}
+        if user_input is not None:
+            api_key = (user_input.get(CONF_API_KEY) or "").strip()
+            # The form value travels lowercase (hassfest); stored upper again,
+            # like every other currency in this flow.
+            currency = user_input[CONF_CURRENCY].upper()
+            try:
+                if api_key:
+                    errors, extra = await self._async_validate_key(api_key)
+                    placeholders.update(extra)
+                if not errors and currency != stored:
+                    self._currency_ids = await self._async_currency_ids()
+                    if currency not in self._currency_ids:
+                        errors = {"base": "cannot_connect"}
+            except BitpandaRateLimitError:
+                errors = {"base": "rate_limited"}
+            except BitpandaApiError:
+                errors = {"base": "cannot_connect"}
+            except Exception as err:  # noqa: BLE001 - a form error, never a traceback
+                _log_unexpected("reconfigure", err)
+                errors = {"base": "unknown"}
+            if not errors:
+                if currency != stored:
+                    self._api_key = api_key or None
+                    self._pending_currency = currency
+                    return await self.async_step_confirm_currency()
+                if api_key:
+                    return self._async_replace_key(entry, api_key, "reconfigure_successful")
+                return self.async_abort(reason="no_changes")
+            shown = currency
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self._reconfigure_schema(shown),
+            errors=errors,
+            description_placeholders=placeholders,
+        )
+
+    async def async_step_confirm_currency(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Warn before every Portfolio sensor is deleted with its history.
+
+        The choices: change the currency, or cancel -- and with a new API
+        key entered, save only that key instead, since a user may want the
+        key without the change. Nothing has changed until a choice is made;
+        closing the dialog changes nothing either.
+        """
+        entry = self._get_reconfigure_entry()
+        # Set by async_step_reconfigure, the only step that leads here.
+        currency = cast(str, self._pending_currency)
+        options = (
+            ["change_key_and_currency", "save_key_only", "cancel_currency_change"]
+            if self._api_key
+            else ["change_currency", "cancel_currency_change"]
+        )
+        return self.async_show_menu(
+            step_id="confirm_currency",
+            menu_options=options,
+            description_placeholders={"old": entry.data[CONF_CURRENCY], "new": currency},
+        )
+
+    async def async_step_change_currency(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Delete every Portfolio sensor with its history, then store the new
+        currency -- and the new API key, if one was entered -- and reload.
+
+        Nothing changes when the Portfolio cannot be unloaded first (see
+        async_purge_portfolio). A change made resolves the upgrade's repair
+        issue about the switch to EUR, if there is one: it asked for exactly
+        this, so it goes.
+        """
+        entry = self._get_reconfigure_entry()
+        currency = cast(str, self._pending_currency)
+        updates: dict[str, Any] = {
+            CONF_CURRENCY: currency,
+            CONF_CURRENCY_ID: self._currency_ids[currency],
+        }
+        if self._api_key:
+            updates[CONF_API_KEY] = self._api_key
+        if not await async_purge_portfolio(self.hass, entry):
+            return self.async_abort(reason="unload_failed")
+        ir.async_delete_issue(self.hass, DOMAIN, ISSUE_CURRENCY_DROPPED)
+        # The purge unloaded the entry, which removed its update listener:
+        # this reload is the only one.
+        return self.async_update_reload_and_abort(
+            entry, data_updates=updates, reason="currency_changed"
+        )
+
+    async def async_step_change_key_and_currency(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The currency change of async_step_change_currency, offered under
+        this label when a new API key was entered: it stores both."""
+        return await self.async_step_change_currency()
+
+    async def async_step_save_key_only(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Store the new API key; the currency and every sensor stay."""
+        return self._async_replace_key(
+            self._get_reconfigure_entry(), cast(str, self._api_key), "reconfigure_successful"
+        )
+
+    async def async_step_cancel_currency_change(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Change nothing: the currency, the API key and every sensor stay."""
+        return self.async_abort(reason="no_changes")
+
+    # --- Options and subentries --------------------------------------------------------
 
     @staticmethod
     @callback
     def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
+        config_entry: ConfigEntry,
     ) -> config_entries.OptionsFlow:
-        """Get the options flow for this handler."""
-        return BitpandaOptionsFlowHandler()
+        """Both services have options (see BitpandaOptionsFlow): with this
+        defined, Home Assistant's own async_supports_options_flow offers
+        Configure on every entry."""
+        return BitpandaOptionsFlow()
+
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls, config_entry: ConfigEntry
+    ) -> dict[str, type[ConfigSubentryFlow]]:
+        """The Price Tracker's groups take assets through "+ Add price
+        tracker"; the Portfolio has no user flow."""
+        if entry_type(config_entry) != ENTRY_TYPE_PRICE_TRACKER:
+            return {}
+        return {SUBENTRY_TYPE_PRICE_GROUP: PriceTrackerSubentryFlow}
 
 
-class BitpandaOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle Bitpanda options."""
+class BitpandaOptionsFlow(config_entries.OptionsFlow):
+    """Configure, for both services.
 
-    def __init__(self) -> None:
-        """Initialize options flow."""
-        self._tracked_assets: list[str] | None = None
-        self._tracked_wallets: list[str] | None = None
+    Each service shows its own form under a step id of its own, so each form
+    has texts of its own (`options.step.price_tracker`, `.portfolio`): the
+    Price Tracker's extra currencies -- EUR is always there -- and the
+    language of its own texts, each in a section of its own; the Portfolio's
+    notifications and language, each in a section too, as its key and
+    currency change through Reconfigure -- the language last in both forms.
+    Saving changes the entry's options -- flat, whatever
+    sections the form shows -- and its update listener reloads it
+    (__init__.py).
+    """
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage the options."""
-        if self._tracked_assets is None:
-            self._tracked_assets = list(self.config_entry.options.get(CONF_TRACKED_ASSETS, []))
-            self._tracked_wallets = list(self.config_entry.options.get(CONF_TRACKED_WALLETS, []))
+        if entry_type(self.config_entry) == ENTRY_TYPE_PRICE_TRACKER:
+            return await self.async_step_price_tracker()
+        return await self.async_step_portfolio()
 
-        return self.async_show_menu(
-            step_id="init",
-            menu_options=["price_tracker", "crypto_wallets", "fiat_wallets", "metal_wallets", "index_wallets", "save"],
+    async def _async_language_section(self) -> dict[vol.Required, section]:
+        """The language of the entry's own texts, in its open section."""
+        return _language_section(
+            await async_shipped_languages(self.hass), entry_language(self.config_entry)
         )
 
     async def async_step_price_tracker(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle price tracker options."""
+        """The extra currencies and the language, in two sections; their
+        input arrives nested by section and is stored flat, as ever."""
         if user_input is not None:
-            self._tracked_assets = user_input.get(CONF_TRACKED_ASSETS, [])
-            return await self.async_step_init()
-
-        session = async_get_clientsession(self.hass)
-        client = BitpandaApiClient(self.config_entry.data[CONF_API_KEY], session)
-
-        try:
-            available_assets = await client.get_available_assets()
-        except Exception as err:
-            _LOGGER.error("Error fetching assets: %s", err)
-            available_assets = []
-
+            return self.async_create_entry(
+                data={
+                    **self.config_entry.options,
+                    CONF_EXTRA_CURRENCIES: extra_currencies(
+                        user_input[_SECTION_CURRENCIES].get(CONF_EXTRA_CURRENCIES)
+                    ),
+                    CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE],
+                }
+            )
         return self.async_show_form(
             step_id="price_tracker",
-            data_schema=vol.Schema({
-                vol.Optional(CONF_TRACKED_ASSETS, default=self._tracked_assets): SelectSelector(
-                    SelectSelectorConfig(
-                        options=available_assets,
-                        multiple=True,
-                        mode="dropdown",
-                    )
-                ),
-            }),
+            data_schema=vol.Schema(
+                {
+                    **_currencies_section(
+                        self.config_entry.options.get(CONF_EXTRA_CURRENCIES, [])
+                    ),
+                    **await self._async_language_section(),
+                }
+            ),
         )
 
-    async def _async_wallet_step(
-        self,
-        step_id: str,
-        category: str,
-        user_input: dict[str, Any] | None,
+    async def async_step_portfolio(
+        self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Generic handler for per-category wallet steps."""
-        if self._tracked_wallets is None:
-            self._tracked_wallets = list(self.config_entry.options.get(CONF_TRACKED_WALLETS, []))
-        prefix = _CATEGORY_PREFIXES.get(category, "")
+        """The notifications and the language, each in its section -- the
+        language last, as in every form; the input arrives nested and is
+        stored flat, as ever."""
         if user_input is not None:
-            other = [w for w in self._tracked_wallets if not w.startswith(prefix)]
-            self._tracked_wallets = other + user_input.get(CONF_TRACKED_WALLETS, [])
-            return await self.async_step_init()
-
-        session = async_get_clientsession(self.hass)
-        client = BitpandaApiClient(self.config_entry.data[CONF_API_KEY], session)
-        wallet_options = await _async_build_wallet_options(client, category)
-        current = [w for w in self._tracked_wallets if w.startswith(prefix)]
-
+            return self.async_create_entry(
+                data={
+                    **self.config_entry.options,
+                    CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE],
+                    **_notification_options(user_input),
+                }
+            )
         return self.async_show_form(
-            step_id=step_id,
-            data_schema=vol.Schema({
-                vol.Optional(CONF_TRACKED_WALLETS, default=current): SelectSelector(
-                    SelectSelectorConfig(
-                        options=wallet_options,
-                        multiple=True,
-                        mode="dropdown",
-                    )
-                ),
-            }),
-        )
-
-    async def async_step_crypto_wallets(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Handle crypto wallet options."""
-        return await self._async_wallet_step("crypto_wallets", "crypto", user_input)
-
-    async def async_step_fiat_wallets(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Handle fiat wallet options."""
-        return await self._async_wallet_step("fiat_wallets", "fiat", user_input)
-
-    async def async_step_metal_wallets(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Handle metal wallet options."""
-        return await self._async_wallet_step("metal_wallets", "metal", user_input)
-
-    async def async_step_index_wallets(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Handle index wallet options."""
-        return await self._async_wallet_step("index_wallets", "index", user_input)
-
-    async def async_step_save(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Save all options and close."""
-        return self.async_create_entry(
-            title="",
-            data={
-                CONF_TRACKED_ASSETS: self._tracked_assets or [],
-                CONF_TRACKED_WALLETS: self._tracked_wallets or [],
-            },
+            step_id="portfolio",
+            data_schema=vol.Schema(
+                {
+                    **_notifications_section(
+                        notifies_new_wallets(self.config_entry),
+                        notifies_staking_rewards(self.config_entry),
+                    ),
+                    **await self._async_language_section(),
+                }
+            ),
         )

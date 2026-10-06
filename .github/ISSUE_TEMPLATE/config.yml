@@ -3,9 +3,9 @@ contact_links:
   - name: Troubleshooting & FAQ
     url: https://github.com/Spegeli/hacs_bitpanda#-troubleshooting
     about: Sensor unavailable, integration not loading, missing 24h change? Check here first — most issues are covered.
-  - name: Unsupported assets (stocks, ETFs, commodities)
-    url: https://github.com/Spegeli/hacs_bitpanda#supported-assets
-    about: These are not available in the public Bitpanda API and cannot be added. Please do not open an issue for them.
   - name: Home Assistant Community Forum
     url: https://community.home-assistant.io
     about: General Home Assistant questions unrelated to this integration.
+  - name: Report a security vulnerability
+    url: https://github.com/Spegeli/hacs_bitpanda/security/advisories/new
+    about: Found a vulnerability? Report it privately here — never in a public issue.

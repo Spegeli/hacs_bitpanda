@@ -14,7 +14,7 @@ body:
     attributes:
       label: Before you start
       options:
-        - label: I read the [Troubleshooting](https://github.com/Spegeli/hacs_bitpanda#-troubleshooting) and [FAQ](https://github.com/Spegeli/hacs_bitpanda#-faq) sections.
+        - label: I read the [Troubleshooting](https://github.com/Spegeli/hacs_bitpanda#-troubleshooting) section.
           required: true
         - label: I searched [existing issues](https://github.com/Spegeli/hacs_bitpanda/issues?q=is%3Aissue) and this is not a duplicate.
           required: true
@@ -26,12 +26,14 @@ body:
     attributes:
       label: Affected area
       options:
-        - Price Tracker (asset price sensor)
-        - Wallet Monitor (wallet balance sensor)
-        - Portfolio Total
-        - Setup / Configuration flow
-        - Manual refresh service
-        - Other / not sure
+        - Price Tracker (price sensors, currencies, Add price tracker)
+        - Portfolio (wallet, staking and total sensors)
+        - Portfolio (total value, cash, Cash Plus, returns)
+        - Dialogs (setup, Configure, Reconfigure, new API key)
+        - Refresh action (bitpanda.refresh)
+        - Upgrade from a date version
+        - Documentation
+        - Other
     validations:
       required: true
 
@@ -39,8 +41,18 @@ body:
     id: integration_version
     attributes:
       label: Integration version
-      description: Settings → Devices & Services → Bitpanda, or the `version` field in `manifest.json`.
-      placeholder: e.g. 2026.06.04
+      description: Settings → Devices & services → Bitpanda, or the `version` field in `manifest.json`.
+      placeholder: e.g. 2.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: Installation method
+      options:
+        - HACS
+        - Manual
     validations:
       required: true
 
@@ -48,6 +60,7 @@ body:
     id: ha_version
     attributes:
       label: Home Assistant version
+      description: Settings → About.
       placeholder: e.g. 2025.9.1
     validations:
       required: true
@@ -55,17 +68,27 @@ body:
   - type: input
     id: currency
     attributes:
-      label: Configured currency
+      label: Currencies involved
+      description: The Portfolio's currency, or the Price Tracker's additional currencies, if the problem concerns them.
       placeholder: e.g. EUR
     validations:
-      required: true
+      required: false
 
   - type: input
     id: asset
     attributes:
       label: Affected asset or wallet
       description: Which symbol shows the problem? Leave empty if it affects everything.
-      placeholder: e.g. BCI5, BTC, XAU, EUR
+      placeholder: e.g. BTC, BCI5, XAU, or an ISIN such as FR0011871136
+    validations:
+      required: false
+
+  - type: input
+    id: asset_id
+    attributes:
+      label: Asset ID
+      description: The asset's device page shows it under **Service info** as **Serial number**. For a holding without a wallet, the debug log names it. It identifies the asset, not your account.
+      placeholder: e.g. b86c034b-efe3-11eb-b56f-0691764446a7
     validations:
       required: false
 
@@ -102,7 +125,8 @@ body:
       label: Relevant log output
       description: |
         Settings → System → Logs → filter for `bitpanda`.
-        For more detail, add this to `configuration.yaml`, restart, and reproduce:
+        For more detail: on the Bitpanda integration page, ⋮ → **Enable debug logging**, reproduce the problem, then disable it — the log downloads.
+        Or add this to `configuration.yaml`, restart, and reproduce:
 
         ```yaml
         logger:
@@ -117,7 +141,7 @@ body:
     id: diagnostics
     attributes:
       label: Diagnostics
-      description: Settings → Devices & Services → Bitpanda → ⋮ → Download diagnostics. The API key is redacted automatically.
+      description: Settings → Devices & services → Bitpanda → ⋮ on **Bitpanda Portfolio** or **Bitpanda Price Tracker** → Download diagnostics. The API key is left out automatically.
       render: json
     validations:
       required: false
@@ -127,4 +151,4 @@ body:
       value: |
         > [!WARNING]
         > **Never paste your Bitpanda API key.** Diagnostics redact it for you, but raw logs or screenshots may not.
-        > If you posted a key by accident, revoke it immediately at https://web.bitpanda.com/apikey.
+        > If you posted a key by accident, revoke it immediately at https://app.bitpanda.com/my-account/apikey.

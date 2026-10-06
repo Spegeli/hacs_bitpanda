@@ -1,0 +1,632 @@
+"""Pure data model of the Portfolio service: no Home Assistant, no network."""
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+import logging
+import math
+from typing import Any, cast
+
+from .const import CASH_PLUS_GROUP, PORTFOLIO_UPDATE_INTERVAL, WALLET_REMOVAL_MISSES
+from .streaks import FailureStreak, streak_confirmed
+
+_LOGGER = logging.getLogger(__name__)
+
+# The API quotes amounts as 8-decimal strings. Anything computed from them is
+# rounded to match rather than publishing float noise.
+DECIMALS = 8
+
+
+def confirmed(count: int, since: datetime, now: datetime) -> bool:
+    """Whether `count` answers in a row that say the same -- no such holding,
+    or no entry of a Portfolio figure: no fiat, no Cash Plus, no entry at
+    all -- confirm it, the first asked for at `since`, the last at `now`.
+
+    WALLET_REMOVAL_MISSES of them, spread over WALLET_REMOVAL_TIME: at the
+    regular pace the one that completes the count confirms, while answers
+    brought in by hand, however many, never confirm sooner than that pace
+    would.
+    """
+    return streak_confirmed(
+        count, since, now, needed=WALLET_REMOVAL_MISSES, interval=PORTFOLIO_UPDATE_INTERVAL
+    )
+
+
+# The Portfolio figures that wait before they show 0 once what they show has
+# vanished from the answer, by the `_key` of the sensor that shows each: Total
+# value, Cash and Cash Plus.
+PORTFOLIO_FIGURES: tuple[str, ...] = ("total", "cash", "cash_plus")
+
+
+@dataclass
+class FigureWatch:
+    """The wait of one Portfolio figure whose entry may vanish from the
+    /portfolio answer (see PortfolioData for the entry each depends on).
+
+    `observe` takes every successful answer, and the figure is in one of
+    three states. There: the answer lists its entry. Waiting: the entry was
+    there and the answers since do not list it, too few yet to confirm it
+    (`confirmed`) -- the figure is unavailable, so that a glitch at Bitpanda
+    leaves a gap in its history, never a false 0. Confirmed empty: the figure
+    shows 0.
+
+    A watch starts out having seen nothing: an entry missing from the first
+    answer after a start -- a setup, a restart, a reload -- was never there
+    to vanish, so the figure shows 0 at once and nothing is counted. Once 0
+    it stays 0, with nothing more counted, while the entry stays missing: it
+    waits again only after the entry came back and vanished anew.
+
+    An answer may also leave the entry in doubt -- Cash Plus beside a
+    holding that cannot be read or is not classified yet, which might or
+    might not be Cash Plus. Doubt is neither there nor missing: it clears a
+    running count, so nothing waits, but never makes the figure there. Had
+    it, a figure that never was there would wait once the holding is read
+    or classified.
+
+    `seen` says the entry was there and its vanishing is not confirmed yet;
+    `misses` counts the answers without it since, the first asked for at
+    `since`.
+    """
+
+    seen: bool = False
+    misses: int = 0
+    since: datetime | None = None
+
+    def observe(self, there: bool | None, at: datetime) -> bool:
+        """Record one successful answer, asked for at `at`, that lists the
+        entry, does not, or leaves it in doubt (`there` True, False or
+        None). True while the figure waits."""
+        if there:
+            self.seen, self.misses, self.since = True, 0, None
+            return False
+        if there is None:
+            # Doubt: no miss. A running count is cleared, `seen` left as it
+            # is -- a figure not seen has nothing counted.
+            self.misses, self.since = 0, None
+            return False
+        if not self.seen:
+            # Missing since the start, or confirmed empty: 0, nothing counted.
+            return False
+        self.misses += 1
+        self.since = self.since or at
+        if confirmed(self.misses, self.since, at):
+            self.seen, self.misses, self.since = False, 0, None
+            return False
+        return True
+
+
+def to_float(container: dict[str, Any] | None, key: str = "value") -> float | None:
+    """Read a numeric string out of an API value object. "NaN" and
+    "Infinity" read as no number: Home Assistant refuses them as a sensor's
+    state."""
+    if not isinstance(container, dict):
+        return None
+    try:
+        number = float(container[key])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _cash_plus_currency_code(symbol: str) -> str:
+    """The currency code a Cash Plus product's amount is keyed by.
+
+    `BCP` plus exactly three ASCII letters names the product's currency
+    (`BCPEUR` -> `eur`, 1:1 with EUR regardless of the Portfolio currency).
+    Any other shape -- a future product Bitpanda names differently -- falls
+    back to the whole symbol, lowercased, so it still gets some key rather
+    than being dropped.
+    """
+    code = symbol[3:]
+    if len(symbol) == 6 and symbol.startswith("BCP") and code.isascii() and code.isalpha():
+        return code.lower()
+    return symbol.lower()
+
+
+@dataclass
+class Holding:
+    """One asset position. `value` is the whole position in the Portfolio
+    currency (`currency_balance`), or None when the API sent none -- an
+    unknown value must never read as 0.
+
+    /portfolio has no staked field: staked units are balance minus
+    available_balance, and the value splits in the same proportion.
+    """
+
+    asset_id: str
+    balance: float
+    available: float
+    value: float | None
+    invested: float | None = None
+    avg_buy_price: float | None = None
+    total_return: float | None = None
+    total_return_pct: float | None = None
+
+    @property
+    def staked(self) -> float:
+        return round(max(self.balance - self.available, 0.0), DECIMALS)
+
+    @property
+    def price(self) -> float | None:
+        """What one unit is worth in this answer: `value` over `balance`, the
+        proportion `_share` splits the value by. None while it cannot be
+        told -- the value is unknown, or there are no units to divide it by.
+
+        Unrounded: it is multiplied by a number of units, and rounded to
+        DECIMALS the price of a token worth a fraction of a cent would keep
+        only a few significant digits.
+        """
+        if self.value is None or self.balance <= 0:
+            return None
+        return self.value / self.balance
+
+    def _share(self, units: float) -> float | None:
+        if self.value is None:
+            return None
+        if self.balance <= 0:
+            return self.value if units > 0 else 0.0
+        return round(self.value * units / self.balance, DECIMALS)
+
+    @property
+    def wallet_value(self) -> float | None:
+        """Value of the unstaked units."""
+        return self._share(min(self.available, self.balance))
+
+    @property
+    def staking_value(self) -> float | None:
+        """Value of the staked units."""
+        return self._share(self.staked)
+
+
+@dataclass
+class PortfolioData:
+    """Normalised /portfolio response plus the records of the held assets.
+
+    `assets` is filled by the coordinator from the AssetDirectory: only a
+    record's `group` tells Cash Plus from a wallet, so a holding without one
+    is neither, and makes Cash Plus unknown -- unless the catalogue answered
+    without it (`unlisted`): Bitpanda's catalogue lists its Cash Plus
+    products, so such a holding is none.
+
+    An entry `parse_portfolio` could not read at all -- not even enough to
+    hold a zero -- is recorded in `unparsed_assets` rather than dropped: a
+    holding that just vanished would look identical to "not held", turning a
+    read failure into a silently low total. The same reasoning makes `cash`
+    `None` when a fiat entry's balance could not be read: `None` means
+    unknown, never that there was none.
+
+    Each figure depends on one kind of entry, which the answer lists or does
+    not (`figures_listed`): Total value on any entry at all, Cash on a fiat
+    entry, Cash Plus on a holding of the group `fiat_earn`. An entry that
+    cannot be read is listed all the same -- there for Total value, and a
+    fiat one for Cash: it is no sign of a sale. Cash Plus alone can be in
+    doubt: a holding that cannot be read, or is not classified yet, might or
+    might not be Cash Plus. Doubt is neither there nor missing (FigureWatch):
+    it clears a running count but never makes Cash Plus there. Either way
+    the figure shows `unknown`, neither 0 nor a wait. Only a holding the
+    catalogue does not list is sure to be no Cash Plus. `waiting` names the
+    figures whose entry vanished and whose vanishing is not confirmed yet
+    (FigureWatch).
+    """
+
+    holdings: dict[str, Holding] = field(default_factory=dict)
+    cash: float | None = 0.0
+    assets: dict[str, dict[str, Any]] = field(default_factory=dict)
+    unlisted: set[str] = field(default_factory=set)
+    unparsed_assets: set[str] = field(default_factory=set)
+    # When /portfolio was asked for this answer (Home Assistant's clock): the
+    # times `confirmed` measures between answers. None where no request
+    # made it.
+    requested_at: datetime | None = None
+    # What the answer lists, as parse_portfolio finds it: any entry at all,
+    # and a fiat entry, its balance readable or not. Cash Plus's entry is
+    # `listed_cash_plus`: it needs the holdings classified.
+    listed_any: bool = False
+    listed_fiat: bool = False
+    # The figures (PORTFOLIO_FIGURES) that wait: their sensors are unavailable.
+    # Set by the coordinator, from its FigureWatch objects, after each
+    # successful answer.
+    waiting: frozenset[str] = frozenset()
+
+    def is_cash_plus(self, asset_id: str) -> bool | None:
+        asset = self.assets.get(asset_id)
+        if asset is None:
+            return None
+        return asset.get("group") == CASH_PLUS_GROUP
+
+    @property
+    def total(self) -> float | None:
+        """Every holding, Cash Plus included, plus all fiat.
+
+        None when that cannot be said with confidence: any holding value is
+        unknown, `cash` is unknown, or an entry failed to parse at all
+        (`unparsed_assets`) -- never a number that quietly omits it.
+        """
+        if self.unparsed_assets or self.cash is None:
+            return None
+        values = [holding.value for holding in self.holdings.values()]
+        known = [value for value in values if value is not None]
+        if len(known) < len(values):
+            return None
+        return round(sum(known) + self.cash, DECIMALS)
+
+    def _cash_plus_holdings(self) -> dict[str, Holding] | None:
+        """The Cash Plus holdings by asset id, in one pass over the holdings.
+
+        None when they cannot be told with confidence: a holding is
+        unclassified -- but one the catalogue does not list (`unlisted`) --
+        a Cash Plus holding's value is unknown, or an entry failed to parse
+        at all and so was never classified (`unparsed_assets`) -- it might
+        itself be Cash Plus.
+        """
+        if self.unparsed_assets:
+            return None
+        found: dict[str, Holding] = {}
+        for asset_id, holding in self.holdings.items():
+            kind = self.is_cash_plus(asset_id)
+            if kind is None and asset_id in self.unlisted:
+                continue
+            if kind is None:
+                return None
+            if kind:
+                if holding.value is None:
+                    return None
+                found[asset_id] = holding
+        return found
+
+    @property
+    def cash_plus(self) -> float | None:
+        """Cash Plus holdings only; None when they cannot be told with
+        confidence (see _cash_plus_holdings)."""
+        holdings = self._cash_plus_holdings()
+        if holdings is None:
+            return None
+        # Every value is known: _cash_plus_holdings returns None otherwise.
+        return round(
+            sum((cast(float, holding.value) for holding in holdings.values()), 0.0), DECIMALS
+        )
+
+    @property
+    def cash_plus_amounts(self) -> dict[str, float] | None:
+        """Each held Cash Plus product's own amount, in its own currency.
+
+        A Cash Plus balance is 1:1 with its product's currency no matter
+        which currency the Portfolio displays -- a EUR account shown in USD
+        still holds EUR Cash Plus. None under exactly the conditions that
+        make `cash_plus` None, so the attributes never carry a partial
+        mapping alongside an unknown state.
+        """
+        holdings = self._cash_plus_holdings()
+        if holdings is None:
+            return None
+        return {
+            _cash_plus_currency_code(self.assets[asset_id].get("symbol", "")): round(
+                holding.balance, 2
+            )
+            for asset_id, holding in holdings.items()
+        }
+
+    @property
+    def listed_cash_plus(self) -> bool | None:
+        """Whether the answer lists a Cash Plus holding; None while that is
+        in doubt (`_cash_plus_holdings` is None). A holding the catalogue
+        does not list is none, as for `cash_plus`."""
+        holdings = self._cash_plus_holdings()
+        return None if holdings is None else bool(holdings)
+
+    def figures_listed(self) -> dict[str, bool | None]:
+        """Whether the answer lists the entry of each figure, by the figure's
+        key (PORTFOLIO_FIGURES) -- None for Cash Plus in doubt: what the
+        coordinator tells each FigureWatch after every successful answer."""
+        return {
+            "total": self.listed_any,
+            "cash": self.listed_fiat,
+            "cash_plus": self.listed_cash_plus,
+        }
+
+    @property
+    def wallet_ids(self) -> list[str]:
+        """Held assets that get a wallet device: resolved and not Cash Plus."""
+        return [a for a in self.holdings if self.is_cash_plus(a) is False]
+
+    @property
+    def held(self) -> set[str]:
+        """Every asset /portfolio listed, its balances readable or not: an
+        unreadable entry is no sign of a sale."""
+        return set(self.holdings) | self.unparsed_assets
+
+
+@dataclass(frozen=True)
+class PortfolioReturns:
+    """The portfolio's return per /portfolio-history timeframe, in percent.
+
+    `values` holds every timeframe with a usable figure. `failed` means one
+    of two things. Raw, as collect_returns returns it: every timeframe whose
+    own request failed in this refresh. Narrowed by
+    tolerate_failed_timeframes, as the sensors see it: only a failing
+    timeframe whose failure is confirmed or that has no last return -- until
+    then it keeps the return it had. A timeframe in neither was last
+    answered without a usable figure: its return is unknown, where a failed
+    one is unavailable.
+    """
+
+    values: dict[str, float]
+    failed: frozenset[str] = frozenset()
+
+
+def tolerate_failed_timeframes(
+    result: PortfolioReturns,
+    previous: PortfolioReturns | None,
+    streaks: dict[str, FailureStreak],
+    at: datetime,
+    interval: timedelta,
+) -> PortfolioReturns:
+    """`result`, with each timeframe whose own request failed keeping its
+    return from `previous` until its streak is confirmed.
+
+    `streaks` holds each timeframe's refreshes in a row without a fresh
+    return, a refresh that failed as a whole included: HistoryCoordinator
+    hands that one in as a raw `result` in which every timeframe failed.
+    Each failed timeframe adds a failure, asked for `at`, to its streak,
+    which FailureStreak's rule confirms at the regular pace `interval`. Not
+    confirmed yet, and not failed in `previous` either, it leaves `failed`
+    and takes its figure from `previous` -- unless it was answered there
+    without one: then it stays unknown. Confirmed, or without a last return
+    -- no `previous`, or failed there too -- it stays in `failed`. A
+    timeframe that answered ends its streak. `streaks` is updated in place.
+    """
+    for timeframe in streaks.keys() - result.failed:
+        del streaks[timeframe]
+    values = dict(result.values)
+    failed = set(result.failed)
+    for timeframe in result.failed:
+        streak = streaks.setdefault(timeframe, FailureStreak())
+        streak.add(at)
+        if streak.confirmed(interval) or previous is None or timeframe in previous.failed:
+            continue
+        failed.discard(timeframe)
+        if timeframe in previous.values:
+            values[timeframe] = previous.values[timeframe]
+    return PortfolioReturns(values=values, failed=frozenset(failed))
+
+
+def lists_nothing(entries: list[dict[str, Any]]) -> bool:
+    """Whether a /portfolio answer lists no asset and no fiat entry at all.
+
+    An entry with neither `asset_id` nor `currency_id` does not count:
+    parse_portfolio ignores it, the same as an entry that never existed.
+    """
+    return not any(entry.get("asset_id") or entry.get("currency_id") for entry in entries)
+
+
+def parse_portfolio(entries: list[dict[str, Any]]) -> PortfolioData:
+    """Normalise a /portfolio response.
+
+    The list mixes asset entries (`asset_id`, `currency_balance`, ...) and
+    fiat entries (`currency_id`, `balance`), with no type field: the split is
+    on `asset_id`. `currency_balance` arrives already converted into the
+    requested currency and is used as given -- multiplying a balance by a
+    price here is what produced issue #7.
+
+    An entry whose balance cannot be read is never silently dropped as if it
+    held nothing: an unparsable holding goes into `unparsed_assets` and an
+    unparsable fiat balance makes `cash` None, so the affected figure reads
+    as unknown rather than quietly low.
+
+    It also notes what the answer lists -- any entry at all, and a fiat
+    entry -- the unreadable ones included: the entries Total value and Cash
+    depend on.
+    """
+    data = PortfolioData(listed_any=not lists_nothing(entries))
+    cash = 0.0
+    cash_ok = True
+    for entry in entries:
+        asset_id = entry.get("asset_id")
+        if not asset_id:
+            currency_id = entry.get("currency_id")
+            if not currency_id:
+                # Neither asset_id nor currency_id: not a shape this endpoint
+                # documents. Ignored, same as an entry that never existed.
+                continue
+            data.listed_fiat = True
+            # `balance`, not `available_balance`: fiat reserved by a pending
+            # order is still the user's cash.
+            amount = to_float(entry.get("balance"))
+            if amount is None:
+                _LOGGER.debug("Skipping unparsable fiat balance %s", currency_id)
+                cash_ok = False
+            else:
+                cash += amount
+            continue
+
+        balance = to_float(entry.get("balance"))
+        available = to_float(entry.get("available_balance"))
+        if balance is None or available is None:
+            _LOGGER.debug("Skipping unparsable holding %s", asset_id)
+            data.unparsed_assets.add(asset_id)
+            continue
+        try:
+            return_pct = float(entry["total_return_percent"])
+        except (KeyError, TypeError, ValueError):
+            return_pct = None
+        data.holdings[asset_id] = Holding(
+            asset_id=asset_id,
+            balance=balance,
+            available=available,
+            value=to_float(entry.get("currency_balance")),
+            invested=to_float(entry.get("invested_amount")),
+            avg_buy_price=to_float(entry.get("average_buy_price")),
+            total_return=to_float(entry.get("total_return")),
+            total_return_pct=return_pct,
+        )
+    data.cash = round(cash, DECIMALS) if cash_ok else None
+    return data
+
+
+def _is_later(candidate: str | None, current: str | None) -> bool:
+    """Return True when `candidate` is the later of two API timestamps.
+
+    Comparing these as strings is wrong. The API emits both
+    `2026-09-22T17:16:35Z` and `2026-09-09T18:31:22.080Z`, and within the
+    same second `"." < "Z"`, so a zero-fraction timestamp sorts *above* a
+    later fractional one. Parse instead, and fall back to string comparison
+    only if parsing fails.
+    """
+    if not candidate:
+        return False
+    if not current:
+        return True
+    try:
+        return datetime.fromisoformat(candidate) > datetime.fromisoformat(current)
+    except (TypeError, ValueError):
+        # ValueError for a malformed string; TypeError for a non-string, and
+        # for comparing an offset-aware datetime against a naive one. Every
+        # timestamp seen from this endpoint carries a Z, but it is undocumented
+        # and a mixed batch must not raise out of a coordinator refresh.
+        return str(candidate) > str(current)
+
+
+@dataclass(frozen=True)
+class RewardPayout:
+    """One staking payout, in its asset's own units: what announcements.py
+    tells as new, after the asset's mark (portfolio_store.RewardMarks)."""
+
+    credited_at: str
+    gross: float
+    fee: float
+    net: float
+
+
+@dataclass
+class RewardTotals:
+    """Lifetime Earn rewards for one asset, in that asset's own units, and
+    each payout that carries the time it was credited, oldest first."""
+
+    gross: float = 0.0
+    fee: float = 0.0
+    net: float = 0.0
+    count: int = 0
+    last_at: str | None = None
+    payouts: tuple[RewardPayout, ...] = ()
+
+
+def time_key(timestamp: str) -> tuple[int, datetime | str]:
+    """Sort key of an API timestamp: by time, as _is_later compares them; one
+    that does not parse after all that do, by its text. A time without an
+    offset counts as UTC, so that sorting never compares it with one that
+    has one -- which would raise."""
+    try:
+        parsed = datetime.fromisoformat(timestamp)
+    except ValueError:
+        return (1, timestamp)
+    return (0, parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC))
+
+
+def payouts_after(payouts: Sequence[RewardPayout], mark: str | None) -> list[RewardPayout]:
+    """The payouts credited after `mark` -- all of them without one."""
+    return [payout for payout in payouts if _is_later(payout.credited_at, mark)]
+
+
+def sum_rewards(operations: list[dict[str, Any]]) -> dict[str, RewardTotals]:
+    """Aggregate staking rewards per asset.
+
+    Only `operation_type == "reward"` with `wallet_owner == "staking-service"`
+    counts. `earn_on_fiat_reward` is Cash Plus interest, a different product.
+    The operation_type enum is open — 29 values were seen in a single account —
+    so anything unrecognised is ignored rather than raising.
+
+    The fee is charged in the reward asset and is not a fixed rate: recent
+    payouts showed exactly 20 % while lifetime aggregates sat near 17 %. Always
+    read `fee_amount`.
+    """
+    totals: dict[str, RewardTotals] = {}
+    payouts: dict[str, list[RewardPayout]] = {}
+
+    for operation in operations:
+        if operation.get("operation_type") != "reward":
+            continue
+        for tx in operation.get("transactions") or []:
+            if tx.get("wallet_owner") != "staking-service":
+                continue
+            asset_id = tx.get("asset_id")
+            gross = to_float(tx.get("asset_amount"))
+            if not asset_id or gross is None:
+                continue
+            fee = to_float(tx.get("fee_amount")) or 0.0
+
+            entry = totals.setdefault(asset_id, RewardTotals())
+            entry.gross += gross
+            entry.fee += fee
+            entry.net += gross - fee
+            entry.count += 1
+
+            credited = tx.get("credited_at")
+            if _is_later(credited, entry.last_at):
+                entry.last_at = credited
+            # Only a payout placed in time can be told new or old: one without
+            # its time counts in the totals alone.
+            if isinstance(credited, str) and credited:
+                payouts.setdefault(asset_id, []).append(
+                    RewardPayout(
+                        credited,
+                        round(gross, DECIMALS),
+                        round(fee, DECIMALS),
+                        round(gross - fee, DECIMALS),
+                    )
+                )
+
+    # The amounts are 8-decimal strings; summing them as floats leaves noise
+    # such as 751.4920099999999. Rounded once, at the end, not per step.
+    for asset_id, entry in totals.items():
+        entry.gross = round(entry.gross, DECIMALS)
+        entry.fee = round(entry.fee, DECIMALS)
+        entry.net = round(entry.net, DECIMALS)
+        entry.payouts = tuple(
+            sorted(payouts.get(asset_id, ()), key=lambda payout: time_key(payout.credited_at))
+        )
+
+    return totals
+
+
+@dataclass(frozen=True)
+class EarnData:
+    """The Earn catalogue: APR per asset (a fraction) and the offered assets."""
+
+    apr: dict[str, float]
+    offered: frozenset[str]
+
+
+def parse_earn_configs(configs: list[dict[str, Any]]) -> EarnData:
+    """An asset is offered while it has an enabled product -- sold out or not:
+    `soldout` and `enabled` are separate flags, and a sold-out product still
+    pays the users already in it. The APR is a JSON number and a fraction:
+    0.0544 means 5.44 %."""
+    apr: dict[str, float] = {}
+    offered: set[str] = set()
+    for config in configs:
+        asset_id = config.get("asset_id")
+        if not asset_id:
+            continue
+        if config.get("enabled") is True:
+            offered.add(asset_id)
+        rate = config.get("annual_percentage_rate")
+        if isinstance(rate, (int, float)) and not isinstance(rate, bool):
+            apr[asset_id] = float(rate)
+    return EarnData(apr=apr, offered=frozenset(offered))
+
+
+def staking_applies(holding: Holding, earn: EarnData | None) -> bool | None:
+    """Whether a wallet carries a Staking sensor; every wallet has its Total
+    sensor regardless.
+
+    True while something is staked, or while Earn offers a product for the
+    asset. False only when nothing is staked and a current Earn catalogue
+    offers nothing. None when that cannot be told -- nothing staked and no
+    current catalogue -- and the caller then keeps whatever exists.
+    """
+    if holding.staked > 0:
+        return True
+    if earn is None:
+        return None
+    return holding.asset_id in earn.offered

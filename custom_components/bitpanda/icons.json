@@ -1,0 +1,47 @@
+{
+  "entity": {
+    "sensor": {
+      "total_value": {
+        "default": "mdi:chart-pie"
+      },
+      "cash": {
+        "default": "mdi:cash"
+      },
+      "cash_plus": {
+        "default": "mdi:piggy-bank"
+      },
+      "return_day": {
+        "default": "mdi:chart-line"
+      },
+      "return_week": {
+        "default": "mdi:chart-line"
+      },
+      "return_month": {
+        "default": "mdi:chart-line"
+      },
+      "return_six_month": {
+        "default": "mdi:chart-line"
+      },
+      "return_year": {
+        "default": "mdi:chart-line"
+      },
+      "wallet": {
+        "default": "mdi:wallet"
+      },
+      "staking": {
+        "default": "mdi:lock-clock"
+      },
+      "wallet_total": {
+        "default": "mdi:sigma"
+      },
+      "price": {
+        "default": "mdi:chart-line"
+      }
+    }
+  },
+  "services": {
+    "refresh": {
+      "service": "mdi:refresh"
+    }
+  }
+}

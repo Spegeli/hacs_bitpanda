@@ -1,0 +1,296 @@
+"""Diagnostics of both services. The API key never appears."""
+from datetime import timedelta
+from types import SimpleNamespace
+
+from homeassistant.config_entries import ConfigEntryState, ConfigSubentryData
+from homeassistant.helpers import device_registry as dr, entity_registry as er
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.bitpanda.const import DOMAIN
+from custom_components.bitpanda.diagnostics import async_get_config_entry_diagnostics
+from custom_components.bitpanda.ecb import EcbRates
+from custom_components.bitpanda.portfolio_store import RewardMarks
+from custom_components.bitpanda.portfolio_model import (
+    EarnData,
+    Holding,
+    PortfolioData,
+    PortfolioReturns,
+)
+
+from tests.conftest import price_group, wallet_group
+
+_SECRET = "totally-secret-diagnostics-key"
+
+# Sorted by category, whatever order the groups were stored in.
+_WALLET_GROUPS = [
+    {"category": "crypto", "title": "Kryptowährungen", "wallets": 2},
+    {"category": "metal", "title": "Precious metals", "wallets": 1},
+]
+
+
+class _Coordinator:
+    def __init__(self, data=None, success=True, interval=None):
+        self.data = data
+        self.last_update_success = success
+        self.update_interval = interval
+
+
+class _History(_Coordinator):
+    """The History coordinator: also the timeframes whose requests fail now,
+    carried over or not."""
+
+    def __init__(self, data=None, failing=()):
+        super().__init__(data)
+        self.failing_timeframes = frozenset(failing)
+
+
+class _Tickers(_Coordinator):
+    """The ticker coordinator: also the assets without a fresh price now,
+    carried over or not. Asked for every 60 seconds."""
+
+    def __init__(self, data=None, failing=()):
+        super().__init__(data, interval=timedelta(seconds=60))
+        self.failing_assets = frozenset(failing)
+
+
+def _add_device(
+    hass, entry, name: str, category: str | None = None, sensors: tuple[str, ...] = ("value",)
+) -> None:
+    """A device of `entry` with one sensor per name in `sensors`, all in the
+    wallet group of `category` or in none."""
+    group = next(
+        (sub.subentry_id for sub in entry.subentries.values() if sub.unique_id == category),
+        None,
+    )
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        config_subentry_id=group,
+        identifiers={(DOMAIN, f"{entry.entry_id}_{name}")},
+        name=name,
+    )
+    for sensor in sensors:
+        er.async_get(hass).async_get_or_create(
+            "sensor", DOMAIN, f"{entry.entry_id}_{name}_{sensor}", config_entry=entry,
+            config_subentry_id=group, device_id=device.id,
+        )
+
+
+def _portfolio_entry(hass, *, loaded: bool) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=3,
+        data={
+            "entry_type": "portfolio",
+            "api_key": _SECRET,
+            "currency": "EUR",
+            "currency_id": "b88b8466-efe3-11eb-b56f-0691764446a7",
+            # A field added later must not leak by default either.
+            "future_field": _SECRET,
+        },
+        subentries_data=[
+            wallet_group("metal", "Precious metals"),
+            wallet_group("crypto", "Kryptowährungen"),
+        ],
+    )
+    entry.add_to_hass(hass)
+    _add_device(hass, entry, "Portfolio", sensors=("total", "cash"))
+    _add_device(hass, entry, "Bitcoin (BTC) Wallet", "crypto")
+    # Wallet, Staking and Total: three sensors, one wallet device.
+    _add_device(hass, entry, "Vision (VSN) Wallet", "crypto", ("wallet", "staking", "total"))
+    _add_device(hass, entry, "Gold (XAU) Wallet", "metal")
+    if loaded:
+        data = PortfolioData(
+            holdings={
+                "a": Holding("a", 1.0, 1.0, 5.0),
+                "b": Holding("b", 1.0, 1.0, 5.0),
+                "c": Holding("c", 1.0, 1.0, 5.0),
+            }
+        )
+        data.assets = {"a": {"id": "a", "group": "coin"}}
+        # "b" the catalogue does not list; the lookup of "c" failed.
+        data.unlisted = {"b"}
+        # Total value and Cash wait (FigureWatch): reported sorted.
+        data.waiting = frozenset({"total", "cash"})
+        entry.runtime_data = SimpleNamespace(
+            portfolio=_Coordinator(data),
+            history=_History(
+                PortfolioReturns(values={"DAY": 1.0}, failed=frozenset({"YEAR"})),
+                failing={"YEAR"},
+            ),
+            earn=_Coordinator(EarnData(apr={}, offered=frozenset({"a"}))),
+            rewards=_Coordinator(None, success=False),
+            # Marks for two assets, read from the file: no write happens.
+            reward_marks=RewardMarks(
+                None, {"a": "2026-09-22T17:16:35Z", "b": "2024-06-25T16:28:16Z"}, None
+            ),
+        )
+        entry.mock_state(hass, ConfigEntryState.LOADED)
+    return entry
+
+
+async def test_portfolio_diagnostics_report_health_and_never_the_key(hass):
+    result = await async_get_config_entry_diagnostics(hass, _portfolio_entry(hass, loaded=True))
+    assert _SECRET not in repr(result)
+    assert result["service"] == "portfolio"
+    assert result["config"] == {
+        "api_key": "**REDACTED**", "currency": "EUR",
+        "notify_new_wallets": True, "notify_staking_rewards": False,
+    }
+    assert result["coordinators"] == {
+        "portfolio": {"last_update_success": True, "holdings": 3, "wallets": 1,
+                      "unnamed_holdings": 2, "unlisted_holdings": 1,
+                      "waiting_figures": ["cash", "total"]},
+        "history": {"last_update_success": True, "timeframes": 1, "failed_timeframes": 1},
+        "earn": {"last_update_success": True, "offered_assets": 1},
+        "rewards": {
+            "last_update_success": False, "assets_with_rewards": 0,
+            "marked_assets": 2, "first_run": False,
+        },
+    }
+
+
+async def test_portfolio_diagnostics_count_a_carried_timeframe_as_failed(hass):
+    """The week's requests fail while the sensor still shows its last return
+    (tolerate_failed_timeframes): the diagnostics report the real outcome --
+    one failed timeframe and one with a fresh return -- not what the sensors
+    show."""
+    entry = _portfolio_entry(hass, loaded=True)
+    entry.runtime_data.history = _History(
+        PortfolioReturns(values={"DAY": 1.0, "WEEK": 2.0}), failing={"WEEK"}
+    )
+    result = await async_get_config_entry_diagnostics(hass, entry)
+    assert result["coordinators"]["history"] == {
+        "last_update_success": True, "timeframes": 1, "failed_timeframes": 1,
+    }
+
+
+async def test_portfolio_diagnostics_list_the_wallet_groups(hass):
+    """Each group's category, title and number of wallet devices; the
+    Portfolio device is in none."""
+    result = await async_get_config_entry_diagnostics(hass, _portfolio_entry(hass, loaded=True))
+    assert result["groups"] == _WALLET_GROUPS
+
+
+async def test_portfolio_that_is_not_loaded_reports_its_config_only(hass):
+    """Setup failed or reauth pending: exactly when diagnostics are wanted."""
+    result = await async_get_config_entry_diagnostics(hass, _portfolio_entry(hass, loaded=False))
+    assert _SECRET not in repr(result)
+    assert result == {
+        "service": "portfolio",
+        "config": {
+            "api_key": "**REDACTED**", "currency": "EUR",
+            "notify_new_wallets": True, "notify_staking_rewards": False,
+        },
+        "groups": _WALLET_GROUPS,
+    }
+
+
+async def test_portfolio_diagnostics_report_the_notification_options_as_set(hass):
+    """The switches as the entry holds them -- what decides whether a new
+    wallet or a staking payout brings a notification."""
+    entry = _portfolio_entry(hass, loaded=False)
+    hass.config_entries.async_update_entry(
+        entry, options={"notify_new_wallets": False, "notify_staking_rewards": True}
+    )
+    result = await async_get_config_entry_diagnostics(hass, entry)
+    assert (
+        result["config"]["notify_new_wallets"], result["config"]["notify_staking_rewards"]
+    ) == (False, True)
+
+
+async def test_portfolio_diagnostics_before_the_first_rewards_refresh(hass):
+    """No marks yet: none counted, the first run still to come."""
+    entry = _portfolio_entry(hass, loaded=True)
+    entry.runtime_data.reward_marks = RewardMarks(None, None, None)
+    result = await async_get_config_entry_diagnostics(hass, entry)
+    assert (
+        result["coordinators"]["rewards"]["marked_assets"],
+        result["coordinators"]["rewards"]["first_run"],
+    ) == (0, True)
+
+
+_BTC = {"id": "uuid-btc", "symbol": "BTC", "name": "Bitcoin", "type": "cryptocoin",
+        "group": "coin"}
+_SOL = {"id": "uuid-sol", "symbol": "SOL", "name": "Solana", "type": "cryptocoin",
+        "group": "coin"}
+_GOLD = {"id": "uuid-gold", "symbol": "XAU", "name": "Gold", "type": "commodity",
+         "group": "metal"}
+
+
+def _price_entry(hass, *, extra, ecb) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=3,
+        data={"entry_type": "price_tracker"},
+        options={"extra_currencies": extra},
+        subentries_data=[
+            price_group("metal", _GOLD, title="My metals"),
+            ConfigSubentryData(
+                data={
+                    "category": "crypto",
+                    # Stored out of order, and with a field added later.
+                    "assets": {"uuid-sol": {**_SOL, "future_field": "x"}, "uuid-btc": _BTC},
+                },
+                subentry_type="price_group",
+                title="Cryptocurrencies",
+                unique_id="crypto",
+            ),
+        ],
+    )
+    entry.add_to_hass(hass)
+    entry.runtime_data = SimpleNamespace(tickers=_Tickers({"uuid-btc": 1.0}), ecb=ecb)
+    entry.mock_state(hass, ConfigEntryState.LOADED)
+    return entry
+
+
+async def test_price_tracker_diagnostics_list_the_groups(hass):
+    ecb = _Coordinator(EcbRates(date="2026-09-24", rates={"USD": 1.1}))
+    result = await async_get_config_entry_diagnostics(hass, _price_entry(hass, extra=["USD"], ecb=ecb))
+    assert result == {
+        "service": "price_tracker",
+        "groups": [
+            {"category": "crypto", "title": "Cryptocurrencies", "assets": [_BTC, _SOL]},
+            {"category": "metal", "title": "My metals", "assets": [_GOLD]},
+        ],
+        "currencies": ["EUR", "USD"],
+        "tickers": {"last_update_success": True, "priced_assets": 1, "failed_assets": 0,
+                    "update_interval_seconds": 60.0},
+        "ecb": {"last_update_success": True, "rate_date": "2026-09-24"},
+    }
+
+
+async def test_price_tracker_diagnostics_count_a_carried_price_as_failed(hass):
+    """Solana's requests fail while its sensors still show its last price
+    (TickerCoordinator), and Gold's failure is confirmed, so it is left out
+    of the data: the diagnostics report the real outcome -- two failed
+    assets and one with a fresh price -- not what the sensors show."""
+    entry = _price_entry(hass, extra=[], ecb=None)
+    entry.runtime_data.tickers = _Tickers(
+        {"uuid-btc": 1.0, "uuid-sol": 2.0}, failing={"uuid-sol", "uuid-gold"}
+    )
+    result = await async_get_config_entry_diagnostics(hass, entry)
+    assert result["tickers"] == {
+        "last_update_success": True, "priced_assets": 1, "failed_assets": 2,
+        "update_interval_seconds": 60.0,
+    }
+
+
+async def test_price_tracker_without_extra_currencies_has_no_ecb(hass):
+    result = await async_get_config_entry_diagnostics(hass, _price_entry(hass, extra=[], ecb=None))
+    assert result["ecb"] is None
+
+
+async def test_price_tracker_that_is_not_loaded_reports_its_config_only(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=3,
+        data={"entry_type": "price_tracker"},
+        options={"extra_currencies": []},
+        subentries_data=[price_group("metal", _GOLD, title="Precious metals")],
+    )
+    entry.add_to_hass(hass)
+    assert await async_get_config_entry_diagnostics(hass, entry) == {
+        "service": "price_tracker",
+        "groups": [{"category": "metal", "title": "Precious metals", "assets": [_GOLD]}],
+        "currencies": ["EUR"],
+    }

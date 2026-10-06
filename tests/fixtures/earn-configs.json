@@ -1,0 +1,398 @@
+[
+  {
+    "id": "1ed132a3-5c87-6268-9191-e27201aa7f24",
+    "asset_id": "b86d8f15-efe3-11eb-b56f-0691764446a7",
+    "annual_percentage_rate": 0.0544,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1ed132a3-a626-6a68-8ec3-e27201aa7f24",
+    "asset_id": "b86cdde7-efe3-11eb-b56f-0691764446a7",
+    "annual_percentage_rate": 0.0386,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1ed132a4-2a4f-6ec0-8ca8-e27201aa7f24",
+    "asset_id": "b86cf728-efe3-11eb-b56f-0691764446a7",
+    "annual_percentage_rate": 0.0447,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1ed91bc6-33b6-619a-8c5e-4ea7fcfcfc2f",
+    "asset_id": "eb5856c0-ee39-11ec-a2e6-0a686dc2c129",
+    "annual_percentage_rate": 0.1516,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1edac563-49de-61c8-b9ff-12e9eed6148d",
+    "asset_id": "b86cb91a-efe3-11eb-b56f-0691764446a7",
+    "annual_percentage_rate": 0.0053,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1edac563-accd-620c-b899-12e9eed6148d",
+    "asset_id": "1ed9d832-47b3-6962-93a6-52850139263d",
+    "annual_percentage_rate": 0.0481,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": true
+  },
+  {
+    "id": "1edb359d-d423-6dec-88a7-3a61f37cc2d9",
+    "asset_id": "09946568-d825-11ec-9258-0a686dc2c129",
+    "annual_percentage_rate": 0.0333,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1edb359e-4d0f-626a-9637-3a61f37cc2d9",
+    "asset_id": "71ac1f3f-cf9b-11ec-a6ac-0a686dc2c129",
+    "annual_percentage_rate": 0.1158,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1edce173-d48f-62bc-8652-7e6995a76d91",
+    "asset_id": "a41f01ac-aeb3-11ec-a6ac-0a686dc2c129",
+    "annual_percentage_rate": 0.0524,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1edd37c0-5526-6afe-aa80-c24e52df4b49",
+    "asset_id": "ad97ca97-a9e2-11ec-82b4-0adf8c369f09",
+    "annual_percentage_rate": 0.0828,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1eddf588-4ad5-692a-966d-c606627e4100",
+    "asset_id": "b6d50bd3-4865-11ec-b276-0a69e15c2b31",
+    "annual_percentage_rate": 0.0857,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": true
+  },
+  {
+    "id": "1edefcf3-9d8f-65da-b45b-86b260199778",
+    "asset_id": "b86c113a-efe3-11eb-b56f-0691764446a7",
+    "annual_percentage_rate": 0.024,
+    "type": "LOCKED",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1ee780a6-1ff4-6a3c-80c9-2ad77da3a77c",
+    "asset_id": "1ee77d7c-3a93-678a-84cf-1511765749f1",
+    "annual_percentage_rate": 0.0336,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1ee8f668-3114-6900-88e2-3ad002aa1c9a",
+    "asset_id": "07d0bc89-d825-11ec-9258-0a686dc2c129",
+    "annual_percentage_rate": 0.0807,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1ee94e38-cb07-64ae-b093-d9cbed90a7aa",
+    "asset_id": "56bae52f-c9ff-11ec-a6ac-0a686dc2c129",
+    "annual_percentage_rate": 0.0416,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": true
+  },
+  {
+    "id": "1ee94e39-04d0-64ec-a4d7-ab4fc2b074db",
+    "asset_id": "26e24f5a-f04b-11eb-b56f-0691764446a7",
+    "annual_percentage_rate": 0.0566,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1eeda0d9-964a-630e-9aed-71d8fb136ab2",
+    "asset_id": "1ede9a7f-3137-6742-9f35-0e40986298bd",
+    "annual_percentage_rate": 0.0103,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1eedf8d1-d12e-674a-95c2-416a90af5e57",
+    "asset_id": "e20a45d6-9cb0-4eb3-96e5-81e4d6cf34b5",
+    "annual_percentage_rate": 0.019,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1eee50e0-5386-633a-acd2-630364ad6282",
+    "asset_id": "1ee3b63f-f5ad-655a-a3d1-ee6ed6fc1116",
+    "annual_percentage_rate": 0.0335,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1eeea8d6-7bf6-6efc-b0b9-4fce2e3c6c96",
+    "asset_id": "1eec68f0-1a4f-6410-b88e-51058b03f566",
+    "annual_percentage_rate": 0.0783,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": true
+  },
+  {
+    "id": "1eef0cfe-4f1c-6bb6-ac17-975f53bb1c33",
+    "asset_id": "a47e1c43-aeb3-11ec-a6ac-0a686dc2c129",
+    "annual_percentage_rate": 0.0491,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1ef7bde6-692c-6064-88d2-bd98cffb4ef0",
+    "asset_id": "1eed7d08-36da-6076-a44e-c1d15ee87945",
+    "annual_percentage_rate": 0.0774,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1ef969a5-1fb2-617e-bcc2-0739c76b8ce5",
+    "asset_id": "b86c9fd5-efe3-11eb-b56f-0691764446a7",
+    "annual_percentage_rate": 0.1199,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1efbeb8d-2c8e-6b9c-90aa-f58abe26d509",
+    "asset_id": "1edb844a-3a2e-61b4-838b-e2757737d8b1",
+    "annual_percentage_rate": 0.0406,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": true
+  },
+  {
+    "id": "1efd4e76-ba93-6ea4-a5bb-371f75c0a7fa",
+    "asset_id": "1efd2782-d953-63aa-a72c-831e2a4d66e5",
+    "annual_percentage_rate": 0.0383,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1efde19c-2d99-6012-ac38-03b38796f500",
+    "asset_id": "1eecbe8b-75b2-6190-b35d-7dfef07da948",
+    "annual_percentage_rate": 0.0672,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1efed092-91d6-6242-a604-510e50de0be0",
+    "asset_id": "b86cf8ae-efe3-11eb-b56f-0691764446a7",
+    "annual_percentage_rate": 0.0305,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1f0049d1-03fe-6276-a214-35c838168bcf",
+    "asset_id": "1ee0ab0c-fe5e-6eec-a754-3edd48ae1131",
+    "annual_percentage_rate": 0.0549,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": true
+  },
+  {
+    "id": "1f02b13a-6445-6634-8258-7582ad339bad",
+    "asset_id": "1efc5d2a-db54-687a-8668-97d8f63a8d7d",
+    "annual_percentage_rate": 0.016,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1f034817-ac74-6990-8746-3719ee21b9b6",
+    "asset_id": "1f00ed86-b6b3-67f0-98a8-fb73d4afa536",
+    "annual_percentage_rate": 0.081,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1f0623e4-3325-6610-8c43-09812a8140e3",
+    "asset_id": "1f051b7c-5980-6dda-9d3d-cf107d8d4bfb",
+    "annual_percentage_rate": 0.041,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1f0b64b4-3ef9-65de-b3db-8974ac37c3dc",
+    "asset_id": "1ef96b30-6729-657a-aa72-7bae1036a7b1",
+    "annual_percentage_rate": 0.07,
+    "type": "LOCKED",
+    "mode": "STABLE_COIN_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1f0b64b5-8536-6758-ac97-4d887dbb733a",
+    "asset_id": "b86c8f28-efe3-11eb-b56f-0691764446a7",
+    "annual_percentage_rate": 0.07,
+    "type": "LOCKED",
+    "mode": "STABLE_COIN_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "1f124388-87a5-66fc-86fe-891838e42ccd",
+    "asset_id": "1f118bf3-d6dc-6ac4-ab49-31dca72c5ccf",
+    "annual_percentage_rate": 0.1,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "9633d0df-7031-470f-9e5f-3796f87dbaad",
+    "asset_id": "b86c7849-efe3-11eb-b56f-0691764446a7",
+    "annual_percentage_rate": 0.0163,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "9633d0df-89d7-4057-b2f5-0eaef2c42e49",
+    "asset_id": "b86c92d3-efe3-11eb-b56f-0691764446a7",
+    "annual_percentage_rate": 0.0248,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "9633d0df-a25d-43a1-a543-fd4ec22589fb",
+    "asset_id": "b86c76cb-efe3-11eb-b56f-0691764446a7",
+    "annual_percentage_rate": 0.0213,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "9633d0df-d520-4d1a-9ecc-e6042443cdf9",
+    "asset_id": "b86da33d-efe3-11eb-b56f-0691764446a7",
+    "annual_percentage_rate": 0.0453,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "9633d0df-ebc6-4c56-b1ae-7c1a253516b2",
+    "asset_id": "b86ccc0b-efe3-11eb-b56f-0691764446a7",
+    "annual_percentage_rate": 0.0194,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "9633d0e0-0286-4b92-841c-5b4d28ee7485",
+    "asset_id": "b86d9f09-efe3-11eb-b56f-0691764446a7",
+    "annual_percentage_rate": 0.0216,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "9633d0e0-192c-4d28-a2f4-9b694172e9b3",
+    "asset_id": "b86c9449-efe3-11eb-b56f-0691764446a7",
+    "annual_percentage_rate": 0.1486,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "9633d0e0-2ec7-492b-95e4-80ac3df08491",
+    "asset_id": "b86d930f-efe3-11eb-b56f-0691764446a7",
+    "annual_percentage_rate": 0.0289,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "9633d0e0-5d13-4f24-a4de-00bfe6687ddd",
+    "asset_id": "14e07770-4159-11ec-a40d-0a69e15c2b31",
+    "annual_percentage_rate": 0.0363,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  },
+  {
+    "id": "f7b65174-a8ec-4f89-aecf-3457a3f1df1e",
+    "asset_id": "1eedc6ae-1f57-6eb8-bb11-03c045a04b4d",
+    "annual_percentage_rate": 0.054,
+    "type": "FLEXIBLE",
+    "mode": "STAKING_EARN",
+    "enabled": true,
+    "soldout": false
+  }
+]

@@ -1,0 +1,582 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bitpanda",
+        "description": "Welke dienst wil je instellen? Elke dienst kan maar één keer worden toegevoegd.\n\n- **Bitpanda Portfolio**: je account – alles wat je bij Bitpanda bezit.\n- **Bitpanda Price Tracker**: actuele prijzen van de assets die je kiest – ook zonder ze te bezitten.",
+        "menu_options": {
+          "portfolio": "Bitpanda Portfolio (API-sleutel nodig)",
+          "price_tracker": "Bitpanda Price Tracker (geen API-sleutel nodig)"
+        }
+      },
+      "portfolio": {
+        "title": "Bitpanda Portfolio",
+        "description": "De Bitpanda Portfolio toont je Bitpanda-account in Home Assistant: de totale waarde, je rendementen en een wallet voor elke asset die je bezit. De integratie maakt de wallets zelf aan en verwijdert ze weer als je een asset niet meer bezit – toevoegen of verwijderen hoef je niets.\n\nDaarvoor heeft de integratie een API-sleutel nodig. Zo maak je er een aan:\n\n1. Open [{api_key_url}]({api_key_url}) en maak een nieuwe API-sleutel aan.\n2. Kies alleen de rechten \"Saldi\", \"Transactie\" en \"Earn (Lezen)\" – niet \"Traden (Lezen)\".\n3. Kopieer de API-sleutel en plak hem hieronder. Bitpanda toont hem maar één keer.\n\nDe integratie leest er alleen mee: handelen of geld verplaatsen kan ze niet.\nBitpanda-API-sleutels zijn geldig tot de datum die je bij het aanmaken kiest, hoogstens een jaar; daarna vraagt Home Assistant om een nieuwe.\nJe kunt de API-sleutel op elk moment vervangen: open op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies \"Herconfigureer\".",
+        "data": {
+          "api_key": "API-sleutel"
+        }
+      },
+      "currency": {
+        "title": "Bitpanda Portfolio",
+        "description": "De API-sleutel werkt. Kies nu de valuta van je portfolio, welke meldingen je wilt ontvangen en de taal van groepstitels en meldingen.",
+        "sections": {
+          "currency": {
+            "name": "Valuta",
+            "data": {
+              "currency": "Portfolio-valuta"
+            },
+            "data_description": {
+              "currency": "Bitpanda geeft alle waarden van je portfolio in deze valuta weer. Om de valuta later te wijzigen, open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies je \"Herconfigureer\". Een wijziging verwijdert alle Portfolio-sensoren met hun geschiedenis en maakt ze opnieuw aan in de nieuwe valuta."
+            }
+          },
+          "notifications": {
+            "name": "Meldingen",
+            "description": "Je kunt de meldingsinstellingen later wijzigen via \"Configureren\" (⚙) bij de invoer \"Bitpanda Portfolio\" op de integratiepagina van Bitpanda.",
+            "data": {
+              "notify_new_wallets": "Melding bij nieuwe wallets",
+              "notify_staking_rewards": "Melding bij stakingbeloningen"
+            },
+            "data_description": {
+              "notify_new_wallets": "Komt er een nieuwe wallet bij in het Portfolio, bijvoorbeeld nadat je een asset hebt gekocht, dan toont Home Assistant een melding onder \"Meldingen\". Wallets die er al waren toen het Portfolio werd ingesteld, tellen niet mee. Automatiseringen kunnen in elk geval reageren op de gebeurtenis `bitpanda_wallet_added`.",
+              "notify_staking_rewards": "Keert Bitpanda een stakingbeloning uit, dan toont Home Assistant een melding onder \"Meldingen\": één per asset, en de volgende uitbetaling vervangt die. Uitbetalingen die Home Assistant heeft gemist omdat het uit stond, worden per asset in één melding opgeteld. Alleen assets met een ingeschakelde sensor \"Saldo (staking)\" tellen mee. Automatiseringen kunnen in elk geval reageren op de gebeurtenis `bitpanda_staking_reward_received`."
+            }
+          },
+          "language": {
+            "name": "Taal",
+            "data": {
+              "language": "Taal van groepstitels en meldingen"
+            },
+            "data_description": {
+              "language": "Groepstitels zoals \"Cryptovaluta\" verschijnen in deze taal, net als de melding waarom een apparaat niet kan worden verwijderd en de meldingen die je kiest in het onderdeel \"Meldingen\". Sensornamen volgen de systeemtaal van Home Assistant, dialogen en attribuutnamen de taal van je gebruikersprofiel. Je kunt deze taal later wijzigen via \"Configureren\" (⚙) bij de invoer \"Bitpanda Portfolio\" op de integratiepagina van Bitpanda."
+            }
+          }
+        }
+      },
+      "old_statistics": {
+        "title": "Oude statistieken in een andere valuta",
+        "description": "Home Assistant bewaart nog langetermijnstatistieken van een eerder Bitpanda Portfolio in {old}. Je hebt voor deze installatie {new} gekozen. Een sensor waarvan de statistieken in een andere valuta staan, legt geen nieuwe statistieken vast zolang de oude er nog zijn.\n\n- **Verwijderen en instellen:** verwijdert de geschiedenis en de langetermijnstatistieken van alle eerdere Portfolio-sensoren – waarden, rendementen en wallets – en stelt het Portfolio in {new} in. De statistieken beginnen dan opnieuw. De verwijderde gegevens kunnen niet worden hersteld.\n- **Behouden en instellen:** stelt het Portfolio in {new} in en verwijdert niets. De sensoren met oude statistieken leggen dan helemaal geen statistieken meer vast, ook niet in {new}, totdat je de oude statistieken zelf verwijdert; [Troubleshooting]({troubleshooting_url}) in de README legt uit hoe.\n- **Annuleren:** stelt niets in en verwijdert niets, bijvoorbeeld om een andere valuta te kiezen.",
+        "menu_options": {
+          "delete_statistics": "Verwijderen en instellen",
+          "keep_statistics": "Behouden en instellen",
+          "cancel_setup": "Annuleren"
+        }
+      },
+      "price_tracker": {
+        "title": "Bitpanda Price Tracker",
+        "description": "De Bitpanda Price Tracker maakt voor elke gevolgde asset altijd een prijssensor in EUR aan. Kies hier optioneel extra valuta waarin de prijzen ook worden getoond.\n\nJe kunt de extra valuta en de taal ook later kiezen of wijzigen via \"Configureren\" (⚙) bij de invoer \"Bitpanda Price Tracker\" op de integratiepagina van Bitpanda. Voeg na het instellen assets toe met \"Prijstracker toevoegen\" bij dezelfde invoer.",
+        "sections": {
+          "currencies": {
+            "name": "Valuta",
+            "data": {
+              "extra_currencies": "Naast EUR"
+            },
+            "data_description": {
+              "extra_currencies": "Elke gekozen valuta voegt per asset nog een sensor toe, omgerekend met de dagelijkse referentiekoersen van de Europese Centrale Bank."
+            }
+          },
+          "language": {
+            "name": "Taal",
+            "data": {
+              "language": "Taal van groepstitels"
+            },
+            "data_description": {
+              "language": "Groepstitels zoals \"Cryptovaluta\" verschijnen in deze taal. Sensornamen volgen de systeemtaal van Home Assistant, dialogen en attribuutnamen de taal van je gebruikersprofiel."
+            }
+          }
+        }
+      },
+      "reauth_confirm": {
+        "title": "Nieuwe Bitpanda API-sleutel nodig",
+        "description": "Bitpanda heeft de opgeslagen API-sleutel geweigerd. Misschien is hij verlopen, of hij dateert van vóór de rechten die deze versie nodig heeft. Je sensoren blijven behouden.\n\nZo maak je een nieuwe API-sleutel aan:\n\n1. Open [{api_key_url}]({api_key_url}) en maak een nieuwe API-sleutel aan.\n2. Kies alleen de rechten \"Saldi\", \"Transactie\" en \"Earn (Lezen)\" – niet \"Traden (Lezen)\".\n3. Kopieer de API-sleutel en plak hem hieronder. Bitpanda toont hem maar één keer.\n\nDe integratie leest er alleen mee: handelen of geld verplaatsen kan ze niet.\nBitpanda-API-sleutels zijn geldig tot de datum die je bij het aanmaken kiest, hoogstens een jaar; daarna vraagt Home Assistant om een nieuwe.",
+        "data": {
+          "api_key": "API-sleutel"
+        }
+      },
+      "reconfigure": {
+        "title": "Bitpanda Portfolio herconfigureren",
+        "description": "Vervang de opgeslagen API-sleutel, wijzig de valuta, of allebei.",
+        "data": {
+          "api_key": "Nieuwe API-sleutel",
+          "currency": "Valuta"
+        },
+        "data_description": {
+          "api_key": "Laat het veld leeg om de huidige API-sleutel te behouden.\nEen nieuwe API-sleutel van [{api_key_url}]({api_key_url}) heeft de rechten \"Saldi\", \"Transactie\" en \"Earn (Lezen)\" nodig – niet \"Traden (Lezen)\".\nDe integratie leest er alleen mee: handelen of geld verplaatsen kan ze niet.",
+          "currency": "Als je de valuta wijzigt, worden alle Portfolio-sensoren met hun geschiedenis verwijderd; dat bevestig je in de volgende stap."
+        }
+      },
+      "confirm_currency": {
+        "title": "Valuta wijzigen?",
+        "description": "Als je de valuta wijzigt van {old} naar {new}, worden alle Portfolio-sensoren met hun geschiedenis verwijderd en in de nieuwe valuta opnieuw aangemaakt. De verwijderde geschiedenis kan niet worden hersteld; de valuta zelf kun je later altijd weer wijzigen.",
+        "menu_options": {
+          "change_currency": "Valuta wijzigen",
+          "change_key_and_currency": "Nieuwe API-sleutel opslaan en valuta wijzigen",
+          "save_key_only": "Alleen de nieuwe API-sleutel opslaan",
+          "cancel_currency_change": "Annuleren"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Bitpanda heeft deze API-sleutel geweigerd. Misschien is hij onvolledig gekopieerd, in je Bitpanda-account verwijderd of verlopen, of heeft hij geen van de rechten \"Saldi\", \"Transactie\" en \"Earn (Lezen)\". Controleer de API-sleutel of maak een nieuwe aan met alle drie.",
+      "missing_scopes": "Rechten van deze API-sleutel: \"Saldi\" {balance}, \"Transactie\" {transaction}, \"Earn (Lezen)\" {earn}. Aan een bestaande API-sleutel kunnen geen rechten worden toegevoegd. Maak een nieuwe aan met alle drie.",
+      "rate_limited": "Te veel verzoeken. Wacht even en probeer het opnieuw.",
+      "cannot_connect": "Bitpanda is niet bereikbaar. Probeer het later opnieuw.",
+      "unknown": "Onverwachte fout"
+    },
+    "abort": {
+      "all_configured": "Beide diensten zijn al ingesteld.",
+      "already_configured": "Deze dienst is al ingesteld.",
+      "already_in_progress": "Deze dienst wordt al in een ander venster ingesteld.",
+      "reauth_successful": "De API-sleutel is bijgewerkt.",
+      "reconfigure_successful": "De API-sleutel is vervangen.",
+      "currency_changed": "De valuta is gewijzigd. De Portfolio-sensoren worden opnieuw aangemaakt.",
+      "no_changes": "Er is niets gewijzigd.",
+      "no_reconfigure": "Bij de Bitpanda Price Tracker valt momenteel niets te herconfigureren. Wijzig de extra valuta en de taal van groepstitels via \"Configureren\" (⚙) bij dezelfde invoer.",
+      "unload_failed": "Het Portfolio kon niet worden gestopt, dus de valuta is niet gewijzigd en er is niets verwijderd. Herstart Home Assistant en probeer het opnieuw.",
+      "setup_cancelled": "Het Portfolio is niet ingesteld en er is niets verwijderd."
+    }
+  },
+  "options": {
+    "step": {
+      "price_tracker": {
+        "title": "Opties van de Price Tracker",
+        "sections": {
+          "currencies": {
+            "name": "Valuta",
+            "data": {
+              "extra_currencies": "Naast EUR"
+            },
+            "data_description": {
+              "extra_currencies": "Elke gekozen valuta voegt per asset nog een sensor toe, omgerekend met de dagelijkse referentiekoersen van de Europese Centrale Bank.\nAls je een valuta weghaalt, worden die sensoren verwijderd; hun geschiedenis blijft bewaard en komt terug als je de valuta opnieuw kiest."
+            }
+          },
+          "language": {
+            "name": "Taal",
+            "data": {
+              "language": "Taal van groepstitels"
+            },
+            "data_description": {
+              "language": "Groepstitels zoals \"Cryptovaluta\" verschijnen in deze taal. Sensornamen volgen de systeemtaal van Home Assistant, dialogen en attribuutnamen de taal van je gebruikersprofiel."
+            }
+          }
+        }
+      },
+      "portfolio": {
+        "title": "Opties van het Portfolio",
+        "description": "Om de API-sleutel te vervangen of de valuta te wijzigen, open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies je \"Herconfigureer\".",
+        "sections": {
+          "notifications": {
+            "name": "Meldingen",
+            "data": {
+              "notify_new_wallets": "Melding bij nieuwe wallets",
+              "notify_staking_rewards": "Melding bij stakingbeloningen"
+            },
+            "data_description": {
+              "notify_new_wallets": "Komt er een nieuwe wallet bij in het Portfolio, bijvoorbeeld nadat je een asset hebt gekocht, dan toont Home Assistant een melding onder \"Meldingen\". Wallets die er al waren toen het Portfolio werd ingesteld, tellen niet mee. Automatiseringen kunnen in elk geval reageren op de gebeurtenis `bitpanda_wallet_added`.",
+              "notify_staking_rewards": "Keert Bitpanda een stakingbeloning uit, dan toont Home Assistant een melding onder \"Meldingen\": één per asset, en de volgende uitbetaling vervangt die. Uitbetalingen die Home Assistant heeft gemist omdat het uit stond, worden per asset in één melding opgeteld. Alleen assets met een ingeschakelde sensor \"Saldo (staking)\" tellen mee. Automatiseringen kunnen in elk geval reageren op de gebeurtenis `bitpanda_staking_reward_received`."
+            }
+          },
+          "language": {
+            "name": "Taal",
+            "data": {
+              "language": "Taal van groepstitels en meldingen"
+            },
+            "data_description": {
+              "language": "Groepstitels zoals \"Cryptovaluta\" verschijnen in deze taal, net als de melding waarom een apparaat niet kan worden verwijderd en de meldingen die je kiest in het onderdeel \"Meldingen\". Sensornamen volgen de systeemtaal van Home Assistant, dialogen en attribuutnamen de taal van je gebruikersprofiel."
+            }
+          }
+        }
+      }
+    }
+  },
+  "config_subentries": {
+    "price_group": {
+      "initiate_flow": {
+        "user": "Prijstracker toevoegen"
+      },
+      "entry_type": "Prijstrackergroep",
+      "step": {
+        "user": {
+          "title": "Prijstracker toevoegen",
+          "description": "Een prijstracker volgt de prijs van één asset – in EUR en in de gekozen extra valuta. Kies eerst het soort asset.",
+          "data": {
+            "category": "Assettype"
+          },
+          "data_description": {
+            "category": "De volgende stap toont alle assets van dit type die je nog niet volgt. Grote lijsten zoals aandelen laden de eerste keer een paar seconden."
+          }
+        },
+        "asset": {
+          "title": "Prijstracker toevoegen",
+          "description": "Kies de asset waarvan je de prijs wilt volgen.",
+          "data": {
+            "asset": "Asset"
+          },
+          "data_description": {
+            "asset": "Typ een naam of een symbool om in de lijst te zoeken. Klik zonder keuze op \"Verzenden\" om terug te gaan naar de assettypes."
+          }
+        },
+        "security": {
+          "title": "Prijstracker toevoegen",
+          "description": "Kies de asset waarvan je de prijs wilt volgen.",
+          "data": {
+            "asset": "Asset"
+          },
+          "data_description": {
+            "asset": "Typ een naam, een symbool of een ISIN om in de lijst te zoeken. Klik zonder keuze op \"Verzenden\" om terug te gaan naar de assettypes."
+          }
+        }
+      },
+      "error": {
+        "no_assets_available": "Alle assets van dit type worden al gevolgd.",
+        "unknown_asset": "Kies een asset uit de lijst.",
+        "rate_limited": "Te veel verzoeken. Wacht even en probeer het opnieuw.",
+        "cannot_connect": "Bitpanda is niet bereikbaar. Probeer het later opnieuw."
+      },
+      "abort": {
+        "already_configured": "Deze asset wordt al gevolgd.",
+        "asset_added": "{asset} wordt nu gevolgd in de groep {group}."
+      }
+    },
+    "wallet_group": {
+      "initiate_flow": {
+        "user": "Walletgroep toevoegen"
+      },
+      "entry_type": "Walletgroep",
+      "step": {}
+    }
+  },
+  "selector": {
+    "asset_category": {
+      "options": {
+        "crypto": "Crypto",
+        "stock": "Aandelen",
+        "etf": "ETF's",
+        "etc": "ETC's (beursverhandelde grondstoffen)",
+        "index": "Crypto-indices",
+        "metal": "Edelmetalen"
+      }
+    },
+    "asset_group": {
+      "options": {
+        "crypto": "Cryptovaluta",
+        "stock": "Aandelen",
+        "etf": "ETF's",
+        "etc": "ETC's",
+        "index": "Crypto-indices",
+        "metal": "Edelmetalen",
+        "other": "Overige"
+      }
+    },
+    "currency": {
+      "options": {
+        "chf": "Zwitserse frank (CHF)",
+        "czk": "Tsjechische kroon (CZK)",
+        "dkk": "Deense kroon (DKK)",
+        "eur": "Euro (EUR)",
+        "gbp": "Brits pond (GBP)",
+        "huf": "Hongaarse forint (HUF)",
+        "nok": "Noorse kroon (NOK)",
+        "pln": "Poolse zloty (PLN)",
+        "ron": "Roemeense leu (RON)",
+        "sek": "Zweedse kroon (SEK)",
+        "try": "Turkse lira (TRY)",
+        "usd": "Amerikaanse dollar (USD)"
+      }
+    },
+    "language": {
+      "options": {
+        "de": "Deutsch",
+        "en": "English",
+        "es": "Español",
+        "fr": "Français",
+        "it": "Italiano",
+        "nl": "Nederlands",
+        "pl": "Polski"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "total_value": {
+        "name": "Totale waarde"
+      },
+      "cash": {
+        "name": "Contanten"
+      },
+      "cash_plus": {
+        "name": "Cash Plus",
+        "state_attributes": {
+          "eur": {
+            "name": "EUR"
+          },
+          "usd": {
+            "name": "USD"
+          },
+          "gbp": {
+            "name": "GBP"
+          }
+        }
+      },
+      "return_day": {
+        "name": "Rendement 1 dag"
+      },
+      "return_week": {
+        "name": "Rendement 1 week"
+      },
+      "return_month": {
+        "name": "Rendement 1 maand"
+      },
+      "return_six_month": {
+        "name": "Rendement 6 maanden"
+      },
+      "return_year": {
+        "name": "Rendement 1 jaar"
+      },
+      "wallet": {
+        "name": "Saldo (beschikbaar)",
+        "state_attributes": {
+          "asset": {
+            "name": "Asset: symbool"
+          },
+          "asset_name": {
+            "name": "Asset: naam"
+          },
+          "asset_isin": {
+            "name": "Asset: ISIN"
+          },
+          "units": {
+            "name": "Asset: hoeveelheid"
+          }
+        }
+      },
+      "staking": {
+        "name": "Saldo (staking)",
+        "state_attributes": {
+          "asset": {
+            "name": "Asset: symbool"
+          },
+          "asset_name": {
+            "name": "Asset: naam"
+          },
+          "asset_isin": {
+            "name": "Asset: ISIN"
+          },
+          "units": {
+            "name": "Asset: hoeveelheid"
+          },
+          "apr_percent": {
+            "name": "Beloningen: jaarlijks rendement (APR %)"
+          },
+          "rewards_gross": {
+            "name": "Beloningen: bruto (hoeveelheid)"
+          },
+          "rewards_fee": {
+            "name": "Beloningen: kosten (hoeveelheid)"
+          },
+          "rewards_net": {
+            "name": "Beloningen: netto (hoeveelheid)"
+          },
+          "rewards_net_value": {
+            "name": "Beloningen: nettowaarde (actueel)"
+          },
+          "rewards_count": {
+            "name": "Beloningen: aantal uitbetalingen"
+          },
+          "rewards_last_at": {
+            "name": "Beloningen: laatste uitbetaling"
+          }
+        }
+      },
+      "wallet_total": {
+        "name": "Saldo (totaal)",
+        "state_attributes": {
+          "asset": {
+            "name": "Asset: symbool"
+          },
+          "asset_name": {
+            "name": "Asset: naam"
+          },
+          "asset_isin": {
+            "name": "Asset: ISIN"
+          },
+          "units": {
+            "name": "Asset: hoeveelheid"
+          },
+          "average_buy_price": {
+            "name": "Positie: gemiddelde aankoopprijs"
+          },
+          "invested_amount": {
+            "name": "Positie: geïnvesteerd bedrag"
+          },
+          "total_return": {
+            "name": "Positie: winst/verlies"
+          },
+          "total_return_percent": {
+            "name": "Positie: winst/verlies %"
+          }
+        }
+      },
+      "price": {
+        "state_attributes": {
+          "asset": {
+            "name": "Asset: symbool"
+          },
+          "asset_name": {
+            "name": "Asset: naam"
+          },
+          "asset_isin": {
+            "name": "Asset: ISIN"
+          },
+          "change_24h_pct": {
+            "name": "24 uur: wijziging %"
+          },
+          "price_24h_ago": {
+            "name": "24 uur: vorige prijs"
+          },
+          "conversion": {
+            "name": "Omrekening: status",
+            "state": {
+              "no_rate": "Nog geen wisselkoers geladen"
+            }
+          },
+          "conversion_rate": {
+            "name": "Omrekening: koers"
+          },
+          "rate_date": {
+            "name": "Omrekening: datum"
+          },
+          "rate_source": {
+            "name": "Omrekening: bron"
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "portfolio_device_not_removable": {
+      "message": "Het apparaat \"Portfolio\" hoort bij de dienst Bitpanda Portfolio en kan niet apart worden verwijderd. Wil je het kwijt, verwijder dan de invoer \"Bitpanda Portfolio\" op de integratiepagina van Bitpanda (⋮ → \"Verwijderen\")."
+    },
+    "held_wallet_not_removable": {
+      "message": "Zolang je {asset} bezit, kan deze wallet niet worden verwijderd – hij zou bij de volgende verversing meteen opnieuw worden aangemaakt. Zodra je {asset} niet meer bezit, wordt hij automatisch verwijderd."
+    },
+    "api_key_rejected": {
+      "message": "Bitpanda heeft de API-sleutel geweigerd."
+    },
+    "update_failed": {
+      "message": "Kan geen gegevens ophalen bij Bitpanda."
+    },
+    "update_failed_timeout": {
+      "message": "Kan geen gegevens ophalen bij Bitpanda: {path} heeft niet op tijd geantwoord."
+    },
+    "update_failed_connection": {
+      "message": "Kan geen gegevens ophalen bij Bitpanda: de verbinding voor {path} is mislukt."
+    },
+    "update_failed_http_status": {
+      "message": "Kan geen gegevens ophalen bij Bitpanda: {path} antwoordde met HTTP-status {status}."
+    },
+    "update_failed_rate_limited": {
+      "message": "Kan geen gegevens ophalen bij Bitpanda: te veel verzoeken voor {path}."
+    },
+    "update_failed_unreadable": {
+      "message": "Kan geen gegevens ophalen bij Bitpanda: het antwoord van {path} was onleesbaar."
+    },
+    "update_failed_incomplete_listing": {
+      "message": "Kan geen gegevens ophalen bij Bitpanda: de lijst van {path} is onvolledig."
+    },
+    "history_unavailable": {
+      "message": "Er kon geen portfoliogeschiedenis worden opgehaald."
+    },
+    "prices_rate_limited": {
+      "message": "Bitpanda heeft te veel prijsverzoeken ontvangen. Er volgt later een nieuwe poging."
+    },
+    "no_prices": {
+      "message": "Er konden geen prijzen bij Bitpanda worden opgehaald."
+    },
+    "ecb_rates_failed": {
+      "message": "Kan de wisselkoersen van de ECB niet ophalen."
+    },
+    "ecb_rates_failed_timeout": {
+      "message": "Kan de wisselkoersen van de ECB niet ophalen: de ECB heeft niet op tijd geantwoord."
+    },
+    "ecb_rates_failed_connection": {
+      "message": "Kan de wisselkoersen van de ECB niet ophalen: de verbinding met de ECB is mislukt."
+    },
+    "ecb_rates_failed_http_status": {
+      "message": "Kan de wisselkoersen van de ECB niet ophalen: de ECB antwoordde met HTTP-status {status}."
+    },
+    "ecb_rates_failed_unreadable": {
+      "message": "Kan de wisselkoersen van de ECB niet ophalen: het antwoord van de ECB was onleesbaar."
+    },
+    "nothing_to_refresh": {
+      "message": "Er valt niets te vernieuwen: noch Bitpanda Portfolio, noch Bitpanda Price Tracker is geladen."
+    },
+    "refresh_failed": {
+      "message": "Vernieuwen mislukt voor {services}."
+    },
+    "wallet_added_title": {
+      "message": "Nieuwe Bitpanda-wallet"
+    },
+    "wallet_added": {
+      "message": "Het Portfolio heeft een nieuwe wallet toegevoegd: **[{wallet}]({link})** in de groep {group}."
+    },
+    "wallet_added_sensors_disabled": {
+      "message": "De sensoren van deze wallet zijn uitgeschakeld. Je kunt ze inschakelen op de [apparaatpagina]({link})."
+    },
+    "staking_reward_title": {
+      "message": "Nieuwe Bitpanda-stakingbeloning"
+    },
+    "staking_reward": {
+      "message": "**[{wallet}]({link})** heeft een stakingbeloning van **{net} {symbol}** ontvangen."
+    },
+    "staking_rewards": {
+      "message": "**[{wallet}]({link})** heeft {count} stakingbeloningen ontvangen, samen **{net} {symbol}**."
+    },
+    "staking_reward_value": {
+      "message": "Vandaag ongeveer {value} {currency} waard."
+    }
+  },
+  "issues": {
+    "renamed_entities": {
+      "title": "Bitpanda-overstap: entiteit-ID's hernoemd",
+      "description": "Bij de overstap zijn de apparaten \"Bitpanda Wallets\" en \"Bitpanda Price Tracker\" opgesplitst: elke wallet en elke gevolgde asset heeft nu een eigen apparaat, genoemd naar de asset. De cijfers van je account staan op het apparaat \"Portfolio\". Entiteit-ID's volgen de apparaatnamen, daarom zijn deze ID's hernoemd; hun geschiedenis is meegegaan. Controleer dashboards, automatiseringen en scripts die nog de oude ID's gebruiken:\n\n{entities}"
+    },
+    "entities_not_migrated": {
+      "title": "Bitpanda-overstap: entiteiten niet gemigreerd",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Niet-gemigreerde entiteiten verwijderen?",
+            "description": "De overstap heeft deze entiteiten ongewijzigd gelaten; ze worden niet meer bijgewerkt. Het kan gaan om:\n\n- wallets en prijzen van assets die de nieuwe API van Bitpanda niet vermeldt, in elk geval nog niet. Zolang je zo'n asset nog bezit, maakt het Portfolio er vanzelf een nieuwe wallet voor aan, uiterlijk een dag nadat de nieuwe API de asset vermeldt.\n- fiatwallets: de sensor \"Contanten\" van het Portfolio omvat nu alle fiatsaldi.\n- prijzen in valuta die Bitpanda niet meer aanbiedt.\n\nDe logs van Home Assistant noemen per entiteit de reden.\n\n{entities}\n\nKlik op \"Verwijderen\" om deze entiteiten te verwijderen, samen met elk oud apparaat dat daarna geen entiteiten meer heeft. Hun geschiedenis blijft bewaard totdat Home Assistant oude geschiedenis opschoont, standaard na 10 dagen. Wil je ze voorlopig houden, sluit dan dit venster.",
+            "submit": "Verwijderen"
+          }
+        }
+      }
+    },
+    "currency_dropped": {
+      "title": "Bitpanda-overstap: Portfolio-valuta gewijzigd in EUR",
+      "description": "{currency}, de valuta van je Bitpanda-invoer vóór de overstap, is niet beschikbaar voor Bitpanda Portfolio; dat rapporteert daarom nu alle waarden in EUR. Om een andere valuta te kiezen, open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies je \"Herconfigureer\"."
+    },
+    "price_tracker_exists": {
+      "title": "Bitpanda-overstap: prijzen toevoegen aan de Price Tracker",
+      "description": "Bij de overstap was er al een Bitpanda Price Tracker ingesteld, dus de prijzen die je oude Bitpanda-invoer volgde, zijn daar niet naartoe verplaatst. Voeg deze assets toe met \"Prijstracker toevoegen\" bij de invoer \"Bitpanda Price Tracker\" op de integratiepagina van Bitpanda om ze te blijven volgen:\n\n{assets}"
+    },
+    "home_assistant_too_old": {
+      "title": "Bitpanda-overstap vereist Home Assistant {minimum}",
+      "description": "De Bitpanda-invoer van vóór de overstap kan pas vanaf Home Assistant {minimum} worden omgezet; die versie behoudt de geschiedenis van de hernoemde sensoren. Deze installatie draait Home Assistant {version}, dus er is niets gewijzigd. Werk Home Assistant bij; de invoer wordt bij de volgende start omgezet."
+    },
+    "portfolio_exists": {
+      "title": "Bitpanda-overstap geblokkeerd: er is al een Bitpanda Portfolio ingesteld",
+      "description": "De Bitpanda-invoer \"{entry}\" van vóór de overstap kan niet worden omgezet: die zou naast \"{portfolio}\" een tweede Bitpanda Portfolio worden, en er kan er maar één worden ingesteld. Er is niets aan gewijzigd. Verwijder een van beide op de integratiepagina van Bitpanda (⋮ → \"Verwijderen\"): \"{entry}\" of \"{portfolio}\". Houd je \"{entry}\", herstart Home Assistant daarna om die om te zetten."
+    },
+    "slow_price_interval": {
+      "title": "Bitpanda Price Tracker: prijzen slechts elke {minutes} minuten vernieuwd",
+      "description": "De Bitpanda Price Tracker volgt {count} assets en heeft per vernieuwing één verzoek per asset nodig. Om binnen zijn verzoekbudget te blijven, vernieuwt hij hun prijzen slechts elke {minutes} minuten. Volg minder assets voor snellere updates: verwijder het apparaat van een asset (⋮ op de apparaatpagina) of een hele groep (⋮ op de integratiepagina van Bitpanda)."
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Vernieuwen",
+      "description": "Haalt je portfolio en de prijzen nu op bij Bitpanda en wacht tot beide klaar zijn. Genegeerd binnen de wachttijd na de vorige aanroep; mislukt als een vernieuwing mislukt."
+    }
+  }
+}

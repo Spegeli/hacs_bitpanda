@@ -1,116 +1,542 @@
 """The Bitpanda integration."""
+from __future__ import annotations
+
+from collections.abc import Callable, Coroutine
+from contextlib import suppress
 import logging
-import time
+from time import monotonic
+from typing import Any, cast
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.exceptions import (
+    ConfigEntryNotReady,
+    HomeAssistantError,
+    ServiceValidationError,
+)
+from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.translation import async_get_translations
+from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
+from . import migration
+from .announcements import RewardAnnouncer
 from .api import BitpandaApiClient
+from .assets import AssetDirectory
 from .const import (
     CONF_API_KEY,
-    CONF_CURRENCY,
+    CONF_ASSETS,
+    CONF_CURRENCY_ID,
+    CONF_EXTRA_CURRENCIES,
+    CONF_LEGACY_ADOPT,
     DOMAIN,
-    PRICE_UPDATE_INTERVAL,
-    WALLET_UPDATE_INTERVAL,
+    ENTRY_TYPE_PRICE_TRACKER,
+    REFRESH_MIN_COOLDOWN,
+    SUBENTRY_TYPE_PRICE_GROUP,
+    SUBENTRY_TYPE_WALLET_GROUP,
+    entry_type,
+)
+from .devices import device_identifiers
+from .groups import (
+    async_group_titles,
+    async_remove_asset_from_group,
+    async_retitle_groups,
+    groups_of_type,
+    tracked_assets,
+)
+from .portfolio_store import async_get_portfolio_store, async_remove_portfolio_store
+from .language import entry_language
+from .naming import (
+    asset_display_label,
+    portfolio_device_identifier,
+    price_device_asset_id,
+    wallet_device_asset_id,
+)
+from .portfolio_coordinator import (
+    EarnCoordinator,
+    HistoryCoordinator,
+    PortfolioConfigEntry,
+    PortfolioCoordinator,
+    PortfolioRuntime,
+    RewardsCoordinator,
+)
+from .price_coordinator import (
+    EcbCoordinator,
+    PriceTrackerConfigEntry,
+    PriceTrackerRuntime,
+    TickerCoordinator,
+    async_delete_price_interval_issue,
+    async_report_price_interval,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
+# A config entry of either service, its runtime data typed. The service
+# itself (const.entry_type) says which of the two it holds; each service's
+# own code takes its own entry type (PortfolioConfigEntry,
+# PriceTrackerConfigEntry).
+type BitpandaConfigEntry = ConfigEntry[PortfolioRuntime | PriceTrackerRuntime]
+
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
+# Set up through the UI only: a `bitpanda:` block in configuration.yaml is
+# reported, never read. Required beside async_setup (hassfest).
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Bitpanda from a config entry."""
-    api_key = entry.data[CONF_API_KEY]
-    currency = entry.data[CONF_CURRENCY]
-    session = async_get_clientsession(hass)
-    client = BitpandaApiClient(api_key, session)
+# Records of held assets, shared across reloads of the Portfolio entry.
+_ASSET_DIRECTORY_KEY = f"{DOMAIN}_asset_directory"
 
-    async def async_update_prices():
-        """Fetch price data from API."""
-        try:
-            return await client.async_get_ticker()
-        except Exception as err:
-            raise UpdateFailed(f"Error communicating with API: {err}")
 
-    async def async_update_wallets():
-        """Fetch wallet data from API."""
-        try:
-            asset_wallets = await client.async_get_asset_wallets()
-            fiat_wallets = await client.async_get_fiat_wallets()
-            return {
-                "asset_wallets": asset_wallets,
-                "fiat_wallets": fiat_wallets,
-            }
-        except Exception as err:
-            raise UpdateFailed(f"Error communicating with API: {err}")
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register `bitpanda.refresh`, once, for both services.
 
-    price_coordinator = DataUpdateCoordinator(
-        hass,
-        _LOGGER,
-        name=f"{DOMAIN}_prices",
-        update_method=async_update_prices,
-        update_interval=PRICE_UPDATE_INTERVAL,
-        config_entry=entry,
-    )
-
-    wallet_coordinator = DataUpdateCoordinator(
-        hass,
-        _LOGGER,
-        name=f"{DOMAIN}_wallets",
-        update_method=async_update_wallets,
-        update_interval=WALLET_UPDATE_INTERVAL,
-        config_entry=entry,
-    )
-
-    await price_coordinator.async_config_entry_first_refresh()
-    await wallet_coordinator.async_config_entry_first_refresh()
-
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = {
-        "price_coordinator": price_coordinator,
-        "wallet_coordinator": wallet_coordinator,
-        "currency": currency,
-    }
-
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(async_update_options))
-
-    if not hass.services.has_service(DOMAIN, "refresh"):
-        _last_refresh: dict[str, float] = {"time": 0.0}
-        _REFRESH_COOLDOWN = 10.0
-
-        async def handle_refresh(call: ServiceCall) -> None:
-            """Trigger a manual refresh of all Bitpanda data."""
-            now = time.monotonic()
-            if now - _last_refresh["time"] < _REFRESH_COOLDOWN:
-                remaining = _REFRESH_COOLDOWN - (now - _last_refresh["time"])
-                _LOGGER.debug(
-                    "Refresh cooldown active, ignoring call (%.1fs remaining)", remaining
-                )
-                return
-            _last_refresh["time"] = now
-            for entry_data in hass.data[DOMAIN].values():
-                await entry_data["price_coordinator"].async_request_refresh()
-                await entry_data["wallet_coordinator"].async_request_refresh()
-
-        hass.services.async_register(DOMAIN, "refresh", handle_refresh)
-
+    Registered with the integration rather than with an entry, the action
+    exists while no entry is loaded -- setup failed or is being retried --
+    so automations that use it still validate, and a call then says why it
+    does nothing.
+    """
+    _async_register_refresh_service(hass)
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-    if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        hass.data[DOMAIN].pop(entry.entry_id)
-        if not hass.data[DOMAIN]:
-            hass.services.async_remove(DOMAIN, "refresh")
-    return unload_ok
+async def async_migrate_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> bool:
+    """Migrate an entry to version 3 (see migration.py)."""
+    return await migration.async_migrate_entry(hass, entry)
 
 
-async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle options update by reloading the integration."""
-    await hass.config_entries.async_reload(entry.entry_id)
+async def async_setup_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> bool:
+    """Set up one of the two services."""
+    is_price_tracker = entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER
+    # In the entry's own language (language.py), which changing under
+    # Configure reloads the entry to apply.
+    group_titles = await async_group_titles(hass, entry_language(entry))
+    # A title is no part of what either service's update listener (below)
+    # compares, so retitling reloads neither.
+    await async_retitle_groups(
+        hass,
+        entry,
+        SUBENTRY_TYPE_PRICE_GROUP if is_price_tracker else SUBENTRY_TYPE_WALLET_GROUP,
+        group_titles,
+    )
+    # The entry's type names its service, and so its runtime data.
+    if is_price_tracker:
+        tracker = cast(PriceTrackerConfigEntry, entry)
+        _async_prepare_price_tracker(hass, tracker)
+        # What the start tracks, read before its first await: the changes
+        # the preparation made are setup's own, none to reload for.
+        at_start = _price_tracker_config(entry)
+        entry.runtime_data = await _async_start_price_tracker(hass, tracker)
+        reload_listener = _price_tracker_reload_listener(at_start)
+    else:
+        # Before the first refresh, which a rejected key fails: the
+        # entities left over from the upgrade are counted whether Bitpanda
+        # answers or not.
+        migration.async_update_left_overs(hass, entry)
+        entry.runtime_data = await _async_start_portfolio(
+            hass, cast(PortfolioConfigEntry, entry), group_titles
+        )
+        reload_listener = _async_reload_on_new_data_or_options
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(entry.add_update_listener(reload_listener))
+    if is_price_tracker and _price_tracker_config(entry) != at_start:
+        # Changed while the start awaited its first prices, before the
+        # listener existed: an asset added meanwhile would never be asked
+        # for. Reloaded once this setup is done (the reload waits for it).
+        hass.config_entries.async_schedule_reload(entry.entry_id)
+    return True
+
+
+async def _async_start_portfolio(
+    hass: HomeAssistant, entry: PortfolioConfigEntry, group_titles: dict[str, str]
+) -> PortfolioRuntime:
+    session = async_get_clientsession(hass)
+    client = BitpandaApiClient(entry.data[CONF_API_KEY], session)
+    # Asset lookups are public: keyless, and the records outlive reloads.
+    directory = AssetDirectory(
+        BitpandaApiClient(None, session), hass.data.setdefault(_ASSET_DIRECTORY_KEY, {})
+    )
+    currency_id = entry.data[CONF_CURRENCY_ID]
+    # Before the first refreshes: the wallets' reconcile reads the list, and
+    # the rewards' first refresh may set the marks.
+    store = await async_get_portfolio_store(hass, entry.entry_id)
+    runtime = PortfolioRuntime(
+        portfolio=PortfolioCoordinator(hass, entry, client, currency_id, directory),
+        history=HistoryCoordinator(hass, entry, client, currency_id),
+        earn=EarnCoordinator(hass, entry, client),
+        rewards=RewardsCoordinator(hass, entry, client),
+        group_titles=group_titles,
+        data_at_setup=dict(entry.data),
+        options_at_setup=dict(entry.options),
+        known_wallets=store.known_wallets,
+        reward_marks=store.reward_marks,
+    )
+    await _async_first_refresh(runtime.portfolio)
+    # New staking payouts are announced after every successful refresh of
+    # the rewards, the first one below included (announcements.py). The
+    # coordinators are handed over: entry.runtime_data is set only once this
+    # start returns.
+    announcer = RewardAnnouncer(
+        hass, entry, store.reward_marks, runtime.rewards, runtime.portfolio
+    )
+    runtime.rewards.on_refreshed = announcer.async_rewards_refreshed
+    # Earn, rewards and history are additive: a failure there must not block
+    # setup, so they refresh with async_refresh(), which never raises
+    # ConfigEntryNotReady. A 401 from any of them still reaches the reauth
+    # dialog: DataUpdateCoordinator catches the ConfigEntryAuthFailed each
+    # raises and starts reauth itself.
+    await runtime.earn.async_refresh()
+    await runtime.rewards.async_refresh()
+    await runtime.history.async_refresh()
+    return runtime
+
+
+@callback
+def _async_prepare_price_tracker(hass: HomeAssistant, entry: PriceTrackerConfigEntry) -> None:
+    """Setup's own changes to the Price Tracker, before it starts."""
+    if entry.data.get(CONF_LEGACY_ADOPT):
+        # Before any entity exists -- see migration.async_adopt_legacy_prices.
+        migration.async_adopt_legacy_prices(hass, entry)
+    # A group that tracks nothing shows up empty on the integration page. No
+    # update listener exists yet, so dropping it triggers no reload.
+    for group in groups_of_type(entry, SUBENTRY_TYPE_PRICE_GROUP):
+        if not group.data[CONF_ASSETS]:
+            hass.config_entries.async_remove_subentry(entry, group.subentry_id)
+
+
+async def _async_start_price_tracker(
+    hass: HomeAssistant, entry: PriceTrackerConfigEntry
+) -> PriceTrackerRuntime:
+    session = async_get_clientsession(hass)
+    tracked = {
+        asset_id: asset_display_label(record)
+        for asset_id, record in tracked_assets(entry).items()
+    }
+    tickers = TickerCoordinator(hass, entry, BitpandaApiClient(None, session), tracked)
+    # Before the first refresh: the interval follows from what is tracked,
+    # whether Bitpanda answers or not.
+    async_report_price_interval(hass, len(tracked))
+    ecb = (
+        EcbCoordinator(hass, entry, session)
+        if entry.options.get(CONF_EXTRA_CURRENCIES)
+        else None
+    )
+    await _async_first_refresh(tickers)
+    if ecb is not None:
+        # Not a first refresh: without rates the EUR sensors still work and
+        # the other currencies say why they have no value.
+        await ecb.async_refresh()
+    return PriceTrackerRuntime(tickers=tickers, ecb=ecb)
+
+
+async def _async_first_refresh(coordinator: DataUpdateCoordinator[Any]) -> None:
+    """`async_config_entry_first_refresh`, its failure translated on every
+    supported Home Assistant version.
+
+    A failed first refresh raises ConfigEntryNotReady, and the integration
+    page shows its message as the reason setup is being retried. From Home
+    Assistant 2026.9 on it carries the translation of the UpdateFailed that
+    caused it; before -- the 2025.5 floor included -- it carries none, and
+    the page shows that UpdateFailed's English text instead. So it is raised
+    again here with that translation, from None like every exception this
+    integration raises: the message comes from the translation, so nothing
+    needs the chain behind it.
+    """
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except ConfigEntryNotReady as err:
+        cause = err.__cause__
+        if (
+            err.translation_key is not None
+            or not isinstance(cause, HomeAssistantError)
+            or cause.translation_key is None
+        ):
+            raise
+        raise ConfigEntryNotReady(
+            translation_domain=cause.translation_domain,
+            translation_key=cause.translation_key,
+            translation_placeholders=cause.translation_placeholders,
+        ) from None
+
+
+def _price_tracker_config(entry: ConfigEntry) -> tuple[Any, ...]:
+    """What the Price Tracker tracks: its data, its options and its groups'
+    data -- neither a title nor a system option."""
+    return (
+        dict(entry.data),
+        dict(entry.options),
+        {sub_id: dict(sub.data) for sub_id, sub in entry.subentries.items()},
+    )
+
+
+def _price_tracker_reload_listener(
+    at_start: tuple[Any, ...],
+) -> Callable[[HomeAssistant, ConfigEntry], Coroutine[Any, Any, None]]:
+    """The Price Tracker's update listener: it reloads the entry once what it
+    tracks (_price_tracker_config) differs from `at_start`, what its start
+    tracked.
+
+    Home Assistant calls it on any change to the entry: a new title for the
+    entry or one of its groups, or a system option, too. None of those
+    changes what is tracked, and a reload would ask Bitpanda for every price
+    again. Switching polling on or off, Home Assistant reloads the entry
+    itself (its config_entries/update command, at 2025.5 as at 2026.9).
+    """
+    async def _async_reload_on_new_config(hass: HomeAssistant, changed: ConfigEntry) -> None:
+        if _price_tracker_config(changed) != at_start:
+            await hass.config_entries.async_reload(changed.entry_id)
+
+    return _async_reload_on_new_config
+
+
+async def _async_reload_on_new_data_or_options(
+    hass: HomeAssistant, entry: PortfolioConfigEntry
+) -> None:
+    """Reload the Portfolio once its data or options differ from setup's.
+
+    Its subentries, the wallet groups, change without a reload: the wallet
+    manager adds and removes them itself, and brings the wallets of a group
+    the user deleted back with the next refresh (portfolio_sensor.py).
+    """
+    runtime: PortfolioRuntime = entry.runtime_data
+    if (dict(entry.data), dict(entry.options)) != (
+        runtime.data_at_setup,
+        runtime.options_at_setup,
+    ):
+        await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _loaded_entries(hass: HomeAssistant) -> list[BitpandaConfigEntry]:
+    return [
+        entry
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.state is ConfigEntryState.LOADED
+    ]
+
+
+def _refresh_cooldown(runtimes: list[PortfolioRuntime | PriceTrackerRuntime]) -> float:
+    """Seconds between two accepted `bitpanda.refresh` calls: the ticker
+    interval, never below REFRESH_MIN_COOLDOWN. A shorter cooldown would let
+    an automation drive ticker requests above the budgeted polling rate."""
+    seconds = REFRESH_MIN_COOLDOWN.total_seconds()
+    for runtime in runtimes:
+        if isinstance(runtime, PriceTrackerRuntime):
+            interval = runtime.tickers.update_interval
+            if interval is not None:
+                seconds = max(seconds, interval.total_seconds())
+    return seconds
+
+
+async def _async_refresh_now(runtime: PortfolioRuntime | PriceTrackerRuntime) -> bool:
+    """Refresh what `bitpanda.refresh` refreshes of one loaded entry -- the
+    Portfolio's portfolio, the Price Tracker's prices -- and say whether it
+    worked.
+
+    async_refresh, not the debounced async_request_refresh, whose outcome
+    never reaches the caller. It raises nothing either: DataUpdateCoordinator
+    catches every failure, logs it, and records it in last_update_success --
+    and a rejected key starts the reauth dialog as on any other refresh.
+    """
+    coordinator = (
+        runtime.portfolio if isinstance(runtime, PortfolioRuntime) else runtime.tickers
+    )
+    await coordinator.async_refresh()
+    return coordinator.last_update_success
+
+
+@callback
+def _async_register_refresh_service(hass: HomeAssistant) -> None:
+    """Register `bitpanda.refresh`, shared by both services (async_setup).
+
+    It refreshes every loaded entry, one after the other, and returns once
+    they are done. A call within the cooldown of the last accepted one is
+    ignored. The call fails with a translated error -- the frontend shows it
+    in the user's language, the log and automation traces in English -- when
+    no entry is loaded (a ServiceValidationError: there is nothing to
+    refresh), and when a refresh failed (a HomeAssistantError naming each
+    service whose refresh failed by its entry's title; the others are
+    refreshed all the same). A script or automation stops at a failed call
+    unless that step continues on error.
+    """
+    # None until the first accepted call: the monotonic clock can start near
+    # zero after a boot.
+    last_accepted: float | None = None
+
+    async def handle_refresh(call: ServiceCall) -> None:
+        nonlocal last_accepted
+        entries = _loaded_entries(hass)
+        if not entries:
+            # Before the cooldown: a refused call refreshed nothing, so it
+            # starts no cooldown either.
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="nothing_to_refresh"
+            )
+        now = monotonic()
+        if last_accepted is not None and now - last_accepted < _refresh_cooldown(
+            [entry.runtime_data for entry in entries]
+        ):
+            _LOGGER.debug("Refresh cooldown active, ignoring call")
+            return
+        # A refresh that fails has asked Bitpanda all the same: it starts the
+        # cooldown like any other. Set before the first await: a call that
+        # arrives while this one refreshes falls within the cooldown.
+        last_accepted = now
+        failed: list[str] = []
+        for entry in entries:
+            # An earlier refresh can take a while -- a long ticker round. An
+            # entry unloaded meanwhile, by a reload or a currency change, has
+            # lost its runtime data and has nothing to refresh; one reloaded
+            # meanwhile has new runtime data, hence it is read only here.
+            if entry.state is not ConfigEntryState.LOADED:
+                continue
+            if not await _async_refresh_now(entry.runtime_data):
+                failed.append(entry.title)
+        if failed:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="refresh_failed",
+                translation_placeholders={"services": ", ".join(failed)},
+            )
+
+    hass.services.async_register(DOMAIN, "refresh", handle_refresh)
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> bool:
+    """Unload an entry. `bitpanda.refresh` stays: it belongs to the
+    integration (async_setup), not to an entry."""
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> None:
+    """Forget what outlived the entry's setups: the Portfolio's store of
+    known wallets and staking reward marks, with its file
+    (portfolio_store.py); the Price Tracker's slow-interval repair issue
+    with the Price Tracker; the repair issue for the entities the upgrade
+    left alone with the Portfolio, whose entities they were; each repair
+    issue about what blocks the upgrade of a version 1 entry, once its cause
+    went with this entry -- and, with the last Bitpanda entry, the upgrade's
+    repair issues (migration.py).
+
+    The entry itself is left out when looking for another one: Home
+    Assistant 2025.5 has already dropped it from its entries when this
+    runs, and nothing here depends on that order.
+    """
+    if entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER:
+        async_delete_price_interval_issue(hass)
+    else:
+        migration.async_delete_not_migrated_issue(hass)
+        await async_remove_portfolio_store(hass, entry.entry_id)
+    migration.async_update_blocker_issues(hass, entry.entry_id)
+    if not any(
+        other.entry_id != entry.entry_id
+        for other in hass.config_entries.async_entries(DOMAIN)
+    ):
+        migration.async_delete_upgrade_issues(hass)
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, config_entry: BitpandaConfigEntry, device_entry: dr.DeviceEntry
+) -> bool:
+    """Whether "Delete" on a device page may remove `device_entry`.
+
+    Refused only where the device would come straight back: the Portfolio
+    device, and the wallet of an asset the Portfolio holds. Deleting a price
+    device stops tracking its asset.
+
+    A device is judged by every identifier this integration gave it, never
+    by one picked at random: it is the Portfolio device if any of them is
+    the Portfolio device's, a wallet if any of them names a wallet of this
+    entry, and a price device of every asset it names.
+
+    Both refusals raise a translated HomeAssistantError instead of returning
+    False. Home Assistant's device-removal websocket handler
+    (websocket_remove_config_entry_from_device in
+    components/config/device_registry.py) awaits this hook with no
+    try/except of its own, so the exception propagates to
+    ActiveConnection.async_handle_exception, which sends the error's message
+    and its translation_domain/translation_key/translation_placeholders to
+    the frontend, and the device page shows the message -- identical at
+    this integration's 2025.5.0 floor and in a 2026.9.3 test image. The
+    message is in the entry's language (see _async_refusal).
+    """
+    identifiers = device_identifiers(device_entry)
+    entry_id = config_entry.entry_id
+    if entry_type(config_entry) == ENTRY_TYPE_PRICE_TRACKER:
+        for identifier in identifiers:
+            asset_id = price_device_asset_id(entry_id, identifier)
+            if asset_id is not None:
+                async_remove_asset_from_group(hass, config_entry, asset_id)
+        return True
+    if portfolio_device_identifier(entry_id) in identifiers:
+        raise await _async_refusal(hass, config_entry, "portfolio_device_not_removable")
+    wallets = sorted(
+        asset_id
+        for identifier in identifiers
+        if (asset_id := wallet_device_asset_id(entry_id, identifier)) is not None
+    )
+    if not wallets or config_entry.state is not ConfigEntryState.LOADED:
+        return True
+    # The Price Tracker's entry returned above: this is the Portfolio's,
+    # loaded -- its first refresh succeeded, so `data` holds an answer.
+    runtime = cast(PortfolioRuntime, config_entry.runtime_data)
+    data = runtime.portfolio.data
+    for asset_id in wallets:
+        if asset_id not in data.held:
+            continue
+        record = data.assets.get(asset_id)
+        asset_label = (
+            asset_display_label(record)
+            if record is not None
+            # A wallet device always has a name (naming.wallet_device_name).
+            else cast(str, device_entry.name_by_user or device_entry.name)
+        )
+        raise await _async_refusal(
+            hass, config_entry, "held_wallet_not_removable", {"asset": asset_label}
+        )
+    # The wallet manager keeps a wallet until its asset has been missing from
+    # several refreshes, and would not create it again if the asset were
+    # bought back in that time. A reload starts it afresh, and its emptied
+    # group -- once the websocket handler's device removal above has run --
+    # follows at the reload's first reconcile.
+    hass.config_entries.async_schedule_reload(entry_id)
+    return True
+
+
+async def _async_refusal(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    key: str,
+    placeholders: dict[str, str] | None = None,
+) -> HomeAssistantError:
+    """A refusal to delete a device of `entry`, its message in the entry's
+    language.
+
+    The device page shows the error's message as it arrives, and Home
+    Assistant renders a translated exception's message in English only
+    (translation.async_get_exception_message, at 2025.5 as at 2026.9). So
+    the message is written here, from the `exceptions` translations, in the
+    entry's own language (language.py: chosen at setup or under Configure,
+    English for an entry without one) -- read when the refusal is written,
+    its translations loaded now if not cached yet; English stands in for a
+    missing text, its placeholders filled. The message keeps its trailing
+    full stop: it is the dialog's whole text, of several sentences, and Home
+    Assistant's habit of dropping it from a translated message would leave
+    the last one unfinished. The translation fields stay, for a frontend that
+    translates them itself. Without any text, Home Assistant renders its
+    English message as before.
+    """
+    translations = await async_get_translations(
+        hass, entry_language(entry), "exceptions", {DOMAIN}
+    )
+    message = translations.get(f"component.{DOMAIN}.exceptions.{key}.message")
+    if message:
+        if placeholders:
+            with suppress(KeyError):
+                message = message.format(**placeholders)
+    return HomeAssistantError(
+        *([message] if message else []),
+        translation_domain=DOMAIN,
+        translation_key=key,
+        translation_placeholders=placeholders,
+    )

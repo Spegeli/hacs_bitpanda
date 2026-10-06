@@ -36,7 +36,10 @@ This Code of Conduct applies within all community spaces — including issues, p
 
 ## Enforcement
 
-This is a small, single-maintainer project. Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the maintainer via [GitHub](https://github.com/Spegeli).
+This is a small project with a single maintainer, [@Spegeli](https://github.com/Spegeli), and GitHub has no private messages. To report abusive, harassing, or otherwise unacceptable behavior:
+
+- **In public:** mention @Spegeli where it happens, in the issue or pull request concerned. If there is no such place, open an issue and mention @Spegeli there.
+- **In private:** choose **Report content** in the ⋯ menu of the issue, pull request, or comment concerned, or **Block or report** on the person's profile. GitHub Support handles these reports.
 
 All complaints will be reviewed and investigated promptly and fairly. The maintainer is obligated to respect the privacy and security of the reporter of any incident.
 
@@ -70,8 +73,4 @@ Community leaders will follow these Community Impact Guidelines in determining t
 
 ## Attribution
 
-This Code of Conduct is adapted from the [Contributor Covenant](https://www.contributor-covenant.org), version 2.1, available at https://www.contributor-covenant.org/version/2/1/code_of_conduct.html.
-
-Community Impact Guidelines were inspired by [Mozilla's code of conduct enforcement ladder](https://github.com/mozilla/diversity).
-
-For answers to common questions about this code of conduct, see the FAQ at https://www.contributor-covenant.org/faq. Translations are available at https://www.contributor-covenant.org/translations.
+Adapted from the [Contributor Covenant](https://www.contributor-covenant.org), version 2.1; the Community Impact Guidelines were inspired by [Mozilla's code of conduct enforcement ladder](https://github.com/mozilla/diversity).

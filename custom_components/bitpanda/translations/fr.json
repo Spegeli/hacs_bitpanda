@@ -1,0 +1,582 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bitpanda",
+        "description": "Quel service voulez-vous configurer ? Chacun ne peut être ajouté qu'une seule fois.\n\n- **Bitpanda Portfolio** : votre compte – tout ce que vous détenez chez Bitpanda.\n- **Bitpanda Price Tracker** : les prix en direct des actifs que vous choisissez – même sans les détenir.",
+        "menu_options": {
+          "portfolio": "Bitpanda Portfolio (clé API requise)",
+          "price_tracker": "Bitpanda Price Tracker (aucune clé API requise)"
+        }
+      },
+      "portfolio": {
+        "title": "Bitpanda Portfolio",
+        "description": "Le Bitpanda Portfolio affiche votre compte Bitpanda dans Home Assistant : sa valeur totale, vos rendements et un wallet pour chaque actif que vous détenez. L'intégration crée elle-même les wallets et les retire lorsque vous ne détenez plus un actif – vous n'avez rien à ajouter ni à supprimer.\n\nPour cela, l'intégration a besoin d'une clé API. Voici comment la créer :\n\n1. Ouvrez [{api_key_url}]({api_key_url}) et créez une nouvelle clé API.\n2. Sélectionnez uniquement les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) ».\n3. Copiez la clé API et collez-la ci-dessous. Bitpanda ne l'affiche qu'une seule fois.\n\nL'intégration ne fait que lire avec cette clé API : elle ne peut ni passer d'ordres ni déplacer d'argent.\nLes clés API Bitpanda sont valables jusqu'à la date choisie lors de leur création, un an au plus ; ensuite, Home Assistant en demande une nouvelle.\nVous pouvez remplacer la clé API à tout moment : ouvrez le menu ⋮ de l'entrée « Bitpanda Portfolio » sur la page de l'intégration Bitpanda et choisissez « Reconfigurer ».",
+        "data": {
+          "api_key": "Clé API"
+        }
+      },
+      "currency": {
+        "title": "Bitpanda Portfolio",
+        "description": "La clé API fonctionne. Choisissez maintenant la devise de votre portefeuille, les notifications que vous souhaitez et la langue des titres de groupe et des messages.",
+        "sections": {
+          "currency": {
+            "name": "Devise",
+            "data": {
+              "currency": "Devise du portefeuille"
+            },
+            "data_description": {
+              "currency": "Bitpanda exprime toutes les valeurs de votre portefeuille dans cette devise. Pour la modifier plus tard, ouvrez le menu ⋮ de l'entrée « Bitpanda Portfolio » sur la page de l'intégration Bitpanda et choisissez « Reconfigurer ». Un changement supprime tous les capteurs du Portfolio avec leur historique et les recrée dans la nouvelle devise."
+            }
+          },
+          "notifications": {
+            "name": "Notifications",
+            "description": "Vous pourrez modifier les paramètres de notification plus tard avec « Configurer » (⚙) sur l'entrée « Bitpanda Portfolio » de la page de l'intégration Bitpanda.",
+            "data": {
+              "notify_new_wallets": "Signaler les nouveaux wallets",
+              "notify_staking_rewards": "Signaler les récompenses de staking"
+            },
+            "data_description": {
+              "notify_new_wallets": "Lorsqu'un nouveau wallet apparaît dans le Portfolio, par exemple après l'achat d'un actif, Home Assistant affiche une notification dans « Notifications ». Les wallets présents lors de la configuration du Portfolio ne comptent pas. Les automatisations peuvent réagir à l'événement `bitpanda_wallet_added` dans tous les cas.",
+              "notify_staking_rewards": "Lorsque Bitpanda verse une récompense de staking, Home Assistant affiche une notification dans « Notifications » : une par actif, que le versement suivant remplace. Les versements manqués pendant que Home Assistant était éteint sont additionnés dans une seule notification par actif. Seuls les actifs dont le capteur « Solde (staking) » est activé comptent. Les automatisations peuvent réagir à l'événement `bitpanda_staking_reward_received` dans tous les cas."
+            }
+          },
+          "language": {
+            "name": "Langue",
+            "data": {
+              "language": "Langue des titres de groupe et des messages"
+            },
+            "data_description": {
+              "language": "Les titres des groupes, comme « Cryptomonnaies », s'affichent dans cette langue, tout comme le message qui explique pourquoi un appareil ne peut pas être supprimé et les notifications que vous choisissez dans la section « Notifications ». Les noms des capteurs suivent la langue du système de Home Assistant, les dialogues et les noms d'attributs la langue de votre profil utilisateur. Vous pourrez modifier cette langue plus tard avec « Configurer » (⚙) sur l'entrée « Bitpanda Portfolio » de la page de l'intégration Bitpanda."
+            }
+          }
+        }
+      },
+      "old_statistics": {
+        "title": "Anciennes statistiques dans une autre devise",
+        "description": "Home Assistant conserve encore des statistiques à long terme d'un ancien Bitpanda Portfolio en {old}. Vous avez choisi {new} pour cette configuration. Un capteur dont les statistiques sont dans une autre devise n'enregistre aucune nouvelle statistique tant que les anciennes existent.\n\n- **Supprimer et configurer :** supprime l'historique et les statistiques à long terme de tous les anciens capteurs du Portfolio – valeurs, rendements et wallets – et configure le Portfolio en {new}. Ses statistiques repartent alors de zéro. Les données supprimées ne peuvent pas être restaurées.\n- **Conserver et configurer :** configure le Portfolio en {new} et ne supprime rien. Les capteurs ayant d'anciennes statistiques n'enregistrent alors plus aucune statistique, pas même en {new}, tant que vous ne supprimez pas vous-même ces anciennes statistiques ; la section [Troubleshooting]({troubleshooting_url}) du README explique comment.\n- **Annuler :** ne configure rien et ne supprime rien, par exemple pour choisir une autre devise.",
+        "menu_options": {
+          "delete_statistics": "Supprimer et configurer",
+          "keep_statistics": "Conserver et configurer",
+          "cancel_setup": "Annuler"
+        }
+      },
+      "price_tracker": {
+        "title": "Bitpanda Price Tracker",
+        "description": "Le Bitpanda Price Tracker crée toujours un capteur de prix en EUR pour chaque actif suivi. En option, choisissez ici des devises supplémentaires dans lesquelles les prix seront aussi affichés.\n\nVous pourrez aussi choisir ou modifier les devises supplémentaires et la langue plus tard avec « Configurer » (⚙) sur l'entrée « Bitpanda Price Tracker » de la page de l'intégration Bitpanda. Après la configuration initiale, ajoutez des actifs avec « Ajouter un suivi de prix » sur la même entrée.",
+        "sections": {
+          "currencies": {
+            "name": "Devises",
+            "data": {
+              "extra_currencies": "En plus de l'EUR"
+            },
+            "data_description": {
+              "extra_currencies": "Chaque devise sélectionnée ajoute un capteur de plus par actif, converti avec les taux de référence quotidiens de la Banque centrale européenne."
+            }
+          },
+          "language": {
+            "name": "Langue",
+            "data": {
+              "language": "Langue des titres de groupe"
+            },
+            "data_description": {
+              "language": "Les titres des groupes, comme « Cryptomonnaies », s'affichent dans cette langue. Les noms des capteurs suivent la langue du système de Home Assistant, les dialogues et les noms d'attributs la langue de votre profil utilisateur."
+            }
+          }
+        }
+      },
+      "reauth_confirm": {
+        "title": "Nouvelle clé API Bitpanda requise",
+        "description": "Bitpanda a refusé la clé API enregistrée. Elle a peut-être expiré, ou elle est antérieure aux autorisations dont cette version a besoin. Vos capteurs sont conservés.\n\nPour créer une nouvelle clé API :\n\n1. Ouvrez [{api_key_url}]({api_key_url}) et créez une nouvelle clé API.\n2. Sélectionnez uniquement les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) ».\n3. Copiez la clé API et collez-la ci-dessous. Bitpanda ne l'affiche qu'une seule fois.\n\nL'intégration ne fait que lire avec cette clé API : elle ne peut ni passer d'ordres ni déplacer d'argent.\nLes clés API Bitpanda sont valables jusqu'à la date choisie lors de leur création, un an au plus ; ensuite, Home Assistant en demande une nouvelle.",
+        "data": {
+          "api_key": "Clé API"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigurer Bitpanda Portfolio",
+        "description": "Remplacez la clé API enregistrée, changez de devise, ou les deux.",
+        "data": {
+          "api_key": "Nouvelle clé API",
+          "currency": "Devise"
+        },
+        "data_description": {
+          "api_key": "Laissez le champ vide pour conserver la clé API actuelle.\nUne nouvelle clé API créée sur [{api_key_url}]({api_key_url}) doit avoir les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) ».\nL'intégration ne fait que lire avec cette clé API : elle ne peut ni passer d'ordres ni déplacer d'argent.",
+          "currency": "Changer de devise supprime tous les capteurs du Portfolio, y compris leur historique ; vous le confirmerez à l'étape suivante."
+        }
+      },
+      "confirm_currency": {
+        "title": "Changer de devise ?",
+        "description": "Passer de {old} à {new} supprime tous les capteurs du Portfolio, y compris leur historique, puis les recrée dans la nouvelle devise. L'historique supprimé ne peut pas être restauré ; la devise elle-même peut être modifiée à nouveau à tout moment.",
+        "menu_options": {
+          "change_currency": "Changer de devise",
+          "change_key_and_currency": "Enregistrer la nouvelle clé API et changer de devise",
+          "save_key_only": "Enregistrer uniquement la nouvelle clé API",
+          "cancel_currency_change": "Annuler"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Bitpanda a refusé cette clé API. Elle est peut-être incomplète, supprimée de votre compte Bitpanda ou expirée, ou elle ne possède aucune des autorisations « Soldes », « Transactions » et « Earn (Lecture) ». Vérifiez la clé API ou créez-en une nouvelle avec les trois.",
+      "missing_scopes": "Autorisations de cette clé API : « Soldes » {balance}, « Transactions » {transaction}, « Earn (Lecture) » {earn}. Il est impossible d'ajouter des autorisations à une clé API existante. Créez-en une nouvelle avec les trois.",
+      "rate_limited": "Trop de requêtes. Patientez un instant, puis réessayez.",
+      "cannot_connect": "Impossible de joindre Bitpanda. Réessayez plus tard.",
+      "unknown": "Erreur inattendue"
+    },
+    "abort": {
+      "all_configured": "Les deux services sont déjà configurés.",
+      "already_configured": "Ce service est déjà configuré.",
+      "already_in_progress": "Ce service est déjà en cours de configuration dans une autre boîte de dialogue.",
+      "reauth_successful": "La clé API a été mise à jour.",
+      "reconfigure_successful": "La clé API a été remplacée.",
+      "currency_changed": "La devise a été changée. Les capteurs du Portfolio sont recréés.",
+      "no_changes": "Rien n'a été modifié.",
+      "no_reconfigure": "Le Bitpanda Price Tracker n'a pour l'instant rien à reconfigurer. Modifiez ses devises supplémentaires et la langue des titres de groupe avec « Configurer » (⚙) sur la même entrée.",
+      "unload_failed": "Le Portfolio n'a pas pu être arrêté : la devise n'a donc pas été changée et rien n'a été supprimé. Redémarrez Home Assistant et réessayez.",
+      "setup_cancelled": "Le Portfolio n'a pas été configuré, et rien n'a été supprimé."
+    }
+  },
+  "options": {
+    "step": {
+      "price_tracker": {
+        "title": "Options du Price Tracker",
+        "sections": {
+          "currencies": {
+            "name": "Devises",
+            "data": {
+              "extra_currencies": "En plus de l'EUR"
+            },
+            "data_description": {
+              "extra_currencies": "Chaque devise sélectionnée ajoute un capteur de plus par actif, converti avec les taux de référence quotidiens de la Banque centrale européenne.\nRetirer une devise retire ces capteurs ; leur historique est conservé et revient lorsque vous sélectionnez à nouveau la devise."
+            }
+          },
+          "language": {
+            "name": "Langue",
+            "data": {
+              "language": "Langue des titres de groupe"
+            },
+            "data_description": {
+              "language": "Les titres des groupes, comme « Cryptomonnaies », s'affichent dans cette langue. Les noms des capteurs suivent la langue du système de Home Assistant, les dialogues et les noms d'attributs la langue de votre profil utilisateur."
+            }
+          }
+        }
+      },
+      "portfolio": {
+        "title": "Options du Portfolio",
+        "description": "Pour remplacer la clé API ou changer de devise, ouvrez le menu ⋮ de l'entrée « Bitpanda Portfolio » sur la page de l'intégration Bitpanda et choisissez « Reconfigurer ».",
+        "sections": {
+          "notifications": {
+            "name": "Notifications",
+            "data": {
+              "notify_new_wallets": "Signaler les nouveaux wallets",
+              "notify_staking_rewards": "Signaler les récompenses de staking"
+            },
+            "data_description": {
+              "notify_new_wallets": "Lorsqu'un nouveau wallet apparaît dans le Portfolio, par exemple après l'achat d'un actif, Home Assistant affiche une notification dans « Notifications ». Les wallets présents lors de la configuration du Portfolio ne comptent pas. Les automatisations peuvent réagir à l'événement `bitpanda_wallet_added` dans tous les cas.",
+              "notify_staking_rewards": "Lorsque Bitpanda verse une récompense de staking, Home Assistant affiche une notification dans « Notifications » : une par actif, que le versement suivant remplace. Les versements manqués pendant que Home Assistant était éteint sont additionnés dans une seule notification par actif. Seuls les actifs dont le capteur « Solde (staking) » est activé comptent. Les automatisations peuvent réagir à l'événement `bitpanda_staking_reward_received` dans tous les cas."
+            }
+          },
+          "language": {
+            "name": "Langue",
+            "data": {
+              "language": "Langue des titres de groupe et des messages"
+            },
+            "data_description": {
+              "language": "Les titres des groupes, comme « Cryptomonnaies », s'affichent dans cette langue, tout comme le message qui explique pourquoi un appareil ne peut pas être supprimé et les notifications que vous choisissez dans la section « Notifications ». Les noms des capteurs suivent la langue du système de Home Assistant, les dialogues et les noms d'attributs la langue de votre profil utilisateur."
+            }
+          }
+        }
+      }
+    }
+  },
+  "config_subentries": {
+    "price_group": {
+      "initiate_flow": {
+        "user": "Ajouter un suivi de prix"
+      },
+      "entry_type": "Groupe de suivi de prix",
+      "step": {
+        "user": {
+          "title": "Ajouter un suivi de prix",
+          "description": "Un suivi de prix affiche le prix d'un actif – en EUR et dans les devises supplémentaires choisies. Choisissez d'abord le type d'actif.",
+          "data": {
+            "category": "Type d'actif"
+          },
+          "data_description": {
+            "category": "L'étape suivante liste tous les actifs de ce type que vous ne suivez pas encore. Les grandes listes, comme les actions, mettent quelques secondes à se charger la première fois."
+          }
+        },
+        "asset": {
+          "title": "Ajouter un suivi de prix",
+          "description": "Choisissez l'actif dont vous voulez suivre le prix.",
+          "data": {
+            "asset": "Actif"
+          },
+          "data_description": {
+            "asset": "Tapez un nom ou un symbole pour rechercher dans la liste. Pour revenir aux types d'actifs, cliquez sur « Valider » sans rien choisir."
+          }
+        },
+        "security": {
+          "title": "Ajouter un suivi de prix",
+          "description": "Choisissez l'actif dont vous voulez suivre le prix.",
+          "data": {
+            "asset": "Actif"
+          },
+          "data_description": {
+            "asset": "Tapez un nom, un symbole ou un ISIN pour rechercher dans la liste. Pour revenir aux types d'actifs, cliquez sur « Valider » sans rien choisir."
+          }
+        }
+      },
+      "error": {
+        "no_assets_available": "Tous les actifs de ce type sont déjà suivis.",
+        "unknown_asset": "Choisissez un actif dans la liste.",
+        "rate_limited": "Trop de requêtes. Patientez un instant, puis réessayez.",
+        "cannot_connect": "Impossible de joindre Bitpanda. Réessayez plus tard."
+      },
+      "abort": {
+        "already_configured": "Cet actif est déjà suivi.",
+        "asset_added": "{asset} est désormais suivi dans le groupe {group}."
+      }
+    },
+    "wallet_group": {
+      "initiate_flow": {
+        "user": "Ajouter un groupe de wallets"
+      },
+      "entry_type": "Groupe de wallets",
+      "step": {}
+    }
+  },
+  "selector": {
+    "asset_category": {
+      "options": {
+        "crypto": "Crypto",
+        "stock": "Actions",
+        "etf": "ETF",
+        "etc": "ETC (matières premières cotées en bourse)",
+        "index": "Indices crypto",
+        "metal": "Métaux précieux"
+      }
+    },
+    "asset_group": {
+      "options": {
+        "crypto": "Cryptomonnaies",
+        "stock": "Actions",
+        "etf": "ETF",
+        "etc": "ETC",
+        "index": "Indices crypto",
+        "metal": "Métaux précieux",
+        "other": "Autres"
+      }
+    },
+    "currency": {
+      "options": {
+        "chf": "Franc suisse (CHF)",
+        "czk": "Couronne tchèque (CZK)",
+        "dkk": "Couronne danoise (DKK)",
+        "eur": "Euro (EUR)",
+        "gbp": "Livre sterling (GBP)",
+        "huf": "Forint hongrois (HUF)",
+        "nok": "Couronne norvégienne (NOK)",
+        "pln": "Zloty polonais (PLN)",
+        "ron": "Leu roumain (RON)",
+        "sek": "Couronne suédoise (SEK)",
+        "try": "Livre turque (TRY)",
+        "usd": "Dollar américain (USD)"
+      }
+    },
+    "language": {
+      "options": {
+        "de": "Deutsch",
+        "en": "English",
+        "es": "Español",
+        "fr": "Français",
+        "it": "Italiano",
+        "nl": "Nederlands",
+        "pl": "Polski"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "total_value": {
+        "name": "Valeur totale"
+      },
+      "cash": {
+        "name": "Liquidités"
+      },
+      "cash_plus": {
+        "name": "Cash Plus",
+        "state_attributes": {
+          "eur": {
+            "name": "EUR"
+          },
+          "usd": {
+            "name": "USD"
+          },
+          "gbp": {
+            "name": "GBP"
+          }
+        }
+      },
+      "return_day": {
+        "name": "Rendement 1 jour"
+      },
+      "return_week": {
+        "name": "Rendement 1 semaine"
+      },
+      "return_month": {
+        "name": "Rendement 1 mois"
+      },
+      "return_six_month": {
+        "name": "Rendement 6 mois"
+      },
+      "return_year": {
+        "name": "Rendement 1 an"
+      },
+      "wallet": {
+        "name": "Solde (disponible)",
+        "state_attributes": {
+          "asset": {
+            "name": "Actif : symbole"
+          },
+          "asset_name": {
+            "name": "Actif : nom"
+          },
+          "asset_isin": {
+            "name": "Actif : ISIN"
+          },
+          "units": {
+            "name": "Actif : quantité"
+          }
+        }
+      },
+      "staking": {
+        "name": "Solde (staking)",
+        "state_attributes": {
+          "asset": {
+            "name": "Actif : symbole"
+          },
+          "asset_name": {
+            "name": "Actif : nom"
+          },
+          "asset_isin": {
+            "name": "Actif : ISIN"
+          },
+          "units": {
+            "name": "Actif : quantité"
+          },
+          "apr_percent": {
+            "name": "Récompenses : taux annuel (APR %)"
+          },
+          "rewards_gross": {
+            "name": "Récompenses : brut (quantité)"
+          },
+          "rewards_fee": {
+            "name": "Récompenses : frais (quantité)"
+          },
+          "rewards_net": {
+            "name": "Récompenses : net (quantité)"
+          },
+          "rewards_net_value": {
+            "name": "Récompenses : valeur nette (actuelle)"
+          },
+          "rewards_count": {
+            "name": "Récompenses : nombre de versements"
+          },
+          "rewards_last_at": {
+            "name": "Récompenses : dernier versement"
+          }
+        }
+      },
+      "wallet_total": {
+        "name": "Solde (total)",
+        "state_attributes": {
+          "asset": {
+            "name": "Actif : symbole"
+          },
+          "asset_name": {
+            "name": "Actif : nom"
+          },
+          "asset_isin": {
+            "name": "Actif : ISIN"
+          },
+          "units": {
+            "name": "Actif : quantité"
+          },
+          "average_buy_price": {
+            "name": "Position : prix d'achat moyen"
+          },
+          "invested_amount": {
+            "name": "Position : montant investi"
+          },
+          "total_return": {
+            "name": "Position : gain/perte"
+          },
+          "total_return_percent": {
+            "name": "Position : gain/perte en %"
+          }
+        }
+      },
+      "price": {
+        "state_attributes": {
+          "asset": {
+            "name": "Actif : symbole"
+          },
+          "asset_name": {
+            "name": "Actif : nom"
+          },
+          "asset_isin": {
+            "name": "Actif : ISIN"
+          },
+          "change_24h_pct": {
+            "name": "24 h : variation en %"
+          },
+          "price_24h_ago": {
+            "name": "24 h : prix précédent"
+          },
+          "conversion": {
+            "name": "Conversion : statut",
+            "state": {
+              "no_rate": "Aucun taux de change chargé pour l'instant"
+            }
+          },
+          "conversion_rate": {
+            "name": "Conversion : taux"
+          },
+          "rate_date": {
+            "name": "Conversion : date"
+          },
+          "rate_source": {
+            "name": "Conversion : source"
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "portfolio_device_not_removable": {
+      "message": "L'appareil « Portfolio » fait partie du service Bitpanda Portfolio et ne peut pas être supprimé seul. Pour le retirer, supprimez l'entrée « Bitpanda Portfolio » sur la page de l'intégration Bitpanda (⋮ → « Supprimer »)."
+    },
+    "held_wallet_not_removable": {
+      "message": "Tant que vous détenez {asset}, ce wallet ne peut pas être supprimé – il serait aussitôt recréé à la prochaine actualisation. Dès que vous ne détenez plus {asset}, il est supprimé automatiquement."
+    },
+    "api_key_rejected": {
+      "message": "Bitpanda a refusé la clé API."
+    },
+    "update_failed": {
+      "message": "Impossible de récupérer les données de Bitpanda."
+    },
+    "update_failed_timeout": {
+      "message": "Impossible de récupérer les données de Bitpanda : {path} n'a pas répondu à temps."
+    },
+    "update_failed_connection": {
+      "message": "Impossible de récupérer les données de Bitpanda : la connexion pour {path} a échoué."
+    },
+    "update_failed_http_status": {
+      "message": "Impossible de récupérer les données de Bitpanda : {path} a répondu avec le statut HTTP {status}."
+    },
+    "update_failed_rate_limited": {
+      "message": "Impossible de récupérer les données de Bitpanda : trop de requêtes pour {path}."
+    },
+    "update_failed_unreadable": {
+      "message": "Impossible de récupérer les données de Bitpanda : la réponse de {path} est illisible."
+    },
+    "update_failed_incomplete_listing": {
+      "message": "Impossible de récupérer les données de Bitpanda : la liste renvoyée par {path} est incomplète."
+    },
+    "history_unavailable": {
+      "message": "Impossible de récupérer l'historique du Portfolio."
+    },
+    "prices_rate_limited": {
+      "message": "Bitpanda a reçu trop de demandes de prix. Nouvelle tentative plus tard."
+    },
+    "no_prices": {
+      "message": "Aucun prix n'a pu être récupéré auprès de Bitpanda."
+    },
+    "ecb_rates_failed": {
+      "message": "Impossible de récupérer les taux de change de la BCE."
+    },
+    "ecb_rates_failed_timeout": {
+      "message": "Impossible de récupérer les taux de change de la BCE : la BCE n'a pas répondu à temps."
+    },
+    "ecb_rates_failed_connection": {
+      "message": "Impossible de récupérer les taux de change de la BCE : la connexion à la BCE a échoué."
+    },
+    "ecb_rates_failed_http_status": {
+      "message": "Impossible de récupérer les taux de change de la BCE : la BCE a répondu avec le statut HTTP {status}."
+    },
+    "ecb_rates_failed_unreadable": {
+      "message": "Impossible de récupérer les taux de change de la BCE : la réponse de la BCE est illisible."
+    },
+    "nothing_to_refresh": {
+      "message": "Il n'y a rien à actualiser : ni Bitpanda Portfolio ni Bitpanda Price Tracker n'est chargé."
+    },
+    "refresh_failed": {
+      "message": "Échec de l'actualisation : {services}."
+    },
+    "wallet_added_title": {
+      "message": "Nouveau wallet Bitpanda"
+    },
+    "wallet_added": {
+      "message": "Le Portfolio a ajouté un nouveau wallet : **[{wallet}]({link})** dans le groupe {group}."
+    },
+    "wallet_added_sensors_disabled": {
+      "message": "Ses capteurs sont désactivés. Vous pouvez les activer sur sa [page d'appareil]({link})."
+    },
+    "staking_reward_title": {
+      "message": "Nouvelle récompense de staking Bitpanda"
+    },
+    "staking_reward": {
+      "message": "**[{wallet}]({link})** a reçu une récompense de staking de **{net} {symbol}**."
+    },
+    "staking_rewards": {
+      "message": "**[{wallet}]({link})** a reçu {count} récompenses de staking, au total **{net} {symbol}**."
+    },
+    "staking_reward_value": {
+      "message": "Valeur actuelle : environ {value} {currency}."
+    }
+  },
+  "issues": {
+    "renamed_entities": {
+      "title": "Migration de Bitpanda : ID d'entité renommés",
+      "description": "La migration a scindé les appareils « Bitpanda Wallets » et « Bitpanda Price Tracker » : chaque wallet et chaque actif suivi a désormais son propre appareil, nommé d'après l'actif. Les chiffres de votre compte se trouvent sur l'appareil « Portfolio ». Les ID d'entité suivent les noms des appareils : ces ID ont donc été renommés, et leur historique les a suivis. Vérifiez les tableaux de bord, automatisations et scripts qui utilisent encore les anciens ID :\n\n{entities}"
+    },
+    "entities_not_migrated": {
+      "title": "Migration de Bitpanda : entités non migrées",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Supprimer les entités non migrées ?",
+            "description": "La migration a laissé ces entités telles quelles ; elles ne sont plus actualisées. Il peut s'agir :\n\n- de wallets et de prix d'actifs que la nouvelle API de Bitpanda ne répertorie pas, du moins pas encore. Tant que vous détenez encore un tel actif, le Portfolio crée de lui-même un nouveau wallet pour cet actif, au plus tard un jour après que la nouvelle API l'a répertorié.\n- de wallets fiat : le capteur « Liquidités » du Portfolio regroupe désormais tous les soldes fiat.\n- de prix dans des devises que Bitpanda ne propose plus.\n\nLes journaux de Home Assistant indiquent la raison pour chaque entité.\n\n{entities}\n\nCliquez sur « Supprimer » pour supprimer ces entités ainsi que chaque ancien appareil qui n'a alors plus aucune entité. Leur historique est conservé jusqu'à ce que Home Assistant supprime l'ancien historique, par défaut au bout de 10 jours. Si vous souhaitez les conserver pour l'instant, fermez cette boîte de dialogue.",
+            "submit": "Supprimer"
+          }
+        }
+      }
+    },
+    "currency_dropped": {
+      "title": "Migration de Bitpanda : devise du Portfolio passée en EUR",
+      "description": "{currency}, la devise de votre entrée Bitpanda avant la migration, n'est pas disponible pour Bitpanda Portfolio : il exprime donc désormais toutes ses valeurs en EUR. Pour choisir une autre devise, ouvrez le menu ⋮ de l'entrée « Bitpanda Portfolio » sur la page de l'intégration Bitpanda et choisissez « Reconfigurer »."
+    },
+    "price_tracker_exists": {
+      "title": "Migration de Bitpanda : prix à ajouter au Price Tracker",
+      "description": "Un Bitpanda Price Tracker était déjà configuré lors de la migration : les prix que suivait votre ancienne entrée Bitpanda n'y ont donc pas été transférés. Pour continuer à les suivre, ajoutez ces actifs avec « Ajouter un suivi de prix » sur l'entrée « Bitpanda Price Tracker » de la page de l'intégration Bitpanda :\n\n{assets}"
+    },
+    "home_assistant_too_old": {
+      "title": "La migration de Bitpanda nécessite Home Assistant {minimum}",
+      "description": "L'entrée Bitpanda d'avant la migration ne peut être migrée qu'à partir de Home Assistant {minimum}, qui conserve l'historique des capteurs renommés. Cette installation utilise Home Assistant {version} : rien n'a donc été modifié. Mettez à jour Home Assistant ; l'entrée sera migrée au prochain démarrage."
+    },
+    "portfolio_exists": {
+      "title": "Migration de Bitpanda bloquée : un Bitpanda Portfolio est déjà configuré",
+      "description": "L'entrée Bitpanda « {entry} » d'avant la migration ne peut pas être migrée : elle deviendrait un second Bitpanda Portfolio à côté de « {portfolio} », et un seul peut être configuré. Elle n'a pas été modifiée. Supprimez l'une des deux entrées sur la page de l'intégration Bitpanda (⋮ → « Supprimer »). Si vous conservez « {entry} », redémarrez ensuite Home Assistant pour la migrer."
+    },
+    "slow_price_interval": {
+      "title": "Bitpanda Price Tracker : prix actualisés seulement toutes les {minutes} minutes",
+      "description": "Le Bitpanda Price Tracker suit {count} actifs et a besoin d'une requête par actif à chaque actualisation. Pour respecter son budget de requêtes, il n'actualise leurs prix que toutes les {minutes} minutes. Suivez moins d'actifs pour des mises à jour plus rapides : supprimez l'appareil d'un actif (⋮ sur sa page d'appareil) ou tout un groupe (⋮ sur la page de l'intégration Bitpanda)."
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Actualiser",
+      "description": "Récupère maintenant le portefeuille et les prix auprès de Bitpanda et attend que les deux soient terminés. Ignorée pendant le délai d'attente après le dernier appel ; échoue si une actualisation échoue."
+    }
+  }
+}

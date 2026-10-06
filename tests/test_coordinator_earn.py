@@ -1,0 +1,236 @@
+"""Tests for reward aggregation."""
+import asyncio
+import base64
+from datetime import timedelta
+from unittest.mock import Mock
+
+import pytest
+from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.update_coordinator import UpdateFailed
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
+from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client
+
+from custom_components.bitpanda.api import (
+    BitpandaApiClient,
+    BitpandaApiError,
+    BitpandaAuthError,
+)
+from custom_components.bitpanda.const import API_BASE_URL, DOMAIN
+from custom_components.bitpanda.portfolio_coordinator import RewardsCoordinator
+from custom_components.bitpanda.portfolio_model import Holding, PortfolioData
+from custom_components.bitpanda.portfolio_sensor import StakingSensor
+
+
+def _reward(asset_id, gross, fee, credited_at, owner="staking-service"):
+    return {
+        "operation_id": f"op-{credited_at}-{asset_id}",
+        "operation_type": "reward",
+        "transactions": [
+            {
+                "asset_id": asset_id,
+                "wallet_owner": owner,
+                "asset_amount": {"value": gross},
+                "fee_amount": {"value": fee},
+                "credited_at": credited_at,
+            }
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# RewardsCoordinator._async_update_data
+#
+# DataUpdateCoordinator.__init__ only stores `hass`, so hass=None/entry=None
+# is enough to drive _async_update_data() directly, without a running Home
+# Assistant instance.
+# ---------------------------------------------------------------------------
+
+
+class _FakeClient:
+    """Fake API client with a controllable async_get_operations."""
+
+    def __init__(self, operations=None, error=None):
+        self._operations = operations or []
+        self._error = error
+        self.calls = 0
+
+    async def async_get_operations(self):
+        self.calls += 1
+        if self._error is not None:
+            raise self._error
+        return self._operations
+
+
+async def test_rewards_coordinator_returns_totals_from_operations():
+    client = _FakeClient(
+        operations=[_reward("vsn", "1", "0", "2026-09-22T17:16:35Z")]
+    )
+    coordinator = RewardsCoordinator(hass=None, entry=None, client=client)
+
+    data = await coordinator._async_update_data()
+
+    assert data["vsn"].gross == 1.0
+
+
+async def test_the_rewards_coordinator_calls_back_after_each_successful_refresh_only(hass):
+    """The announcer's call (announcements.RewardAnnouncer) comes after a
+    refresh that succeeded, never after a failed one."""
+    entry = MockConfigEntry(domain=DOMAIN, data={"api_key": "key", "currency": "EUR"})
+    entry.add_to_hass(hass)
+    client = _FakeClient(operations=[_reward("vsn", "1", "0", "2026-09-22T17:16:35Z")])
+    coordinator = RewardsCoordinator(hass, entry, client)
+    coordinator.on_refreshed = Mock()
+
+    await coordinator.async_refresh()
+    assert coordinator.on_refreshed.call_count == 1
+
+    client._error = BitpandaApiError("down", path="/operations")
+    await coordinator.async_refresh()
+    assert coordinator.on_refreshed.call_count == 1
+
+
+async def test_the_callback_schedules_no_refresh_without_a_listener(hass, freezer):
+    """The call is no listener: without a Staking sensor listening, the
+    whole history is not read again an hour later (issue #13)."""
+    entry = MockConfigEntry(domain=DOMAIN, data={"api_key": "key", "currency": "EUR"})
+    entry.add_to_hass(hass)
+    client = _FakeClient(operations=[_reward("vsn", "1", "0", "2026-09-22T17:16:35Z")])
+    coordinator = RewardsCoordinator(hass, entry, client)
+    coordinator.on_refreshed = Mock()
+
+    await coordinator.async_refresh()
+    freezer.tick(timedelta(hours=2))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert (client.calls, coordinator.on_refreshed.call_count) == (1, 1)
+
+
+async def test_rewards_coordinator_raises_config_entry_auth_failed_on_401():
+    """Setup requires every scope, so a 401 here means the key
+    expired, was revoked, or predates that requirement (a migrated legacy
+    key). Every case is answered by a new key, so this must raise
+    ConfigEntryAuthFailed and let Home Assistant start the reauth flow --
+    not degrade silently, which is what this coordinator used to do.
+    """
+    client = _FakeClient(error=BitpandaAuthError("Unauthorized for /operations"))
+    coordinator = RewardsCoordinator(hass=None, entry=None, client=client)
+
+    with pytest.raises(ConfigEntryAuthFailed) as excinfo:
+        await coordinator._async_update_data()
+    assert (excinfo.value.translation_domain, excinfo.value.translation_key) == (
+        "bitpanda", "api_key_rejected"
+    )
+
+
+async def test_rewards_coordinator_raises_update_failed_on_other_errors():
+    client = _FakeClient(
+        error=BitpandaApiError(
+            "/operations repeated a page cursor; its listing is incomplete",
+            kind="incomplete_listing",
+            path="/operations",
+        )
+    )
+    coordinator = RewardsCoordinator(hass=None, entry=None, client=client)
+
+    with pytest.raises(UpdateFailed) as excinfo:
+        await coordinator._async_update_data()
+    assert (
+        excinfo.value.translation_domain,
+        excinfo.value.translation_key,
+        excinfo.value.translation_placeholders,
+    ) == ("bitpanda", "update_failed_incomplete_listing", {"path": "/operations"})
+
+
+# ---------------------------------------------------------------------------
+# A paging failure reaches the wallet sensor as absent or stale rewards --
+# never as totals recounted over whichever pages happened to arrive. Driven
+# through the real client, the real coordinator refresh and the real sensor.
+# ---------------------------------------------------------------------------
+
+# Carries milliseconds already, so the /operations cursor workaround cannot
+# repair a server that keeps handing it back: the pager must raise.
+_REPEATING_CURSOR = base64.b64encode(b"2026-09-09T18:31:22.080Z").decode("ascii")
+
+
+def _register_repeating_operations(mocker, operations: list[dict]) -> None:
+    page = {
+        "data": operations,
+        "next_cursor": _REPEATING_CURSOR,
+        "has_next_page": True,
+    }
+    mocker.get(f"{API_BASE_URL}/operations?cursor={_REPEATING_CURSOR}", json=page)
+    mocker.get(f"{API_BASE_URL}/operations", json=page)
+
+
+class _Coordinator:
+    def __init__(self, data):
+        self.data = data
+        self.last_update_success = True
+        self.data_available = True
+
+
+def _vsn_staking_sensor(rewards) -> StakingSensor:
+    portfolio = _Coordinator(
+        PortfolioData(
+            holdings={"vsn": Holding(asset_id="vsn", balance=100.0, available=0.0, value=4.0)}
+        )
+    )
+    return StakingSensor(
+        portfolio, _Coordinator(None), rewards, "entry1", "EUR",
+        {"id": "vsn", "symbol": "VSN"},
+    )
+
+
+@pytest.mark.timeout(10)
+async def test_rewards_paging_failure_leaves_rewards_attributes_absent(hass):
+    entry = MockConfigEntry(domain=DOMAIN, data={"api_key": "key", "currency": "EUR"})
+    entry.add_to_hass(hass)
+
+    with mock_aiohttp_client() as mocker:
+        _register_repeating_operations(
+            mocker, [_reward("vsn", "20.68994769", "4.13798954", "2026-09-22T17:16:35Z")]
+        )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            rewards = RewardsCoordinator(hass, entry, BitpandaApiClient("key", session))
+            await rewards.async_refresh()
+
+    assert rewards.last_update_success is False
+    assert rewards.data is None
+    attrs = _vsn_staking_sensor(rewards).extra_state_attributes
+    assert attrs["units"] == 100.0
+    assert not [key for key in attrs if key.startswith("rewards_")]
+
+
+@pytest.mark.timeout(10)
+async def test_rewards_paging_failure_keeps_the_last_complete_totals(hass):
+    """Stale is honest; a recount over a partial history is not."""
+    entry = MockConfigEntry(domain=DOMAIN, data={"api_key": "key", "currency": "EUR"})
+    entry.add_to_hass(hass)
+    older = _reward("vsn", "20.67399483", "4.13479897", "2026-09-15T17:16:25Z")
+    newer = _reward("vsn", "20.68994769", "4.13798954", "2026-09-22T17:16:35Z")
+
+    with mock_aiohttp_client() as mocker:
+        mocker.get(
+            f"{API_BASE_URL}/operations",
+            json={"data": [newer, older], "has_next_page": False},
+        )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            rewards = RewardsCoordinator(hass, entry, BitpandaApiClient("key", session))
+            await rewards.async_refresh()
+            assert rewards.last_update_success is True
+            assert rewards.data["vsn"].count == 2
+
+            # Next hour the listing breaks down after one page holding only
+            # the newer reward.
+            mocker.clear_requests()
+            _register_repeating_operations(mocker, [newer])
+            await rewards.async_refresh()
+
+    assert rewards.last_update_success is False
+    attrs = _vsn_staking_sensor(rewards).extra_state_attributes
+    assert attrs["rewards_count"] == 2
+    assert abs(attrs["rewards_gross"] - (20.67399483 + 20.68994769)) < 1e-8

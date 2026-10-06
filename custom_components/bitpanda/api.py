@@ -1,65 +1,457 @@
-"""API client for Bitpanda."""
+"""API client for the Bitpanda Public API."""
+from __future__ import annotations
+
 import asyncio
+import base64
+from collections.abc import Callable
+from datetime import datetime
 import logging
+import re
 from typing import Any
+
 import aiohttp
 
-from .const import API_BASE_URL
+from .const import (
+    API_BASE_URL,
+    API_TIMEOUT,
+    ERROR_CONNECTION,
+    ERROR_HTTP_STATUS,
+    ERROR_INCOMPLETE_LISTING,
+    ERROR_RATE_LIMITED,
+    ERROR_TIMEOUT,
+    ERROR_UNREADABLE,
+    MAX_PAGE_SIZE,
+    REQUIRED_SCOPES,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
+# Hard stop for one paginated listing. The largest real walk is the whole
+# 14,054-asset catalogue, 141 pages of 100; a five-year operation history took
+# 13. 500 pages (50,000 records) leaves a wide margin above both, and even an
+# /operations history that long, re-read at the hourly rewards cadence, stays
+# inside the hourly read budget next to the share reserved for prices.
+_MAX_PAGES = 500
+
+# The only cursor shape /operations mishandles: a whole-second UTC timestamp.
+_WHOLE_SECOND_TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+
+
+def normalize_operations_cursor(cursor: str) -> str:
+    """Return an /operations cursor in the form the server honours.
+
+    /operations cursors are base64 of an ISO-8601 timestamp meaning "records
+    strictly older than this". The server silently ignores a cursor whose
+    timestamp has no fractional seconds and answers with page 1 and a 200 --
+    yet it emits exactly such cursors itself whenever a page boundary falls on
+    a whole second. The same instant with ".000" added is honoured.
+
+    Anything that does not decode to such a timestamp is returned unchanged.
+    The rewritten cursor is 24 ASCII bytes of digits, "-", ":", "T", "." and
+    "Z", which always base64-encode to 32 plain letters and digits: no padding,
+    and none of the characters on which the standard and URL-safe alphabets
+    differ, so it takes the same form whichever of them the server uses.
+    """
+    if not isinstance(cursor, str):
+        return cursor
+    try:
+        decoded = base64.b64decode(
+            cursor + "=" * (-len(cursor) % 4), validate=True
+        ).decode("ascii")
+        # Shape first: fromisoformat alone would also accept forms (no
+        # seconds, an offset) where appending ".000" makes no sense.
+        if not _WHOLE_SECOND_TIMESTAMP.fullmatch(decoded):
+            return cursor
+        datetime.fromisoformat(decoded)
+    except ValueError:
+        # binascii.Error (not base64), UnicodeDecodeError (not text) and an
+        # impossible date all subclass ValueError.
+        return cursor
+    return base64.b64encode(f"{decoded[:-1]}.000Z".encode("ascii")).decode("ascii")
+
+
+class BitpandaApiError(Exception):
+    """Base error for API failures.
+
+    The message is English, for the log. What failed is carried without
+    words too, for a translated text (portfolio_coordinator._update_failed):
+    `kind`, one of const.API_ERROR_KINDS -- None when raised outside the
+    client --, `path`, the request path, and `status`, the HTTP status of an
+    ERROR_HTTP_STATUS or ERROR_RATE_LIMITED (429). None of them ever holds
+    request data.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        kind: str | None = None,
+        path: str | None = None,
+        status: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.kind = kind
+        self.path = path
+        self.status = status
+
+
+class BitpandaAuthError(BitpandaApiError):
+    """The API key is missing, invalid, or lacks the required scope."""
+
+
+class BitpandaRateLimitError(BitpandaApiError):
+    """The read rate limit was exceeded."""
+
+
+def _unreadable(path: str) -> BitpandaApiError:
+    """An answer from `path` that could not be read, logged at DEBUG."""
+    _LOGGER.debug("Could not decode response from %s", path)
+    return BitpandaApiError(
+        f"Could not decode response from {path}", kind=ERROR_UNREADABLE, path=path
+    )
+
+
+def _listing(body: dict[str, Any], path: str) -> list[dict[str, Any]]:
+    """The `data` of an answer that lists records: a list of objects. An
+    absent or empty `data` is an empty listing; any other shape is
+    unreadable."""
+    data = body.get("data") or []
+    if not isinstance(data, list) or not all(isinstance(item, dict) for item in data):
+        raise _unreadable(path)
+    return data
+
+
+def _object(body: dict[str, Any], path: str) -> dict[str, Any]:
+    """The `data` of an answer that holds one record: an object. An absent or
+    empty `data` is an empty record; any other shape is unreadable."""
+    data = body.get("data") or {}
+    if not isinstance(data, dict):
+        raise _unreadable(path)
+    return data
+
+
+# One cheap, read-only endpoint per required scope, used only to probe which
+# scopes a key carries during setup. `/portfolio` needs no params; the other
+# two accept `page_size` and 1 is the smallest page the API allows.
+_SCOPE_PROBES: dict[str, tuple[str, dict[str, Any] | None]] = {
+    "balance": ("/portfolio", None),
+    "transaction": ("/operations", {"page_size": 1}),
+    "earn": ("/earn/configs", {"page_size": 1}),
+}
+
 
 class BitpandaApiClient:
-    """Bitpanda API Client."""
+    """Client for the Bitpanda Public API.
 
-    def __init__(self, api_key: str, session: aiohttp.ClientSession) -> None:
-        self._api_key = api_key
+    Read-only. No method here may call a write endpoint.
+    """
+
+    def __init__(self, api_key: str | None, session: aiohttp.ClientSession) -> None:
+        """`api_key=None` builds a keyless client for the public endpoints.
+
+        /currencies, /assets and /tickers answer without a key. A keyless
+        client sends no x-api-key header at all, so public lookups never
+        carry the key and never count against its read budget. The key lives
+        only inside the header dict -- no second copy on the instance.
+        """
         self._session = session
-        self._headers = {"X-Api-Key": api_key}
+        self._headers = {"x-api-key": api_key} if api_key else {}
 
-    async def _request(self, url: str, headers: dict | None = None) -> Any:
+    async def _request(
+        self, path: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Perform one GET and return the decoded body, always a dict.
+
+        A 200 whose JSON is not an object -- null, a list, a bare string or
+        number -- is as unreadable as a body that fails to parse at all: it
+        holds none of the fields an answer carries. Read on, a wrong top-level
+        shape would escape as an unlogged AttributeError instead of the outage
+        it is, and a scope probe would count it as a granted scope.
+
+        Failures are logged at DEBUG only: every caller either reports an
+        outage once itself (the coordinators) or turns it into a form error,
+        and a line per failed request would flood the log during an outage.
+        Never attach the exception chain to the log record: tracebacks can
+        carry the API key.
+
+        Redirects are never followed: when one leaves the origin, aiohttp
+        drops only an Authorization header, so the x-api-key header would
+        travel on to whatever host the redirect names. The API does not
+        redirect, so a 3xx answer is an error.
+        """
+        url = f"{API_BASE_URL}{path}"
         try:
             async with self._session.get(
-                url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)
+                url,
+                headers=self._headers,
+                params=params,
+                timeout=aiohttp.ClientTimeout(total=API_TIMEOUT),
+                allow_redirects=False,
             ) as response:
+                status = response.status
+                if 300 <= status < 400:
+                    _LOGGER.debug("HTTP %s redirect from %s", status, path)
+                    raise BitpandaApiError(
+                        f"Unexpected redirect from {path}",
+                        kind=ERROR_HTTP_STATUS, path=path, status=status,
+                    )
+                if status in (401, 403):
+                    raise BitpandaAuthError(
+                        f"Unauthorized for {path}",
+                        kind=ERROR_HTTP_STATUS, path=path, status=status,
+                    )
+                if status == 429:
+                    raise BitpandaRateLimitError(
+                        f"Rate limited on {path}",
+                        kind=ERROR_RATE_LIMITED, path=path, status=status,
+                    )
                 response.raise_for_status()
-                return await response.json()
+                body = await response.json()
+                if not isinstance(body, dict):
+                    raise _unreadable(path)
+                return body
+        except aiohttp.ContentTypeError:
+            # A 200 answer that is no JSON -- a maintenance or captive-portal
+            # page served as text/html: json() refuses its content type
+            # before parsing, with a ClientResponseError subclass carrying
+            # the 200. The answer could not be read; no status failed.
+            raise _unreadable(path) from None
+        except aiohttp.ClientResponseError as err:
+            _LOGGER.debug("HTTP %s from %s", err.status, path)
+            raise BitpandaApiError(
+                f"HTTP {err.status} from {path}",
+                kind=ERROR_HTTP_STATUS, path=path, status=err.status,
+            ) from None
         except aiohttp.ClientError as err:
-            _LOGGER.error("Error during request to %s: %s", url, err)
-            raise
+            _LOGGER.debug("Connection error for %s: %s", path, type(err).__name__)
+            raise BitpandaApiError(
+                f"Connection error for {path}", kind=ERROR_CONNECTION, path=path
+            ) from None
         except asyncio.TimeoutError:
-            _LOGGER.error("Timeout during request to %s", url)
-            raise
+            _LOGGER.debug("Timeout for %s", path)
+            raise BitpandaApiError(
+                f"Timeout for {path}", kind=ERROR_TIMEOUT, path=path
+            ) from None
+        except RuntimeError:
+            # Home Assistant closes its shared session when it stops; a
+            # refresh that starts just then gets aiohttp's "Session is
+            # closed". That is a failed request, not a bug -- any other
+            # RuntimeError is one, and stays one.
+            if not self._session.closed:
+                raise
+            _LOGGER.debug("Session closed for %s", path)
+            raise BitpandaApiError(
+                f"Connection error for {path}", kind=ERROR_CONNECTION, path=path
+            ) from None
+        except ValueError:
+            # json.JSONDecodeError subclasses ValueError, and a body that
+            # decodes to text but not JSON can also raise UnicodeDecodeError
+            # here, another ValueError subclass — hence the general wording.
+            # Without this the exception escapes to Home Assistant's
+            # coordinator, whose final handler calls logger.exception() —
+            # exc_info=True through this integration's own logger, which is
+            # exactly what the API-key rule forbids.
+            raise _unreadable(path) from None
 
-    async def async_get_ticker(self) -> dict[str, Any]:
-        """Get price ticker data."""
-        return await self._request(f"{API_BASE_URL}/ticker")
+    async def _paginate(
+        self,
+        path: str,
+        params: dict[str, Any],
+        *,
+        cursor_fix: Callable[[str], str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Collect every page of a cursor-paginated endpoint, or raise.
 
-    async def async_get_asset_wallets(self) -> dict[str, Any]:
-        """Get asset wallets."""
-        return await self._request(f"{API_BASE_URL}/asset-wallets", headers=self._headers)
+        Deduplicates by id: pages can overlap by one record. `cursor_fix`
+        rewrites each `next_cursor` before it is sent (see
+        `normalize_operations_cursor`).
 
-    async def async_get_fiat_wallets(self) -> dict[str, Any]:
-        """Get fiat wallets."""
-        return await self._request(f"{API_BASE_URL}/fiatwallets", headers=self._headers)
+        Never returns a partial listing. A cursor that was already sent means
+        the server is re-serving pages it has answered before -- /operations
+        does exactly that for cursors it ignores -- so following it loops until
+        rate-limited, and stopping there quietly would pass off the pages so
+        far as the whole listing. That, a listing longer than _MAX_PAGES, and a
+        page that announces another without a cursor all raise instead: a
+        failed update is honest, a truncated total published as fact is not.
 
-    async def get_available_currencies(self) -> list[str]:
-        """Get available currencies from ticker."""
-        try:
-            ticker = await self.async_get_ticker()
-            if ticker:
-                first_asset = next(iter(ticker.values()))
-                return list(first_asset.keys())
-            return ["EUR", "USD", "CHF", "GBP"]
-        except Exception as err:
-            _LOGGER.error("Error getting available currencies: %s", err)
-            return ["EUR", "USD", "CHF", "GBP"]
+        A page whose `data` is not a list, or whose items are not objects,
+        is as unreadable as a malformed body: an id could not be read from it
+        either way. So is an id that is no string or integer, and a
+        `next_cursor` that is no string: Bitpanda sends neither, and an object
+        or a list could not be compared with the ones seen before.
+        """
+        params = dict(params)
+        params.setdefault("page_size", MAX_PAGE_SIZE)
+        out: list[dict[str, Any]] = []
+        seen: set[str | int] = set()
+        sent_cursors: set[str] = set()
 
-    async def get_available_assets(self) -> list[str]:
-        """Get available assets from ticker."""
-        try:
-            ticker = await self.async_get_ticker()
-            return list(ticker.keys()) if ticker else []
-        except Exception as err:
-            _LOGGER.error("Error getting available assets: %s", err)
-            return []
+        for _ in range(_MAX_PAGES):
+            body = await self._request(path, params)
+            for item in _listing(body, path):
+                key = item.get("id")
+                if key is None:
+                    key = item.get("operation_id")
+                if key is not None:
+                    if not isinstance(key, (str, int)):
+                        raise _unreadable(path)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                out.append(item)
+            if not body.get("has_next_page"):
+                return out
+            cursor = body.get("next_cursor")
+            if not cursor:
+                raise BitpandaApiError(
+                    f"{path} announced another page but sent no cursor",
+                    kind=ERROR_INCOMPLETE_LISTING, path=path,
+                )
+            if not isinstance(cursor, str):
+                raise _unreadable(path)
+            if cursor_fix is not None:
+                cursor = cursor_fix(cursor)
+            if cursor in sent_cursors:
+                raise BitpandaApiError(
+                    f"{path} repeated a page cursor; its listing is incomplete",
+                    kind=ERROR_INCOMPLETE_LISTING, path=path,
+                )
+            sent_cursors.add(cursor)
+            params["cursor"] = cursor
+
+        raise BitpandaApiError(
+            f"{path} returned more than {_MAX_PAGES} pages",
+            kind=ERROR_INCOMPLETE_LISTING, path=path,
+        )
+
+    async def async_get_currencies(self) -> list[dict[str, Any]]:
+        """List all fiat currencies. Not paginated."""
+        path = "/currencies"
+        body = await self._request(path)
+        return _listing(body, path)
+
+    async def async_get_assets(
+        self,
+        *,
+        symbol: str | None = None,
+        asset_id: str | None = None,
+        page_size: int = MAX_PAGE_SIZE,
+    ) -> list[dict[str, Any]]:
+        """List assets, optionally filtered.
+
+        `asset_id` takes a single UUID only. A comma-separated list returns 500,
+        despite what the published documentation says.
+        """
+        params: dict[str, Any] = {"page_size": min(page_size, MAX_PAGE_SIZE)}
+        if symbol:
+            params["symbol"] = symbol
+        if asset_id:
+            params["id"] = asset_id
+        return await self._paginate("/assets", params)
+
+    async def async_list_assets(
+        self, type_: str, group: str | None = None
+    ) -> list[dict[str, Any]]:
+        """List every asset of one catalogue type (and, optionally, group).
+
+        Builds the "Add price tracker" subentry flow's category pickers (see
+        assets.py's ASSET_CATEGORY_FILTERS) -- a handful of these calls
+        cover the whole 14000-asset catalogue, each cached there for 24 hours
+        precisely because even one uncached listing is a meaningful slice of
+        the hourly read budget.
+        """
+        params: dict[str, Any] = {"type": type_}
+        if group is not None:
+            params["group"] = group
+        return await self._paginate("/assets", params)
+
+    async def async_get_ticker(self, asset_id: str) -> dict[str, Any]:
+        """Current price for one asset.
+
+        Always returns EUR. Every currency parameter that could plausibly exist
+        was probed and is silently ignored, so none is sent.
+        """
+        path = f"/tickers/{asset_id}"
+        body = await self._request(path)
+        return _object(body, path)
+
+    async def async_get_portfolio(
+        self, *, equivalent_currency_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        """All non-zero holdings.
+
+        The list mixes two shapes. Asset entries carry `asset_id` and
+        `currency_balance`; fiat entries carry `currency_id` and no
+        `currency_balance`. Branch on the presence of `asset_id`.
+        """
+        params: dict[str, Any] = {}
+        if equivalent_currency_id:
+            params["equivalent_currency_id"] = equivalent_currency_id
+        path = "/portfolio"
+        body = await self._request(path, params or None)
+        return _listing(body, path)
+
+    async def async_get_portfolio_history(
+        self,
+        *,
+        timeframe: str = "DAY",
+        equivalent_currency_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Portfolio value series and the return over the selected window.
+
+        `timeframe` is one of DAY, WEEK, MONTH, SIX_MONTH, YEAR. It is absent
+        from the published documentation but is validated server-side: an
+        unknown value returns 400.
+        """
+        params: dict[str, Any] = {"timeframe": timeframe}
+        if equivalent_currency_id:
+            params["equivalent_currency_id"] = equivalent_currency_id
+        path = "/portfolio-history"
+        body = await self._request(path, params)
+        return _object(body, path)
+
+    async def async_get_earn_configs(self) -> list[dict[str, Any]]:
+        """Available Earn products and their rates.
+
+        This is a catalog, not user positions. `annual_percentage_rate` is a
+        JSON number and a fraction: 0.0544 means 5.44 %.
+        """
+        return await self._paginate("/earn/configs", {})
+
+    async def async_get_operations(
+        self, *, from_ts: str | None = None, to_ts: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Operation history, optionally windowed by date.
+
+        `from` and `to` are undocumented on the hosted docs but work. Every
+        cursor goes through `normalize_operations_cursor`: this endpoint emits
+        whole-second cursors that it then ignores, which without the rewrite
+        stalls or cycles on the first pages.
+
+        Needs the Transaction scope; a key without it gets 401.
+        """
+        params: dict[str, Any] = {}
+        if from_ts:
+            params["from"] = from_ts
+        if to_ts:
+            params["to"] = to_ts
+        return await self._paginate(
+            "/operations", params, cursor_fix=normalize_operations_cursor
+        )
+
+    async def async_missing_scopes(self) -> list[str]:
+        """Return the required scopes this key lacks, in REQUIRED_SCOPES order.
+
+        One request per scope. Bitpanda answers a wrong key and a missing scope
+        with the same 401, so the caller reads the pattern: every scope missing
+        means the key itself is wrong or carries none of them. Rate-limit and
+        connection errors propagate.
+        """
+        missing: list[str] = []
+        for scope in REQUIRED_SCOPES:
+            path, params = _SCOPE_PROBES[scope]
+            try:
+                await self._request(path, params)
+            except BitpandaAuthError:
+                missing.append(scope)
+        return missing

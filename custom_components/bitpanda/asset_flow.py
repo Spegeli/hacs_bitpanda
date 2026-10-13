@@ -45,6 +45,10 @@ from .groups import (
 from .language import entry_language
 from .naming import asset_display_label
 
+# Home Assistant 2026.10 types form schemas as probatio schemas; the voluptuous
+# ones built here work the same from 2025.5 on, hence `type: ignore[arg-type]`
+# where a form or section takes one. Strict mypy flags these once unneeded.
+
 # The stock listing alone is ~103 requests: kept for an hour, it serves a
 # round of picks, and an asset Bitpanda adds shows within the hour.
 _CATALOGUE_CACHE_TTL = timedelta(hours=1)
@@ -133,7 +137,7 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
         )
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema(
+            data_schema=vol.Schema(  # type: ignore[arg-type]
                 {
                     category: SelectSelector(
                         SelectSelectorConfig(
@@ -159,7 +163,7 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
         """
         return self.async_show_form(
             step_id="security" if self._category in ISIN_CATEGORIES else "asset",
-            data_schema=vol.Schema(
+            data_schema=vol.Schema(  # type: ignore[arg-type]
                 {
                     vol.Optional("asset"): SelectSelector(
                         SelectSelectorConfig(

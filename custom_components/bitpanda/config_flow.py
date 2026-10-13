@@ -74,6 +74,10 @@ from .purge import (
     async_purge_recorded,
 )
 
+# Home Assistant 2026.10 types form schemas as probatio schemas; the voluptuous
+# ones built here work the same from 2025.5 on, hence `type: ignore[arg-type]`
+# where a form or section takes one. Strict mypy flags these once unneeded.
+
 _LOGGER = logging.getLogger(__name__)
 
 _SERVICES = (ENTRY_TYPE_PORTFOLIO, ENTRY_TYPE_PRICE_TRACKER)
@@ -177,14 +181,14 @@ _OPEN: SectionConfig = {"collapsed": False}
 
 def _currencies_section(selected: list[str]) -> dict[vol.Required, section]:
     """The extra currencies (extra_currencies_schema) in their open section."""
-    return {vol.Required(_SECTION_CURRENCIES): section(extra_currencies_schema(selected), _OPEN)}
+    return {vol.Required(_SECTION_CURRENCIES): section(extra_currencies_schema(selected), _OPEN)}  # type: ignore[arg-type]
 
 
 def _language_section(languages: list[str], current: str) -> dict[vol.Required, section]:
     """The language field (see _language_field) in its open section."""
     return {
         vol.Required(_SECTION_LANGUAGE): section(
-            vol.Schema(_language_field(languages, current)), _OPEN
+            vol.Schema(_language_field(languages, current)), _OPEN  # type: ignore[arg-type]
         )
     }
 
@@ -195,7 +199,7 @@ def _notifications_section(wallets: bool, rewards: bool) -> dict[vol.Required, s
     show."""
     return {
         vol.Required(_SECTION_NOTIFICATIONS): section(
-            vol.Schema(
+            vol.Schema(  # type: ignore[arg-type]
                 {
                     vol.Required(CONF_NOTIFY_NEW_WALLETS, default=wallets): BooleanSelector(),
                     vol.Required(CONF_NOTIFY_STAKING_REWARDS, default=rewards): BooleanSelector(),
@@ -313,7 +317,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_currency()
         return self.async_show_form(
             step_id="portfolio",
-            data_schema=_KEY_SCHEMA,
+            data_schema=_KEY_SCHEMA,  # type: ignore[arg-type]
             errors=errors,
             description_placeholders={"api_key_url": API_KEY_URL, **placeholders},
         )
@@ -345,9 +349,9 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         return self.async_show_form(
             step_id="currency",
-            data_schema=vol.Schema(
+            data_schema=vol.Schema(  # type: ignore[arg-type]
                 {
-                    vol.Required(_SECTION_CURRENCY): section(currency, _OPEN),
+                    vol.Required(_SECTION_CURRENCY): section(currency, _OPEN),  # type: ignore[arg-type]
                     **_notifications_section(
                         DEFAULT_NOTIFY_NEW_WALLETS, DEFAULT_NOTIFY_STAKING_REWARDS
                     ),
@@ -436,7 +440,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
         return self.async_show_form(
             step_id="price_tracker",
-            data_schema=vol.Schema(
+            data_schema=vol.Schema(  # type: ignore[arg-type]
                 {**_currencies_section([]), **await self._async_language_section()}
             ),
         )
@@ -514,7 +518,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=_KEY_SCHEMA,
+            data_schema=_KEY_SCHEMA,  # type: ignore[arg-type]
             errors=errors,
             description_placeholders=placeholders,
         )
@@ -587,7 +591,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             shown = currency
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=self._reconfigure_schema(shown),
+            data_schema=self._reconfigure_schema(shown),  # type: ignore[arg-type]
             errors=errors,
             description_placeholders=placeholders,
         )
@@ -733,7 +737,7 @@ class BitpandaOptionsFlow(config_entries.OptionsFlow):
             )
         return self.async_show_form(
             step_id="price_tracker",
-            data_schema=vol.Schema(
+            data_schema=vol.Schema(  # type: ignore[arg-type]
                 {
                     **_currencies_section(
                         self.config_entry.options.get(CONF_EXTRA_CURRENCIES, [])
@@ -759,7 +763,7 @@ class BitpandaOptionsFlow(config_entries.OptionsFlow):
             )
         return self.async_show_form(
             step_id="portfolio",
-            data_schema=vol.Schema(
+            data_schema=vol.Schema(  # type: ignore[arg-type]
                 {
                     **_notifications_section(
                         notifies_new_wallets(self.config_entry),

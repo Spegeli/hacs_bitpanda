@@ -81,9 +81,14 @@ def asset_isin(asset: dict[str, Any]) -> str | None:
 
 def asset_attributes(asset: dict[str, Any]) -> dict[str, str | None]:
     """What every sensor of `asset` shows about it: `asset` (the symbol),
-    `asset_name`, and `asset_isin` where asset_isin gives one -- no such
-    key at all for any other asset."""
-    attrs = {"asset": asset.get("symbol"), "asset_name": asset.get("name")}
+    `asset_name`, `asset_category` (the key of asset_category, which the
+    dashboard cards group by), and `asset_isin` where asset_isin gives one
+    -- no such key at all for any other asset."""
+    attrs = {
+        "asset": asset.get("symbol"),
+        "asset_name": asset.get("name"),
+        "asset_category": asset_category(asset),
+    }
     isin = asset_isin(asset)
     if isin is not None:
         attrs["asset_isin"] = isin

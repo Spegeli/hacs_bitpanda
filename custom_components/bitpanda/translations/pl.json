@@ -341,6 +341,9 @@
           "asset_name": {
             "name": "Aktywo: nazwa"
           },
+          "asset_category": {
+            "name": "Aktywo: kategoria"
+          },
           "asset_isin": {
             "name": "Aktywo: ISIN"
           },
@@ -357,6 +360,9 @@
           },
           "asset_name": {
             "name": "Aktywo: nazwa"
+          },
+          "asset_category": {
+            "name": "Aktywo: kategoria"
           },
           "asset_isin": {
             "name": "Aktywo: ISIN"
@@ -396,6 +402,9 @@
           "asset_name": {
             "name": "Aktywo: nazwa"
           },
+          "asset_category": {
+            "name": "Aktywo: kategoria"
+          },
           "asset_isin": {
             "name": "Aktywo: ISIN"
           },
@@ -423,6 +432,9 @@
           },
           "asset_name": {
             "name": "Aktywo: nazwa"
+          },
+          "asset_category": {
+            "name": "Aktywo: kategoria"
           },
           "asset_isin": {
             "name": "Aktywo: ISIN"

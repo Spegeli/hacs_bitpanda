@@ -1978,3 +1978,20 @@ def test_the_conversion_status_has_a_translated_name_and_state():
         "name": "Umrechnung: Status",
         "state": {"no_rate": "Noch kein Umrechnungskurs geladen"},
     }
+
+
+def test_the_category_attribute_is_labelled_like_the_other_asset_attributes():
+    """The approved names of `asset_category` in each language, on every sensor
+    that carries the other asset attributes."""
+    labels = {
+        "en": "Asset: category", "de": "Asset: Kategorie", "fr": "Actif : catégorie",
+        "nl": "Asset: categorie", "it": "Asset: categoria", "es": "Activo: categoría",
+        "pl": "Aktywo: kategoria",
+    }
+    assert sorted(labels) == _LANGUAGES
+    for name in _FILES:
+        language = "en" if name == "strings.json" else Path(name).stem
+        sensors = _load(name)["entity"]["sensor"]
+        for key in ("wallet", "wallet_total", "staking", "price"):
+            attribute = sensors[key]["state_attributes"]["asset_category"]
+            assert attribute == {"name": labels[language]}, (name, key)

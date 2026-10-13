@@ -343,7 +343,7 @@ def test_wallet_is_the_unstaked_value():
     assert sensor.translation_key == "wallet"
     assert sensor.native_value == 50.0
     assert sensor.extra_state_attributes == {
-        "asset": "VSN", "asset_name": "Vision", "units": 25.0,
+        "asset": "VSN", "asset_name": "Vision", "asset_category": "other", "units": 25.0,
     }
 
 
@@ -426,7 +426,8 @@ def test_staking_is_the_staked_value_with_earn_attributes():
     assert sensor.icon is None
     assert sensor.native_value == 150.0
     assert sensor.extra_state_attributes == {
-        "asset": "VSN", "asset_name": "Vision", "units": 75.0, "apr_percent": 5.44,
+        "asset": "VSN", "asset_name": "Vision", "asset_category": "other", "units": 75.0,
+        "apr_percent": 5.44,
         "rewards_gross": 12.0, "rewards_fee": 2.4, "rewards_net": 9.6,
         "rewards_net_value": 19.2,
         "rewards_count": 3, "rewards_last_at": "2026-09-22T17:16:35Z",
@@ -481,7 +482,9 @@ def test_staking_without_earn_or_reward_data_leaves_those_attributes_out():
         _portfolio(**{VSN["id"]: _vsn()}), _Coordinator(None), _Coordinator(None),
         "eid", "EUR", VSN,
     )
-    assert sensor.extra_state_attributes == {"asset": "VSN", "asset_name": "Vision", "units": 75.0}
+    assert sensor.extra_state_attributes == {
+        "asset": "VSN", "asset_name": "Vision", "asset_category": "other", "units": 75.0,
+    }
 
 
 def test_staking_keeps_the_last_complete_reward_totals_after_a_failed_refresh():
@@ -497,7 +500,7 @@ def test_a_performance_figure_bitpanda_did_not_send_is_left_out():
     holding = _vsn(invested=None, total_return_pct=None)
     sensor = WalletTotalSensor(_portfolio(**{VSN["id"]: holding}), "eid", "EUR", VSN)
     assert sensor.extra_state_attributes == {
-        "asset": "VSN", "asset_name": "Vision", "units": 100.0,
+        "asset": "VSN", "asset_name": "Vision", "asset_category": "other", "units": 100.0,
         "average_buy_price": 1.5, "total_return": 50.0,
     }
 
@@ -516,7 +519,7 @@ def test_a_stock_etf_or_etc_shows_its_isin_on_every_wallet_part():
     wallet = WalletSensor(coordinator, "eid", "EUR", etf)
     assert wallet.extra_state_attributes == {
         "asset": "LYY1", "asset_name": "Amundi PEA S&P 500 UCITS ETF",
-        "asset_isin": "FR0011871136", "units": 10.0,
+        "asset_category": "etf", "asset_isin": "FR0011871136", "units": 10.0,
     }
     for sensor in (
         StakingSensor(coordinator, earn, _Coordinator(None), "eid", "EUR", etf),
@@ -527,6 +530,25 @@ def test_a_stock_etf_or_etc_shows_its_isin_on_every_wallet_part():
         )
 
 
+def test_every_wallet_sensor_names_its_category():
+    """`asset_category` on the available, total and staking sensor alike, so
+    a dashboard card can group a wallet by any of them."""
+    etf = {"id": "1f0ed6c9-ee10-68c6-8a0e-55a29b7757fe", "symbol": "LYY1",
+           "name": "Amundi PEA S&P 500 UCITS ETF", "isin": "FR0011871136",
+           "type": "equity_security", "group": "equity_etf"}
+    data = PortfolioData(holdings={etf["id"]: Holding(
+        asset_id=etf["id"], balance=10.0, available=10.0, value=5000.0)}, cash=0.0)
+    data.assets = {etf["id"]: etf}
+    coordinator = _Coordinator(data)
+    earn = _Coordinator(EarnData(apr={}, offered=frozenset()))
+    for sensor in (
+        WalletSensor(coordinator, "eid", "EUR", etf),
+        WalletTotalSensor(coordinator, "eid", "EUR", etf),
+        StakingSensor(coordinator, earn, _Coordinator(None), "eid", "EUR", etf),
+    ):
+        assert sensor.extra_state_attributes["asset_category"] == "etf", type(sensor).__name__
+
+
 def test_total_is_the_whole_position_with_its_performance():
     sensor = WalletTotalSensor(_portfolio(**{VSN["id"]: _vsn()}), "eid", "EUR", VSN)
     assert sensor.entity_id == "sensor.bitpanda_vision_vsn_wallet_total"
@@ -534,7 +556,7 @@ def test_total_is_the_whole_position_with_its_performance():
     assert sensor.translation_key == "wallet_total"
     assert sensor.native_value == 200.0
     assert sensor.extra_state_attributes == {
-        "asset": "VSN", "asset_name": "Vision", "units": 100.0,
+        "asset": "VSN", "asset_name": "Vision", "asset_category": "other", "units": 100.0,
         "average_buy_price": 1.5, "invested_amount": 150.0,
         "total_return": 50.0, "total_return_percent": 33.33,
     }

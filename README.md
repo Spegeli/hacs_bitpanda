@@ -235,14 +235,16 @@ Each sensor's attributes appear in its **Details** view (before Home Assistant 2
 
 | Sensor | Attributes |
 |---|---|
-| Balance (available) — every wallet | `asset`, `asset_name`, `asset_isin`, `units` (tradable units) |
-| Balance (total) — every wallet | `asset`, `asset_name`, `asset_isin`, `units` (whole position), and the position performance: `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
-| Balance (staking) — while something is staked or an Earn product is offered | `asset`, `asset_name`, `asset_isin`, `units` (staked), `apr_percent`, `rewards_gross`, `rewards_fee`, `rewards_net`, `rewards_net_value`, `rewards_count`, `rewards_last_at` |
+| Balance (available) — every wallet | `asset`, `asset_name`, `asset_category`, `asset_isin`, `units` (tradable units) |
+| Balance (total) — every wallet | `asset`, `asset_name`, `asset_category`, `asset_isin`, `units` (whole position), and the position performance: `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
+| Balance (staking) — while something is staked or an Earn product is offered | `asset`, `asset_name`, `asset_category`, `asset_isin`, `units` (staked), `apr_percent`, `rewards_gross`, `rewards_fee`, `rewards_net`, `rewards_net_value`, `rewards_count`, `rewards_last_at` |
 | Portfolio Cash Plus | `eur`, `usd`, `gbp` — the amount of each held Cash Plus product in its own currency |
-| Price (EUR) | `asset`, `asset_name`, `asset_isin`, `change_24h_pct`, `price_24h_ago` |
+| Price (EUR) | `asset`, `asset_name`, `asset_category`, `asset_isin`, `change_24h_pct`, `price_24h_ago` |
 | Price (other currencies) | as EUR, plus `conversion` (status `no_rate` until the first ECB rate is loaded), `conversion_rate`, `rate_date`, `rate_source` (`ECB`) |
 
 `asset_isin`, the ISIN, is there for stocks, ETFs and ETCs only.
+
+`asset_category` is the asset's category key: `crypto`, `stock`, `etf`, `etc`, `index`, `metal` or `other`.
 
 The lifetime reward amounts `rewards_gross`, `rewards_fee` and `rewards_net` are in units of the asset, and `rewards_count` is the number of payouts; `rewards_net_value` is what the net rewards are worth at today's price, as the Bitpanda app shows it — not their value when they were paid out.
 

@@ -205,26 +205,37 @@ _OPTIONS = {
 }
 
 
+# Each card's own table of options, under "Card options".
+_TABLES = {
+    "bitpanda-portfolio-card": "#### Bitpanda Portfolio card",
+    "bitpanda-price-tracker-card": "#### Bitpanda Price Tracker card",
+}
+
+
 def _readme_section(heading: str) -> str:
+    """From `heading` to the next heading of its level or above."""
+    level = len(heading) - len(heading.lstrip("#"))
     start = _README.index(heading)
-    end = _README.find("\n#", start + len(heading))
-    return _README[start:] if end < 0 else _README[start:end]
+    ends = [
+        found.start()
+        for found in re.finditer(rf"^#{{1,{level}}} ", _README, re.MULTILINE)
+        if found.start() > start
+    ]
+    return _README[start : ends[0]] if ends else _README[start:]
 
 
-def test_every_card_option_is_documented():
-    """Each option is a row of the README's option table and an option the
-    bundle knows; the title is named for both cards, and no colours option
-    is left."""
-    table = _readme_section("### Card options")
-    documented = set(re.findall(r"^\| `([a-z_]+)` \|", table, re.MULTILINE))
+def test_every_card_option_is_documented_in_its_cards_table():
+    """Each card has a table of exactly its own options, the title among
+    them, and each is an option the bundle knows; no colours option is
+    left."""
     bundle = CARDS_FILE.read_text(encoding="utf-8")
-    for card, options in _OPTIONS.items():
-        for option in options:
-            assert option in documented, (card, option)
+    for card, heading in _TABLES.items():
+        table = _readme_section(heading)
+        documented = set(re.findall(r"^\| `([a-z_]+)` \|", table, re.MULTILINE))
+        assert documented == _OPTIONS[card] | {"title"}, card
+        for option in _OPTIONS[card]:
             assert f'"{option}"' in bundle or f"{option}:" in bundle, (card, option)
-    assert documented == set().union(*_OPTIONS.values())
-    assert "`title`" in table
-    assert "`colors`" not in table
+    assert "`colors`" not in _readme_section("### Card options")
 
 
 def test_the_cards_link_to_their_readme_section():

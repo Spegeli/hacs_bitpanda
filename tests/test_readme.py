@@ -214,17 +214,17 @@ async def test_the_morning_report_comes_even_when_the_refresh_fails(hass):
         "automation", "trigger", {"entity_id": "automation.bitpanda_morning_report"}, blocking=True
     )
     await hass.async_block_till_done()
-    assert _messages(notifications) == ["Portfolio: 12345.67 EUR, today 1.25 %"]
+    assert _messages(notifications) == ["Portfolio: 12345.67 EUR, 1.25 % in 24 hours"]
     await _turn_off(hass)
 
 
 async def test_the_staking_reward_example_sends_the_net_amount_and_the_count(hass):
     """One push message per announcement, with what it adds up: one payout,
-    or several after a pause."""
+    or several after a pause -- a small one written out, never as 4.8e-05."""
     assert await async_setup_component(hass, "automation", {"automation": [_examples()[3]]})
     await hass.async_block_till_done()
     pushed = async_mock_service(hass, "notify", "mobile_app_your_phone")
-    for count, net in ((1, 9.87654312), (3, 29.62962936)):
+    for count, net in ((1, 9.87654312), (3, 29.62962936), (1, 0.000048)):
         hass.bus.async_fire(
             EVENT_STAKING_REWARD_RECEIVED,
             {
@@ -246,6 +246,7 @@ async def test_the_staking_reward_example_sends_the_net_amount_and_the_count(has
     assert [(call.data["title"], call.data["message"]) for call in pushed] == [
         ("Staking reward", "Vision (VSN) Wallet received 9.87654312 VSN from 1 payout."),
         ("Staking reward", "Vision (VSN) Wallet received 29.62962936 VSN from 3 payouts."),
+        ("Staking reward", "Vision (VSN) Wallet received 0.000048 VSN from 1 payout."),
     ]
 
 

@@ -29,9 +29,9 @@ A custom <a href="https://www.home-assistant.io/">Home Assistant</a> integration
 The integration offers two services. Set up either or both — each one once.
 
 ### Bitpanda Portfolio
-- A **Portfolio** device: **Total value** (all holdings, Cash Plus included, and all fiat), **Cash** (all fiat, including money reserved by an open order), **Cash Plus**, and your **return** over a day, a week, a month, six months and a year — every value in your Portfolio currency, as Bitpanda reports it
+- A **Portfolio** device: **Total value** (all holdings, Cash Plus included, and all fiat), **Cash** (all fiat, including money reserved by an open order), **Cash Plus**, and your **return** in percent over a day, a week, a month, six months and a year — every amount in your Portfolio currency, as Bitpanda reports it
 - A wallet device for every asset you hold, such as **Vision (VSN) Wallet**, with **Balance (available)** (the value of the units you can trade), **Balance (total)** (the whole position, with invested amount, average buy price and return) and — while something is staked or Bitpanda offers Earn for the asset — **Balance (staking)** (with APR and rewards)
-- Nothing to maintain: a wallet appears at the next update after you buy an asset and goes about 15 minutes after you sell it, in groups by asset type such as Cryptocurrencies or Precious metals
+- Nothing to maintain: a wallet appears at the next update after you buy an asset and goes 10 to 15 minutes after you sell it, in groups by asset type such as Cryptocurrencies or Precious metals
 - A notification under **Notifications** when a new wallet appears — you can switch it off — and the event `bitpanda_wallet_added` for your own automations
 - A notification under **Notifications** when Bitpanda pays out a staking reward — switch it on if you want it — and the event `bitpanda_staking_reward_received` for your own automations
 - Updates every 5 minutes; Earn offers and rewards hourly
@@ -135,7 +135,7 @@ A new version can come out as a beta first, for testing before everyone gets it.
    - ⚠️ Permissions cannot be added to an existing key afterwards.
 3. Copy your API key — **you will only see it once!** Home Assistant stores it locally and sends it only to Bitpanda; the integration never logs it, and diagnostics leave it out.
 4. Go to **Settings → Devices & services → Add integration**, search for **Bitpanda**, select it, and choose **Bitpanda Portfolio** in the dialog that follows. If the Price Tracker is already set up, **Add service** on the Bitpanda integration page opens the same dialog. It lists only what is not set up yet.
-5. Enter your API key — setup checks all three permissions and marks any that is missing — then choose your currency, whether to be notified about new wallets (see [New wallets](#new-wallets)) and the language of group titles and messages (see [Languages](#languages))
+5. Enter your API key — setup checks all three permissions and marks any that is missing — then choose your currency, the notifications about new wallets (on at first; see [New wallets](#new-wallets)) and about staking rewards (off at first; see [Staking rewards](#staking-rewards)), and the language of group titles and messages (see [Languages](#languages))
    - If an earlier Portfolio left long-term statistics in another currency, a last step asks whether to delete them — see [Troubleshooting](#-troubleshooting).
 
 Bitpanda API keys expire on the date you choose when you create them, **one year** later at most. Home Assistant then asks for a new one — see [Changing settings later](#changing-settings-later).
@@ -184,7 +184,7 @@ Tracking an asset again later brings its sensors back under the entity IDs the i
 The Portfolio keeps its wallets and groups up to date by itself:
 
 - **A new asset** gets its wallet, in the group of its type, at the next update — every five minutes.
-- **An asset you no longer hold** loses its wallet about 15 minutes after you sell it. To remove the wallet sooner, delete it on its device page (**⋮ → Delete**).
+- **An asset you no longer hold** loses its wallet 10 to 15 minutes after you sell it; until then its sensors are `unavailable`. To remove the wallet sooner, delete it on its device page (**⋮ → Delete**).
 - **What you cannot delete:** the Portfolio device and the wallet of an asset you hold — they would come straight back, and the dialog says why. A group you delete (**⋮ → Delete**) while you still hold its assets comes back at the next update.
 
 On the Price Tracker, deleting a device or a group stops tracking (see [Stop tracking](#stop-tracking)).
@@ -211,7 +211,7 @@ Payouts that could not be announced — while Home Assistant was off, the Portfo
 
 The integration gives every sensor an English entity ID, the same in every language: `sensor.bitpanda_`, then the device's name in lower case with `_` for spaces and punctuation, then the sensor's own ending. Device names are English too — the asset's label followed by **Wallet** or **Price Tracker**. Assets are labelled `Name (SYMBOL)`, or just the symbol when the name only repeats it (BNB, BCI5). Stocks, ETFs and ETCs add their ISIN: `Name (SYMBOL / ISIN)`, or `SYMBOL (ISIN)` when the name only repeats the symbol.
 
-You can change an entity ID in the sensor's settings: the sensor keeps working under the new ID, with its history, and the integration does not change it back (before Home Assistant 2025.7, a currency change does: it recreates the Portfolio's sensors under the integration's IDs). To go back yourself, see [Resetting names and entity IDs](#resetting-names-and-entity-ids).
+You can change an entity ID in the sensor's settings: the sensor keeps working under the new ID, with its history, and the integration does not change it back (before Home Assistant 2025.7, a sensor the integration removes and creates again comes back under the integration's ID: after a currency change, after a deleted group, or when a wallet or its Balance (staking) sensor returns). To go back yourself, see [Resetting names and entity IDs](#resetting-names-and-entity-ids).
 
 | Sensor | Entity ID |
 |---|---|
@@ -249,6 +249,8 @@ Each sensor's attributes appear in its **Details** view (before Home Assistant 2
 
 `asset_category` is the asset's category key: `crypto`, `stock`, `etf`, `etc`, `index`, `metal` or `other`.
 
+An attribute without a value is left out rather than set to `null`: `apr_percent` without an Earn rate, the `rewards_…` attributes before the first payout, `rewards_net_value` without a price, `change_24h_pct` and `price_24h_ago` until the recorder holds a price from 24 hours ago. A price in another currency carries either `conversion` (`no_rate`, before the first ECB rate) or `conversion_rate`, `rate_date` and `rate_source`. `rewards_last_at` is when Bitpanda credited the newest payout, in UTC.
+
 The lifetime reward amounts `rewards_gross`, `rewards_fee` and `rewards_net` are in units of the asset, and `rewards_count` is the number of payouts; `rewards_net_value` is what the net rewards are worth at today's price, as the Bitpanda app shows it — not their value when they were paid out.
 
 ### Long-term statistics
@@ -261,10 +263,10 @@ Every value sensor keeps long-term statistics: the Portfolio's figures, returns 
 
 ### Refreshing by hand
 
-The action `bitpanda.refresh` fetches the portfolio and the prices right away and finishes when both are done.
+The action `bitpanda.refresh` fetches the portfolio — Total value, Cash, Cash Plus, the wallets and the returns — and the prices right away and finishes when both are done. Earn offers, staking rewards and exchange rates keep their own schedule.
 
-- **Cooldown:** a call within the cooldown of the last accepted one is ignored. The cooldown is the price interval — 60 seconds, longer with many tracked assets — or 10 seconds with the Portfolio alone.
-- **Failures:** when a refresh fails — Bitpanda cannot be reached or answers with an error — the action fails with an error naming the service; the other service is refreshed all the same. The action also fails while neither service is loaded.
+- **Cooldown:** a call within the cooldown of the last accepted one is ignored. The cooldown is the price interval — 60 seconds, longer while Bitpanda rate-limits the price requests (up to 16 minutes) — or 10 seconds with the Portfolio alone.
+- **Failures:** when a refresh fails — Bitpanda cannot be reached or answers with an error — the action fails with an error naming the service; the other service is refreshed all the same. The returns are fetched only when the portfolio was; returns that could not be fetched keep their last value and fail nothing. The action also fails while neither service is loaded.
 - **In automations:** a failed action stops a script or automation at that step, unless the step sets `continue_on_error: true` (see the [Morning report](#3-morning-report-portfolio-value-and-todays-return-at-a-set-time) example).
 
 ---
@@ -280,7 +282,7 @@ To add one, edit a dashboard, choose **Add card** and search for **Bitpanda**; e
 
 | Card | Type | Shows |
 |---|---|---|
-| **Bitpanda Portfolio** | `custom:bitpanda-portfolio-card` | Total value with your return over 1 day to 1 year and a line of the total value; Cash and Cash Plus; how your money is split across asset types; your wallets, by asset type or in one list — tap a group to open it, the arrow beside a wallet for its details: available and staked units, staking APR, average buy price, invested amount, profit or loss and staking rewards. Each part can be left out, down to total value and return alone |
+| **Bitpanda Portfolio** | `custom:bitpanda-portfolio-card` | Total value with your return over 1 day to 1 year and a line of the total value; Cash and Cash Plus; how your money is split across asset types, Cash and Cash Plus; your wallets, by asset type or in one list — tap a group to open it, the arrow beside a wallet for its details: available and staked units, staking APR, average buy price, invested amount, profit or loss and staking rewards. Each part can be left out, down to total value and return alone |
 | **Bitpanda Price Tracker** | `custom:bitpanda-price-tracker-card` | Your tracked assets as a list or as tiles: price, change in percent and in the price's currency, and a line. With extra currencies set up in the Price Tracker, a switch shows the prices in them |
 
 <table>
@@ -298,39 +300,54 @@ To add one, edit a dashboard, choose **Add card** and search for **Bitpanda**; e
 
 - **The line shows the total value, not your return.** A deposit raises it; the percentage beside it is Bitpanda's return, which leaves deposits and withdrawals out, and the amount after it is what that percentage means on today's total value. The line is Bitpanda's own history of your total value, complete from the first day. Its dashed line marks the middle between the highest and the lowest value shown. Point at the line, or move a finger along it, to see the value at that moment, with the highest, middle and lowest value at the right.
 - **A wallet's percentage** is its return since purchase, and a group's is that of all its wallets together; the timeframe switch changes neither. A wallet's profit or loss is in its details.
-- **1D in the Price Tracker** is the sensor's own 24-hour change; 1W to 1Y come from the statistics. Beside or below the percentage is the same change in the price's currency. While an asset's statistics are shorter than the timeframe, its change and its line count from their start, and the row says since when ("Change since 6 Oct").
-- **"—"** means that a sensor has no value right now. The cards never put a figure of their own in its place.
+- **1D in the Price Tracker** is the sensor's own 24-hour change; until the sensor has one, in an asset's first day, and for 1W to 1Y, the change comes from the statistics. Beside or below the percentage is the same change in the price's currency. While an asset's statistics are shorter than the timeframe, its change and its line count from their start, and the row says since when ("Change since Oct 6"). A price line breaks where Home Assistant has no statistics: while it was off or the sensor unavailable.
+- **"—"** means that a figure is missing right now: a sensor without a value, or a change the statistics cannot give yet. A sum or a share needs all its parts: one wallet without its value shows "—" for its group and the allocation. The cards never put a figure of their own in its place.
 - **Stocks, ETFs and ETCs** count in shares, precious metals in grams. The wallet list shows up to 4 decimals, rounded down as in the Bitpanda app; a wallet's details show all of them.
-- **The eye** blurs amounts and units — for a screenshot, say — and keeps the percentages. It hides them on that card only; nothing else changes.
+- **The eye** on the Portfolio card blurs amounts and units — for a screenshot, say — and keeps the percentages; pointing at the line then shows the time only. It hides them on that card only; nothing else changes.
 - **A tap** opens Home Assistant's dialog of that figure, with its history.
-- **Language:** your profile language; group names come from the integration.
+- **Language:** your profile language — English, German, French, Dutch, Italian, Spanish or Polish; English for any other. Asset group names are the integration's own, in that language — not a title you gave a group, nor the language chosen for the Portfolio.
 
 ### Card options
 
-Both cards take `title` (empty: the card's name). Gains and losses take your theme's success and error colours, green and red in Home Assistant's default theme.
+Gains and losses take your theme's success and error colours, green and red in Home Assistant's default theme.
 
-| Option | Values | Default | Cards |
+#### Bitpanda Portfolio card
+
+| Option | Values | Default | What it does |
 |---|---|---|---|
-| `timeframe` | `day`, `week`, `month`, `six_month`, `year` | `day` | both — the timeframe a card opens with |
-| `hide_amounts` | `true`, `false` | `false` | Portfolio — start with amounts hidden |
-| `show_total` | `true`, `false` | `true` | Portfolio — the total value and its return; the timeframe buttons stay while the line is shown |
-| `show_graph` | `true`, `false` | `true` | Portfolio — the line of the total value |
-| `show_cash` | `true`, `false` | `true` | Portfolio — Cash and Cash Plus |
-| `show_allocation` | `true`, `false` | `true` | Portfolio — the split by asset type |
-| `show_wallets` | `true`, `false` | `true` | Portfolio — the wallets |
-| `group_wallets` | `true`, `false` | `true` | Portfolio — wallets in their asset groups |
-| `show_search` | `true`, `false` | `false` | Portfolio — a search field above the wallets: finds them by name, symbol or ISIN, as one list without groups |
-| `sort` | `value`, `return`, `name` | `value` | Portfolio |
-| `sort` | `selection`, `name`, `change_desc`, `change_asc` | `name` | Price Tracker |
-| `group_selection` | `all`, `all_except`, `only` | `all` | Portfolio, Price Tracker |
+| `title` | text | `Bitpanda Portfolio` | the card's heading |
+| `timeframe` | `day`, `week`, `month`, `six_month`, `year` | `day` | the timeframe the card opens with |
+| `show_total` | `true`, `false` | `true` | the total value and its return; the timeframe buttons stay while the line is shown |
+| `show_graph` | `true`, `false` | `true` | the line of the total value |
+| `show_cash` | `true`, `false` | `true` | Cash and Cash Plus |
+| `show_allocation` | `true`, `false` | `true` | the split by asset type, Cash and Cash Plus |
+| `show_wallets` | `true`, `false` | `true` | the wallets |
+| `show_search` | `true`, `false` | `false` | a search field above the wallets: finds them by name, symbol or ISIN, as one list without groups |
+| `group_wallets` | `true`, `false` | `true` | wallets in their asset groups |
+| `sort` | `value`, `return`, `name` | `value` | the order of the wallets |
+| `limit` | 0 or more; 0 shows all | `5` | wallets before "Show all", when `group_wallets` is off |
+| `group_selection` | `all`, `all_except`, `only` | `all` | which asset groups' wallets the card shows |
 | `groups` | `crypto`, `stock`, `etf`, `etc`, `index`, `metal`, `other` | — | with `all_except` or `only`: the asset groups left out or shown |
-| `asset_selection` | `all`, `all_except`, `only` | `all` | Portfolio, Price Tracker |
-| `assets` | device IDs | — | with `all_except` or `only`: the wallets or price trackers left out or shown, within the asset groups shown |
-| `limit` | 0 or more; 0 shows all | `5` (Portfolio), `0` (Price Tracker) | Portfolio (wallets without asset groups), Price Tracker — rows before "Show all" |
-| `layout` | `list`, `tiles` | `list` | Price Tracker |
-| `currency` | `EUR` or a currency set up in the Price Tracker | `EUR` | Price Tracker — the start currency; EUR while that currency is not set up |
+| `asset_selection` | `all`, `all_except`, `only` | `all` | which wallets the card shows, within the asset groups shown |
+| `assets` | device IDs | — | with `all_except` or `only`: the wallets left out or shown |
+| `hide_amounts` | `true`, `false` | `false` | start with amounts hidden |
 
 Hiding a section, an asset group or a wallet changes only what the card shows: the total value, Cash, Cash Plus and the allocation always cover your whole portfolio, while a group's count, return and sum cover the wallets it shows.
+
+#### Bitpanda Price Tracker card
+
+| Option | Values | Default | What it does |
+|---|---|---|---|
+| `title` | text | `Bitpanda Price Tracker` | the card's heading |
+| `layout` | `list`, `tiles` | `list` | the prices as a list or as tiles |
+| `timeframe` | `day`, `week`, `month`, `six_month`, `year` | `day` | the timeframe the card opens with |
+| `currency` | `EUR` or a currency set up in the Price Tracker | `EUR` | the currency the card opens with; EUR while that currency is not set up |
+| `sort` | `selection`, `name`, `change_desc`, `change_asc` | `name` | the order of the assets; `change_desc` and `change_asc` by the change of the timeframe shown, `selection` keeps the order of `assets` with `only`, otherwise by name |
+| `limit` | 0 or more; 0 shows all | `0` | assets before "Show all" |
+| `group_selection` | `all`, `all_except`, `only` | `all` | which asset groups' prices the card shows |
+| `groups` | `crypto`, `stock`, `etf`, `etc`, `index`, `metal`, `other` | — | with `all_except` or `only`: the asset groups left out or shown |
+| `asset_selection` | `all`, `all_except`, `only` | `all` | which assets the card shows, within the asset groups shown |
+| `assets` | device IDs | — | with `all_except` or `only`: the price trackers left out or shown |
 
 ```yaml
 type: custom:bitpanda-price-tracker-card
@@ -406,7 +423,7 @@ actions:
 
 ### 3. Morning report: portfolio value and today's return at a set time
 
-Ask Bitpanda at a set time instead of waiting for the next regular update, then show the portfolio's total value and today's return. With `continue_on_error: true`, a failed refresh (see [Refreshing by hand](#refreshing-by-hand)) does not stop the automation: the report still comes, with the last figures.
+Ask Bitpanda for the portfolio and its returns at a set time instead of waiting for the next regular update, then show its total value and its return over the last 24 hours. With `continue_on_error: true`, a failed refresh (see [Refreshing by hand](#refreshing-by-hand)) does not stop the automation: the report still comes, with the last figures.
 
 ```yaml
 alias: Bitpanda morning report
@@ -420,7 +437,7 @@ actions:
   - action: persistent_notification.create
     data:
       title: Bitpanda
-      message: "Portfolio: {{ states('sensor.bitpanda_portfolio_total', with_unit=True) }}, today {{ states('sensor.bitpanda_portfolio_return_day', with_unit=True) }}"
+      message: "Portfolio: {{ states('sensor.bitpanda_portfolio_total', with_unit=True) }}, {{ states('sensor.bitpanda_portfolio_return_day', with_unit=True) }} in 24 hours"
 ```
 
 The same steps work in a script, which you can start from anywhere — from a button, for example.
@@ -441,7 +458,7 @@ actions:
     data:
       title: Staking reward
       message: >-
-        {{ trigger.event.data.wallet }} received {{ trigger.event.data.net }}
+        {{ trigger.event.data.wallet }} received {{ ('%.8f' | format(trigger.event.data.net)).rstrip('0').rstrip('.') }}
         {{ trigger.event.data.symbol }} from {{ trigger.event.data.count }}
         payout{{ 's' if trigger.event.data.count > 1 else '' }}.
 ```
@@ -500,10 +517,10 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 - **Entity IDs follow the new scheme**, for example `sensor.bitpanda_wallets_vsn_wallet` → `sensor.bitpanda_vision_vsn_wallet_available` and `sensor.bitpanda_price_tracker_btc_eur` → `sensor.bitpanda_bitcoin_btc_price_tracker_eur`.
 - **Every holding is tracked**, not only the wallets you picked, and each gets its own device, in a group by asset type.
 - **Group titles and the integration's own messages start in English** after the upgrade, whatever language Home Assistant runs in. Choose another language under **Configure** on each service (see [Languages](#languages)).
-- **Wallets of assets you no longer hold go away.** They are migrated like the others, then removed after three portfolio refreshes without them — about ten minutes after the Portfolio starts working with your new key. Their recorded history stays until the recorder purges it.
+- **Wallets of assets you no longer hold go away.** They are migrated like the others, then removed after three portfolio refreshes without them — about ten minutes after the Portfolio first starts after the upgrade: your old key still reads the portfolio, only Earn needs the new one. Their recorded history stays until the recorder purges it.
 - **The wallet sensor still shows the unstaked part**, as before, now named **Balance (available)**. Beside it, every wallet gets the new **Balance (total)** for the whole position, and **Balance (staking)** for the staked part while something is staked or Bitpanda offers an Earn product for the asset; they start without history.
 - **Portfolio Total value now covers your whole account** — every holding plus all fiat. It used to add up only the wallets you tracked, so its value steps up at the upgrade: check automations that compare it against a threshold.
-- **The fiat wallet in your currency becomes Portfolio Cash**, which sums all your fiat balances. Other fiat wallets are left as `unavailable` entities you can delete.
+- **The fiat wallet in your currency — without one, your only fiat wallet, whatever its currency — becomes Portfolio Cash**, which sums all your fiat balances. Other fiat wallets are left as `unavailable` entities you can delete.
 - **Prices in other currencies are converted with ECB daily rates** instead of being quoted by Bitpanda.
 - **Long-term statistics.** Every value sensor now keeps them, from the upgrade on (see [Long-term statistics](#long-term-statistics)).
 - **A failed `bitpanda.refresh` now fails the call**, and stops a script or automation at that step unless the step sets `continue_on_error: true` (see [Refreshing by hand](#refreshing-by-hand)).
@@ -513,9 +530,9 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 
 ## ⚠️ Known limitations
 
-- **One Bitpanda account per Home Assistant.** Each service can be set up once, and Bitpanda's API does not tell which account a key belongs to: a key of another account — entered under **Reconfigure** or when Home Assistant asks for a new key — switches the Portfolio to that account. Its figures then follow the new account, and the wallets of assets the new account does not hold are removed after three refreshes.
+- **One Bitpanda account per Home Assistant.** Each service can be set up once, and Bitpanda's API does not tell which account a key belongs to: a key of another account — entered under **Reconfigure** or when Home Assistant asks for a new key — switches the Portfolio to that account. Its figures then follow the new account, and the wallets of assets the new account does not hold are removed after three refreshes. The Portfolio then announces that account's wallets as new and, for assets with an enabled Balance (staking) sensor, their past staking rewards.
 - **Cloud polling only.** Bitpanda sends no updates by itself: the integration asks at the intervals under [Features](#-features), and `bitpanda.refresh` asks right away (see [Refreshing by hand](#refreshing-by-hand)).
-- **Short outages are bridged, longer ones show.** When Bitpanda cannot be reached — while your Internet connection is down, say — the sensors keep their last value through two failed refreshes. The third failed refresh in a row, at least two regular intervals after the first, makes them `unavailable`: for the Portfolio and its returns after about 15 minutes, for prices after about 3 minutes (longer above 30 tracked assets, or while Bitpanda rate-limits the requests). A rejected API key makes them `unavailable` at once. After a restart of Home Assistant during an outage, there is no last value to show.
+- **Short outages are bridged, longer ones show.** When Bitpanda cannot be reached — while your Internet connection is down, say — the sensors keep their last value through two failed refreshes. The third failed refresh in a row, at least two regular intervals after the first, makes them `unavailable`: for the Portfolio and its returns after about 15 minutes, for prices after about 3 minutes (longer while Bitpanda rate-limits the requests). A rejected API key makes them `unavailable` at once. After a restart of Home Assistant during an outage, there is no last value to show.
 - **What disappears waits ten minutes.** When Bitpanda's answer no longer lists something the Portfolio showed — an asset, all fiat, all Cash Plus, or anything at all — the sensors that show it are `unavailable` at first, not 0: a short glitch at Bitpanda then leaves a gap in their history instead of a drop. Once three answers in a row, at least ten minutes apart from first to last, confirm it, the wallet is removed, and Total value, Cash or Cash Plus shows 0. Refreshing by hand does not make that sooner. What is already missing when the Portfolio starts shows 0 at once.
 - **Prices in other currencies are converted, not quoted.** Bitpanda's price endpoint answers in EUR only; every other currency is the EUR price × the ECB's daily reference rate, which can differ from the price Bitpanda itself shows in that currency. The ECB publishes its rates once per working day around 16:00 CET; at weekends and on holidays the last rate stays in use, and the `rate_date` attribute shows which day's rate a price uses.
 - **The 24-hour change needs a day of history.** `change_24h_pct` and `price_24h_ago` compare the price with its own value from 24 hours ago in Home Assistant's recorder: a newly tracked price shows them only after a day, and never while the recorder does not record the sensor.
@@ -526,7 +543,7 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 
 | Problem | Solution |
 |---|---|
-| The integration does not load | The entry on the Bitpanda integration page says why its setup failed or is being retried; **Settings → Repairs** says what blocks an upgrade from a date version. If Bitpanda could not be reached while Home Assistant started, the upgrade runs again at the next restart. |
+| The integration does not load | The entry on the Bitpanda integration page says why its setup failed or is being retried; **Settings → Repairs** says what blocks an upgrade from a date version. If the upgrade itself failed — for example because Bitpanda could not be reached while Home Assistant started — the entry shows a migration error, the log says why, and the upgrade runs again at the next restart. |
 | HACS offers no update while you are on a date version (2026.06.04 or older) | Install the newest version once by hand — see [Upgrading from a date version](#%EF%B8%8F-upgrading-from-a-date-version), step 2 |
 | After the upgrade, old sensors stay `unavailable` on a device such as Bitpanda Wallets (old version, not migrated) | The upgrade could not migrate them, for example the wallet of an asset that Bitpanda's new API does not list yet. **Settings → Repairs → Bitpanda upgrade: entities not migrated** deletes them, together with the old device |
 | "New Bitpanda API key needed" | The key expired, was revoked, or lacks a permission — paste a new key with all three permissions (see [Set up the Portfolio](#set-up-the-portfolio)) |
@@ -538,15 +555,15 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 | An asset you hold has no wallet | Bitpanda's asset catalogue does not list the asset, at least not yet: without its name and type, no wallet can be set up. Its value still counts in **Total value**. Bitpanda's API names such an asset only by its ID; to see the ID, enable debug logging and reload the Bitpanda Portfolio. Once the catalogue lists it, the wallet appears within a day |
 | A new wallet brought no notification | Check **Configure** on the Portfolio: the notification may be switched off. Wallets that existed when the Portfolio was set up or upgraded from a date version are not announced, and Home Assistant drops notifications at a restart. An asset sold and bought again within about 15 minutes keeps its wallet, so nothing is new. The event `bitpanda_wallet_added` comes even with the notification off |
 | A staking reward brought no notification | The notification is off by default: switch it on under **Configure** on the Portfolio. Only assets with an enabled **Balance (staking)** sensor count, and the rewards are checked once an hour. Payouts made before you set up the Portfolio are not announced, and Home Assistant drops notifications at a restart. The event `bitpanda_staking_reward_received` comes even with the notification off |
-| Every sensor of a service is `unavailable` | Bitpanda has not answered three refreshes in a row (see [Known limitations](#%EF%B8%8F-known-limitations)), or it rejected the API key — then Home Assistant asks for a new one |
+| Every sensor of a service is `unavailable` | Bitpanda has not answered three refreshes in a row, or answered "too many requests" (see [Known limitations](#%EF%B8%8F-known-limitations)); after a restart during an outage this shows at once. Or it rejected the API key — then Home Assistant asks for a new one |
 | Portfolio Total value, Cash, Cash Plus or a wallet sensor is `unknown` | Bitpanda answered, but an entry could not be read or came without a value; rather than show a figure that silently leaves something out, the sensor shows none until Bitpanda sends it again. Enable debug logging to see which entry. Cash Plus is also `unknown` while looking up an asset you hold fails at Bitpanda; the integration tries again at every refresh. |
 | A return sensor is `unknown` | Bitpanda answered for that timeframe without a figure, for example while the account has no history for it yet |
 | A return sensor is `unavailable` while the other returns are not | Bitpanda's answer for that timeframe failed three refreshes in a row; it kept its last value until then and comes back with the next answer |
-| Total value, Cash or Cash Plus is `unavailable` while the returns are not | Bitpanda's answer no longer lists what it shows — you sold everything, withdrew all your money or ended Cash Plus. It shows 0 once three answers in a row, at least ten minutes apart, confirm it (see [Known limitations](#%EF%B8%8F-known-limitations)) |
+| Total value, Cash or Cash Plus is `unavailable` while the returns are not | Bitpanda's answer no longer lists what it shows — you sold everything, withdrew all your money or ended Cash Plus. It shows 0 once three answers in a row, the last at least ten minutes after the first, confirm it (see [Known limitations](#%EF%B8%8F-known-limitations)) |
 | No Balance (staking) sensor for an asset | It appears once something is staked or Bitpanda offers an Earn product for the asset |
-| A price in another currency has no value and a `conversion` attribute | The ECB rates could not be loaded since Home Assistant started; the integration retries every 15 minutes and the value appears with the first success |
+| A price in another currency has no value and a `conversion` attribute | The ECB rates could not be loaded since the Price Tracker last started — a restart, or a reload after you added an asset or changed its options; the integration retries every 15 minutes and the value appears with the first success |
 | One asset's price sensors are `unavailable` | Bitpanda returned no price for it three rounds in a row; see the warning in the log |
-| Prices update less often than every minute | Bitpanda answered "too many requests": the integration waits longer between rounds, up to 16 minutes, and returns to every 60 seconds as soon as Bitpanda answers again. The log says when it slows down and when it is back. |
+| Prices update less often than every minute | Bitpanda answered "too many requests": the integration waits longer between rounds, up to 16 minutes, and returns to every 60 seconds as soon as Bitpanda answers again. The log warns when it slows down, and Home Assistant adds one error line of its own, "Error fetching bitpanda_tickers data: Bitpanda received too many price requests"; that it is back shows only with debug logging. With many tracked assets a round itself takes a while: the next one starts 60 seconds after it ends. |
 | 24-hour price change missing | A newly tracked price shows it after a day, and only while the recorder records the sensor (see [Known limitations](#%EF%B8%8F-known-limitations)) |
 | A Portfolio sensor keeps no statistics after you set the Portfolio up again in another currency, and **Settings → Repairs** reports "The unit of sensor.bitpanda_… has changed" | Home Assistant still holds its statistics in the old currency — if setup offered to delete them, you kept them. Delete them under **Settings → Tools → Statistics** (before Home Assistant 2026.8: **Developer tools → Statistics**), where the sensor is listed with the changed unit |
 | A card shows "Custom element doesn't exist", or **Add card** does not list the Bitpanda cards | Reload the page twice — your browser loads the cards when it opens Home Assistant, and the first reload after a new installation or an update can still come from its cache. A new browser tab works at once (in the Home Assistant app: close and reopen it, twice if needed) |
@@ -559,10 +576,11 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 
 ## 🗑️ Removal
 
-1. Go to **Settings → Devices & services → Bitpanda** and delete each service entry — **Bitpanda Portfolio** and **Bitpanda Price Tracker** — with **⋮ → Delete**. Their devices, their sensors and the API key stored in Home Assistant go with them.
-2. Remove **Bitpanda** in HACS (its **⋮** menu → **Remove**). Installed manually: delete the `config/custom_components/bitpanda` folder.
-3. Restart Home Assistant.
-4. Optional: delete the API key at [app.bitpanda.com/my-account/apikey](https://app.bitpanda.com/my-account/apikey) if nothing else uses it.
+1. Remove the Bitpanda cards from your dashboards: without the integration they show "Custom element doesn't exist".
+2. Go to **Settings → Devices & services → Bitpanda** and delete each service entry — **Bitpanda Portfolio** and **Bitpanda Price Tracker** — with **⋮ → Delete**. Their devices, their sensors and the API key stored in Home Assistant go with them.
+3. Remove **Bitpanda** in HACS (its **⋮** menu → **Remove**). Installed manually: delete the `config/custom_components/bitpanda` folder.
+4. Restart Home Assistant.
+5. Optional: delete the API key at [app.bitpanda.com/my-account/apikey](https://app.bitpanda.com/my-account/apikey) if nothing else uses it.
 
 **History:** the recorded history of the removed sensors stays in Home Assistant's database until the recorder purges it — after 10 days by default (the recorder's `purge_keep_days`).
 

@@ -22,6 +22,7 @@ from .const import (
     ERROR_UNREADABLE,
     MAX_PAGE_SIZE,
     REQUIRED_SCOPES,
+    TICKER_TIMEOUT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -158,7 +159,7 @@ class BitpandaApiClient:
         self._headers = {"x-api-key": api_key} if api_key else {}
 
     async def _request(
-        self, path: str, params: dict[str, Any] | None = None
+        self, path: str, params: dict[str, Any] | None = None, *, timeout: float = API_TIMEOUT
     ) -> dict[str, Any]:
         """Perform one GET and return the decoded body, always a dict.
 
@@ -185,7 +186,7 @@ class BitpandaApiClient:
                 url,
                 headers=self._headers,
                 params=params,
-                timeout=aiohttp.ClientTimeout(total=API_TIMEOUT),
+                timeout=aiohttp.ClientTimeout(total=timeout),
                 allow_redirects=False,
             ) as response:
                 status = response.status
@@ -371,7 +372,7 @@ class BitpandaApiClient:
         was probed and is silently ignored, so none is sent.
         """
         path = f"/tickers/{asset_id}"
-        body = await self._request(path)
+        body = await self._request(path, timeout=TICKER_TIMEOUT)
         return _object(body, path)
 
     async def async_get_portfolio(

@@ -19,6 +19,9 @@ CONF_TRACKED_WALLETS = "tracked_wallets"
 
 API_BASE_URL = "https://api.public.bitpanda.com/v1"
 API_TIMEOUT = 15
+# A ticker answers in well under a second, and the Price Tracker asks for one
+# asset after the other: a hanging request holds up the whole round of prices.
+TICKER_TIMEOUT = 5
 MAX_PAGE_SIZE = 100
 
 # What made a request fail, as api.py and ecb.py report it beside their

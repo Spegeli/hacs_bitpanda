@@ -1593,60 +1593,6 @@ async def test_a_group_without_assets_is_dropped_at_setup(hass, price_api):
     assert ticker.call_count == 1
 
 
-# Four ticker requests an hour: three tracked assets need 45 minutes between
-# refreshes, two need 30 -- the Price Tracker's interval above and at the
-# 30-minute mark without tracking hundreds of assets.
-def _four_tickers_an_hour():
-    return patch("custom_components.bitpanda.price_coordinator.TICKER_HOURLY_BUDGET", 4)
-
-
-def _interval_issue(hass):
-    return ir.async_get(hass).async_get_issue(DOMAIN, "slow_price_interval")
-
-
-async def test_a_price_interval_above_thirty_minutes_is_a_repair_issue_until_it_is_not(
-    hass, price_api
-):
-    """Raised at setup, before any price is asked for; gone with the reload
-    that stopping to track an asset causes, the interval back at 30
-    minutes."""
-    with _four_tickers_an_hour():
-        entry = _price_entry(
-            hass, [], price_group("crypto", BTC, SOL), price_group("metal", GOLD)
-        )
-        await _setup(hass, entry)
-        assert _interval_issue(hass).translation_placeholders == {
-            "count": "3", "minutes": "45"
-        }
-
-        _set_group_assets(hass, entry, "crypto", BTC)
-        await hass.async_block_till_done()
-
-    assert entry.state is ConfigEntryState.LOADED
-    assert _interval_issue(hass) is None
-
-
-async def test_the_price_interval_issue_goes_with_the_price_tracker(
-    hass, price_api, portfolio_api
-):
-    """Deleting the Price Tracker ends it; deleting the Portfolio does not."""
-    with _four_tickers_an_hour():
-        tracker = _price_entry(
-            hass, [], price_group("crypto", BTC, SOL), price_group("metal", GOLD)
-        )
-        portfolio = _portfolio_entry(hass)
-        # The first setup of the domain sets up both entries.
-        await _setup(hass, tracker)
-        assert portfolio.state is ConfigEntryState.LOADED
-        assert _interval_issue(hass) is not None
-
-        await hass.config_entries.async_remove(portfolio.entry_id)
-        assert _interval_issue(hass) is not None
-
-        await hass.config_entries.async_remove(tracker.entry_id)
-    assert _interval_issue(hass) is None
-
-
 async def test_without_extra_currencies_the_ecb_is_never_asked(hass, price_api):
     _, ecb = price_api
     await _setup(hass, _price_entry(hass, [], price_group("crypto", BTC)))

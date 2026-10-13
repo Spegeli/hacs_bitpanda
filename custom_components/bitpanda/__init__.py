@@ -68,8 +68,6 @@ from .price_coordinator import (
     PriceTrackerConfigEntry,
     PriceTrackerRuntime,
     TickerCoordinator,
-    async_delete_price_interval_issue,
-    async_report_price_interval,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -218,9 +216,6 @@ async def _async_start_price_tracker(
         for asset_id, record in tracked_assets(entry).items()
     }
     tickers = TickerCoordinator(hass, entry, BitpandaApiClient(None, session), tracked)
-    # Before the first refresh: the interval follows from what is tracked,
-    # whether Bitpanda answers or not.
-    async_report_price_interval(hass, len(tracked))
     ecb = (
         EcbCoordinator(hass, entry, session)
         if entry.options.get(CONF_EXTRA_CURRENCIES)
@@ -322,7 +317,8 @@ def _loaded_entries(hass: HomeAssistant) -> list[BitpandaConfigEntry]:
 def _refresh_cooldown(runtimes: list[PortfolioRuntime | PriceTrackerRuntime]) -> float:
     """Seconds between two accepted `bitpanda.refresh` calls: the ticker
     interval, never below REFRESH_MIN_COOLDOWN. A shorter cooldown would let
-    an automation drive ticker requests above the budgeted polling rate."""
+    an automation drive ticker requests above the polling rate, and past a
+    429's backoff."""
     seconds = REFRESH_MIN_COOLDOWN.total_seconds()
     for runtime in runtimes:
         if isinstance(runtime, PriceTrackerRuntime):
@@ -415,8 +411,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) ->
 async def async_remove_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> None:
     """Forget what outlived the entry's setups: the Portfolio's store of
     known wallets and staking reward marks, with its file
-    (portfolio_store.py); the Price Tracker's slow-interval repair issue
-    with the Price Tracker; the repair issue for the entities the upgrade
+    (portfolio_store.py); the repair issue for the entities the upgrade
     left alone with the Portfolio, whose entities they were; each repair
     issue about what blocks the upgrade of a version 1 entry, once its cause
     went with this entry -- and, with the last Bitpanda entry, the upgrade's
@@ -426,9 +421,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) ->
     Assistant 2025.5 has already dropped it from its entries when this
     runs, and nothing here depends on that order.
     """
-    if entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER:
-        async_delete_price_interval_issue(hass)
-    else:
+    if entry_type(entry) != ENTRY_TYPE_PRICE_TRACKER:
         migration.async_delete_not_migrated_issue(hass)
         await async_remove_portfolio_store(hass, entry.entry_id)
     migration.async_update_blocker_issues(hass, entry.entry_id)

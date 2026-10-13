@@ -39,7 +39,7 @@ The integration offers two services. Set up either or both — each one once.
 ### Bitpanda Price Tracker
 - Live prices for more than 14,000 assets — crypto, stocks, ETFs, ETCs, Bitpanda Crypto Indices and tokenized precious metals — **without an API key**
 - One device per tracked asset, such as **Bitcoin (BTC) Price Tracker**, in groups by asset type, with a price sensor in EUR (**Bitcoin (BTC) Price Tracker EUR**) and, optionally, one in each of the other 11 supported currencies
-- EUR prices come from Bitpanda every 60 seconds. Above 30 tracked assets the interval stretches automatically, so the integration never sends more than 1,800 price requests per hour. Should it grow past 30 minutes (above 900 tracked assets), **Settings → Repairs** says so until you track fewer
+- EUR prices come from Bitpanda every 60 seconds, one request per tracked asset. Should Bitpanda answer "too many requests", the integration slows down by itself and returns to every 60 seconds once Bitpanda answers again.
 - Other currencies are converted with the daily reference rates of the European Central Bank (ECB), fetched every 6 hours
 - 24-hour price change (`change_24h_pct`) as an attribute, from the Home Assistant recorder
 
@@ -546,7 +546,7 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 | No Balance (staking) sensor for an asset | It appears once something is staked or Bitpanda offers an Earn product for the asset |
 | A price in another currency has no value and a `conversion` attribute | The ECB rates could not be loaded since Home Assistant started; the integration retries every 15 minutes and the value appears with the first success |
 | One asset's price sensors are `unavailable` | Bitpanda returned no price for it three rounds in a row; see the warning in the log |
-| Prices update less often than every minute | Above 30 tracked assets the interval stretches so that the integration stays under 1,800 price requests an hour; **Settings → Repairs** says so once it passes 30 minutes (see [Features](#-features)) |
+| Prices update less often than every minute | Bitpanda answered "too many requests": the integration waits longer between rounds, up to 16 minutes, and returns to every 60 seconds as soon as Bitpanda answers again. The log says when it slows down and when it is back. |
 | 24-hour price change missing | A newly tracked price shows it after a day, and only while the recorder records the sensor (see [Known limitations](#%EF%B8%8F-known-limitations)) |
 | A Portfolio sensor keeps no statistics after you set the Portfolio up again in another currency, and **Settings → Repairs** reports "The unit of sensor.bitpanda_… has changed" | Home Assistant still holds its statistics in the old currency — if setup offered to delete them, you kept them. Delete them under **Settings → Tools → Statistics** (before Home Assistant 2026.8: **Developer tools → Statistics**), where the sensor is listed with the changed unit |
 | A card shows "Custom element doesn't exist", or **Add card** does not list the Bitpanda cards | Reload the page twice — your browser loads the cards when it opens Home Assistant, and the first reload after a new installation or an update can still come from its cache. A new browser tab works at once (in the Home Assistant app: close and reopen it, twice if needed) |

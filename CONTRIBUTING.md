@@ -101,7 +101,7 @@ The integration lives in `custom_components/bitpanda/`; the dashboard cards' sou
 | `assets.py` | Asset categories (`asset_category`), legacy symbol resolution (`pick_legacy`), `AssetDirectory` for holding metadata, list labels |
 | `asset_flow.py` | The "Add price tracker" subentry flow and the cached catalogue listings |
 | `config_flow.py` | Service menu, Portfolio setup/reauth/reconfigure, Price Tracker setup, the options (Configure) of both services, import |
-| `const.py` | Domain, URLs, scopes, currencies, intervals, budgets |
+| `const.py` | Domain, URLs, scopes, currencies, intervals |
 | `devices.py` | Device lookups scoped to their config entry |
 | `diagnostics.py` | Diagnostics per service, API key redacted |
 | `ecb.py` | ECB daily reference rates |
@@ -115,7 +115,7 @@ The integration lives in `custom_components/bitpanda/`; the dashboard cards' sou
 | `portfolio_model.py` | Pure data model: holdings, value split, Cash Plus, Earn, rewards, and the wait of a Portfolio figure whose entry vanished (`FigureWatch`) |
 | `portfolio_sensor.py` | Portfolio sensors and the wallet lifecycle manager, which also keeps the wallet groups |
 | `portfolio_store.py` | What each Portfolio remembers, in `.storage/bitpanda.portfolio.<entry_id>`, one section per feature: the assets known — announced, or there when the list began — (`known_wallets`), and the newest announced staking payout per asset (`known_rewards`) |
-| `price_coordinator.py` | Keyless ticker coordinator with its request budget, and the repair issue while that stretches its interval past 30 minutes; ECB coordinator |
+| `price_coordinator.py` | Keyless ticker coordinator, every 60 seconds and slowed down after a 429; ECB coordinator |
 | `price_sensor.py` | Price sensors per asset and currency |
 | `purge.py` | On a currency change, deletes the Portfolio's sensors and devices with their history and long-term statistics, and the history and statistics of its sensors removed earlier; at setup, the history and statistics an earlier Portfolio left in another currency |
 | `repairs.py` | The fix flow of the upgrade's repair issue for entities not migrated: after a confirmation, deletes them and each old device left empty |
@@ -124,7 +124,7 @@ The integration lives in `custom_components/bitpanda/`; the dashboard cards' sou
 | `strings.json`, `translations/` | UI strings, seven languages (see [Translations](#translations)) |
 | `tolerance.py` | `TolerantCoordinator` and `TolerantEntity`: sensors keep their last data through short outages |
 
-The Portfolio polls `/portfolio` and `/portfolio-history` every 5 minutes, `/operations` every hour and `/earn/configs` every 24 hours, all with the key. The Price Tracker polls `/tickers` without a key — every 60 seconds, stretched above 30 assets to stay within 1,800 requests per hour — and the ECB every 6 hours when extra currencies are configured. Add new reads to an existing coordinator rather than polling from a sensor.
+The Portfolio polls `/portfolio` and `/portfolio-history` every 5 minutes, `/operations` every hour and `/earn/configs` every 24 hours, all with the key. The Price Tracker polls `/tickers` without a key — every 60 seconds, one request per asset after the other, slowed down after a 429 — and the ECB every 6 hours when extra currencies are configured. Add new reads to an existing coordinator rather than polling from a sensor.
 
 The wallet lifecycle manager (`PortfolioEntityManager`) runs after every portfolio refresh. It adds and removes the wallet devices and keeps them in wallet groups, config subentries it creates and removes itself; a group the user deletes comes back with the next refresh while its assets are still held. So the Portfolio's update listener reloads the entry only when `entry.data` or `entry.options` changed since setup — subentry changes never reload it. The Price Tracker reloads only when its data, options or group data changed since its start: its groups hold what it tracks. A change saved while it starts, before its update listener exists, is caught at the end of setup and reloads it once more. A new title for the entry or a group, or a changed system option, does not reload it; when polling is switched on or off, Home Assistant reloads the entry itself.
 

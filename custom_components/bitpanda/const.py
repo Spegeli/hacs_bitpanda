@@ -151,10 +151,6 @@ EXTRA_CURRENCIES: tuple[str, ...] = tuple(c for c in SUPPORTED_CURRENCIES if c !
 ECB_RATES_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
 ECB_UPDATE_INTERVAL = timedelta(hours=6)
 
-# The keyless ticker endpoint documents no limit. The Price Tracker holds
-# itself to this many requests per hour: 30 assets at the 60 s base interval.
-TICKER_HOURLY_BUDGET = 1800
-
 # A holding is removed only after this many consecutive successful portfolio
 # refreshes without it, spread over WALLET_REMOVAL_TIME at the least: the
 # time they take at the regular pace, which refreshes by hand

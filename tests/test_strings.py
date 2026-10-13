@@ -23,7 +23,7 @@ from custom_components.bitpanda.portfolio_sensor import (
     WalletSensor,
     WalletTotalSensor,
 )
-from custom_components.bitpanda.price_coordinator import ISSUE_SLOW_PRICE_INTERVAL, _ecb_failed
+from custom_components.bitpanda.price_coordinator import _ecb_failed
 from custom_components.bitpanda.price_sensor import PriceSensor
 
 _DIR = Path(__file__).parent.parent / "custom_components" / "bitpanda"
@@ -267,7 +267,6 @@ _LOCATED_TEXTS = {
     ("issues", "price_tracker_exists", "description"): "",
     ("issues", "portfolio_exists", "description"): "⋮",
     ("exceptions", "portfolio_device_not_removable", "message"): "⋮",
-    ("issues", "slow_price_interval", "description"): "⋮",
 }
 # Shown right on the Price Tracker's entry, after its ⋮ -> "Reconfigure": it
 # sends the user to "Configure" (⚙) on "the same entry".
@@ -1543,12 +1542,11 @@ def test_no_exception_text_takes_an_english_message():
 
 def test_every_issue_text_is_one_the_code_raises():
     """strings.json holds no repair-issue text the code never raises: the
-    upgrade's reports, what blocks the upgrade, and the Price Tracker's slow
-    interval. Each module's own tests render its issues in every language."""
+    upgrade's reports and what blocks the upgrade. Each module's own tests
+    render its issues in every language."""
     assert set(_load("strings.json")["issues"]) == {
         *migration.UPGRADE_ISSUES,
         *migration.BLOCKER_ISSUES,
-        ISSUE_SLOW_PRICE_INTERVAL,
     }
 
 

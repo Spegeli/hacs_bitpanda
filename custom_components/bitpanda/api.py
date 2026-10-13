@@ -28,9 +28,9 @@ _LOGGER = logging.getLogger(__name__)
 
 # Hard stop for one paginated listing. The largest real walk is the whole
 # 14,054-asset catalogue, 141 pages of 100; a five-year operation history took
-# 13. 500 pages (50,000 records) leaves a wide margin above both, and even an
-# /operations history that long, re-read at the hourly rewards cadence, stays
-# inside the hourly read budget next to the share reserved for prices.
+# 13. 500 pages (50,000 records) leaves a wide margin above both. Bitpanda
+# limits reads to 50 requests per second per API key, and the pages of a
+# listing are asked for one after the other.
 _MAX_PAGES = 500
 
 # The only cursor shape /operations mishandles: a whole-second UTC timestamp.
@@ -151,7 +151,7 @@ class BitpandaApiClient:
 
         /currencies, /assets and /tickers answer without a key. A keyless
         client sends no x-api-key header at all, so public lookups never
-        carry the key and never count against its read budget. The key lives
+        carry the key and never count against its rate limit. The key lives
         only inside the header dict -- no second copy on the instance.
         """
         self._session = session
@@ -356,9 +356,8 @@ class BitpandaApiClient:
 
         Builds the "Add price tracker" subentry flow's category pickers (see
         assets.py's ASSET_CATEGORY_FILTERS) -- a handful of these calls
-        cover the whole 14000-asset catalogue, each cached there for 24 hours
-        precisely because even one uncached listing is a meaningful slice of
-        the hourly read budget.
+        cover the whole 14000-asset catalogue, each cached there for 24 hours:
+        one uncached listing takes up to 141 requests, one after the other.
         """
         params: dict[str, Any] = {"type": type_}
         if group is not None:

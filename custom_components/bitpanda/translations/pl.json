@@ -579,10 +579,6 @@
     "portfolio_exists": {
       "title": "Migracja integracji Bitpanda zablokowana: usługa Bitpanda Portfolio jest już skonfigurowana",
       "description": "Wpisu Bitpanda „{entry}” sprzed migracji nie można zmigrować: stałby się drugą usługą Bitpanda Portfolio obok „{portfolio}”, a można skonfigurować tylko jedną. Nic w nim nie zostało zmienione. Usuń jeden z dwóch wpisów na stronie integracji Bitpanda (⋮ → „Usuń”). Jeśli zachowasz „{entry}”, uruchom następnie ponownie Home Assistant, aby go zmigrować."
-    },
-    "slow_price_interval": {
-      "title": "Bitpanda Price Tracker: ceny odświeżane tylko co {minutes} min",
-      "description": "Liczba aktywów śledzonych przez usługę Bitpanda Price Tracker: {count}. Każde odświeżenie wymaga jednego zapytania na aktywo, dlatego — aby nie przekroczyć budżetu zapytań — ceny są odświeżane tylko co {minutes} min. Śledź mniej aktywów, aby odświeżanie było szybsze: usuń urządzenie aktywa (⋮ na jego stronie urządzenia) albo całą grupę (⋮ na stronie integracji Bitpanda)."
     }
   },
   "services": {

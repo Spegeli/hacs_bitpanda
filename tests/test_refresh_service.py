@@ -2,8 +2,8 @@
 throttled to the ticker interval, and failing when a refresh fails.
 
 Every accepted call costs a portfolio request plus one ticker request per
-tracked asset; the ticker interval is what keeps the latter inside the
-self-imposed budget, so the cooldown follows it and never drops below 10 s.
+tracked asset; the ticker interval, slowed after a 429, is the pace Bitpanda
+gets the latter at, so the cooldown follows it and never drops below 10 s.
 The clock is the module's own `monotonic` name, patched there alone.
 """
 import asyncio
@@ -113,7 +113,9 @@ async def test_refresh_reaches_both_services_and_is_throttled(hass):
     assert portfolio.async_refresh.await_count == 2
 
 
-async def test_cooldown_follows_a_stretched_ticker_interval(hass):
+async def test_cooldown_follows_a_slowed_ticker_interval(hass):
+    """After a 429 the prices are asked for less often (the backoff): no
+    refresh by hand comes sooner."""
     _, tickers = await _register(hass, timedelta(seconds=120))
     clock = _Clock(1000.0)
     with patch("custom_components.bitpanda.monotonic", clock):

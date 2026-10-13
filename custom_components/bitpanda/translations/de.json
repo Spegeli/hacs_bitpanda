@@ -579,10 +579,6 @@
     "portfolio_exists": {
       "title": "Bitpanda-Umstieg blockiert: Ein Bitpanda Portfolio ist bereits eingerichtet",
       "description": "Der Bitpanda-Eintrag „{entry}“ aus der Zeit vor dem Umstieg kann nicht umgestellt werden: Er würde neben „{portfolio}“ zu einem zweiten Bitpanda Portfolio, und es kann nur eines eingerichtet sein. An ihm wurde nichts geändert. Lösche einen der beiden Einträge auf der Bitpanda-Integrationsseite (⋮ → „Löschen“). Behältst du „{entry}“, starte Home Assistant danach neu, damit er umgestellt wird."
-    },
-    "slow_price_interval": {
-      "title": "Bitpanda Price Tracker: Preise nur alle {minutes} Minuten aktualisiert",
-      "description": "Der Bitpanda Price Tracker verfolgt {count} Assets und braucht für jede Aktualisierung eine Anfrage pro Asset. Um sein Anfragebudget einzuhalten, aktualisiert er ihre Preise nur alle {minutes} Minuten. Verfolge weniger Assets für schnellere Aktualisierungen: Lösche das Gerät eines Assets (⋮ auf seiner Geräteseite) oder eine ganze Gruppe (⋮ auf der Bitpanda-Integrationsseite)."
     }
   },
   "services": {

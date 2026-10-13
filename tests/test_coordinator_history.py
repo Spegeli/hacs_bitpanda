@@ -41,6 +41,30 @@ async def test_collect_returns_one_entry_per_timeframe():
     )
 
 
+async def test_collect_returns_keeps_each_timeframes_value_series():
+    """The portfolio's value over each window comes in the same answer as
+    its return: the dashboard cards draw their line from it. Points without
+    a time or a number are left out."""
+    datapoints = [
+        {"time": "2026-10-12T10:10:00Z", "value": {"value": "861.50", "currency_id": "eur"}},
+        {"time": "2026-10-12T10:00:00Z", "value": {"value": "860.98", "currency_id": "eur"}},
+        {"time": "nonsense", "value": {"value": "1"}},
+        {"time": "2026-10-12T10:20:00Z", "value": {"value": "not a number"}},
+        {"time": "2026-10-12T10:30:00Z"},
+    ]
+    with mock_aiohttp_client() as mocker:
+        for timeframe in PORTFOLIO_TIMEFRAMES:
+            mocker.get(
+                f"{API_BASE_URL}/portfolio-history?timeframe={timeframe}",
+                json={"data": {"datapoints": datapoints if timeframe == "DAY" else [],
+                                "return_percentage": "0.5"}},
+            )
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            result = await collect_returns(client, None)
+    assert result.series == {"DAY": ((1791799200000, 860.98), (1791799800000, 861.5))}
+
+
 async def test_collect_returns_asks_in_the_portfolio_currency():
     """A Portfolio kept in USD gets its returns measured in USD: every
     timeframe's request names the Portfolio currency."""

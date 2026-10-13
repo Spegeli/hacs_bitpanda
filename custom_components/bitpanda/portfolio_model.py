@@ -353,6 +353,32 @@ class PortfolioReturns:
 
     values: dict[str, float]
     failed: frozenset[str] = frozenset()
+    # The portfolio's value over each timeframe, as (milliseconds, value)
+    # pairs in time order: the dashboard cards draw their line from it.
+    # Kept in memory only, replaced with every refresh.
+    series: dict[str, tuple[tuple[int, float], ...]] = field(default_factory=dict)
+
+
+def parse_history_points(datapoints: Any) -> tuple[tuple[int, float], ...]:
+    """A /portfolio-history `datapoints` list as (milliseconds, value)
+    pairs in time order; a point without a readable time or a finite value
+    is left out."""
+    points: list[tuple[int, float]] = []
+    for point in datapoints if isinstance(datapoints, list) else []:
+        if not isinstance(point, dict):
+            continue
+        amount = point.get("value")
+        raw = amount.get("value") if isinstance(amount, dict) else None
+        if raw is None:
+            continue
+        try:
+            time = datetime.fromisoformat(str(point.get("time")).replace("Z", "+00:00"))
+            value = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if time.tzinfo is not None and math.isfinite(value):
+            points.append((int(time.timestamp() * 1000), value))
+    return tuple(sorted(points))
 
 
 def tolerate_failed_timeframes(
@@ -379,6 +405,7 @@ def tolerate_failed_timeframes(
     for timeframe in streaks.keys() - result.failed:
         del streaks[timeframe]
     values = dict(result.values)
+    series = dict(result.series)
     failed = set(result.failed)
     for timeframe in result.failed:
         streak = streaks.setdefault(timeframe, FailureStreak())
@@ -388,7 +415,9 @@ def tolerate_failed_timeframes(
         failed.discard(timeframe)
         if timeframe in previous.values:
             values[timeframe] = previous.values[timeframe]
-    return PortfolioReturns(values=values, failed=frozenset(failed))
+        if timeframe in previous.series:
+            series[timeframe] = previous.series[timeframe]
+    return PortfolioReturns(values=values, failed=frozenset(failed), series=series)
 
 
 def lists_nothing(entries: list[dict[str, Any]]) -> bool:

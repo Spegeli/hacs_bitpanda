@@ -1,0 +1,235 @@
+"""The dashboard cards' bundle: served by the integration and added to every
+dashboard, once per Home Assistant run, at a URL that changes with the file."""
+from pathlib import Path
+import re
+from unittest.mock import AsyncMock, Mock, patch
+
+from homeassistant.components.http import StaticPathConfig
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.setup import async_setup_component
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.bitpanda import cards
+from custom_components.bitpanda.api import BitpandaAuthError
+from custom_components.bitpanda.cards import (
+    CARDS_FILE,
+    CARDS_URL,
+    async_register_cards,
+    cards_digest,
+)
+from custom_components.bitpanda.const import DOMAIN, SUPPORTED_CURRENCIES
+
+
+def _http() -> Mock:
+    return Mock(async_register_static_paths=AsyncMock())
+
+
+async def test_the_bundle_is_served_from_the_package(hass):
+    hass.http = _http()
+    with patch.object(cards, "add_extra_js_url"):
+        await async_register_cards(hass)
+    hass.http.async_register_static_paths.assert_awaited_once_with(
+        [StaticPathConfig(CARDS_URL, str(CARDS_FILE), True)]
+    )
+    assert CARDS_FILE.name == "bitpanda-cards.js"
+    assert CARDS_FILE.parent.name == "frontend"
+    assert CARDS_FILE.is_file()
+
+
+async def test_the_module_url_carries_the_content_hash(hass):
+    hass.http = _http()
+    with patch.object(cards, "add_extra_js_url") as add:
+        await async_register_cards(hass)
+    add.assert_called_once_with(hass, f"{CARDS_URL}?v={cards_digest(CARDS_FILE)}")
+
+
+async def test_a_missing_bundle_costs_only_the_cards(hass, caplog):
+    """A broken installation without the bundle: the integration still sets
+    up, the log says why the cards are missing."""
+    hass.http = _http()
+    with (
+        patch.object(cards, "CARDS_FILE", Path("/nonexistent/bitpanda-cards.js")),
+        patch.object(cards, "add_extra_js_url") as add,
+    ):
+        await async_register_cards(hass)
+    add.assert_not_called()
+    assert "The dashboard cards are not available: " in caplog.text
+
+
+async def test_a_refused_path_costs_only_the_cards(hass, caplog):
+    hass.http = Mock(async_register_static_paths=AsyncMock(side_effect=RuntimeError("router frozen")))
+    with patch.object(cards, "add_extra_js_url") as add:
+        await async_register_cards(hass)
+    add.assert_not_called()
+    assert "The dashboard cards are not available: router frozen" in caplog.text
+
+
+def test_the_hash_changes_with_the_content(tmp_path):
+    one, same, other = (tmp_path / name for name in ("one.js", "same.js", "other.js"))
+    one.write_bytes(b"customElements.define('a', A);")
+    same.write_bytes(b"customElements.define('a', A);")
+    other.write_bytes(b"customElements.define('b', B);")
+    assert cards_digest(one) == cards_digest(same)
+    assert cards_digest(one) != cards_digest(other)
+    assert len(cards_digest(one)) == 12
+    assert all(char in "0123456789abcdef" for char in cards_digest(one))
+
+
+_CLIENT = "custom_components.bitpanda.api.BitpandaApiClient."
+
+
+async def test_registered_once_for_the_integration_its_entries_and_reloads(hass, caplog):
+    """async_setup runs once per run; setting up and reloading either
+    service adds nothing more (a second registration of the path would be
+    refused and logged)."""
+    portfolio = MockConfigEntry(
+        domain=DOMAIN, version=3, unique_id="portfolio", title="Bitpanda Portfolio",
+        data={"entry_type": "portfolio", "api_key": "key", "currency": "EUR",
+              "currency_id": "b88b8466-efe3-11eb-b56f-0691764446a7"},
+    )
+    tracker = MockConfigEntry(
+        domain=DOMAIN, version=3, unique_id="price_tracker", title="Bitpanda Price Tracker",
+        data={"entry_type": "price_tracker"}, options={"extra_currencies": []},
+    )
+    for entry in (portfolio, tracker):
+        entry.add_to_hass(hass)
+    with (
+        patch(f"{_CLIENT}async_get_portfolio", AsyncMock(return_value=[])),
+        patch(f"{_CLIENT}async_get_portfolio_history", AsyncMock(return_value={"return_percentage": 0})),
+        patch(f"{_CLIENT}async_get_earn_configs", AsyncMock(return_value=[])),
+        patch(f"{_CLIENT}async_get_operations", AsyncMock(return_value=[])),
+        patch(f"{_CLIENT}async_get_assets", AsyncMock(return_value=[])),
+        patch.object(cards, "add_extra_js_url") as add,
+    ):
+        assert await async_setup_component(hass, DOMAIN, {})
+        await hass.async_block_till_done()
+        assert portfolio.state is ConfigEntryState.LOADED
+        assert tracker.state is ConfigEntryState.LOADED
+        for entry in (portfolio, tracker):
+            for _ in range(2):
+                assert await hass.config_entries.async_reload(entry.entry_id)
+                await hass.async_block_till_done()
+    assert add.call_count == 1
+    assert "The dashboard cards are not available" not in caplog.text
+
+
+async def test_the_portfolio_line_comes_from_bitpandas_value_history(hass, hass_ws_client):
+    """bitpanda/portfolio_history answers with the series the Portfolio's
+    returns came with, as [milliseconds, value] pairs; a timeframe or a
+    Portfolio without one answers with none."""
+    portfolio = MockConfigEntry(
+        domain=DOMAIN, version=3, unique_id="portfolio", title="Bitpanda Portfolio",
+        data={"entry_type": "portfolio", "api_key": "key", "currency": "EUR",
+              "currency_id": "b88b8466-efe3-11eb-b56f-0691764446a7"},
+    )
+    portfolio.add_to_hass(hass)
+
+    async def history(*, timeframe, equivalent_currency_id=None):
+        points = [{"time": "2026-10-12T10:00:00Z", "value": {"value": "860.98"}}] if timeframe == "WEEK" else []
+        return {"datapoints": points, "return_percentage": "0.31"}
+
+    with (
+        patch(f"{_CLIENT}async_get_portfolio", AsyncMock(return_value=[])),
+        patch(f"{_CLIENT}async_get_portfolio_history", AsyncMock(side_effect=history)),
+        patch(f"{_CLIENT}async_get_earn_configs", AsyncMock(return_value=[])),
+        patch(f"{_CLIENT}async_get_operations", AsyncMock(return_value=[])),
+        patch(f"{_CLIENT}async_get_assets", AsyncMock(return_value=[])),
+        patch.object(cards, "add_extra_js_url"),
+    ):
+        assert await async_setup_component(hass, DOMAIN, {})
+        await hass.async_block_till_done()
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "bitpanda/portfolio_history", "timeframe": "week"})
+    answer = await client.receive_json()
+    assert answer["success"], answer
+    assert answer["result"] == {"points": [[1791799200000, 860.98]]}
+    await client.send_json_auto_id({"type": "bitpanda/portfolio_history", "timeframe": "day"})
+    assert (await client.receive_json())["result"] == {"points": []}
+    await client.send_json_auto_id({"type": "bitpanda/portfolio_history", "timeframe": "decade"})
+    assert not (await client.receive_json())["success"]
+    # A rejected key turns the Portfolio's figures unavailable at once: the
+    # line goes with them, instead of standing beside "—".
+    with patch(f"{_CLIENT}async_get_portfolio_history", AsyncMock(side_effect=BitpandaAuthError("rejected"))):
+        await portfolio.runtime_data.history.async_refresh()
+        await hass.async_block_till_done()
+    assert not portfolio.runtime_data.history.data_available
+    await client.send_json_auto_id({"type": "bitpanda/portfolio_history", "timeframe": "week"})
+    assert (await client.receive_json())["result"] == {"points": []}
+
+
+async def test_without_a_portfolio_the_line_has_no_points(hass, hass_ws_client):
+    hass.http = _http()
+    with patch.object(cards, "add_extra_js_url"):
+        await async_register_cards(hass)
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "bitpanda/portfolio_history", "timeframe": "year"})
+    assert (await client.receive_json())["result"] == {"points": []}
+
+
+# The cards' names, as dashboards and the card picker know them: an
+# interface from the first release, like entity IDs.
+_CARDS = {
+    "bitpanda-portfolio-card": "Bitpanda Portfolio",
+    "bitpanda-price-tracker-card": "Bitpanda Price Tracker",
+}
+
+
+def test_the_bundle_defines_the_two_cards_by_their_fixed_names():
+    bundle = CARDS_FILE.read_text(encoding="utf-8")
+    for tag, name in _CARDS.items():
+        assert f'"{tag}"' in bundle, tag
+        assert f'"{name}"' in bundle, name
+
+
+def test_the_price_tracker_card_offers_the_integrations_currencies():
+    """Its start-currency field lists EUR and every extra currency the
+    Price Tracker can be set up with."""
+    bundle = CARDS_FILE.read_text(encoding="utf-8")
+    for currency in SUPPORTED_CURRENCIES:
+        assert f'"{currency}"' in bundle, currency
+
+
+_README = (Path(__file__).parents[1] / "README.md").read_text(encoding="utf-8")
+
+# Every card's options; the title is common to both.
+_OPTIONS = {
+    "bitpanda-portfolio-card": {
+        "timeframe", "show_total", "show_graph", "show_cash", "show_allocation", "show_wallets",
+        "group_wallets", "show_search", "sort", "limit", "group_selection", "groups",
+        "asset_selection", "assets", "hide_amounts",
+    },
+    "bitpanda-price-tracker-card": {
+        "layout", "timeframe", "currency", "sort", "group_selection", "groups",
+        "asset_selection", "assets", "limit",
+    },
+}
+
+
+def _readme_section(heading: str) -> str:
+    start = _README.index(heading)
+    end = _README.find("\n#", start + len(heading))
+    return _README[start:] if end < 0 else _README[start:end]
+
+
+def test_every_card_option_is_documented():
+    """Each option is a row of the README's option table and an option the
+    bundle knows; the title is named for both cards, and no colours option
+    is left."""
+    table = _readme_section("### Card options")
+    documented = set(re.findall(r"^\| `([a-z_]+)` \|", table, re.MULTILINE))
+    bundle = CARDS_FILE.read_text(encoding="utf-8")
+    for card, options in _OPTIONS.items():
+        for option in options:
+            assert option in documented, (card, option)
+            assert f'"{option}"' in bundle or f"{option}:" in bundle, (card, option)
+    assert documented == set().union(*_OPTIONS.values())
+    assert "`title`" in table
+    assert "`colors`" not in table
+
+
+def test_the_cards_link_to_their_readme_section():
+    """The card picker's documentation link opens the README's section."""
+    assert "#-dashboard-cards" in CARDS_FILE.read_text(encoding="utf-8")
+    assert "\n## 🃏 Dashboard cards\n" in _README
+    for card in _OPTIONS:
+        assert f"`custom:{card}`" in _README, card

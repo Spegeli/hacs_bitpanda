@@ -48,6 +48,7 @@ from .portfolio_model import (
     PortfolioReturns,
     RewardTotals,
     parse_earn_configs,
+    parse_history_points,
     parse_portfolio,
     sum_rewards,
     tolerate_failed_timeframes,
@@ -338,6 +339,7 @@ async def collect_returns(
     whose return is unknown, not a failed one.
     """
     out: dict[str, float] = {}
+    series: dict[str, tuple[tuple[int, float], ...]] = {}
     failed: set[str] = set()
     for timeframe in PORTFOLIO_TIMEFRAMES:
         try:
@@ -350,6 +352,8 @@ async def collect_returns(
             failed.add(timeframe)
             _LOGGER.debug("No history for timeframe %s this cycle", timeframe)
             continue
+        if points := parse_history_points(body.get("datapoints")):
+            series[timeframe] = points
         value = body.get("return_percentage")
         if isinstance(value, bool):
             # isinstance(True, int) is True in Python, so a boolean would be
@@ -378,7 +382,7 @@ async def collect_returns(
             translation_domain=DOMAIN, translation_key="history_unavailable"
         )
 
-    return PortfolioReturns(values=out, failed=frozenset(failed))
+    return PortfolioReturns(values=out, failed=frozenset(failed), series=series)
 
 
 class HistoryCoordinator(TolerantCoordinator[PortfolioReturns]):

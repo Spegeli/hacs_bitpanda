@@ -409,6 +409,19 @@ def test_a_failing_timeframe_keeps_its_last_return_until_confirmed():
     assert returns == PortfolioReturns(values={"DAY": 1.0}, failed=frozenset({"WEEK"}))
 
 
+def test_a_failing_timeframe_keeps_its_value_series_with_its_return():
+    """The cards' line of the week stays while its return does, and goes
+    with it once the failure is confirmed."""
+    line = ((1, 100.0), (2, 101.0))
+    streaks = {}
+    returns = PortfolioReturns(values={"DAY": 1.0, "WEEK": 2.0}, series={"WEEK": line})
+    for at in (_T0, _T0 + _I):
+        returns = tolerate_failed_timeframes(_WEEK_FAILED, returns, streaks, at, _I)
+        assert returns.series == {"WEEK": line}
+    returns = tolerate_failed_timeframes(_WEEK_FAILED, returns, streaks, _T0 + 2 * _I, _I)
+    assert returns.series == {}
+
+
 def test_a_timeframe_answered_without_a_figure_stays_unknown_while_it_fails():
     """Bitpanda answered for the month without a usable figure, then the
     month's own requests fail: there is no figure to keep, yet no failure is

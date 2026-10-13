@@ -25,6 +25,7 @@ from . import migration
 from .announcements import RewardAnnouncer
 from .api import BitpandaApiClient
 from .assets import AssetDirectory
+from .cards import async_register_cards
 from .const import (
     CONF_API_KEY,
     CONF_ASSETS,
@@ -90,14 +91,17 @@ _ASSET_DIRECTORY_KEY = f"{DOMAIN}_asset_directory"
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register `bitpanda.refresh`, once, for both services.
+    """Register `bitpanda.refresh` and the dashboard cards, once, for both
+    services.
 
     Registered with the integration rather than with an entry, the action
     exists while no entry is loaded -- setup failed or is being retried --
     so automations that use it still validate, and a call then says why it
-    does nothing.
+    does nothing. The cards (cards.py) are added to every dashboard once
+    per run, however many entries are set up or reloaded.
     """
     _async_register_refresh_service(hass)
+    await async_register_cards(hass)
     return True
 
 

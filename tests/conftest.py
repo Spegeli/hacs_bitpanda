@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 import string
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.history import get_significant_states
@@ -57,6 +57,18 @@ def pytest_configure(config):
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
 _FIXTURES = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture(autouse=True)
+def stub_the_dashboard_cards(request):
+    """Every test but test_cards.py sets up the integration without serving
+    the cards' bundle: the test environment has no frontend package, so
+    add_extra_js_url finds nothing to add to. test_cards.py owns it."""
+    if request.module.__name__.endswith("test_cards"):
+        yield
+        return
+    with patch("custom_components.bitpanda.async_register_cards", AsyncMock()):
+        yield
 
 
 @pytest.fixture(autouse=True)

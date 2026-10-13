@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Spegeli/hacs_bitpanda/main/logo.png" alt="Bitpanda Logo" width="300">
+  <img src="https://raw.githubusercontent.com/Spegeli/hacs_bitpanda/main/.github/readme/logo.png" alt="Bitpanda Logo" width="300">
 </p>
 
 <h1 align="center">Bitpanda – Home Assistant Integration</h1>
@@ -42,6 +42,9 @@ The integration offers two services. Set up either or both — each one once.
 - EUR prices come from Bitpanda every 60 seconds. Above 30 tracked assets the interval stretches automatically, so the integration never sends more than 1,800 price requests per hour. Should it grow past 30 minutes (above 900 tracked assets), **Settings → Repairs** says so until you track fewer
 - Other currencies are converted with the daily reference rates of the European Central Bank (ECB), fetched every 6 hours
 - 24-hour price change (`change_24h_pct`) as an attribute, from the Home Assistant recorder
+
+### Dashboard cards
+- Two cards for your dashboards, shipped with the integration — nothing else to install: **Bitpanda Portfolio** and **Bitpanda Price Tracker** (see [Dashboard cards](#-dashboard-cards))
 
 ### Supported Assets
 | Type | Examples | Price Tracker | Portfolio |
@@ -266,6 +269,78 @@ The action `bitpanda.refresh` fetches the portfolio and the prices right away an
 
 ---
 
+## 🃏 Dashboard cards
+
+The integration brings two cards for your dashboards. They come with it — there is nothing else to install — and find their sensors by themselves: wallets and tracked assets that come and go appear and disappear without editing a card.
+
+To add one, edit a dashboard, choose **Add card** and search for **Bitpanda**; each card shows a preview. Every option is in the card's visual editor, and YAML works too.
+
+> [!NOTE]
+> Your browser loads the cards when it opens Home Assistant. After you set up the integration, and after each update, **reload the page twice**: the first reload can still come from your browser's cache. A new browser tab shows the cards at once (in the Home Assistant app: close and reopen it, twice if needed).
+
+| Card | Type | Shows |
+|---|---|---|
+| **Bitpanda Portfolio** | `custom:bitpanda-portfolio-card` | Total value with your return over 1 day to 1 year and a line of the total value; Cash and Cash Plus; how your money is split across asset types; your wallets, by asset type or in one list — tap a group to open it, the arrow beside a wallet for its details: available and staked units, staking APR, average buy price, invested amount, profit or loss and staking rewards. Each part can be left out, down to total value and return alone |
+| **Bitpanda Price Tracker** | `custom:bitpanda-price-tracker-card` | Your tracked assets as a list or as tiles: price, change in percent and in the price's currency, and a line. With extra currencies set up in the Price Tracker, a switch shows the prices in them |
+
+<table>
+  <tr>
+    <td valign="top"><img src="https://raw.githubusercontent.com/Spegeli/hacs_bitpanda/main/.github/readme/cards/portfolio-card.png" alt="The Bitpanda Portfolio card: total value with the return over 1 day, the line of the total value, Cash and Cash Plus, the allocation, the search field and the wallets by asset type, one of them opened" width="300"></td>
+    <td valign="top">
+      <img src="https://raw.githubusercontent.com/Spegeli/hacs_bitpanda/main/.github/readme/cards/portfolio-card-search.png" alt="The Bitpanda Portfolio card's wallet search: the wallets matching “sol”, one of them opened" width="300"><br><br>
+      <img src="https://raw.githubusercontent.com/Spegeli/hacs_bitpanda/main/.github/readme/cards/price-tracker-card-list.png" alt="The Bitpanda Price Tracker card as a list" width="300"><br><br>
+      <img src="https://raw.githubusercontent.com/Spegeli/hacs_bitpanda/main/.github/readme/cards/price-tracker-card-tiles.png" alt="The Bitpanda Price Tracker card as tiles" width="300">
+    </td>
+  </tr>
+</table>
+
+### What the cards show
+
+- **The line shows the total value, not your return.** A deposit raises it; the percentage beside it is Bitpanda's return, which leaves deposits and withdrawals out, and the amount after it is what that percentage means on today's total value. The line is Bitpanda's own history of your total value, complete from the first day. Its dashed line marks the middle between the highest and the lowest value shown. Point at the line, or move a finger along it, to see the value at that moment, with the highest, middle and lowest value at the right.
+- **A wallet's percentage** is its return since purchase, and a group's is that of all its wallets together; the timeframe switch changes neither. A wallet's profit or loss is in its details.
+- **1D in the Price Tracker** is the sensor's own 24-hour change; 1W to 1Y come from the statistics. Beside or below the percentage is the same change in the price's currency. While an asset's statistics are shorter than the timeframe, its change and its line count from their start, and the row says since when ("Change since 6 Oct").
+- **"—"** means that a sensor has no value right now. The cards never put a figure of their own in its place.
+- **Stocks, ETFs and ETCs** count in shares, precious metals in grams. The wallet list shows up to 4 decimals, rounded down as in the Bitpanda app; a wallet's details show all of them.
+- **The eye** blurs amounts and units — for a screenshot, say — and keeps the percentages. It hides them on that card only; nothing else changes.
+- **A tap** opens Home Assistant's dialog of that figure, with its history.
+- **Language:** your profile language; group names come from the integration.
+
+### Card options
+
+Both cards take `title` (empty: the card's name). Gains and losses take your theme's success and error colours, green and red in Home Assistant's default theme.
+
+| Option | Values | Default | Cards |
+|---|---|---|---|
+| `timeframe` | `day`, `week`, `month`, `six_month`, `year` | `day` | both — the timeframe a card opens with |
+| `hide_amounts` | `true`, `false` | `false` | Portfolio — start with amounts hidden |
+| `show_total` | `true`, `false` | `true` | Portfolio — the total value and its return; the timeframe buttons stay while the line is shown |
+| `show_graph` | `true`, `false` | `true` | Portfolio — the line of the total value |
+| `show_cash` | `true`, `false` | `true` | Portfolio — Cash and Cash Plus |
+| `show_allocation` | `true`, `false` | `true` | Portfolio — the split by asset type |
+| `show_wallets` | `true`, `false` | `true` | Portfolio — the wallets |
+| `group_wallets` | `true`, `false` | `true` | Portfolio — wallets in their asset groups |
+| `show_search` | `true`, `false` | `false` | Portfolio — a search field above the wallets: finds them by name, symbol or ISIN, as one list without groups |
+| `sort` | `value`, `return`, `name` | `value` | Portfolio |
+| `sort` | `selection`, `name`, `change_desc`, `change_asc` | `name` | Price Tracker |
+| `group_selection` | `all`, `all_except`, `only` | `all` | Portfolio, Price Tracker |
+| `groups` | `crypto`, `stock`, `etf`, `etc`, `index`, `metal`, `other` | — | with `all_except` or `only`: the asset groups left out or shown |
+| `asset_selection` | `all`, `all_except`, `only` | `all` | Portfolio, Price Tracker |
+| `assets` | device IDs | — | with `all_except` or `only`: the wallets or price trackers left out or shown, within the asset groups shown |
+| `limit` | 0 or more; 0 shows all | `5` (Portfolio), `0` (Price Tracker) | Portfolio (wallets without asset groups), Price Tracker — rows before "Show all" |
+| `layout` | `list`, `tiles` | `list` | Price Tracker |
+| `currency` | `EUR` or a currency set up in the Price Tracker | `EUR` | Price Tracker — the start currency; EUR while that currency is not set up |
+
+Hiding a section, an asset group or a wallet changes only what the card shows: the total value, Cash, Cash Plus and the allocation always cover your whole portfolio, while a group's count, return and sum cover the wallets it shows.
+
+```yaml
+type: custom:bitpanda-price-tracker-card
+layout: tiles
+currency: USD
+sort: change_desc
+```
+
+---
+
 ## 🤖 Automation examples
 
 Paste one into a new automation's YAML editor (in the automation editor: **⋮ → Edit in YAML**) and adjust the entity IDs and the numbers. A price sensor's entity ID ends in its currency: for US dollars, use `sensor.bitpanda_bitcoin_btc_price_tracker_usd` once USD is one of the Price Tracker's extra currencies, and write the threshold in USD. Every example works from Home Assistant 2025.5 on.
@@ -474,6 +549,9 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 | Prices update less often than every minute | Above 30 tracked assets the interval stretches so that the integration stays under 1,800 price requests an hour; **Settings → Repairs** says so once it passes 30 minutes (see [Features](#-features)) |
 | 24-hour price change missing | A newly tracked price shows it after a day, and only while the recorder records the sensor (see [Known limitations](#%EF%B8%8F-known-limitations)) |
 | A Portfolio sensor keeps no statistics after you set the Portfolio up again in another currency, and **Settings → Repairs** reports "The unit of sensor.bitpanda_… has changed" | Home Assistant still holds its statistics in the old currency — if setup offered to delete them, you kept them. Delete them under **Settings → Tools → Statistics** (before Home Assistant 2026.8: **Developer tools → Statistics**), where the sensor is listed with the changed unit |
+| A card shows "Custom element doesn't exist", or **Add card** does not list the Bitpanda cards | Reload the page twice — your browser loads the cards when it opens Home Assistant, and the first reload after a new installation or an update can still come from its cache. A new browser tab works at once (in the Home Assistant app: close and reopen it, twice if needed) |
+| A card shows "—" where a value should be | The sensor behind it has no value right now; the rows above say why |
+| A Price Tracker line is missing | Its lines come from Home Assistant's long-term statistics: a newly tracked price draws one once two statistics exist — after about ten minutes on 1D, two hours on 1W and 1M, the next day on 6M and 1Y |
 
 **Still stuck?** Open an [issue](https://github.com/Spegeli/hacs_bitpanda/issues) with the diagnostics (**⋮ → Download diagnostics** on the entry; the API key is left out) and a debug log (**⋮ → Enable debug logging**).
 
@@ -503,4 +581,4 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 
 ## 📜 License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details. It covers this project's code and documentation, not Bitpanda's name and logo (`logo.png` and `custom_components/bitpanda/brand/`), which remain their owner's trademarks (see [Disclaimer](#%EF%B8%8F-disclaimer)).
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details. It covers this project's code and documentation, not Bitpanda's name and logo (`.github/readme/logo.png` and `custom_components/bitpanda/brand/`), which remain their owner's trademarks (see [Disclaimer](#%EF%B8%8F-disclaimer)).

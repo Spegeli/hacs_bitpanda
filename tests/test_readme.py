@@ -335,6 +335,34 @@ def test_the_license_badge_names_the_license_of_the_license_file_and_opens_it():
     ) in _README
 
 
+_OWN_IMAGE = "https://raw.githubusercontent.com/Spegeli/hacs_bitpanda/main/"
+
+
+def test_every_image_of_the_repository_the_readme_shows_lies_in_github_readme():
+    """The README's own images live in .github/readme, apart from the
+    integration, and the README loads them by their full address on main,
+    which HACS shows too: each address finds its file, and each image says
+    in words what it shows."""
+    images = re.findall(r"<img ([^>]*)>", _README)
+    own = [
+        (re.search(r'src="([^"]*)"', tag).group(1), re.search(r'alt="([^"]*)"', tag))
+        for tag in images
+        if _OWN_IMAGE in tag
+    ]
+    paths = [src.removeprefix(_OWN_IMAGE) for src, _ in own]
+    assert paths == [
+        ".github/readme/logo.png",
+        ".github/readme/cards/portfolio-card.png",
+        ".github/readme/cards/portfolio-card-search.png",
+        ".github/readme/cards/price-tracker-card-list.png",
+        ".github/readme/cards/price-tracker-card-tiles.png",
+    ]
+    for path in paths:
+        assert (_ROOT / path).is_file(), path
+    assert all(alt and alt.group(1) for _, alt in own)
+    assert not (_ROOT / "logo.png").exists()
+
+
 def test_the_release_badge_opens_the_release_it_shows():
     """The badge shows the newest stable release -- pre-releases left out,
     as include_prereleases is not set -- and GitHub's /releases/latest

@@ -71,7 +71,7 @@ EUR_CURRENCY_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
 
 PORTFOLIO_UPDATE_INTERVAL = timedelta(minutes=5)
 PRICE_UPDATE_INTERVAL_BASE = timedelta(seconds=60)
-EARN_UPDATE_INTERVAL = timedelta(hours=24)
+EARN_UPDATE_INTERVAL = timedelta(hours=1)
 REWARDS_UPDATE_INTERVAL = timedelta(hours=1)
 CHANGE_24H_UPDATE_INTERVAL = timedelta(minutes=15)
 

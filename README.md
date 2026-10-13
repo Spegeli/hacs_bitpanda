@@ -34,7 +34,7 @@ The integration offers two services. Set up either or both — each one once.
 - Nothing to maintain: a wallet appears at the next update after you buy an asset and goes about 15 minutes after you sell it, in groups by asset type such as Cryptocurrencies or Precious metals
 - A notification under **Notifications** when a new wallet appears — you can switch it off — and the event `bitpanda_wallet_added` for your own automations
 - A notification under **Notifications** when Bitpanda pays out a staking reward — switch it on if you want it — and the event `bitpanda_staking_reward_received` for your own automations
-- Updates every 5 minutes; Earn offers daily, rewards hourly
+- Updates every 5 minutes; Earn offers and rewards hourly
 
 ### Bitpanda Price Tracker
 - Live prices for more than 14,000 assets — crypto, stocks, ETFs, ETCs, Bitpanda Crypto Indices and tokenized precious metals — **without an API key**

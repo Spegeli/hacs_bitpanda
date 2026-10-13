@@ -201,11 +201,11 @@ class PortfolioCoordinator(TolerantCoordinator[PortfolioData]):
 
 
 class EarnCoordinator(DataUpdateCoordinator[EarnData]):
-    """Polls the Earn product catalogue once a day.
+    """Polls the Earn product catalogue every hour.
 
     A failed fetch leaves `data` at the last catalogue. While no catalogue
     was ever loaded, no Staking sensor shows its APR, so a failure then is
-    retried after FIRST_LOAD_RETRY_INTERVAL instead of a day.
+    retried after FIRST_LOAD_RETRY_INTERVAL instead of an hour.
     """
 
     config_entry: PortfolioConfigEntry

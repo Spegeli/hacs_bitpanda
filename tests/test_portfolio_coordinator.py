@@ -418,10 +418,18 @@ async def test_earn_error_fails_the_update():
     )
 
 
+async def test_earn_is_asked_for_every_hour():
+    """Offers and their APR change at Bitpanda's pace: every hour, like the
+    rewards, so a failed fetch costs an hour, not a day."""
+    coordinator = EarnCoordinator(None, None, _EarnClient([]))
+    assert coordinator.update_interval == timedelta(hours=1)
+    assert EARN_UPDATE_INTERVAL == timedelta(hours=1)
+
+
 async def test_earn_is_retried_sooner_until_it_first_loads():
     """Until the Earn catalogue first loads, no Staking sensor shows its APR,
-    so a failure then is retried after 15 minutes, not after a day. Once it
-    loaded, a failure keeps the daily interval: the last catalogue stays."""
+    so a failure then is retried after 15 minutes, not after an hour. Once it
+    loaded, a failure keeps the hourly interval: the last catalogue stays."""
     error = BitpandaApiError(
         "HTTP 503 from /earn/configs", kind="http_status", path="/earn/configs", status=503
     )

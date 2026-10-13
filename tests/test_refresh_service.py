@@ -1,8 +1,8 @@
 """The bitpanda.refresh action: registered once with the integration,
 throttled to the ticker interval, and failing when a refresh fails.
 
-Every accepted call costs a portfolio request plus one ticker request per
-tracked asset; the ticker interval, slowed after a 429, is the pace Bitpanda
+Every accepted call costs a portfolio request, five history requests for
+the returns and one ticker request per tracked asset; the ticker interval, slowed after a 429, is the pace Bitpanda
 gets the latter at, so the cooldown follows it and never drops below 10 s.
 The clock is the module's own `monotonic` name, patched there alone.
 """
@@ -66,9 +66,13 @@ def _loaded(hass, entry_type: str, runtime) -> MockConfigEntry:
     return entry
 
 
-def _portfolio_runtime(portfolio: _Coordinator) -> PortfolioRuntime:
+def _portfolio_runtime(
+    portfolio: _Coordinator, history: _Coordinator | None = None
+) -> PortfolioRuntime:
     return PortfolioRuntime(
-        portfolio=portfolio, history=None, earn=None, rewards=None,
+        portfolio=portfolio,
+        history=history if history is not None else _Coordinator(timedelta(minutes=5)),
+        earn=None, rewards=None,
         group_titles={}, data_at_setup={}, options_at_setup={},
     )
 
@@ -111,6 +115,34 @@ async def test_refresh_reaches_both_services_and_is_throttled(hass):
         await _call(hass)
     assert tickers.async_refresh.await_count == 2
     assert portfolio.async_refresh.await_count == 2
+
+
+async def test_the_portfolio_refresh_takes_its_returns_along(hass):
+    """The returns have a coordinator of their own: a refresh by hand asks
+    for them too, so a report right after it shows the current return. A
+    return that could not be fetched fails nothing -- it keeps its last
+    value, as after a scheduled refresh."""
+    await _set_up_the_integration(hass)
+    portfolio = _Coordinator(timedelta(minutes=5))
+    history = _Coordinator(timedelta(minutes=5), fails=True)
+    _loaded(hass, "portfolio", _portfolio_runtime(portfolio, history))
+    await _call(hass)
+    assert portfolio.async_refresh.await_count == 1
+    assert history.async_refresh.await_count == 1
+
+
+async def test_a_failed_portfolio_refresh_leaves_the_returns_alone(hass):
+    """While Bitpanda hangs, each of the five return requests would wait out
+    its own timeout before the call ends: after a failed portfolio refresh
+    the returns are not asked for, and keep their last value."""
+    await _set_up_the_integration(hass)
+    portfolio = _Coordinator(timedelta(minutes=5), fails=True)
+    history = _Coordinator(timedelta(minutes=5))
+    _loaded(hass, "portfolio", _portfolio_runtime(portfolio, history))
+    with pytest.raises(HomeAssistantError):
+        await _call(hass)
+    assert portfolio.async_refresh.await_count == 1
+    assert history.async_refresh.await_count == 0
 
 
 async def test_cooldown_follows_a_slowed_ticker_interval(hass):

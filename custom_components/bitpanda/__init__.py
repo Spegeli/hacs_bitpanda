@@ -330,19 +330,29 @@ def _refresh_cooldown(runtimes: list[PortfolioRuntime | PriceTrackerRuntime]) ->
 
 async def _async_refresh_now(runtime: PortfolioRuntime | PriceTrackerRuntime) -> bool:
     """Refresh what `bitpanda.refresh` refreshes of one loaded entry -- the
-    Portfolio's portfolio, the Price Tracker's prices -- and say whether it
-    worked.
+    Portfolio's portfolio and its returns, the Price Tracker's prices -- and
+    say whether it worked.
 
     async_refresh, not the debounced async_request_refresh, whose outcome
     never reaches the caller. It raises nothing either: DataUpdateCoordinator
     catches every failure, logs it, and records it in last_update_success --
     and a rejected key starts the reauth dialog as on any other refresh.
+
+    The outcome is the portfolio's or the prices'. The returns come along so
+    that a report right after the call shows the current one; like at setup
+    they are additive: one that could not be fetched keeps its last value,
+    as after a scheduled refresh, and fails nothing. They are asked for only
+    after a successful portfolio refresh: while Bitpanda hangs, each of
+    their requests would wait out its own timeout before the call ends.
     """
-    coordinator = (
-        runtime.portfolio if isinstance(runtime, PortfolioRuntime) else runtime.tickers
-    )
-    await coordinator.async_refresh()
-    return coordinator.last_update_success
+    if isinstance(runtime, PortfolioRuntime):
+        await runtime.portfolio.async_refresh()
+        succeeded = runtime.portfolio.last_update_success
+        if succeeded:
+            await runtime.history.async_refresh()
+        return succeeded
+    await runtime.tickers.async_refresh()
+    return runtime.tickers.last_update_success
 
 
 @callback

@@ -73,13 +73,29 @@ docker run --rm -v "${PWD}:/workspace" -w /workspace python:3.13 sh -c 'pip inst
 
 CI runs both (see [Continuous integration](#continuous-integration)): the suite must pass with at least 95 % line coverage, and `mypy --strict` must report no error. `config_flow.py` and `asset_flow.py` stay at 100 %, and every test that shows an error in a dialog goes on to finish that dialog.
 
+## Dashboard cards
+
+The two dashboard cards, Portfolio and Price Tracker, are TypeScript and Lit in `cards/`. esbuild bundles them into one file, `custom_components/bitpanda/frontend/bitpanda-cards.js`, because HACS installs only the integration's folder; the integration serves that file and adds it to every dashboard. With Node 24, in `cards/`:
+
+```bash
+npm ci              # exactly the packages package-lock.json locks
+npm run typecheck   # tsc --noEmit, strict
+npm test            # Vitest with coverage; fails under 95 %
+npm run build       # writes the bundle
+```
+
+The Portfolio card draws its line from Bitpanda's own value history (`bitpanda/portfolio_history`), the Price Tracker its lines from the recorder's statistics.
+
+Every change under `cards/src` commits the rebuilt bundle with it, and nothing else ever changes the bundle: the check "Repository / Cards" rebuilds it and fails when the committed file differs. Pin every package to an exact version.
+
 ## Project layout
 
-Everything lives in `custom_components/bitpanda/`:
+The integration lives in `custom_components/bitpanda/`; the dashboard cards' sources live in `cards/` (see [Dashboard cards](#dashboard-cards)):
 
 | File | Responsibility |
 |---|---|
-| `__init__.py` | Setup and unload per service, deleting devices from their device page, the `bitpanda.refresh` action (registered once, in `async_setup`) |
+| `__init__.py` | Setup and unload per service, deleting devices from their device page, the `bitpanda.refresh` action and the dashboard cards (both registered once, in `async_setup`) |
+| `cards.py` | Serves the dashboard cards' bundle (`frontend/bitpanda-cards.js`) and adds it to every dashboard, once per run, at a URL carrying a hash of its content; answers the cards' `bitpanda/portfolio_history` with the Portfolio's value history, which `HistoryCoordinator` keeps in memory from its returns |
 | `announcements.py` | The Portfolio's announcements, each an event and, unless switched off, a notification in the Portfolio's language: a wallet new to the Portfolio (`bitpanda_wallet_added`) and new staking payouts (`bitpanda_staking_reward_received`) |
 | `api.py` | `BitpandaApiClient` — all HTTP calls; keyless for public endpoints |
 | `assets.py` | Asset categories (`asset_category`), legacy symbol resolution (`pick_legacy`), `AssetDirectory` for holding metadata, list labels |
@@ -89,6 +105,7 @@ Everything lives in `custom_components/bitpanda/`:
 | `devices.py` | Device lookups scoped to their config entry |
 | `diagnostics.py` | Diagnostics per service, API key redacted |
 | `ecb.py` | ECB daily reference rates |
+| `frontend/bitpanda-cards.js` | The dashboard cards, built from `cards/` — never edited by hand |
 | `groups.py` | Groups by asset type (config subentries): titles, lookups, the Price Tracker's tracked assets, the Portfolio's wallet groups |
 | `icons.json` | Every sensor's icon, by its translation key, and the `bitpanda.refresh` action's icon — never set an icon in code |
 | `language.py` | The language of the integration's own texts: each entry's language option, the shipped languages |
@@ -236,14 +253,15 @@ One workflow, **Validate** (`.github/workflows/validate.yml`), checks every chan
 | Minimum HA / Tests | the suite on Python 3.13 against the minimum release in `hacs.json` (`tests/requirements-floor.txt`), after a check that the installed release is that one |
 | Repository / HACS validation | HACS's checks of the repository |
 | Repository / Release script | a compile of `.github/scripts/release.py` with Python 3.12 — the release runs it on the runner's own Python — and a stable release planned from the whole history |
+| Repository / Cards | the dashboard cards on Node 24: `npm ci`, the type check, the tests with their coverage gate, a build, and a comparison of the committed bundle with that build (see [Dashboard cards](#dashboard-cards)) |
 
 **Which Home Assistant.** Hassfest, the tests and mypy check against one release: the newest stable Home Assistant that `pytest-homeassistant-custom-component` has been released for, never a beta. Each of the three jobs finds it first with `.github/scripts/ha_version.py` and names it in its log. So a new stable release reaches CI without a change in this repository, and it can turn a run red although nothing changed here: then the integration needs an update for that release, before the next release goes out. The tests also run against the minimum Home Assistant release in `hacs.json` (`tests/requirements-floor.txt`, no coverage gate): raise both together. That job can turn red without a change here as well: the dependencies of the minimum's packages are not all pinned. HACS validation depends on no Home Assistant release: it checks the repository against HACS's own rules.
 
 When Validate runs:
 
-- **A push to any branch but `main`** — all seven checks.
-- **A pull request to `main` or `dev`** — all seven checks.
-- **By hand** — all seven checks as well: Actions → Validate → Run workflow, on any branch.
+- **A push to any branch but `main`** — all eight checks.
+- **A pull request to `main` or `dev`** — all eight checks.
+- **By hand** — all eight checks as well: Actions → Validate → Run workflow, on any branch.
 
 Validate does not run on `main` itself: changes reach it only through a validated pull request, or as a release's version commit, validated just before. A newer push to the same branch, or a new commit in the same pull request, cancels the run it makes obsolete. A run started by hand and a push's run on the same branch cancel each other as well, whichever starts later cancelling the other: start one by hand only after the push's run has finished, or that run is cancelled and its Validation summary turns red.
 

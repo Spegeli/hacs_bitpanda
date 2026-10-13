@@ -278,7 +278,7 @@ The integration brings two cards for your dashboards. They come with it — ther
 To add one, edit a dashboard, choose **Add card** and search for **Bitpanda**; each card shows a preview. Every option is in the card's visual editor, and YAML works too.
 
 > [!NOTE]
-> Your browser loads the cards when it opens Home Assistant. After you set up the integration, and after each update, **reload the page twice**: the first reload can still come from your browser's cache. A new browser tab shows the cards at once (in the Home Assistant app: close and reopen it, twice if needed).
+> Your browser loads the cards when it opens Home Assistant. After you set up the integration, and after each update, **reload the page twice**: the first reload can still come from your browser's cache. A new browser tab shows the cards at once. **In the Home Assistant app**, closing and reopening it is not enough: open the app's **Settings → Companion app → Troubleshooting** and select **Reset frontend cache**.
 
 | Card | Type | Shows |
 |---|---|---|
@@ -566,7 +566,7 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 | Prices update less often than every minute | Bitpanda answered "too many requests": the integration waits longer between rounds, up to 16 minutes, and returns to every 60 seconds as soon as Bitpanda answers again. The log warns when it slows down, and Home Assistant adds one error line of its own, "Error fetching bitpanda_tickers data: Bitpanda received too many price requests"; that it is back shows only with debug logging. With many tracked assets a round itself takes a while: the next one starts 60 seconds after it ends. |
 | 24-hour price change missing | A newly tracked price shows it after a day, and only while the recorder records the sensor (see [Known limitations](#%EF%B8%8F-known-limitations)) |
 | A Portfolio sensor keeps no statistics after you set the Portfolio up again in another currency, and **Settings → Repairs** reports "The unit of sensor.bitpanda_… has changed" | Home Assistant still holds its statistics in the old currency — if setup offered to delete them, you kept them. Delete them under **Settings → Tools → Statistics** (before Home Assistant 2026.8: **Developer tools → Statistics**), where the sensor is listed with the changed unit |
-| A card shows "Custom element doesn't exist", or **Add card** does not list the Bitpanda cards | Reload the page twice — your browser loads the cards when it opens Home Assistant, and the first reload after a new installation or an update can still come from its cache. A new browser tab works at once (in the Home Assistant app: close and reopen it, twice if needed) |
+| A card shows "Custom element doesn't exist", or **Add card** does not list the Bitpanda cards | Reload the page twice — your browser loads the cards when it opens Home Assistant, and the first reload after a new installation or an update can still come from its cache. A new browser tab works at once. In the Home Assistant app, reset its frontend cache (see [Dashboard cards](#-dashboard-cards)). The cards need no entry under **Resources**: the integration loads them itself |
 | A card shows "—" where a value should be | The sensor behind it has no value right now; the rows above say why |
 | A Price Tracker line is missing | Its lines come from Home Assistant's long-term statistics: a newly tracked price draws one once two statistics exist — after about ten minutes on 1D, two hours on 1W and 1M, the next day on 6M and 1Y |
 

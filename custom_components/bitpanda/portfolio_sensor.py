@@ -603,7 +603,8 @@ class PortfolioEntityManager:
                 # A wallet registered in a group stays in it, whatever its
                 # asset's category says now. Moving its device to another
                 # group would list it in both on Home Assistant 2025.5;
-                # 2026.9 warns about such a move, and 2027.8 will refuse it.
+                # newer releases warn about such a move, and 2027.8 will
+                # refuse it.
                 sits_in = self._registered_category(asset_id)
                 category = asset_category(asset) if sits_in is None else sits_in
                 self._wallets[asset_id] = category

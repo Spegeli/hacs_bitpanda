@@ -357,7 +357,7 @@ class BitpandaApiClient:
 
         Builds the "Add price tracker" subentry flow's category pickers (see
         assets.py's ASSET_CATEGORY_FILTERS) -- a handful of these calls
-        cover the whole 14000-asset catalogue, each cached there for 24 hours:
+        cover the whole 14000-asset catalogue, each cached there for an hour:
         one uncached listing takes up to 141 requests, one after the other.
         """
         params: dict[str, Any] = {"type": type_}

@@ -27,8 +27,11 @@ body:
       label: Affected area
       options:
         - Price Tracker (price sensors, currencies, Add price tracker)
-        - Portfolio (wallet, staking and total sensors)
-        - Portfolio (total value, cash, Cash Plus, returns)
+        - Portfolio wallets (Balance (available), Balance (total), Balance (staking))
+        - Portfolio (Total value, Cash, Cash Plus, returns)
+        - Notifications and events (new wallets, staking rewards)
+        - Dashboard card (Bitpanda Portfolio)
+        - Dashboard card (Bitpanda Price Tracker)
         - Dialogs (setup, Configure, Reconfigure, new API key)
         - Refresh action (bitpanda.refresh)
         - Upgrade from a date version
@@ -64,6 +67,15 @@ body:
       placeholder: e.g. 2025.9.1
     validations:
       required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser or app
+      description: For a card problem. The browser and its version, or the Home Assistant app and its version (Settings → About → **Companion app**).
+      placeholder: e.g. Firefox on Windows 11, or the Home Assistant app on Android
+    validations:
+      required: false
 
   - type: input
     id: currency
@@ -120,6 +132,15 @@ body:
       required: false
 
   - type: textarea
+    id: card_config
+    attributes:
+      label: Card configuration
+      description: For a card problem. Edit the card, select **Show code editor** and paste the card's YAML here.
+      render: yaml
+    validations:
+      required: false
+
+  - type: textarea
     id: logs
     attributes:
       label: Relevant log output
@@ -133,6 +154,8 @@ body:
           logs:
             custom_components.bitpanda: debug
         ```
+
+        For a card problem, also the browser's console — open its developer tools (F12), reload the page and copy what **Console** shows.
       render: text
     validations:
       required: false
@@ -143,6 +166,14 @@ body:
       label: Diagnostics
       description: Settings → Devices & services → Bitpanda → ⋮ on **Bitpanda Portfolio** or **Bitpanda Price Tracker** → Download diagnostics. The API key is left out automatically.
       render: json
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: For a card problem, drop a screenshot of the card here. On the Bitpanda Portfolio card, select the eye (**Hide amounts**) first — it blurs amounts and units and keeps the percentages.
     validations:
       required: false
 

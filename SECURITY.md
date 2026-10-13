@@ -19,6 +19,7 @@ In scope is the code in this repository, in particular:
 
 - how the integration stores and uses your Bitpanda API key, and that it keeps the key out of logs, diagnostics and error messages
 - the requests to Bitpanda and to the European Central Bank
+- the dashboard cards, and the Portfolio's value history the integration serves them (`bitpanda/portfolio_history`)
 - the workflows that check and publish releases
 
 Vulnerabilities in Bitpanda's own services, in Home Assistant or in HACS are out of scope: report them to Bitpanda, to [Home Assistant](https://www.home-assistant.io/security/) or to the HACS project.

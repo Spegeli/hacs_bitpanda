@@ -1,8 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Troubleshooting & FAQ
+  - name: Troubleshooting
     url: https://github.com/Spegeli/hacs_bitpanda#-troubleshooting
-    about: Sensor unavailable, integration not loading, missing 24h change? Check here first — most issues are covered.
+    about: Sensor unavailable, a card missing, integration not loading, missing 24h change? Check here first — most issues are covered.
+  - name: Questions about this integration
+    url: https://community.home-assistant.io/t/840223
+    about: How do I …? Ask in the integration's thread in the Home Assistant Community Forum.
   - name: Home Assistant Community Forum
     url: https://community.home-assistant.io
     about: General Home Assistant questions unrelated to this integration.

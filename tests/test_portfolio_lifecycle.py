@@ -21,9 +21,15 @@ from custom_components.bitpanda.const import DOMAIN, PORTFOLIO_UPDATE_INTERVAL
 from custom_components.bitpanda.groups import async_get_or_create_wallet_group
 from custom_components.bitpanda.naming import wallet_device_name, wallet_entity_id
 from custom_components.bitpanda.portfolio_coordinator import PortfolioRuntime, RewardsCoordinator
-from custom_components.bitpanda.portfolio_model import EarnData, Holding, PortfolioData
+from custom_components.bitpanda.portfolio_model import (
+    EarnData,
+    Holding,
+    PortfolioData,
+    PortfolioReturns,
+)
 from custom_components.bitpanda.portfolio_sensor import (
     PortfolioEntityManager,
+    PortfolioReturnSensor,
     async_setup_portfolio_entities,
 )
 from custom_components.bitpanda.tolerance import TolerantCoordinator
@@ -623,3 +629,53 @@ async def test_the_earn_catalogue_keeps_refreshing_without_staking_sensors(hass)
     # directly instead (DataUpdateCoordinator registers this same method with
     # config_entry.async_on_unload itself when given a config_entry).
     await earn.async_shutdown()
+
+
+async def test_the_value_history_keeps_refreshing_with_every_return_sensor_disabled(hass):
+    """The Portfolio card draws its line from the history coordinator, whose
+    only other listeners are the five return sensors: with all of them
+    disabled -- Home Assistant then never adds them -- the line must not
+    freeze at its setup-time answer."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=3, data={"entry_type": "portfolio", "currency": "EUR"},
+    )
+    entry.add_to_hass(hass)
+    platform = MockEntityPlatform(hass, domain="sensor", platform_name=DOMAIN)
+    platform.config_entry = entry
+
+    update_method = AsyncMock(return_value=PortfolioReturns(values={}))
+    history = DataUpdateCoordinator(
+        hass, _LOG, config_entry=entry, name="history",
+        update_interval=PORTFOLIO_UPDATE_INTERVAL, update_method=update_method,
+    )
+    runtime = PortfolioRuntime(
+        portfolio=_tolerant(hass, entry, "portfolio"),
+        history=history,
+        earn=DataUpdateCoordinator(
+            hass, _LOG, config_entry=entry, name="earn", update_interval=None
+        ),
+        rewards=DataUpdateCoordinator(
+            hass, _LOG, config_entry=entry, name="rewards", update_interval=None
+        ),
+        group_titles=_TITLES,
+        data_at_setup=dict(entry.data),
+        options_at_setup={},
+    )
+    runtime.portfolio.data = _data(_holding(VSN))
+    runtime.portfolio.last_update_success = True
+    entry.runtime_data = runtime
+
+    def add_all_but_the_returns(entities, **kwargs):
+        shown = [entity for entity in entities if not isinstance(entity, PortfolioReturnSensor)]
+        hass.async_create_task(platform.async_add_entities(shown, **kwargs))
+
+    await async_setup_portfolio_entities(hass, entry, add_all_but_the_returns)
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.bitpanda_portfolio_return_day") is None
+
+    async_fire_time_changed(hass, dt_util.utcnow() + 2 * PORTFOLIO_UPDATE_INTERVAL)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert update_method.await_count >= 1
+
+    # See the Earn test above: shut the coordinator down directly.
+    await history.async_shutdown()

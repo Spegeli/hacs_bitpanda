@@ -697,17 +697,23 @@ class PortfolioEntityManager:
 
 @callback
 def _keep_polling() -> None:
-    """No-op listener that keeps the Earn coordinator's periodic refresh alive.
+    """No-op listener that keeps a coordinator's periodic refresh alive.
 
     DataUpdateCoordinator only schedules its next refresh while it has at
-    least one listener, and stops once the last one unsubscribes. The Earn
-    coordinator's only other listeners are StakingSensors, so an entry with
-    none registered -- nothing staked and nothing offered, or the last
-    Staking sensor was just removed -- would freeze its catalogue forever at
-    whatever the first refresh returned (or at `None` if that one failed),
-    even though the manager reads it on every portfolio refresh: an Earn
-    product offered later gives a wallet its Staking sensor even with
+    least one listener, and stops once the last one unsubscribes.
+
+    The Earn coordinator's only other listeners are StakingSensors, so an
+    entry with none registered -- nothing staked and nothing offered, or the
+    last Staking sensor was just removed -- would freeze its catalogue
+    forever at whatever the first refresh returned (or at `None` if that one
+    failed), even though the manager reads it on every portfolio refresh: an
+    Earn product offered later gives a wallet its Staking sensor even with
     nothing staked yet.
+
+    The history coordinator's only other listeners are the five return
+    sensors, so with all of them disabled the Portfolio card's line, which
+    the card asks for through `bitpanda/portfolio_history` (cards.py), would
+    freeze at its setup-time answer.
     """
 
 
@@ -748,3 +754,5 @@ async def async_setup_portfolio_entities(
     # remove a holding after fewer than WALLET_REMOVAL_MISSES portfolio
     # refreshes.
     entry.async_on_unload(runtime.earn.async_add_listener(_keep_polling))
+    # And the value history, for the Portfolio card's line.
+    entry.async_on_unload(runtime.history.async_add_listener(_keep_polling))

@@ -45,6 +45,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Collection, Iterable, Mapping
 from datetime import datetime
+import hashlib
 import logging
 from typing import Any
 
@@ -104,9 +105,9 @@ class PortfolioStore:
         # The file's sections as read, unknown ones included; each section
         # writes its own back here.
         self._data: dict[str, Any] = {}
-        # The API key the entry last started with: in memory only, never
-        # written (key_changed).
-        self._api_key: str | None = None
+        # A digest of the API key the entry last started with: in memory
+        # only, never written (key_changed).
+        self._key_digest: bytes | None = None
 
     async def async_load(self) -> None:
         """Read the file and build the sections from it."""
@@ -126,11 +127,12 @@ class PortfolioStore:
     def key_changed(self, api_key: str) -> bool:
         """Whether the entry starts with another API key than it last started
         with in this run: the operations read so far may be another
-        account's. The key is kept in memory only. A restart forgets it,
-        which is safe: a key changes only through a dialog, which reloads the
-        entry at once."""
-        changed = self._api_key is not None and api_key != self._api_key
-        self._api_key = api_key
+        account's. Only a digest of the key is kept, in memory: no second
+        copy of the key itself. A restart forgets it, which is safe: a key
+        changes only through a dialog, which reloads the entry at once."""
+        digest = hashlib.sha256(api_key.encode()).digest()
+        changed = self._key_digest is not None and digest != self._key_digest
+        self._key_digest = digest
         return changed
 
     def write_section(self, key: str, value: Any) -> None:

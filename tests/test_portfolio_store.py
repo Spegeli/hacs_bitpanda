@@ -408,6 +408,16 @@ async def test_replacing_and_dropping_leave_the_other_sections(hass, hass_storag
     assert (await _loaded(hass)).operations.staking is None
 
 
+async def test_the_store_keeps_no_plain_copy_of_the_key(hass):
+    """It tells a new key by a digest of the last one: the key itself lives
+    only in the entry's data, not in a second long-lived copy here."""
+    store = await _loaded(hass)
+    store.key_changed("first-secret-key")
+    assert all("first-secret-key" not in repr(value) for value in vars(store).values())
+    assert store.key_changed("first-secret-key") is False
+    assert store.key_changed("other-secret-key") is True
+
+
 async def test_a_new_key_is_told_in_memory_and_never_written(hass, hass_storage, freezer):
     """The first key the store meets is no change; the same again is none
     either; another is. Nothing of either key reaches the file."""

@@ -1,5 +1,5 @@
 """Diagnostics of both services. The API key never appears."""
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentryData
@@ -9,7 +9,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.diagnostics import async_get_config_entry_diagnostics
 from custom_components.bitpanda.ecb import EcbRates
-from custom_components.bitpanda.portfolio_store import RewardMarks
+from custom_components.bitpanda.portfolio_store import OperationsHistory, RewardMarks
 from custom_components.bitpanda.portfolio_model import (
     EarnData,
     Holding,
@@ -51,6 +51,21 @@ class _Tickers(_Coordinator):
     def __init__(self, data=None, failing=()):
         super().__init__(data, interval=timedelta(seconds=60))
         self.failing_assets = frozenset(failing)
+
+
+_NOW = datetime(2026, 10, 14, 12, 0, tzinfo=UTC)
+_OPERATIONS_SECTION = {
+    "kinds": ["staking"],
+    "full_read_at": "2026-10-14T10:00:00+00:00",
+    "anchor": "2026-10-13T16:48:00Z",
+    "recent_ids": {"op-1": "2026-10-13T16:48:00Z"},
+    "staking": {
+        "secret-asset-id": {
+            "gross": 1.0, "fee": 0.2, "net": 0.8, "count": 1, "last_at": "2026-10-13T16:48:00Z",
+            "payouts": [["2026-10-13T16:48:00Z", 1.0, 0.2, 0.8]],
+        }
+    },
+}
 
 
 def _add_device(
@@ -123,12 +138,16 @@ def _portfolio_entry(hass, *, loaded: bool) -> MockConfigEntry:
             reward_marks=RewardMarks(
                 None, {"a": "2026-09-22T17:16:35Z", "b": "2024-06-25T16:28:16Z"}, None
             ),
+            # The operations read so far, from the file: read whole two
+            # hours before _NOW, one asset with payouts.
+            operations=OperationsHistory(None, _OPERATIONS_SECTION, None),
         )
         entry.mock_state(hass, ConfigEntryState.LOADED)
     return entry
 
 
-async def test_portfolio_diagnostics_report_health_and_never_the_key(hass):
+async def test_portfolio_diagnostics_report_health_and_never_the_key(hass, freezer):
+    freezer.move_to(_NOW)
     result = await async_get_config_entry_diagnostics(hass, _portfolio_entry(hass, loaded=True))
     assert _SECRET not in repr(result)
     assert result["service"] == "portfolio"
@@ -145,6 +164,10 @@ async def test_portfolio_diagnostics_report_health_and_never_the_key(hass):
         "rewards": {
             "last_update_success": False, "assets_with_rewards": 0,
             "marked_assets": 2, "first_run": False,
+            # Counts and an age only: no id, no amount.
+            "operations": {
+                "present": True, "kinds": ["staking"], "full_read_age_hours": 2.0, "assets": 1,
+            },
         },
     }
 
@@ -199,15 +222,28 @@ async def test_portfolio_diagnostics_report_the_notification_options_as_set(hass
 
 
 async def test_portfolio_diagnostics_before_the_first_rewards_refresh(hass):
-    """No marks yet: none counted, the first run still to come."""
+    """No marks yet: none counted, the first run still to come; nothing
+    read of the operations yet."""
     entry = _portfolio_entry(hass, loaded=True)
     entry.runtime_data.reward_marks = RewardMarks(None, None, None)
+    entry.runtime_data.operations = OperationsHistory(None, None, None)
     result = await async_get_config_entry_diagnostics(hass, entry)
     assert (
         result["coordinators"]["rewards"]["marked_assets"],
         result["coordinators"]["rewards"]["first_run"],
     ) == (0, True)
+    assert result["coordinators"]["rewards"]["operations"] == {
+        "present": False, "kinds": [], "full_read_age_hours": None, "assets": 0,
+    }
 
+
+
+async def test_portfolio_diagnostics_without_the_operations_section_leave_it_out(hass):
+    """A runtime built without the section reports no operations at all."""
+    entry = _portfolio_entry(hass, loaded=True)
+    entry.runtime_data.operations = None
+    result = await async_get_config_entry_diagnostics(hass, entry)
+    assert "operations" not in result["coordinators"]["rewards"]
 
 _BTC = {"id": "uuid-btc", "symbol": "BTC", "name": "Bitcoin", "type": "cryptocoin",
         "group": "coin"}

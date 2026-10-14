@@ -177,6 +177,7 @@ async def _async_start_portfolio(
         options_at_setup=dict(entry.options),
         known_wallets=store.known_wallets,
         reward_marks=store.reward_marks,
+        operations=store.operations,
     )
     await _async_first_refresh(runtime.portfolio)
     # New staking payouts are announced after every successful refresh of

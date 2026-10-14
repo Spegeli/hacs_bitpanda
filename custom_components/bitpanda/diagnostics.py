@@ -10,6 +10,7 @@ from typing import Any, cast
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState, ConfigSubentry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.util import dt as dt_util
 
 from . import BitpandaConfigEntry
 from .assets import slim_asset
@@ -71,6 +72,28 @@ def _marks(runtime: PortfolioRuntime) -> dict[str, Any]:
     return {"marked_assets": len(marks), "first_run": marks.first_run}
 
 
+def _operations(runtime: PortfolioRuntime) -> dict[str, Any]:
+    """What was read of the operations so far (portfolio_store
+    OperationsHistory): whether there is anything to build on, the kinds it
+    covers, how many hours ago the whole history was read, and for how many
+    assets -- counts and an age only, no id, no amount."""
+    history = runtime.operations
+    if history is None:
+        return {}
+    read_at = history.full_read_at
+    return {
+        "operations": {
+            "present": history.staking is not None,
+            "kinds": list(history.kinds),
+            "full_read_age_hours": (
+                None if read_at is None
+                else round((dt_util.utcnow() - read_at).total_seconds() / 3600, 1)
+            ),
+            "assets": len(history.staking or {}),
+        }
+    }
+
+
 def _portfolio(
     hass: HomeAssistant, entry: ConfigEntry, runtime: PortfolioRuntime | None
 ) -> dict[str, Any]:
@@ -117,6 +140,7 @@ def _portfolio(
             **_health(runtime.rewards),
             "assets_with_rewards": len(runtime.rewards.data or {}),
             **_marks(runtime),
+            **_operations(runtime),
         },
     }
     return out

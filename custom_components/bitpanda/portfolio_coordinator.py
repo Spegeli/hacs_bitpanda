@@ -620,11 +620,12 @@ class PortfolioRuntime:
     data_at_setup: dict[str, Any] = field(repr=False)
     options_at_setup: dict[str, Any] = field(repr=False)
     # The assets the Portfolio knows -- announced, or there when the list
-    # began -- and when the newest staking payout announced per asset was
-    # credited (portfolio_store.py): set at setup, None where a test builds a
-    # runtime without them.
+    # began --, when the newest staking payout announced per asset was
+    # credited, and the operations read so far (portfolio_store.py): set at
+    # setup, None where a test builds a runtime without them.
     known_wallets: KnownWallets | None = field(default=None, repr=False)
     reward_marks: RewardMarks | None = field(default=None, repr=False)
+    operations: OperationsHistory | None = field(default=None, repr=False)
 
 
 # A Portfolio config entry, its runtime data typed.

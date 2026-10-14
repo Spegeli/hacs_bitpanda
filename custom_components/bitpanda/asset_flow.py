@@ -57,11 +57,18 @@ _CATALOGUE_CACHE_TTL = timedelta(hours=1)
 # every flow and survives entry reloads.
 _CATALOGUE_KEY = f"{DOMAIN}_asset_catalogue"
 
+# Bitpanda's old securities line: listed beside the current one with the
+# same symbol and ISIN and a near-equal price, but never buyable again. The
+# dialog leaves it out; ASSET_CATEGORY_FILTERS keeps it, so that an asset of
+# it tracked or held already still finds its group.
+_OLD_SECURITIES = frozenset({("security", "stock"), ("security", "etf"), ("security", "etc")})
+
 
 async def async_category_listing(
     hass: HomeAssistant, client: BitpandaApiClient, category: str
 ) -> list[dict[str, Any]]:
-    """Every asset of one category, all pages, slimmed, kept for an hour.
+    """Every asset of one category, all pages, slimmed, kept for an hour --
+    Bitpanda's old securities line left out (_OLD_SECURITIES).
 
     A timer drops each listing an hour after it was loaded, whether or not
     the dialog is opened again: no listing outstays its hour in memory --
@@ -82,6 +89,8 @@ async def async_category_listing(
     assets: list[dict[str, Any]] = []
     seen: set[str] = set()
     for type_, group in ASSET_CATEGORY_FILTERS[category]:
+        if (type_, group) in _OLD_SECURITIES:
+            continue
         for asset in await client.async_list_assets(type_, group):
             asset_id = asset.get("id")
             if asset_id and asset_id not in seen:

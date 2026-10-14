@@ -28,9 +28,12 @@ CATALOGUE_FIELDS = ("id", "symbol", "name", "isin", "type", "group")
 # filters -- (type, group), group None for any -- that list it. Every filter
 # was verified live on 2026-09-24. Together they cover 14,051 of 14,054
 # catalogue assets -- the three left out are security/fiat_earn (Cash Plus),
-# a cash equivalent. Stocks exist in two families, equity_security/
-# equity_stock and security/stock, often the same company twice; both are
-# genuine, priced listings, so a category can merge several filters.
+# a cash equivalent. Stocks, ETFs and ETCs exist in two families: the
+# current equity_security one and Bitpanda's old security line, often the
+# same company twice. Both are priced, so a category can merge several
+# filters -- an asset of the old line, tracked or held, still finds its
+# group --, but "Add price tracker" offers the current line only
+# (asset_flow._OLD_SECURITIES).
 ASSET_CATEGORY_FILTERS: dict[str, list[tuple[str, str | None]]] = {
     "crypto": [("cryptocoin", None)],
     "stock": [("equity_security", "equity_stock"), ("security", "stock")],

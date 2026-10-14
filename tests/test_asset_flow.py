@@ -212,16 +212,23 @@ async def test_the_catalogue_is_fetched_without_a_key(hass):
     client_cls.assert_called_once_with(None, ANY)
 
 
-async def test_the_stock_category_merges_both_listing_families(hass):
+@pytest.mark.parametrize(
+    ("category", "filters"),
+    [
+        ("stock", [("equity_security", "equity_stock")]),
+        ("etf", [("equity_security", "equity_etf"), ("equity_security", "equity_complex_etf")]),
+        ("etc", [("equity_security", "equity_complex_etc")]),
+    ],
+)
+async def test_the_add_dialog_lists_only_bitpandas_current_securities(hass, category, filters):
+    """Bitpanda lists most stocks, ETFs and ETCs twice: in its old line
+    (type security, never buyable again) and in its current one, same
+    symbol and ISIN. The dialog asks for the current line only."""
     entry = _entry(hass)
-    listing = AsyncMock(side_effect=[[_fixture("517")], [_fixture("ESSITYB", "security")]])
+    listing = AsyncMock(return_value=[_fixture("517")])
     with patch(_LIST, listing):
-        result = await _pick_category(hass, entry, "stock")
-    assert [call.args for call in listing.call_args_list] == [
-        ("equity_security", "equity_stock"),
-        ("security", "stock"),
-    ]
-    assert len(_options(result)) == 2
+        await _pick_category(hass, entry, category)
+    assert [call.args for call in listing.call_args_list] == filters
 
 
 async def test_a_listing_is_kept_for_an_hour_in_slim_records(hass):

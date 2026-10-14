@@ -24,8 +24,21 @@ def _http() -> Mock:
     return Mock(async_register_static_paths=AsyncMock())
 
 
+def _frontend(hass) -> None:
+    """Home Assistant's frontend loaded, as in every usual configuration:
+    the test environment has no frontend package to load it from."""
+    hass.config.components.add("frontend")
+
+
+async def _websocket_api(hass) -> None:
+    """Home Assistant's websocket API set up before the integration, as
+    its after-dependency is."""
+    assert await async_setup_component(hass, "websocket_api", {})
+
+
 async def test_the_bundle_is_served_from_the_package(hass):
     hass.http = _http()
+    _frontend(hass)
     with patch.object(cards, "add_extra_js_url"):
         await async_register_cards(hass)
     hass.http.async_register_static_paths.assert_awaited_once_with(
@@ -38,6 +51,7 @@ async def test_the_bundle_is_served_from_the_package(hass):
 
 async def test_the_module_url_carries_the_content_hash(hass):
     hass.http = _http()
+    _frontend(hass)
     with patch.object(cards, "add_extra_js_url") as add:
         await async_register_cards(hass)
     add.assert_called_once_with(hass, f"{CARDS_URL}?v={cards_digest(CARDS_FILE)}")
@@ -47,6 +61,7 @@ async def test_a_missing_bundle_costs_only_the_cards(hass, caplog):
     """A broken installation without the bundle: the integration still sets
     up, the log says why the cards are missing."""
     hass.http = _http()
+    _frontend(hass)
     with (
         patch.object(cards, "CARDS_FILE", Path("/nonexistent/bitpanda-cards.js")),
         patch.object(cards, "add_extra_js_url") as add,
@@ -58,10 +73,46 @@ async def test_a_missing_bundle_costs_only_the_cards(hass, caplog):
 
 async def test_a_refused_path_costs_only_the_cards(hass, caplog):
     hass.http = Mock(async_register_static_paths=AsyncMock(side_effect=RuntimeError("router frozen")))
+    _frontend(hass)
     with patch.object(cards, "add_extra_js_url") as add:
         await async_register_cards(hass)
     add.assert_not_called()
     assert "The dashboard cards are not available: router frozen" in caplog.text
+
+
+async def test_without_the_frontend_only_the_cards_are_missing(hass, caplog):
+    """Home Assistant without its frontend -- a minimal configuration: the
+    cards have nowhere to go, the log says so once, and nothing fails."""
+    hass.http = _http()
+    await async_register_cards(hass)
+    hass.http.async_register_static_paths.assert_not_awaited()
+    assert caplog.text.count("The dashboard cards are not available") == 1
+    assert "Home Assistant's frontend is not loaded" in caplog.text
+
+
+async def test_without_the_frontend_the_services_set_up(hass, caplog):
+    """End to end, nothing patched: the integration and its entries set up
+    as always, only the cards are missing."""
+    tracker = MockConfigEntry(
+        domain=DOMAIN, version=3, unique_id="price_tracker", title="Bitpanda Price Tracker",
+        data={"entry_type": "price_tracker"}, options={"extra_currencies": []},
+    )
+    tracker.add_to_hass(hass)
+    assert await async_setup_component(hass, DOMAIN, {})
+    await hass.async_block_till_done()
+    assert tracker.state is ConfigEntryState.LOADED
+    assert "Home Assistant's frontend is not loaded" in caplog.text
+
+
+async def test_without_the_websocket_api_the_line_command_is_not_registered(hass):
+    hass.http = _http()
+    hass.config.components.add("frontend")
+    with (
+        patch.object(cards, "add_extra_js_url"),
+        patch.object(cards.websocket_api, "async_register_command") as register,
+    ):
+        await async_register_cards(hass)
+    register.assert_not_called()
 
 
 def test_the_hash_changes_with_the_content(tmp_path):
@@ -93,6 +144,7 @@ async def test_registered_once_for_the_integration_its_entries_and_reloads(hass,
     )
     for entry in (portfolio, tracker):
         entry.add_to_hass(hass)
+    _frontend(hass)
     with (
         patch(f"{_CLIENT}async_get_portfolio", AsyncMock(return_value=[])),
         patch(f"{_CLIENT}async_get_portfolio_history", AsyncMock(return_value={"return_percentage": 0})),
@@ -123,6 +175,8 @@ async def test_the_portfolio_line_comes_from_bitpandas_value_history(hass, hass_
               "currency_id": "b88b8466-efe3-11eb-b56f-0691764446a7"},
     )
     portfolio.add_to_hass(hass)
+    _frontend(hass)
+    await _websocket_api(hass)
 
     async def history(*, timeframe, equivalent_currency_id=None):
         points = [{"time": "2026-10-12T10:00:00Z", "value": {"value": "860.98"}}] if timeframe == "WEEK" else []
@@ -159,6 +213,8 @@ async def test_the_portfolio_line_comes_from_bitpandas_value_history(hass, hass_
 
 async def test_without_a_portfolio_the_line_has_no_points(hass, hass_ws_client):
     hass.http = _http()
+    _frontend(hass)
+    await _websocket_api(hass)
     with patch.object(cards, "add_extra_js_url"):
         await async_register_cards(hass)
     client = await hass_ws_client(hass)

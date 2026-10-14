@@ -80,8 +80,16 @@ async def async_register_cards(hass: HomeAssistant) -> None:
     cards' requests for the Portfolio line. Called once per run, from
     async_setup, however many entries are set up or reloaded. A failure
     serving the bundle costs the cards only: the sensors set up all the
-    same."""
-    websocket_api.async_register_command(hass, ws_portfolio_history)
+    same. So does a Home Assistant without its frontend or its websocket
+    API, both after-dependencies: set up before the integration when they
+    are configured at all."""
+    if "websocket_api" in hass.config.components:
+        websocket_api.async_register_command(hass, ws_portfolio_history)
+    if "frontend" not in hass.config.components:
+        _LOGGER.warning(
+            "The dashboard cards are not available: Home Assistant's frontend is not loaded"
+        )
+        return
     try:
         digest = await hass.async_add_executor_job(cards_digest, CARDS_FILE)
         await hass.http.async_register_static_paths(

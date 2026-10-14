@@ -278,6 +278,8 @@ One last check sums up each run: green when every check passed, red when one fai
 
 A pull request from a fork, to `dev` or to `main`, runs the same checks, with a read-only token and no secrets: Validate uses `pull_request`, never `pull_request_target`. A first-time contributor's run waits for the maintainer's approval. In your own fork, Validate works as it is: it needs no secrets.
 
+Third-party actions are pinned to a commit hash with their version as a comment (`softprops/action-gh-release`); GitHub's own `actions/*` use their major tag. `hacs/action@main` is a deliberate exception: the validation always runs HACS's current checks.
+
 ## Commit messages
 
 A release computes its version from the commit messages and writes its release notes from their subjects (see [Releases](#releases)), so a commit's type decides where the change shows up:

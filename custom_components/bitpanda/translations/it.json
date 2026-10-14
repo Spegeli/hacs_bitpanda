@@ -202,7 +202,7 @@
             "category": "Tipo di asset"
           },
           "data_description": {
-            "category": "Il passaggio successivo elenca tutti gli asset di questo tipo che non monitori ancora. Gli elenchi grandi, come le azioni, impiegano qualche secondo a caricarsi la prima volta."
+            "category": "Il passaggio successivo elenca tutti gli asset di questo tipo che non monitori ancora. Gli elenchi grandi, come le azioni, impiegano fino a mezzo minuto a caricarsi la prima volta."
           }
         },
         "asset": {
@@ -235,6 +235,9 @@
       "abort": {
         "already_configured": "Questo asset è già monitorato.",
         "asset_added": "{asset} è ora monitorato nel gruppo {group}."
+      },
+      "create_entry": {
+        "default": "{asset} è ora monitorato nel gruppo {group}."
       }
     },
     "wallet_group": {

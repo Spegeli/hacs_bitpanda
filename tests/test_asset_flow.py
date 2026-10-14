@@ -18,6 +18,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
 from custom_components.bitpanda.assets import asset_label, slim_asset
 from custom_components.bitpanda.const import API_BASE_URL, DOMAIN
+from custom_components.bitpanda.naming import asset_display_label
 
 from tests.conftest import load_fixture, price_group
 
@@ -354,6 +355,18 @@ async def test_the_first_asset_of_a_type_starts_its_group(hass):
     assert group.unique_id == "metal"
     assert group.title == "Precious metals"
     assert dict(group.data) == {"category": "metal", "assets": {SILVER["id"]: slim_asset(SILVER)}}
+
+
+async def test_the_first_asset_of_a_type_ends_with_the_text_every_later_one_ends_with(hass):
+    """Starting a group, the dialog names the asset and the new group, as
+    joining one does (strings.json: create_entry.default = asset_added)."""
+    entry = _entry(hass)
+    result = await _pick_metal(hass, entry, SILVER)
+    assert result["type"] == _FLOW.CREATE_ENTRY
+    assert result["description_placeholders"] == {
+        "asset": asset_display_label(slim_asset(SILVER)),
+        "group": "Precious metals",
+    }
 
 
 async def test_the_picked_label_is_submitted_and_resolves_to_the_asset(hass):

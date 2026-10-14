@@ -202,7 +202,7 @@
             "category": "Asset type"
           },
           "data_description": {
-            "category": "The next step lists every asset of this type that you do not track yet. Large lists such as stocks take a few seconds to load the first time."
+            "category": "The next step lists every asset of this type that you do not track yet. Large lists such as stocks take up to half a minute to load the first time."
           }
         },
         "asset": {
@@ -235,6 +235,9 @@
       "abort": {
         "already_configured": "This asset is already tracked.",
         "asset_added": "{asset} is now tracked in the group {group}."
+      },
+      "create_entry": {
+        "default": "{asset} is now tracked in the group {group}."
       }
     },
     "wallet_group": {

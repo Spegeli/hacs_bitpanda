@@ -252,8 +252,10 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
     async def _async_track(self, record: dict[str, Any]) -> SubentryFlowResult:
         """Add `record` to the group of its asset type, or start that group.
 
-        Joining ends the dialog with a message naming the group: no subentry
-        is created, so Home Assistant's own confirmation would not fit.
+        Both end the dialog with the same message, naming the asset and its
+        group: joining one as an abort -- no subentry is created, so Home
+        Assistant's own confirmation would not fit --, starting one with
+        that text as the new subentry's (create_entry.default).
         """
         category = asset_category(record)
         # A new group is titled in the entry's language. _get_entry() raises
@@ -269,6 +271,10 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
                 title=titles[category],
                 data=price_group_data(category, [record]),
                 unique_id=category,
+                description_placeholders={
+                    "asset": asset_display_label(record),
+                    "group": titles[category],
+                },
             )
         async_add_asset_to_group(self.hass, entry, group, record)
         return self.async_abort(

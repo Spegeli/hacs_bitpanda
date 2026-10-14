@@ -1623,6 +1623,48 @@ def test_the_price_group_flow_has_its_strings():
     assert set(group["abort"]) == {"already_configured", "asset_added"}
     assert "{asset}" in group["abort"]["asset_added"]
     assert "{group}" in group["abort"]["asset_added"]
+    assert set(group["create_entry"]) == {"default"}
+
+
+def test_a_new_group_and_a_joined_one_end_with_the_same_text():
+    """The first asset of a type starts its group, every later one joins
+    it: both dialogs end with the same message, naming asset and group."""
+    for name in _FILES:
+        group = _load(name)["config_subentries"]["price_group"]
+        assert group["create_entry"]["default"] == group["abort"]["asset_added"], name
+
+
+# The asset type step's hint: how long a large list takes the first time
+# (measured: about 12 seconds for Bitpanda's stocks).
+_CATEGORY_HINT = {
+    "de": "Der nächste Schritt zeigt alle Assets dieses Typs, die du noch nicht verfolgst. "
+    "Große Listen wie Aktien brauchen beim ersten Öffnen bis zu einer halben Minute.",
+    "en": "The next step lists every asset of this type that you do not track yet. "
+    "Large lists such as stocks take up to half a minute to load the first time.",
+    "es": "El siguiente paso muestra todos los activos de este tipo que aún no sigues. "
+    "Las listas grandes, como las acciones, tardan hasta medio minuto en cargarse la primera vez.",
+    "fr": "L'étape suivante liste tous les actifs de ce type que vous ne suivez pas encore. "
+    "Les grandes listes, comme les actions, mettent jusqu'à une demi-minute à se charger "
+    "la première fois.",
+    "it": "Il passaggio successivo elenca tutti gli asset di questo tipo che non monitori ancora. "
+    "Gli elenchi grandi, come le azioni, impiegano fino a mezzo minuto a caricarsi la prima volta.",
+    "nl": "De volgende stap toont alle assets van dit type die je nog niet volgt. "
+    "Grote lijsten zoals aandelen laden de eerste keer tot een halve minuut.",
+    "pl": "Następny krok pokaże wszystkie aktywa tego rodzaju, których jeszcze nie śledzisz. "
+    "Duże listy, takie jak akcje, wczytują się za pierwszym razem do pół minuty.",
+}
+
+
+def test_the_asset_type_hint_says_how_long_a_large_list_takes():
+    assert sorted(_CATEGORY_HINT) == _LANGUAGES
+    for language, hint in _CATEGORY_HINT.items():
+        step = _load(f"translations/{language}.json")["config_subentries"]["price_group"]["step"]
+        assert step["user"]["data_description"]["category"] == hint, language
+
+
+def test_the_german_reauth_title_joins_the_compound_with_hyphens():
+    config = _load("translations/de.json")["config"]
+    assert config["step"]["reauth_confirm"]["title"] == "Neuer Bitpanda-API-Schlüssel nötig"
 
 
 def test_only_the_securities_search_names_the_isin():

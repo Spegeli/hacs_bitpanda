@@ -202,7 +202,7 @@
             "category": "Assettype"
           },
           "data_description": {
-            "category": "De volgende stap toont alle assets van dit type die je nog niet volgt. Grote lijsten zoals aandelen laden de eerste keer een paar seconden."
+            "category": "De volgende stap toont alle assets van dit type die je nog niet volgt. Grote lijsten zoals aandelen laden de eerste keer tot een halve minuut."
           }
         },
         "asset": {
@@ -235,6 +235,9 @@
       "abort": {
         "already_configured": "Deze asset wordt al gevolgd.",
         "asset_added": "{asset} wordt nu gevolgd in de groep {group}."
+      },
+      "create_entry": {
+        "default": "{asset} wordt nu gevolgd in de groep {group}."
       }
     },
     "wallet_group": {

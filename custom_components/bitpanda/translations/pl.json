@@ -202,7 +202,7 @@
             "category": "Rodzaj aktywa"
           },
           "data_description": {
-            "category": "Następny krok pokaże wszystkie aktywa tego rodzaju, których jeszcze nie śledzisz. Duże listy, takie jak akcje, wczytują się za pierwszym razem kilka sekund."
+            "category": "Następny krok pokaże wszystkie aktywa tego rodzaju, których jeszcze nie śledzisz. Duże listy, takie jak akcje, wczytują się za pierwszym razem do pół minuty."
           }
         },
         "asset": {
@@ -235,6 +235,9 @@
       "abort": {
         "already_configured": "To aktywo jest już śledzone.",
         "asset_added": "Aktywo {asset} jest teraz śledzone w grupie {group}."
+      },
+      "create_entry": {
+        "default": "Aktywo {asset} jest teraz śledzone w grupie {group}."
       }
     },
     "wallet_group": {

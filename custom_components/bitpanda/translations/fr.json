@@ -202,7 +202,7 @@
             "category": "Type d'actif"
           },
           "data_description": {
-            "category": "L'étape suivante liste tous les actifs de ce type que vous ne suivez pas encore. Les grandes listes, comme les actions, mettent quelques secondes à se charger la première fois."
+            "category": "L'étape suivante liste tous les actifs de ce type que vous ne suivez pas encore. Les grandes listes, comme les actions, mettent jusqu'à une demi-minute à se charger la première fois."
           }
         },
         "asset": {
@@ -235,6 +235,9 @@
       "abort": {
         "already_configured": "Cet actif est déjà suivi.",
         "asset_added": "{asset} est désormais suivi dans le groupe {group}."
+      },
+      "create_entry": {
+        "default": "{asset} est désormais suivi dans le groupe {group}."
       }
     },
     "wallet_group": {

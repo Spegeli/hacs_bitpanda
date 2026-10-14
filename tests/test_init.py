@@ -167,6 +167,19 @@ async def _setup(hass, entry) -> None:
     assert entry.state is ConfigEntryState.LOADED
 
 
+async def test_an_unload_shuts_the_portfolios_rewards_read_down(hass, portfolio_api):
+    """Home Assistant shuts a coordinator with a config entry down at the
+    entry's unload: a staking read still under way then keeps nothing
+    (tests/test_coordinator_earn.py)."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    rewards = entry.runtime_data.rewards
+    assert not rewards._shut_down
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert rewards._shut_down
+
+
 def _value(hass, entity_id) -> float:
     return float(hass.states.get(entity_id).state)
 

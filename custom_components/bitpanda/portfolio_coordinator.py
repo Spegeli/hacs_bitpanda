@@ -318,6 +318,11 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]
     of new payouts (announcements.RewardAnnouncer). That call is no listener:
     a listener would keep the coordinator reading every hour even with every
     Staking sensor disabled.
+
+    Home Assistant shuts it down at the entry's unload, while a read may
+    still be under way: one that ends after the shutdown keeps nothing of
+    what it read -- the entry's file may be about to go with the entry --
+    and announces nothing.
     """
 
     config_entry: PortfolioConfigEntry
@@ -347,6 +352,16 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]
         # hourly read could run while one a new Staking sensor asked for was
         # under way.
         self._read_lock = asyncio.Lock()
+        self._shut_down = False
+
+    async def async_shutdown(self) -> None:
+        self._shut_down = True
+        await super().async_shutdown()
+
+    def _kept(self) -> dict[str, RewardTotals]:
+        """What a read ending after the shutdown answers: the totals as
+        they were, the section untouched."""
+        return self._history.staking or {}
 
     async def _async_update_data(self) -> dict[str, RewardTotals]:
         async with self._read_lock:
@@ -375,6 +390,8 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]
     async def _async_read_whole(self) -> dict[str, RewardTotals]:
         read_at = dt_util.utcnow()
         operations = await self._client.async_get_operations()
+        if self._shut_down:
+            return self._kept()
         totals = sum_rewards(operations)
         anchor = newest_credited_at(operations, None)
         self._history.replace(
@@ -396,6 +413,8 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]
         operations = await self._client.async_get_operations(
             from_ts=since.strftime("%Y-%m-%dT%H:%M:%SZ")
         )
+        if self._shut_down:
+            return self._kept()
         # New: listed from `since` on -- should Bitpanda list older ones all
         # the same, they were counted before, or wait for the weekly whole
         # read -- and not counted in the day before already. An operation
@@ -432,7 +451,7 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]
         are told (2025.5.0 and 2026.9.4 alike): the announcer runs after a
         successful one only."""
         super()._async_refresh_finished()
-        if self.last_update_success and self.on_refreshed is not None:
+        if self.last_update_success and self.on_refreshed is not None and not self._shut_down:
             self.on_refreshed()
 
     @callback

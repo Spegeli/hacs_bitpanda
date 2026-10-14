@@ -21,7 +21,11 @@ from custom_components.bitpanda.api import (
 from custom_components.bitpanda.const import API_BASE_URL, DOMAIN
 from custom_components.bitpanda.portfolio_coordinator import RewardsCoordinator
 from custom_components.bitpanda.portfolio_model import Holding, PortfolioData, sum_rewards
-from custom_components.bitpanda.portfolio_store import PortfolioStore
+from custom_components.bitpanda.portfolio_store import (
+    PortfolioStore,
+    async_get_portfolio_store,
+    async_remove_portfolio_store,
+)
 from custom_components.bitpanda.portfolio_sensor import StakingSensor
 
 
@@ -498,3 +502,68 @@ async def test_a_read_asked_for_meanwhile_begins_once_the_one_under_way_has_ende
     assert await second == sum_rewards([earlier, newer])
     assert client.requests == ["2026-10-12T16:48:00Z", "2026-10-13T20:00:00Z"]
     assert history.staking == sum_rewards([earlier, newer])
+
+
+@pytest.mark.parametrize("read_before", [True, False], ids=["new only", "whole history"])
+async def test_a_read_that_ends_after_the_shutdown_writes_nothing_and_announces_nothing(
+    hass, freezer, read_before
+):
+    """An unload shuts the coordinator down -- Home Assistant does it for
+    every coordinator with a config entry -- while a read may be under way.
+    One that ends after the shutdown keeps nothing of what it read (the
+    entry's file may be about to go with the entry) and announces nothing:
+    a read of what is new as one of the whole history."""
+    freezer.move_to(_NOW)
+    history = await _history(hass)
+    earlier = _read_before(history) if read_before else _reward(
+        "vsn", "10", "2", "2026-10-13T16:48:00.512Z"
+    )
+    before = history.staking
+    newer = _reward("vsn", "1", "0.2", "2026-10-14T20:00:00Z")
+    client = _HeldClient(operations=[newer, earlier])
+    coordinator = RewardsCoordinator(hass, None, client, history)
+    coordinator.on_refreshed = Mock()
+    refresh = asyncio.create_task(coordinator.async_refresh())
+    await client.entered.wait()
+    await coordinator.async_shutdown()
+    client.release.set()
+    await refresh
+    assert history.staking == before
+    coordinator.on_refreshed.assert_not_called()
+
+
+@pytest.mark.parametrize("read_before", [True, False], ids=["new only", "whole history"])
+async def test_a_read_that_ends_after_the_portfolio_was_removed_brings_no_file_back(
+    hass, hass_storage, freezer, read_before
+):
+    """Removing the Portfolio unloads it -- the coordinator shuts down --
+    and then deletes its file (async_remove_entry). A read still under way
+    that ends after that leaves no file behind, however long one waits."""
+    freezer.move_to(_NOW)
+    store = await async_get_portfolio_store(hass, "eid")
+    history = store.operations
+    earlier = _read_before(history) if read_before else _reward(
+        "vsn", "10", "2", "2026-10-13T16:48:00.512Z"
+    )
+    newer = _reward("vsn", "1", "0.2", "2026-10-14T20:00:00Z")
+    # What was read before is on disk, its save done: only the read under
+    # way could write again.
+    await _flushed(hass, freezer)
+    assert ("bitpanda.portfolio.eid" in hass_storage) is read_before
+    client = _HeldClient(operations=[newer, earlier])
+    coordinator = RewardsCoordinator(hass, None, client, history)
+    refresh = asyncio.create_task(coordinator.async_refresh())
+    await client.entered.wait()
+    await coordinator.async_shutdown()
+    await async_remove_portfolio_store(hass, "eid")
+    client.release.set()
+    await refresh
+    await _flushed(hass, freezer)
+    assert "bitpanda.portfolio.eid" not in hass_storage
+
+
+async def _flushed(hass, freezer) -> None:
+    """Past the store's delayed save: a save asked for is written."""
+    freezer.tick(timedelta(seconds=10))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()

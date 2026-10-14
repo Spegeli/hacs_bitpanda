@@ -43,7 +43,7 @@ export const pl: Texts = {
   eye_hide: "Ukryj kwoty",
   eye_show: "Pokaż kwoty",
   change_since: "Zmiana od {date}",
-  ecb_footer: "Ceny w {currency}: ceny Bitpandy w EUR przeliczone po kursie referencyjnym EBC z {date}.",
+  ecb_footer: "Ceny w {currency}: ceny Bitpandy w EUR przeliczone po kursie referencyjnym EBC z {date}. Ich zmiana obejmuje ruch kursu.",
   empty_portfolio: "Skonfiguruj Bitpanda Portfolio, aby zobaczyć je tutaj.",
   empty_wallets: "Brak portfeli.",
   empty_selection_wallets: "Brak portfeli w wyborze tej karty.",

@@ -207,7 +207,9 @@ describe("the Bitpanda Price Tracker card", () => {
 
   it("the footer names the ECB date outside EUR", async () => {
     const card = await mount({ currency: "USD" });
-    expect(textOf(one(card, ".foot"))).toBe("Prices in USD: Bitpanda's EUR prices converted at the ECB reference rate of October 10.");
+    expect(textOf(one(card, ".foot"))).toBe(
+      "Prices in USD: Bitpanda's EUR prices converted at the ECB reference rate of October 10. Their change includes the rate's move.",
+    );
   });
 
   it("sorts by change, dashes last, and by the picked order", async () => {

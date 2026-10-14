@@ -42,7 +42,7 @@ export const en = {
   eye_hide: "Hide amounts",
   eye_show: "Show amounts",
   change_since: "Change since {date}",
-  ecb_footer: "Prices in {currency}: Bitpanda's EUR prices converted at the ECB reference rate of {date}.",
+  ecb_footer: "Prices in {currency}: Bitpanda's EUR prices converted at the ECB reference rate of {date}. Their change includes the rate's move.",
   empty_portfolio: "Set up the Bitpanda Portfolio to see it here.",
   empty_wallets: "No wallets yet.",
   empty_selection_wallets: "No wallets in this card's selection.",

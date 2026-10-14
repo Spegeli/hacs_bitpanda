@@ -33,7 +33,7 @@ from homeassistant.components.http import StaticPathConfig  # type: ignore[attr-
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, callback
 
-from .const import DOMAIN, ENTRY_TYPE_PORTFOLIO, entry_type
+from .const import DOMAIN, ENTRY_TYPE_PORTFOLIO, PORTFOLIO_TIMEFRAMES, entry_type
 from .portfolio_coordinator import PortfolioRuntime
 
 _LOGGER = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ def cards_digest(path: Path) -> str:
 
 
 # The cards' timeframes and /portfolio-history's.
-_TIMEFRAMES = {"day": "DAY", "week": "WEEK", "month": "MONTH", "six_month": "SIX_MONTH", "year": "YEAR"}
+_TIMEFRAMES = {timeframe.lower(): timeframe for timeframe in PORTFOLIO_TIMEFRAMES}
 
 
 # Newer releases type schemas with probatio; voluptuous works the same at

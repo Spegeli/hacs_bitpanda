@@ -27,8 +27,10 @@ from .const import (
     notifies_staking_rewards,
 )
 from .groups import entities_by_group, groups_of_type
+from .language import entry_language
 from .portfolio_coordinator import PortfolioRuntime
 from .price_coordinator import PriceTrackerRuntime
+from .price_sensor import tracked_currencies
 
 _REDACTED = "**REDACTED**"
 
@@ -106,6 +108,8 @@ def _portfolio(
             # notification: the first thing to look at when one did not.
             "notify_new_wallets": notifies_new_wallets(entry),
             "notify_staking_rewards": notifies_staking_rewards(entry),
+            # The language of the group titles, refusals and notifications.
+            "language": entry_language(entry),
         },
         "groups": _wallet_groups(hass, entry),
     }
@@ -168,7 +172,11 @@ def _price_tracker(
     out: dict[str, Any] = {
         "service": "price_tracker",
         "groups": _price_groups(entry),
-        "currencies": ["EUR", *entry.options.get(CONF_EXTRA_CURRENCIES, [])],
+        "config": {
+            "language": entry_language(entry),
+            "extra_currencies": list(entry.options.get(CONF_EXTRA_CURRENCIES, [])),
+        },
+        "currencies": tracked_currencies(entry),
     }
     if runtime is None:
         return out

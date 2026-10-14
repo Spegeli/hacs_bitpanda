@@ -153,7 +153,7 @@ async def test_portfolio_diagnostics_report_health_and_never_the_key(hass, freez
     assert result["service"] == "portfolio"
     assert result["config"] == {
         "api_key": "**REDACTED**", "currency": "EUR",
-        "notify_new_wallets": True, "notify_staking_rewards": False,
+        "notify_new_wallets": True, "notify_staking_rewards": False, "language": "en",
     }
     assert result["coordinators"] == {
         "portfolio": {"last_update_success": True, "holdings": 3, "wallets": 1,
@@ -202,7 +202,7 @@ async def test_portfolio_that_is_not_loaded_reports_its_config_only(hass):
         "service": "portfolio",
         "config": {
             "api_key": "**REDACTED**", "currency": "EUR",
-            "notify_new_wallets": True, "notify_staking_rewards": False,
+            "notify_new_wallets": True, "notify_staking_rewards": False, "language": "en",
         },
         "groups": _WALLET_GROUPS,
     }
@@ -219,6 +219,15 @@ async def test_portfolio_diagnostics_report_the_notification_options_as_set(hass
     assert (
         result["config"]["notify_new_wallets"], result["config"]["notify_staking_rewards"]
     ) == (False, True)
+
+
+async def test_the_portfolio_diagnostics_name_its_language(hass):
+    """The language of the Portfolio's own texts -- group titles, refusals,
+    notifications --, English for an entry without the option."""
+    entry = _portfolio_entry(hass, loaded=False)
+    assert (await async_get_config_entry_diagnostics(hass, entry))["config"]["language"] == "en"
+    hass.config_entries.async_update_entry(entry, options={"language": "de"})
+    assert (await async_get_config_entry_diagnostics(hass, entry))["config"]["language"] == "de"
 
 
 async def test_portfolio_diagnostics_before_the_first_rewards_refresh(hass):
@@ -288,11 +297,22 @@ async def test_price_tracker_diagnostics_list_the_groups(hass):
             {"category": "crypto", "title": "Cryptocurrencies", "assets": [_BTC, _SOL]},
             {"category": "metal", "title": "My metals", "assets": [_GOLD]},
         ],
+        "config": {"language": "en", "extra_currencies": ["USD"]},
         "currencies": ["EUR", "USD"],
         "tickers": {"last_update_success": True, "priced_assets": 1, "failed_assets": 0,
                     "update_interval_seconds": 60.0},
         "ecb": {"last_update_success": True, "rate_date": "2026-09-24"},
     }
+
+
+async def test_the_price_tracker_diagnostics_name_its_language_and_extra_currencies(hass):
+    entry = _price_entry(hass, extra=["USD"], ecb=None)
+    hass.config_entries.async_update_entry(
+        entry, options={"extra_currencies": ["USD"], "language": "fr"}
+    )
+    result = await async_get_config_entry_diagnostics(hass, entry)
+    assert result["config"] == {"language": "fr", "extra_currencies": ["USD"]}
+    assert result["currencies"] == ["EUR", "USD"]
 
 
 async def test_price_tracker_diagnostics_count_a_carried_price_as_failed(hass):
@@ -328,5 +348,6 @@ async def test_price_tracker_that_is_not_loaded_reports_its_config_only(hass):
     assert await async_get_config_entry_diagnostics(hass, entry) == {
         "service": "price_tracker",
         "groups": [{"category": "metal", "title": "Precious metals", "assets": [_GOLD]}],
+        "config": {"language": "en", "extra_currencies": []},
         "currencies": ["EUR"],
     }

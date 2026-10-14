@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { PriceTrackerCard, amountsFit, priceRowLayout } from "../src/price-tracker-card";
+import { PriceTrackerCard, amountsFit, priceColumns, priceRowLayout } from "../src/price-tracker-card";
 import { makeHass, portfolioDevice, priceDevice, type FakeHass } from "./fixtures";
 
 const HOUR = 3_600_000;
@@ -417,6 +417,55 @@ describe("the Bitpanda Price Tracker card", () => {
     expect(priceRowLayout([{ ...row, room: 173 }])).toBe("stacked");
     expect(priceRowLayout([{ ...row, room: 173 }, { ...row, room: 173, change: 76 }])).toBe("below");
     expect(priceRowLayout([])).toBe("beside");
+  });
+
+  it("priceRowLayout: every row gets the widest price and change, so a name keeps its room beside both", () => {
+    // Each row alone leaves its name 120 px (289 - 75 - 8 - 78 - 8, and
+    // 289 - 40 - 8 - 90 - 8), but the shared columns take 75 and 90.
+    const rows = [
+      { room: 289, price: 75, change: 60 },
+      { room: 289, price: 40, change: 90 },
+    ];
+    expect(priceRowLayout(rows)).toBe("stacked");
+  });
+
+  it("priceColumns: the widest price, the widest change but at least 78 px, and the wider of both, rounded up", () => {
+    expect(priceColumns([{ price: 74.2, change: 60 }, { price: 40, change: 65.5 }])).toEqual({ price: 75, change: 78, figures: 75 });
+    expect(priceColumns([{ price: 40, change: 90.1 }])).toEqual({ price: 40, change: 91, figures: 91 });
+    expect(priceColumns([])).toEqual({ price: 0, change: 78, figures: 0 });
+  });
+
+  it("every list row takes the widest price and change as its columns, so the lines stand one under another", async () => {
+    const room = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(393);
+    // A price as wide as its text: rows of different widths.
+    const rect = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const list = this.classList;
+      const width = list.contains("p") ? (this.textContent ?? "").trim().length * 7 : list.contains("pct") ? 60 : list.contains("a") ? 65 : 0;
+      return { width, height: 0, x: 0, y: 0, top: 0, left: 0, right: width, bottom: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    try {
+      const card = await mount();
+      const prices = all(card, ".price-row .p").map((price) => (price.textContent ?? "").trim().length * 7);
+      expect(new Set(prices).size).toBeGreaterThan(1);
+      const widest = Math.max(...prices);
+      const rows = one(card, ".rows") as HTMLElement;
+      await vi.waitFor(() => expect(rows.style.getPropertyValue("--bp-price")).toBe(`${widest}px`));
+      expect(rows.style.getPropertyValue("--bp-change")).toBe("78px");
+      expect(rows.style.getPropertyValue("--bp-figures")).toBe(`${Math.max(widest, 65)}px`);
+    } finally {
+      room.mockRestore();
+      rect.mockRestore();
+    }
+  });
+
+  it("a list row's columns are the shared widths, before the first measurement as wide as their contents", () => {
+    const css = (PriceTrackerCard.styles as unknown as { cssText: string }[]).map((sheet) => sheet.cssText).join("\n");
+    const rule = (selector: string): string | undefined =>
+      css.match(new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`))?.[1];
+    expect(rule(".price-row")).toMatch(
+      /grid-template-columns:\s*minmax\(0,\s*1fr\)\s*96px\s*var\(--bp-price,\s*auto\)\s*var\(--bp-change,\s*minmax\(78px,\s*auto\)\)/,
+    );
+    expect(rule(".rows.stacked .price-row")).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s*96px\s*var\(--bp-figures,\s*auto\)/);
   });
 
   it("below its name, a row's price, chip and amount stand right-aligned, without the line", () => {

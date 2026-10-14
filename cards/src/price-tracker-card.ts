@@ -47,9 +47,12 @@ interface Row {
 }
 
 const priceStyles = css`
+  /* Price and change in columns as wide as the widest of the list
+     (priceColumns), so that every line stands where the others do; as wide
+     as their contents until the card has measured them. */
   .price-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 96px auto minmax(78px, auto);
+    grid-template-columns: minmax(0, 1fr) 96px var(--bp-price, auto) var(--bp-change, minmax(78px, auto));
     grid-template-areas: "lead line price change";
     align-items: center;
     gap: 8px;
@@ -84,7 +87,7 @@ const priceStyles = css`
   }
   /* Not room for the name in every row: the price above its change. */
   .rows.stacked .price-row {
-    grid-template-columns: minmax(0, 1fr) 96px auto;
+    grid-template-columns: minmax(0, 1fr) 96px var(--bp-figures, auto);
     grid-template-areas:
       "lead line price"
       "lead line change";
@@ -241,16 +244,32 @@ const NARROW_LIST = 380;
 /** Where a list row's price and change stand, the same in every row. */
 export type PriceRowLayout = "beside" | "stacked" | "below";
 
+/** The widths every list row gives its price and its change, in pixels. */
+export interface PriceColumns {
+  price: number;
+  change: number;
+  /** The one column of the price above its change. */
+  figures: number;
+}
+
+/** The widest price, the widest change but at least CHANGE_LEAST, and the
+ * wider of both; whole pixels, rounded up, so that no figure wraps in a
+ * column a fraction too narrow. */
+export function priceColumns(rows: readonly { price: number; change: number }[]): PriceColumns {
+  const price = Math.ceil(Math.max(0, ...rows.map((row) => row.price)));
+  const change = Math.ceil(Math.max(0, ...rows.map((row) => row.change)));
+  return { price, change: Math.max(CHANGE_LEAST, change), figures: Math.max(price, change) };
+}
+
 /** Beside each other while every row leaves its name NAME_ROOM; the price
  * above the change while every row leaves it NAME_ROOM_STACKED; else both
- * below the name. `room` is a row's width without its line; widths in
- * pixels. */
+ * below the name. Every row has the same columns (priceColumns), so the
+ * widest price and change count for each. `room` is a row's width without
+ * its line; widths in pixels. */
 export function priceRowLayout(rows: readonly { room: number; price: number; change: number }[]): PriceRowLayout {
-  const beside = (row: { room: number; price: number; change: number }) =>
-    row.room - row.price - ROW_GAP - Math.max(CHANGE_LEAST, row.change) - ROW_GAP >= NAME_ROOM;
-  const stacked = (row: { room: number; price: number; change: number }) => row.room - Math.max(row.price, row.change) - ROW_GAP >= NAME_ROOM_STACKED;
-  if (rows.every(beside)) return "beside";
-  return rows.every(stacked) ? "stacked" : "below";
+  const columns = priceColumns(rows);
+  if (rows.every((row) => row.room - columns.price - ROW_GAP - columns.change - ROW_GAP >= NAME_ROOM)) return "beside";
+  return rows.every((row) => row.room - columns.figures - ROW_GAP >= NAME_ROOM_STACKED) ? "stacked" : "below";
 }
 
 /** Whether every tile that shows an amount has room for it beside the
@@ -276,6 +295,7 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
     showAll: { state: true },
     amountsInline: { state: true },
     rowsLayout: { state: true },
+    columns: { state: true },
   };
 
   static override styles = [cardStyles, priceStyles];
@@ -284,6 +304,8 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
   private showAll = false;
   private amountsInline = false;
   private rowsLayout: PriceRowLayout = "beside";
+  /** The list's shared column widths, once its rows were measured. */
+  private columns: PriceColumns | undefined = undefined;
   private window: StatWindow = windowFor("day", Date.now());
   private readonly lines = new SeriesLoader(() => this.seriesArrived());
 
@@ -421,6 +443,13 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
     });
     const layout = priceRowLayout(rows);
     if (layout !== this.rowsLayout) this.rowsLayout = layout;
+    // Without rows -- tiles, or nothing to list -- the columns stay as they
+    // were: zero widths would squeeze the first list drawn after them.
+    if (rows.length > 0) {
+      const columns = priceColumns(rows);
+      const now = this.columns;
+      if (!now || now.price !== columns.price || now.change !== columns.change || now.figures !== columns.figures) this.columns = columns;
+    }
   }
 
   override getCardSize(): number {
@@ -460,7 +489,9 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
   }
 
   private renderList(hass: Hass, rows: Row[]): TemplateResult {
-    return html`<div class="rows ${this.rowsLayout === "beside" ? "" : this.rowsLayout}">
+    const columns = this.columns;
+    const widths = columns ? `--bp-price:${columns.price}px;--bp-change:${columns.change}px;--bp-figures:${columns.figures}px` : "";
+    return html`<div class="rows ${this.rowsLayout === "beside" ? "" : this.rowsLayout}" style=${widths}>
       ${rows.map((row) => {
         const change = this.change(hass, row);
         // As in the tiles: the name, and below it the symbol, or a

@@ -87,14 +87,14 @@
       },
       "reauth_confirm": {
         "title": "New Bitpanda API key needed",
-        "description": "Bitpanda rejected the stored API key. It may have expired, or it predates the permissions this version needs. Your sensors are kept.\n\nTo create a new API key:\n\n1. Open [{api_key_url}]({api_key_url}) and create a new API key.\n2. Select only the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\".\n3. Copy the API key and paste it below. Bitpanda shows it only once.\n\nThe integration only reads with it: it cannot trade or move money.\nBitpanda API keys are valid until the date you choose when creating them, one year at most; after that, Home Assistant asks for a new one.",
+        "description": "Bitpanda rejected the stored API key. It may have expired, or it predates the permissions this version needs. Your sensors are kept. The new API key must belong to the same Bitpanda account. For another account, open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page, choose \"Delete\" and set up the Portfolio again.\n\nTo create a new API key:\n\n1. Open [{api_key_url}]({api_key_url}) and create a new API key.\n2. Select only the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\".\n3. Copy the API key and paste it below. Bitpanda shows it only once.\n\nThe integration only reads with it: it cannot trade or move money.\nBitpanda API keys are valid until the date you choose when creating them, one year at most; after that, Home Assistant asks for a new one.",
         "data": {
           "api_key": "API key"
         }
       },
       "reconfigure": {
         "title": "Reconfigure Bitpanda Portfolio",
-        "description": "Replace the stored API key, change the currency, or both.",
+        "description": "Replace the stored API key, change the currency, or both. A new API key must belong to the same Bitpanda account. For another account, open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page, choose \"Delete\" and set up the Portfolio again.",
         "data": {
           "api_key": "New API key",
           "currency": "Currency"

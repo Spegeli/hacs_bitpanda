@@ -206,6 +206,8 @@ _LABEL_REFERENCES = {
     "delete": [
         ("issues", "portfolio_exists", "description"),
         ("exceptions", "portfolio_device_not_removable", "message"),
+        ("config", "step", "reauth_confirm", "description"),
+        ("config", "step", "reconfigure", "description"),
     ],
 }
 
@@ -267,6 +269,8 @@ _LOCATED_TEXTS = {
     ("issues", "price_tracker_exists", "description"): "",
     ("issues", "portfolio_exists", "description"): "⋮",
     ("exceptions", "portfolio_device_not_removable", "message"): "⋮",
+    ("config", "step", "reauth_confirm", "description"): "⋮",
+    ("config", "step", "reconfigure", "description"): "⋮",
 }
 # Shown right on the Price Tracker's entry, after its ⋮ -> "Reconfigure": it
 # sends the user to "Configure" (⚙) on "the same entry".
@@ -1035,8 +1039,9 @@ def test_the_reconfigure_key_help_has_a_line_per_sentence():
 
 
 def test_the_reauth_dialog_walks_through_creating_the_key_as_the_setup_does():
-    """The new-key dialog says what happened, why, and that the sensors are
-    kept; then, as the Portfolio's setup does, it walks through creating the
+    """The new-key dialog says what happened, why, that the sensors are kept
+    and that the key must be of the same account; then, as the Portfolio's
+    setup does, it walks through creating the
     key -- the same numbered steps -- and says that the integration only
     reads with it and how long a key is valid. Its field has no help text:
     the steps are the guide. In the approved English and German wording."""
@@ -1051,7 +1056,10 @@ def test_the_reauth_dialog_walks_through_creating_the_key_as_the_setup_does():
         assert key.split("\n") == setup_key.split("\n")[:2], name
     assert _load("strings.json")["config"]["step"]["reauth_confirm"]["description"] == (
         "Bitpanda rejected the stored API key. It may have expired, or it predates the"
-        " permissions this version needs. Your sensors are kept.\n\n"
+        " permissions this version needs. Your sensors are kept. The new API key must belong"
+        " to the same Bitpanda account. For another account, open the \u22ee menu of the"
+        ' "Bitpanda Portfolio" entry on the Bitpanda integration page, choose "Delete" and set'
+        " up the Portfolio again.\n\n"
         "To create a new API key:\n\n"
         "1. Open [{api_key_url}]({api_key_url}) and create a new API key.\n"
         '2. Select only the permissions "Balances", "Transaction" and "Earn (Read)"'
@@ -1064,7 +1072,10 @@ def test_the_reauth_dialog_walks_through_creating_the_key_as_the_setup_does():
     assert _load("translations/de.json")["config"]["step"]["reauth_confirm"]["description"] == (
         "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen,"
         " oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht. Deine"
-        " Sensoren bleiben erhalten.\n\n"
+        " Sensoren bleiben erhalten. Der neue API-Schlüssel muss zum selben Bitpanda-Konto"
+        " gehören. Für ein anderes Konto öffne auf der Bitpanda-Integrationsseite das Menü"
+        " \u22ee beim Eintrag „Bitpanda Portfolio“, wähle „Löschen“ und richte das Portfolio"
+        " danach neu ein.\n\n"
         "So erstellst du einen neuen API-Schlüssel:\n\n"
         "1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen API-Schlüssel.\n"
         "2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“"
@@ -1993,3 +2004,68 @@ def test_the_category_attribute_is_labelled_like_the_other_asset_attributes():
         for key in ("wallet", "wallet_total", "staking", "price"):
             attribute = sensors[key]["state_attributes"]["asset_category"]
             assert attribute == {"name": labels[language]}, (name, key)
+
+
+# Bitpanda's API does not tell which account a key belongs to: the key dialogs
+# say that a new key must be of the same account, and that another account
+# means deleting the Portfolio and setting it up again (approved 2026-10-14).
+# The new-key dialog says it in its first paragraph, Reconfigure after its own
+# line.
+_SAME_ACCOUNT = {
+    "de": (
+        "Der neue API-Schlüssel muss zum selben Bitpanda-Konto gehören.",
+        "Ein neuer API-Schlüssel muss zum selben Bitpanda-Konto gehören.",
+        " Für ein anderes Konto öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag "
+        "„Bitpanda Portfolio“, wähle „Löschen“ und richte das Portfolio danach neu ein.",
+    ),
+    "en": (
+        "The new API key must belong to the same Bitpanda account.",
+        "A new API key must belong to the same Bitpanda account.",
+        " For another account, open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda "
+        "integration page, choose \"Delete\" and set up the Portfolio again.",
+    ),
+    "es": (
+        "La nueva clave API debe pertenecer a la misma cuenta de Bitpanda.",
+        "Una nueva clave API debe pertenecer a la misma cuenta de Bitpanda.",
+        " Para otra cuenta, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la "
+        "integración Bitpanda, elige \"Eliminar\" y vuelve a configurar el Portfolio.",
+    ),
+    "fr": (
+        "La nouvelle clé API doit appartenir au même compte Bitpanda.",
+        "Une nouvelle clé API doit appartenir au même compte Bitpanda.",
+        " Pour un autre compte, ouvrez le menu ⋮ de l'entrée « Bitpanda Portfolio » sur la page de "
+        "l'intégration Bitpanda, choisissez « Supprimer » puis configurez à nouveau le Portfolio.",
+    ),
+    "it": (
+        "La nuova chiave API deve appartenere allo stesso account Bitpanda.",
+        "Una nuova chiave API deve appartenere allo stesso account Bitpanda.",
+        " Per un altro account apri il menu ⋮ della voce \"Bitpanda Portfolio\" nella pagina "
+        "dell'integrazione Bitpanda, scegli \"Elimina\" e configura di nuovo il Portfolio.",
+    ),
+    "nl": (
+        "De nieuwe API-sleutel moet bij hetzelfde Bitpanda-account horen.",
+        "Een nieuwe API-sleutel moet bij hetzelfde Bitpanda-account horen.",
+        " Voor een ander account open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer "
+        "\"Bitpanda Portfolio\", kies je \"Verwijderen\" en stel je het Portfolio daarna opnieuw in.",
+    ),
+    "pl": (
+        "Nowy klucz API musi należeć do tego samego konta Bitpanda.",
+        "Nowy klucz API musi należeć do tego samego konta Bitpanda.",
+        " Aby użyć innego konta, otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie "
+        "„Bitpanda Portfolio”, wybierz „Usuń” i skonfiguruj Portfolio od nowa.",
+    ),
+}
+
+
+def test_the_key_dialogs_say_a_new_key_must_be_of_the_same_account():
+    """Both dialogs that take a new key -- the new-key dialog
+    (reauth_confirm), at the end of its first paragraph, and Reconfigure, at
+    the end of its description -- say that the key must belong to the same
+    Bitpanda account, and how to switch to another one: delete the Portfolio
+    and set it up again."""
+    assert sorted(_SAME_ACCOUNT) == _LANGUAGES
+    for language, (reauth, reconfigure, another) in _SAME_ACCOUNT.items():
+        step = _load(f"translations/{language}.json")["config"]["step"]
+        first_paragraph = step["reauth_confirm"]["description"].split("\n\n")[0]
+        assert first_paragraph.endswith(f" {reauth}{another}"), language
+        assert step["reconfigure"]["description"].endswith(f" {reconfigure}{another}"), language

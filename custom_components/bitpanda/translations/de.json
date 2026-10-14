@@ -87,14 +87,14 @@
       },
       "reauth_confirm": {
         "title": "Neuer Bitpanda API-Schlüssel nötig",
-        "description": "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen, oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht. Deine Sensoren bleiben erhalten.\n\nSo erstellst du einen neuen API-Schlüssel:\n\n1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen API-Schlüssel.\n2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading (Read)“.\n3. Kopiere den API-Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal an.\n\nDie Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\nBitpanda-API-Schlüssel gelten bis zu dem Datum, das du beim Erstellen wählst, höchstens ein Jahr; danach fragt Home Assistant nach einem neuen.",
+        "description": "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen, oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht. Deine Sensoren bleiben erhalten. Der neue API-Schlüssel muss zum selben Bitpanda-Konto gehören. Für ein anderes Konto öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“, wähle „Löschen“ und richte das Portfolio danach neu ein.\n\nSo erstellst du einen neuen API-Schlüssel:\n\n1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen API-Schlüssel.\n2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading (Read)“.\n3. Kopiere den API-Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal an.\n\nDie Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\nBitpanda-API-Schlüssel gelten bis zu dem Datum, das du beim Erstellen wählst, höchstens ein Jahr; danach fragt Home Assistant nach einem neuen.",
         "data": {
           "api_key": "API-Schlüssel"
         }
       },
       "reconfigure": {
         "title": "Bitpanda Portfolio neu konfigurieren",
-        "description": "Ersetze den gespeicherten API-Schlüssel, ändere die Währung oder beides.",
+        "description": "Ersetze den gespeicherten API-Schlüssel, ändere die Währung oder beides. Ein neuer API-Schlüssel muss zum selben Bitpanda-Konto gehören. Für ein anderes Konto öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“, wähle „Löschen“ und richte das Portfolio danach neu ein.",
         "data": {
           "api_key": "Neuer API-Schlüssel",
           "currency": "Währung"

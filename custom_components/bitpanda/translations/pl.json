@@ -87,14 +87,14 @@
       },
       "reauth_confirm": {
         "title": "Potrzebny nowy klucz API platformy Bitpanda",
-        "description": "Bitpanda odrzuciła zapisany klucz API. Mógł wygasnąć albo powstać przed wprowadzeniem uprawnień, których wymaga ta wersja. Twoje sensory zostaną zachowane.\n\nJak utworzyć nowy klucz API:\n\n1. Otwórz [{api_key_url}]({api_key_url}) i utwórz nowy klucz API.\n2. Wybierz tylko uprawnienia „Salda”, „Transakcja” i „Earn (Odczytaj)” – bez uprawnienia „Trade (Odczytaj)”.\n3. Skopiuj klucz API i wklej go poniżej. Bitpanda pokazuje go tylko raz.\n\nIntegracja używa klucza API tylko do odczytu: nie może handlować ani przenosić pieniędzy.\nKlucze API Bitpanda są ważne do daty wybranej przy ich tworzeniu, najwyżej przez rok; potem Home Assistant poprosi o nowy.",
+        "description": "Bitpanda odrzuciła zapisany klucz API. Mógł wygasnąć albo powstać przed wprowadzeniem uprawnień, których wymaga ta wersja. Twoje sensory zostaną zachowane. Nowy klucz API musi należeć do tego samego konta Bitpanda. Aby użyć innego konta, otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio”, wybierz „Usuń” i skonfiguruj Portfolio od nowa.\n\nJak utworzyć nowy klucz API:\n\n1. Otwórz [{api_key_url}]({api_key_url}) i utwórz nowy klucz API.\n2. Wybierz tylko uprawnienia „Salda”, „Transakcja” i „Earn (Odczytaj)” – bez uprawnienia „Trade (Odczytaj)”.\n3. Skopiuj klucz API i wklej go poniżej. Bitpanda pokazuje go tylko raz.\n\nIntegracja używa klucza API tylko do odczytu: nie może handlować ani przenosić pieniędzy.\nKlucze API Bitpanda są ważne do daty wybranej przy ich tworzeniu, najwyżej przez rok; potem Home Assistant poprosi o nowy.",
         "data": {
           "api_key": "Klucz API"
         }
       },
       "reconfigure": {
         "title": "Rekonfiguracja usługi Bitpanda Portfolio",
-        "description": "Zastąp zapisany klucz API, zmień walutę albo jedno i drugie.",
+        "description": "Zastąp zapisany klucz API, zmień walutę albo jedno i drugie. Nowy klucz API musi należeć do tego samego konta Bitpanda. Aby użyć innego konta, otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio”, wybierz „Usuń” i skonfiguruj Portfolio od nowa.",
         "data": {
           "api_key": "Nowy klucz API",
           "currency": "Waluta"

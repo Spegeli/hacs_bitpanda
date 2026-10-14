@@ -87,14 +87,14 @@
       },
       "reauth_confirm": {
         "title": "Se necesita una nueva clave API de Bitpanda",
-        "description": "Bitpanda ha rechazado la clave API guardada. Puede que haya caducado o que sea anterior a los permisos que necesita esta versión. Tus sensores se conservan.\n\nAsí puedes crear una clave API nueva:\n\n1. Abre [{api_key_url}]({api_key_url}) y crea una clave API nueva.\n2. Selecciona solo los permisos \"Créditos\", \"Transacción\" y \"Earn (Lectura)\" – no \"Trading (Lectura)\".\n3. Copia la clave API y pégala abajo. Bitpanda solo la muestra una vez.\n\nCon la clave API, la integración solo lee: no puede operar ni mover dinero.\nLas claves API de Bitpanda son válidas hasta la fecha que eliges al crearlas, como máximo un año; después, Home Assistant pide una nueva.",
+        "description": "Bitpanda ha rechazado la clave API guardada. Puede que haya caducado o que sea anterior a los permisos que necesita esta versión. Tus sensores se conservan. La nueva clave API debe pertenecer a la misma cuenta de Bitpanda. Para otra cuenta, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda, elige \"Eliminar\" y vuelve a configurar el Portfolio.\n\nAsí puedes crear una clave API nueva:\n\n1. Abre [{api_key_url}]({api_key_url}) y crea una clave API nueva.\n2. Selecciona solo los permisos \"Créditos\", \"Transacción\" y \"Earn (Lectura)\" – no \"Trading (Lectura)\".\n3. Copia la clave API y pégala abajo. Bitpanda solo la muestra una vez.\n\nCon la clave API, la integración solo lee: no puede operar ni mover dinero.\nLas claves API de Bitpanda son válidas hasta la fecha que eliges al crearlas, como máximo un año; después, Home Assistant pide una nueva.",
         "data": {
           "api_key": "Clave API"
         }
       },
       "reconfigure": {
         "title": "Reconfigurar Bitpanda Portfolio",
-        "description": "Sustituye la clave API guardada, cambia la moneda o ambas cosas.",
+        "description": "Sustituye la clave API guardada, cambia la moneda o ambas cosas. Una nueva clave API debe pertenecer a la misma cuenta de Bitpanda. Para otra cuenta, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda, elige \"Eliminar\" y vuelve a configurar el Portfolio.",
         "data": {
           "api_key": "Nueva clave API",
           "currency": "Moneda"

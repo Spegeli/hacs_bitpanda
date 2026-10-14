@@ -87,14 +87,14 @@
       },
       "reauth_confirm": {
         "title": "Nouvelle clé API Bitpanda requise",
-        "description": "Bitpanda a refusé la clé API enregistrée. Elle a peut-être expiré, ou elle est antérieure aux autorisations dont cette version a besoin. Vos capteurs sont conservés.\n\nPour créer une nouvelle clé API :\n\n1. Ouvrez [{api_key_url}]({api_key_url}) et créez une nouvelle clé API.\n2. Sélectionnez uniquement les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) ».\n3. Copiez la clé API et collez-la ci-dessous. Bitpanda ne l'affiche qu'une seule fois.\n\nL'intégration ne fait que lire avec cette clé API : elle ne peut ni passer d'ordres ni déplacer d'argent.\nLes clés API Bitpanda sont valables jusqu'à la date choisie lors de leur création, un an au plus ; ensuite, Home Assistant en demande une nouvelle.",
+        "description": "Bitpanda a refusé la clé API enregistrée. Elle a peut-être expiré, ou elle est antérieure aux autorisations dont cette version a besoin. Vos capteurs sont conservés. La nouvelle clé API doit appartenir au même compte Bitpanda. Pour un autre compte, ouvrez le menu ⋮ de l'entrée « Bitpanda Portfolio » sur la page de l'intégration Bitpanda, choisissez « Supprimer » puis configurez à nouveau le Portfolio.\n\nPour créer une nouvelle clé API :\n\n1. Ouvrez [{api_key_url}]({api_key_url}) et créez une nouvelle clé API.\n2. Sélectionnez uniquement les autorisations « Soldes », « Transactions » et « Earn (Lecture) » – pas « Trader (Lecture) ».\n3. Copiez la clé API et collez-la ci-dessous. Bitpanda ne l'affiche qu'une seule fois.\n\nL'intégration ne fait que lire avec cette clé API : elle ne peut ni passer d'ordres ni déplacer d'argent.\nLes clés API Bitpanda sont valables jusqu'à la date choisie lors de leur création, un an au plus ; ensuite, Home Assistant en demande une nouvelle.",
         "data": {
           "api_key": "Clé API"
         }
       },
       "reconfigure": {
         "title": "Reconfigurer Bitpanda Portfolio",
-        "description": "Remplacez la clé API enregistrée, changez de devise, ou les deux.",
+        "description": "Remplacez la clé API enregistrée, changez de devise, ou les deux. Une nouvelle clé API doit appartenir au même compte Bitpanda. Pour un autre compte, ouvrez le menu ⋮ de l'entrée « Bitpanda Portfolio » sur la page de l'intégration Bitpanda, choisissez « Supprimer » puis configurez à nouveau le Portfolio.",
         "data": {
           "api_key": "Nouvelle clé API",
           "currency": "Devise"

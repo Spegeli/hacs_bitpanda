@@ -707,10 +707,11 @@ async def test_an_outage_cannot_leave_two_hanging_assets_in_front(freezer):
     assert coordinator.data == dict.fromkeys(("a", "b", "c", "d"), 1.0)
 
 
-# --- Overlapping rounds ---------------------------------------------------------------
+# --- Rounds in turn ------------------------------------------------------------------
 #
-# Home Assistant 2025.5 takes no lock around a refresh: a refresh by hand
-# (bitpanda.refresh) can run while a scheduled one waits for an answer.
+# Home Assistant 2025.5 to 2025.10 take no lock around a refresh: a refresh by
+# hand (bitpanda.refresh) could run while a scheduled one waits for an answer.
+# The tolerance's own lock makes it wait, as Home Assistant 2025.11 does.
 
 
 class _HeldClient(_Client):
@@ -730,19 +731,22 @@ class _HeldClient(_Client):
         return await super().async_get_ticker(asset_id)
 
 
-async def test_two_overlapping_rounds_both_return_data():
-    """Round A waits for Bitcoin's answer. Meanwhile round B asks for both
-    assets -- Solana first, as A has marked Bitcoin -- and completes;
-    Bitcoin's fresh price removes its mark. Then Bitcoin answers A, whose
-    fresh price finds no mark left to remove: both rounds return data."""
+async def test_a_round_asked_for_meanwhile_waits_and_asks_for_every_price_again():
+    """Round A waits for Bitcoin's answer. Round B, asked for meanwhile,
+    asks for nothing until A has its prices; then it asks for both again,
+    in tracked order: A's fresh prices left no mark."""
     client = _HeldClient({BTC: "1.00000000", SOL: "2.00000000"}, held=BTC)
     coordinator = _coordinator(client)
     round_a = asyncio.create_task(coordinator._async_update_data())
     await client.asked.wait()
-    assert await coordinator._async_update_data() == {BTC: 1.0, SOL: 2.0}
+    round_b = asyncio.create_task(coordinator._async_update_data())
+    for _ in range(10):
+        await asyncio.sleep(0)
+    assert client.calls == []
     client.answer.set()
     assert await round_a == {BTC: 1.0, SOL: 2.0}
-    assert client.calls == [SOL, BTC, BTC, SOL]
+    assert await round_b == {BTC: 1.0, SOL: 2.0}
+    assert client.calls == [BTC, SOL, BTC, SOL]
 
 
 # --- TickerCoordinator through Home Assistant's refresh -----------------------------

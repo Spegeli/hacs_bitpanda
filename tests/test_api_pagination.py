@@ -285,6 +285,37 @@ async def test_paginate_raises_when_the_page_cap_is_reached(monkeypatch):
     assert mocker.call_count == 3
 
 
+@pytest.mark.timeout(5)
+async def test_operations_page_past_the_cap_of_the_other_listings(monkeypatch):
+    """A long operation history -- savings plans buying daily for years --
+    pages on past the cap that keeps /assets in check: /operations has a
+    cap of its own. Scaled down: 3 pages for the others, 5 for operations,
+    and a history of 4 pages read completely."""
+    monkeypatch.setattr(api, "_MAX_PAGES", 3)
+    monkeypatch.setattr(api, "_MAX_OPERATION_PAGES", 5)
+    cursors = [_b64(f"2026-09-0{day}T00:00:00.001Z") for day in (4, 3, 2)]
+    with mock_aiohttp_client() as mocker:
+        for index, cursor in enumerate(cursors):
+            following = cursors[index + 1] if index + 1 < len(cursors) else None
+            mocker.get(
+                f"{API_BASE_URL}/operations?cursor={cursor}",
+                json=_ops_page([f"o{index + 2}"], following),
+            )
+        mocker.get(f"{API_BASE_URL}/operations", json=_ops_page(["o1"], cursors[0]))
+        async with mocker.create_session(asyncio.get_running_loop()) as session:
+            client = BitpandaApiClient("key", session)
+            operations = await client.async_get_operations()
+
+    assert [operation["operation_id"] for operation in operations] == ["o1", "o2", "o3", "o4"]
+    assert mocker.call_count == 4
+
+
+def test_the_operation_page_cap_covers_a_million_operations():
+    """Far beyond the test account's 1,243 operations: room for accounts
+    that trade every day for years."""
+    assert api._MAX_OPERATION_PAGES * MAX_PAGE_SIZE >= 1_000_000
+
+
 def test_page_cap_is_far_above_any_real_listing():
     """The whole 14,054-asset catalogue is 141 pages of 100 and a five-year
     operation history 13; the cap must leave a wide margin above both.

@@ -1,4 +1,5 @@
 """Shared fixtures for Bitpanda integration tests."""
+import asyncio
 from collections.abc import Mapping
 from datetime import timedelta
 from functools import partial
@@ -82,6 +83,23 @@ def stub_the_dashboard_cards(request):
 def auto_enable_custom_integrations(enable_custom_integrations):
     """Make Home Assistant load custom_components during tests."""
     return
+
+
+async def async_settle(rounds: int = 1000) -> None:
+    """Let the event loop run until it has no callback ready: whatever
+    still waits then waits for something -- an event, a lock, a timer, an
+    executor job --, and no task of the loop will move it on its own. That
+    is what "nothing happened yet" asserts in the tests that call it; a job
+    running in a thread can still finish later, so they wait on none.
+    Fails when the loop is still busy after `rounds` turns, rather than
+    passing on a guess."""
+    loop = asyncio.get_running_loop()
+    for _ in range(rounds):
+        await asyncio.sleep(0)
+        # The loop's queue of callbacks ready to run (CPython's asyncio).
+        if not loop._ready:  # type: ignore[attr-defined]
+            return
+    raise AssertionError(f"the event loop was still busy after {rounds} turns")
 
 
 def load_fixture(name: str):

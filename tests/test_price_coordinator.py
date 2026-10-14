@@ -23,6 +23,8 @@ from custom_components.bitpanda.price_coordinator import (
     convert_price,
 )
 
+from tests.conftest import async_settle
+
 
 BTC = "b86c034b-efe3-11eb-b56f-0691764446a7"
 SOL = "b86da33d-efe3-11eb-b56f-0691764446a7"
@@ -740,8 +742,7 @@ async def test_a_round_asked_for_meanwhile_waits_and_asks_for_every_price_again(
     round_a = asyncio.create_task(coordinator._async_update_data())
     await client.asked.wait()
     round_b = asyncio.create_task(coordinator._async_update_data())
-    for _ in range(10):
-        await asyncio.sleep(0)
+    await async_settle()
     assert client.calls == []
     client.answer.set()
     assert await round_a == {BTC: 1.0, SOL: 2.0}

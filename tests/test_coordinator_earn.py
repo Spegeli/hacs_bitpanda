@@ -28,6 +28,8 @@ from custom_components.bitpanda.portfolio_store import (
 )
 from custom_components.bitpanda.portfolio_sensor import StakingSensor
 
+from tests.conftest import async_settle
+
 
 def _reward(asset_id, gross, fee, credited_at, owner="staking-service"):
     return {
@@ -494,8 +496,7 @@ async def test_a_read_asked_for_meanwhile_begins_once_the_one_under_way_has_ende
     first = asyncio.create_task(coordinator._async_update_data())
     await client.entered.wait()
     second = asyncio.create_task(coordinator._async_update_data())
-    for _ in range(10):
-        await asyncio.sleep(0)
+    await async_settle()
     assert client.requests == ["2026-10-12T16:48:00Z"]
     client.release.set()
     await first

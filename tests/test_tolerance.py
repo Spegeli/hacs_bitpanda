@@ -13,6 +13,8 @@ from homeassistant.util import dt as dt_util
 
 from custom_components.bitpanda.tolerance import TolerantCoordinator, TolerantEntity
 
+from tests.conftest import async_settle
+
 _REGULAR = timedelta(minutes=5)
 # Refreshes by hand (bitpanda.refresh) come a cooldown apart.
 _BY_HAND = timedelta(seconds=20)
@@ -381,8 +383,7 @@ async def test_a_refresh_begins_only_once_the_one_under_way_has_ended(hass, free
     refresh_a = asyncio.create_task(probe._async_refresh())
     await held_a.entered.wait()
     refresh_b = asyncio.create_task(probe._async_refresh())
-    for _ in range(10):
-        await asyncio.sleep(0)
+    await async_settle()
     assert len(probe.asked) == 1
     freezer.tick(_LATE)
     ended_a = dt_util.utcnow()
@@ -411,8 +412,7 @@ async def test_a_refresh_that_waited_is_judged_by_the_outcome_before_the_wait(ha
     refresh_a = asyncio.create_task(probe._async_refresh())
     await held_a.entered.wait()
     refresh_b = asyncio.create_task(probe._async_refresh())
-    for _ in range(10):
-        await asyncio.sleep(0)
+    await async_settle()
     held_a.release.set()
     await refresh_a
     await refresh_b

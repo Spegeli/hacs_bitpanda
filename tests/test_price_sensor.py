@@ -148,7 +148,7 @@ def test_a_confirmed_failure_makes_the_price_unavailable():
 
 def test_change_24h_attributes_from_the_recorded_price():
     sensor = _sensor("EUR", prices={BTC["id"]: 110.0}, ecb=False)
-    sensor._price_24h_ago = 100.0
+    sensor.set_price_24h_ago(100.0)
     attrs = sensor.extra_state_attributes
     assert attrs["change_24h_pct"] == 10.0
     assert attrs["price_24h_ago"] == 100.0

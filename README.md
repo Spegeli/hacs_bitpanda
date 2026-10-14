@@ -41,7 +41,7 @@ The integration offers two services. Set up either or both — each one once.
 - One device per tracked asset, such as **Bitcoin (BTC) Price Tracker**, in groups by asset type, with a price sensor in EUR (**Bitcoin (BTC) Price Tracker EUR**) and, optionally, one in each of the other 11 supported currencies
 - EUR prices come from Bitpanda every 60 seconds, one request per tracked asset. Should Bitpanda answer "too many requests", the integration slows down by itself and returns to every 60 seconds once Bitpanda answers again.
 - Other currencies are converted with the daily reference rates of the European Central Bank (ECB), fetched every 6 hours
-- 24-hour price change (`change_24h_pct`) as an attribute, from the Home Assistant recorder
+- 24-hour price change (`change_24h_pct`) as an attribute, from Home Assistant's statistics
 
 ### Dashboard cards
 - Two cards for your dashboards, shipped with the integration — nothing else to install: **Bitpanda Portfolio** and **Bitpanda Price Tracker** (see [Dashboard cards](#-dashboard-cards))
@@ -249,7 +249,7 @@ Each sensor's attributes appear in its **Details** view (before Home Assistant 2
 
 `asset_category` is the asset's category key: `crypto`, `stock`, `etf`, `etc`, `index`, `metal` or `other`.
 
-An attribute without a value is left out rather than set to `null`: `apr_percent` without an Earn rate, the `rewards_…` attributes before the first payout, `rewards_net_value` without a price, `change_24h_pct` and `price_24h_ago` until the recorder holds a price from 24 hours ago. A price in another currency carries either `conversion` (`no_rate`, before the first ECB rate) or `conversion_rate`, `rate_date` and `rate_source`. `rewards_last_at` is when Bitpanda credited the newest payout, in UTC.
+An attribute without a value is left out rather than set to `null`: `apr_percent` without an Earn rate, the `rewards_…` attributes before the first payout, `rewards_net_value` without a price, `change_24h_pct` and `price_24h_ago` until Home Assistant's statistics hold a price from about 24 hours ago (within half an hour). A price in another currency carries either `conversion` (`no_rate`, before the first ECB rate) or `conversion_rate`, `rate_date` and `rate_source`. `rewards_last_at` is when Bitpanda credited the newest payout, in UTC.
 
 The lifetime reward amounts `rewards_gross`, `rewards_fee` and `rewards_net` are in units of the asset, and `rewards_count` is the number of payouts; `rewards_net_value` is what the net rewards are worth at today's price, as the Bitpanda app shows it — not their value when they were paid out.
 
@@ -536,7 +536,7 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 - **Short outages are bridged, longer ones show.** When Bitpanda cannot be reached — while your Internet connection is down, say — the sensors keep their last value through two failed refreshes. The third failed refresh in a row, at least two regular intervals after the first, makes them `unavailable`: for the Portfolio and its returns after about 15 minutes, for prices after about 3 minutes (longer while Bitpanda rate-limits the requests). A rejected API key makes them `unavailable` at once. After a restart of Home Assistant during an outage, there is no last value to show.
 - **What disappears waits ten minutes.** When Bitpanda's answer no longer lists something the Portfolio showed — an asset, all fiat, all Cash Plus, or anything at all — the sensors that show it are `unavailable` at first, not 0: a short glitch at Bitpanda then leaves a gap in their history instead of a drop. Once three answers in a row, at least ten minutes apart from first to last, confirm it, the wallet is removed, and Total value, Cash or Cash Plus shows 0. Refreshing by hand does not make that sooner. What is already missing when the Portfolio starts shows 0 at once.
 - **Prices in other currencies are converted, not quoted.** Bitpanda's price endpoint answers in EUR only; every other currency is the EUR price × the ECB's daily reference rate, which can differ from the price Bitpanda itself shows in that currency. The ECB publishes its rates once per working day around 16:00 CET; at weekends and on holidays the last rate stays in use, and the `rate_date` attribute shows which day's rate a price uses.
-- **The 24-hour change needs a day of history.** `change_24h_pct` and `price_24h_ago` compare the price with its own value from 24 hours ago in Home Assistant's recorder: a newly tracked price shows them only after a day, and never while the recorder does not record the sensor.
+- **The 24-hour change needs a day of history.** `change_24h_pct` and `price_24h_ago` compare the price with its value from 24 hours ago in Home Assistant's statistics — the one nearest to that time within half an hour: a newly tracked price shows them only after a day, and they are missing while there is no value within that half hour, such as after Home Assistant was off, and never while the recorder does not record the sensor.
 
 ---
 

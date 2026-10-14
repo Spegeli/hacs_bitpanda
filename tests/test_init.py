@@ -1,5 +1,6 @@
 """Both services set up, reload and unload end to end (API mocked)."""
 import asyncio
+import logging
 from contextlib import nullcontext
 from datetime import timedelta
 from itertools import count
@@ -1298,6 +1299,28 @@ async def test_price_tracker_setup_creates_one_sensor_per_asset_and_currency(has
     assert registry_entry.config_subentry_id == _group(entry, "crypto").subentry_id
     device = dr.async_get(hass).async_get(registry_entry.device_id)
     assert device.name == "Bitcoin (BTC) Price Tracker"
+
+
+async def test_without_the_recorder_the_prices_work_and_have_no_24h_change(
+    hass, price_api, freezer, caplog
+):
+    """The recorder is only an after-dependency: without it the 24 h
+    lookup fails quietly -- one debug line --, the 24 h attributes stay
+    absent, and the prices come as ever."""
+    caplog.set_level(logging.DEBUG, logger="custom_components.bitpanda")
+    await _setup(hass, _price_entry(hass, [], price_group("crypto", BTC)))
+    assert "recorder" not in hass.config.components
+    freezer.tick(timedelta(seconds=1))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    await _next_price_round(hass, freezer)
+
+    state = hass.states.get("sensor.bitpanda_bitcoin_btc_price_tracker_eur")
+    assert float(state.state) == 100.0
+    assert "price_24h_ago" not in state.attributes
+    assert "change_24h_pct" not in state.attributes
+    assert "No 24 h statistics" in caplog.text
+    assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
 
 
 async def _next_price_round(hass, freezer) -> None:

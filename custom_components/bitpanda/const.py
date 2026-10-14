@@ -81,7 +81,11 @@ REWARDS_UPDATE_INTERVAL = timedelta(hours=1)
 # earlier time is caught -- and the whole history again once a week.
 OPERATIONS_OVERLAP = timedelta(hours=24)
 OPERATIONS_FULL_READ_INTERVAL = timedelta(days=7)
-CHANGE_24H_UPDATE_INTERVAL = timedelta(minutes=15)
+# The Price Tracker's 24 h reference: looked up in Home Assistant's 5-minute
+# statistics as often as they are written, the value nearest to a day ago
+# within half an hour (price_sensor.async_prices_24h_ago).
+CHANGE_24H_UPDATE_INTERVAL = timedelta(minutes=5)
+CHANGE_24H_TOLERANCE = timedelta(minutes=30)
 
 # Retry for the Earn offers and the ECB rates while they never loaded: until
 # then the APRs and the other currencies have no value at all.

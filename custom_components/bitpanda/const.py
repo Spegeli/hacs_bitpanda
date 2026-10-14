@@ -115,9 +115,10 @@ CONF_EXTRA_CURRENCIES = "extra_currencies"
 
 # Option of both services: the language of the integration's own texts --
 # group titles, the refusals to delete a device and the Portfolio's
-# notification about a new wallet (language.py). Chosen at setup, Home
-# Assistant's system language offered first, and changed under Configure;
-# English for an entry without it (one upgraded from version 1).
+# notifications about a new wallet and new staking rewards (language.py).
+# Chosen at setup, Home Assistant's system language offered first, and
+# changed under Configure; English for an entry without it (one upgraded
+# from version 1).
 CONF_LANGUAGE = "language"
 DEFAULT_LANGUAGE = "en"
 

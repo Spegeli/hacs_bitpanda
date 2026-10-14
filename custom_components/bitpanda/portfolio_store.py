@@ -51,6 +51,7 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
+from homeassistant.util.hass_dict import HassKey
 
 from .const import DOMAIN
 from .portfolio_model import RewardTotals, totals_from_section, totals_to_section
@@ -65,7 +66,7 @@ _WALLETS = "known_wallets"
 _REWARDS = "known_rewards"
 _OPERATIONS = "operations"
 # hass.data key of the stores, by entry id: they outlive the entries' reloads.
-_STORES = f"{DOMAIN}_portfolio_stores"
+_STORES: HassKey[dict[str, PortfolioStore]] = HassKey(f"{DOMAIN}_portfolio_stores")
 # The type name a section reports for a value of the wrong shape.
 _MALFORMED = ValueError.__name__
 
@@ -359,7 +360,7 @@ class OperationsHistory:
 async def async_get_portfolio_store(hass: HomeAssistant, entry_id: str) -> PortfolioStore:
     """The store of the Portfolio entry `entry_id`, loaded once and kept
     across its reloads."""
-    stores: dict[str, PortfolioStore] = hass.data.setdefault(_STORES, {})
+    stores = hass.data.setdefault(_STORES, {})
     store = stores.get(entry_id)
     if store is None:
         store = PortfolioStore(hass, entry_id)

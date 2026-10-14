@@ -29,8 +29,8 @@ announces it at once.
 New staking payouts (RewardAnnouncer). The rewards coordinator calls the
 announcer after every successful refresh -- hourly while an enabled Staking
 sensor listens, and at every setup, reload and start -- and never as a
-listener, which would keep it reading the whole history every hour with
-every Staking sensor disabled. The Portfolio keeps a mark per asset, when the
+listener, which would keep it reading every hour with every Staking sensor
+disabled. The Portfolio keeps a mark per asset, when the
 newest payout announced was credited (portfolio_store.RewardMarks); the
 first refresh without marks marks every asset's newest payout and announces
 nothing. After that the payouts credited after an asset's mark are new: one
@@ -65,12 +65,11 @@ from .const import (
     notifies_new_wallets,
     notifies_staking_rewards,
 )
-from .devices import device_identifiers, find_entry_device
+from .devices import device_identifiers, find_wallet_device
 from .language import entry_language
 from .naming import (
     staking_unique_id,
     wallet_device_asset_id,
-    wallet_device_identifier,
     wallet_device_name,
 )
 from .portfolio_coordinator import (
@@ -189,8 +188,7 @@ class WalletAnnouncer:
         """This entry's wallet device of `asset_id`, looked up among the
         entry's own devices (devices.py): another entry's device may carry
         the same identifier."""
-        entry_id = self._entry.entry_id
-        return find_entry_device(dev_reg, entry_id, wallet_device_identifier(entry_id, asset_id))
+        return find_wallet_device(dev_reg, self._entry.entry_id, asset_id)
 
     @callback
     def async_listen_for_wallet_devices(self) -> Callable[[], None]:
@@ -238,10 +236,11 @@ class WalletAnnouncer:
         The announcement runs once Home Assistant has started -- at once
         while it runs. A start adds the wallets before automations listen:
         Home Assistant arms their triggers only as it finishes starting, and
-        an event fired before would reach none. An unload drops an
-        announcement still waiting; the asset is not known yet, so the
-        entry's next setup marks it again -- and announces it at once, its
-        device being there (mark)."""
+        an event fired before would reach none. An unload while Home
+        Assistant starts drops an announcement still waiting; the asset is
+        not known yet, so the entry's next setup marks it again -- and
+        announces it at once, its device being there (mark). While it runs,
+        nothing waits, and nothing is left for the unload to cancel."""
         asset, category = self._pending.pop(asset_id)
         self._scheduled.add(asset_id)
 
@@ -256,7 +255,10 @@ class WalletAnnouncer:
             await asyncio.sleep(0)
             await self._async_announce(asset_id, asset, category, device_id)
 
-        self._entry.async_on_unload(async_at_started(self._hass, _announce))
+        starting = self._hass.state is not CoreState.running
+        cancel = async_at_started(self._hass, _announce)
+        if starting:
+            self._entry.async_on_unload(cancel)
 
     async def _async_announce(
         self, asset_id: str, asset: dict[str, Any], category: str, device_id: str

@@ -17,10 +17,11 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
+from custom_components.bitpanda.announcements import WalletAnnouncer
 from custom_components.bitpanda.const import DOMAIN, PORTFOLIO_UPDATE_INTERVAL
 from custom_components.bitpanda.groups import async_get_or_create_wallet_group
 from custom_components.bitpanda.naming import wallet_device_name, wallet_entity_id
-from custom_components.bitpanda.portfolio_coordinator import PortfolioRuntime, RewardsCoordinator
+from custom_components.bitpanda.portfolio_coordinator import RewardsCoordinator
 from custom_components.bitpanda.portfolio_model import (
     EarnData,
     Holding,
@@ -35,7 +36,7 @@ from custom_components.bitpanda.portfolio_sensor import (
 )
 from custom_components.bitpanda.tolerance import TolerantCoordinator
 
-from tests.conftest import device_names_in_subentry
+from tests.conftest import device_names_in_subentry, portfolio_runtime
 
 VSN = {"id": "1f051b7c-5980-6dda-9d3d-cf107d8d4bfb", "symbol": "VSN", "name": "Vision",
        "type": "cryptocoin", "group": "token"}
@@ -116,7 +117,8 @@ class _Harness:
         self.entry.add_to_hass(hass)
         self.platform = MockEntityPlatform(hass, domain="sensor", platform_name=DOMAIN)
         self.platform.config_entry = self.entry
-        self.runtime = PortfolioRuntime(
+        self.runtime = portfolio_runtime(
+            hass, self.entry.entry_id,
             portfolio=_tolerant(hass, self.entry, "portfolio"),
             history=_tolerant(hass, self.entry, "history"),
             earn=DataUpdateCoordinator(
@@ -135,6 +137,7 @@ class _Harness:
             lambda entities, **kwargs: hass.async_create_task(
                 self.platform.async_add_entities(entities, **kwargs), eager_start=eager_add
             ),
+            WalletAnnouncer(hass, self.entry, self.runtime.known_wallets, _TITLES),
         )
 
     async def refresh(self, data=None, success=True, *, after=PORTFOLIO_UPDATE_INTERVAL):
@@ -595,7 +598,8 @@ async def test_the_earn_catalogue_keeps_refreshing_without_staking_sensors(hass)
         hass, _LOG, config_entry=entry, name="earn",
         update_interval=timedelta(hours=24), update_method=update_method,
     )
-    runtime = PortfolioRuntime(
+    runtime = portfolio_runtime(
+        hass, entry.entry_id,
         portfolio=_tolerant(hass, entry, "portfolio"),
         history=_tolerant(hass, entry, "history"),
         earn=earn,
@@ -652,7 +656,8 @@ async def test_the_value_history_keeps_refreshing_with_every_return_sensor_disab
         hass, _LOG, config_entry=entry, name="history",
         update_interval=PORTFOLIO_UPDATE_INTERVAL, update_method=update_method,
     )
-    runtime = PortfolioRuntime(
+    runtime = portfolio_runtime(
+        hass, entry.entry_id,
         portfolio=_tolerant(hass, entry, "portfolio"),
         history=history,
         earn=DataUpdateCoordinator(

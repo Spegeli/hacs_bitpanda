@@ -246,14 +246,6 @@ async def test_portfolio_diagnostics_before_the_first_rewards_refresh(hass):
     }
 
 
-
-async def test_portfolio_diagnostics_without_the_operations_section_leave_it_out(hass):
-    """A runtime built without the section reports no operations at all."""
-    entry = _portfolio_entry(hass, loaded=True)
-    entry.runtime_data.operations = None
-    result = await async_get_config_entry_diagnostics(hass, entry)
-    assert "operations" not in result["coordinators"]["rewards"]
-
 _BTC = {"id": "uuid-btc", "symbol": "BTC", "name": "Bitcoin", "type": "cryptocoin",
         "group": "coin"}
 _SOL = {"id": "uuid-sol", "symbol": "SOL", "name": "Solana", "type": "cryptocoin",

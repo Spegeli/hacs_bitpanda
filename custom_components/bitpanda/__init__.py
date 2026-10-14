@@ -20,6 +20,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.util.hass_dict import HassKey
 
 from . import migration
 from .announcements import RewardAnnouncer
@@ -85,7 +86,7 @@ PLATFORMS: list[Platform] = [Platform.SENSOR]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 # Records of held assets, shared across reloads of the Portfolio entry.
-_ASSET_DIRECTORY_KEY = f"{DOMAIN}_asset_directory"
+_ASSET_DIRECTORY_KEY: HassKey[dict[str, dict[str, Any]]] = HassKey(f"{DOMAIN}_asset_directory")
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -425,8 +426,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) ->
 
 async def async_remove_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> None:
     """Forget what outlived the entry's setups: the Portfolio's store of
-    known wallets and staking reward marks, with its file
-    (portfolio_store.py); the repair issue for the entities the upgrade
+    known wallets, staking reward marks and the operations read so far,
+    with its file (portfolio_store.py); the repair issue for the entities the upgrade
     left alone with the Portfolio, whose entities they were; each repair
     issue about what blocks the upgrade of a version 1 entry, once its cause
     went with this entry -- and, with the last Bitpanda entry, the upgrade's

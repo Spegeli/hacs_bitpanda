@@ -122,20 +122,18 @@ def legacy_symbol(wallet_id: str) -> str:
     migrated, with the reason in the log -- both are safer than guessing at
     a split.
     """
-    for prefix in _LEGACY_PREFIXES:
-        if wallet_id.startswith(prefix):
-            return wallet_id[len(prefix):]
-    return wallet_id
+    prefix = legacy_prefix(wallet_id)
+    return wallet_id if prefix is None else wallet_id[len(prefix):]
 
 
 def legacy_prefix(wallet_id: str) -> str | None:
     """Return the recognised v1 category prefix of a wallet id, or None.
 
-    Mirrors `legacy_symbol`'s own prefix search (same `_LEGACY_PREFIXES`,
-    longest/most-specific first) but returns the prefix itself instead of
-    stripping it -- `pick_legacy` (assets.py) needs to know which category a
-    wallet id claimed, not just its bare symbol, to tell a metal wallet from
-    a coin wallet that happens to share a symbol.
+    The prefix search of `legacy_symbol` too (`_LEGACY_PREFIXES`,
+    longest/most-specific first), returning the prefix itself --
+    `pick_legacy` (assets.py) needs to know which category a wallet id
+    claimed, not just its bare symbol, to tell a metal wallet from a coin
+    wallet that happens to share a symbol.
     """
     for prefix in _LEGACY_PREFIXES:
         if wallet_id.startswith(prefix):

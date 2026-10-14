@@ -25,6 +25,8 @@ from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.portfolio_coordinator import PortfolioRuntime
 from custom_components.bitpanda.price_coordinator import PriceTrackerRuntime
 
+from tests.conftest import portfolio_runtime
+
 
 class _Coordinator:
     """What the action touches: the update interval, which sets the
@@ -67,13 +69,13 @@ def _loaded(hass, entry_type: str, runtime) -> MockConfigEntry:
 
 
 def _portfolio_runtime(
-    portfolio: _Coordinator, history: _Coordinator | None = None
+    hass, portfolio: _Coordinator, history: _Coordinator | None = None
 ) -> PortfolioRuntime:
-    return PortfolioRuntime(
+    return portfolio_runtime(
+        hass,
         portfolio=portfolio,
         history=history if history is not None else _Coordinator(timedelta(minutes=5)),
         earn=None, rewards=None,
-        group_titles={}, data_at_setup={}, options_at_setup={},
     )
 
 
@@ -95,7 +97,7 @@ async def _register(
     await _set_up_the_integration(hass)
     portfolio = _Coordinator(timedelta(minutes=5), fails=portfolio_fails)
     tickers = _Coordinator(ticker_interval, fails=tickers_fail)
-    _loaded(hass, "portfolio", _portfolio_runtime(portfolio))
+    _loaded(hass, "portfolio", _portfolio_runtime(hass, portfolio))
     _loaded(hass, "price_tracker", PriceTrackerRuntime(tickers=tickers, ecb=None))
     return portfolio, tickers
 
@@ -125,7 +127,7 @@ async def test_the_portfolio_refresh_takes_its_returns_along(hass):
     await _set_up_the_integration(hass)
     portfolio = _Coordinator(timedelta(minutes=5))
     history = _Coordinator(timedelta(minutes=5), fails=True)
-    _loaded(hass, "portfolio", _portfolio_runtime(portfolio, history))
+    _loaded(hass, "portfolio", _portfolio_runtime(hass, portfolio, history))
     await _call(hass)
     assert portfolio.async_refresh.await_count == 1
     assert history.async_refresh.await_count == 1
@@ -138,7 +140,7 @@ async def test_a_failed_portfolio_refresh_leaves_the_returns_alone(hass):
     await _set_up_the_integration(hass)
     portfolio = _Coordinator(timedelta(minutes=5), fails=True)
     history = _Coordinator(timedelta(minutes=5))
-    _loaded(hass, "portfolio", _portfolio_runtime(portfolio, history))
+    _loaded(hass, "portfolio", _portfolio_runtime(hass, portfolio, history))
     with pytest.raises(HomeAssistantError):
         await _call(hass)
     assert portfolio.async_refresh.await_count == 1
@@ -183,7 +185,7 @@ async def test_only_the_loaded_services_are_refreshed(hass):
     has nothing to refresh; the loaded one is refreshed as usual."""
     await _set_up_the_integration(hass)
     portfolio = _Coordinator(timedelta(minutes=5))
-    _loaded(hass, "portfolio", _portfolio_runtime(portfolio))
+    _loaded(hass, "portfolio", _portfolio_runtime(hass, portfolio))
     MockConfigEntry(
         domain=DOMAIN, version=3, data={"entry_type": "price_tracker"},
         state=ConfigEntryState.SETUP_RETRY,
@@ -251,7 +253,7 @@ async def test_a_service_is_named_by_the_title_its_entry_carries(hass):
     """The title the integration page shows, renamed by the user or not."""
     await _set_up_the_integration(hass)
     entry = _loaded(hass, "portfolio", _portfolio_runtime(
-        _Coordinator(timedelta(minutes=5), fails=True)
+        hass, _Coordinator(timedelta(minutes=5), fails=True)
     ))
     hass.config_entries.async_update_entry(entry, title="My Bitpanda")
     with pytest.raises(HomeAssistantError) as excinfo:
@@ -267,7 +269,7 @@ async def test_an_entry_unloaded_while_an_earlier_refresh_runs_is_skipped(hass):
     await _set_up_the_integration(hass)
     portfolio = _Coordinator(timedelta(minutes=5))
     tickers = _Coordinator(timedelta(seconds=60))
-    _loaded(hass, "portfolio", _portfolio_runtime(portfolio))
+    _loaded(hass, "portfolio", _portfolio_runtime(hass, portfolio))
     tracker = _loaded(hass, "price_tracker", PriceTrackerRuntime(tickers=tickers, ecb=None))
 
     async def _refresh_while_the_tracker_unloads() -> None:
@@ -290,7 +292,7 @@ async def test_an_entry_reloaded_during_a_refresh_is_refreshed_with_its_new_stat
     portfolio = _Coordinator(timedelta(minutes=5))
     old_tickers = _Coordinator(timedelta(seconds=60), fails=True)
     new_tickers = _Coordinator(timedelta(seconds=60))
-    _loaded(hass, "portfolio", _portfolio_runtime(portfolio))
+    _loaded(hass, "portfolio", _portfolio_runtime(hass, portfolio))
     tracker = _loaded(
         hass, "price_tracker", PriceTrackerRuntime(tickers=old_tickers, ecb=None)
     )

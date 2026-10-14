@@ -36,7 +36,7 @@ from .const import (
     PRICES_URL,
     SUBENTRY_TYPE_WALLET_GROUP,
 )
-from .devices import find_entry_device
+from .devices import find_wallet_device
 from .groups import (
     async_get_or_create_wallet_group,
     entities_by_group,
@@ -513,7 +513,7 @@ class PortfolioEntityManager:
         runtime: PortfolioRuntime,
         currency: str,
         add_entities: AddConfigEntryEntitiesCallback,
-        announcer: WalletAnnouncer | None = None,
+        announcer: WalletAnnouncer,
     ) -> None:
         self._hass = hass
         self._entry = entry
@@ -576,9 +576,7 @@ class PortfolioEntityManager:
                 ent_reg.async_remove(entity_id)
         if device:
             dev_reg = dr.async_get(self._hass)
-            found = find_entry_device(
-                dev_reg, entry_id, wallet_device_identifier(entry_id, asset_id)
-            )
+            found = find_wallet_device(dev_reg, entry_id, asset_id)
             if found is not None:
                 dev_reg.async_remove_device(found.id)
 
@@ -589,7 +587,7 @@ class PortfolioEntityManager:
         if not portfolio.last_update_success or data is None:
             return
         announcer = self._announcer
-        if announcer is not None and announcer.known.first_run:
+        if announcer.known.first_run:
             # No list yet -- a new setup, an upgrade, an update from a version
             # without it: the wallets found now are no news, and neither is a
             # wallet still registered -- a sold asset's waiting out its misses,
@@ -620,7 +618,7 @@ class PortfolioEntityManager:
                 # Before its sensors go to Home Assistant, which creates the
                 # wallet's device -- and so announces the wallet -- as it
                 # takes in the first of them, within this refresh.
-                if announcer is not None and asset_id not in announcer.known:
+                if asset_id not in announcer.known:
                     announcer.mark(asset, category)
                 entities.append(WalletSensor(portfolio, entry_id, self._currency, asset))
                 entities.append(WalletTotalSensor(portfolio, entry_id, self._currency, asset))
@@ -681,7 +679,7 @@ class PortfolioEntityManager:
             )
             self._add_entities(entities, config_subentry_id=group.subentry_id)
         self._remove_empty_groups()
-        if announcer is not None and data.listed_any:
+        if data.listed_any:
             # A held asset stays known, and so does a sold one whose wallet
             # still exists: tracked here while it waits out its misses, or
             # registered from before a restart or reload, which this manager
@@ -753,8 +751,7 @@ async def async_setup_portfolio_entities(
     add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """The Portfolio device's sensors, outside every group, then the wallets
-    the manager keeps current in their groups -- announcing the new ones
-    wherever setup loaded the list of known wallets."""
+    the manager keeps current in their groups -- announcing the new ones."""
     runtime: PortfolioRuntime = entry.runtime_data
     currency = entry.data[CONF_CURRENCY]
     add_entities(
@@ -768,13 +765,9 @@ async def async_setup_portfolio_entities(
             ),
         ]
     )
-    known = runtime.known_wallets
-    announcer = (
-        None if known is None else WalletAnnouncer(hass, entry, known, runtime.group_titles)
-    )
-    if announcer is not None:
-        # Before the first reconcile, which may create a new wallet's device.
-        entry.async_on_unload(announcer.async_listen_for_wallet_devices())
+    announcer = WalletAnnouncer(hass, entry, runtime.known_wallets, runtime.group_titles)
+    # Before the first reconcile, which may create a new wallet's device.
+    entry.async_on_unload(announcer.async_listen_for_wallet_devices())
     manager = PortfolioEntityManager(hass, entry, runtime, currency, add_entities, announcer)
     manager.async_reconcile()
     entry.async_on_unload(runtime.portfolio.async_add_listener(manager.async_reconcile))

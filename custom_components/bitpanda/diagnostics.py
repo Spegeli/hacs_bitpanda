@@ -69,8 +69,6 @@ def _marks(runtime: PortfolioRuntime) -> dict[str, Any]:
     """How many assets have a staking reward mark, and whether the marks are
     still to begin (portfolio_store.RewardMarks): counts only, no asset."""
     marks = runtime.reward_marks
-    if marks is None:
-        return {}
     return {"marked_assets": len(marks), "first_run": marks.first_run}
 
 
@@ -80,8 +78,6 @@ def _operations(runtime: PortfolioRuntime) -> dict[str, Any]:
     covers, how many hours ago the whole history was read, and for how many
     assets -- counts and an age only, no id, no amount."""
     history = runtime.operations
-    if history is None:
-        return {}
     read_at = history.full_read_at
     return {
         "operations": {

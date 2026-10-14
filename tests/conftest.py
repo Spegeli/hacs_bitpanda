@@ -24,6 +24,13 @@ from homeassistant.util import dt as dt_util
 import pytest
 
 from custom_components.bitpanda.assets import slim_asset
+from custom_components.bitpanda.portfolio_coordinator import PortfolioRuntime
+from custom_components.bitpanda.portfolio_store import (
+    KnownWallets,
+    OperationsHistory,
+    PortfolioStore,
+    RewardMarks,
+)
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 
@@ -97,6 +104,23 @@ def price_group(category: str, *assets: dict, title: str | None = None) -> Confi
         title=title or category,
         unique_id=category,
     )
+
+
+def portfolio_runtime(hass, entry_id: str = "eid", **fields: Any) -> PortfolioRuntime:
+    """A Portfolio's runtime data built by hand: `fields` as given -- the
+    coordinators at least --, no group titles and setup data unless given,
+    and the Portfolio's file as at a first start: no list of known wallets,
+    no marks, nothing read of the operations."""
+    store = PortfolioStore(hass, entry_id)
+    return PortfolioRuntime(**{
+        "group_titles": {},
+        "data_at_setup": {},
+        "options_at_setup": {},
+        "known_wallets": KnownWallets(store, None, None),
+        "reward_marks": RewardMarks(store, None, None),
+        "operations": OperationsHistory(store, None, None),
+        **fields,
+    })
 
 
 def wallet_group(category: str, title: str | None = None) -> ConfigSubentryData:

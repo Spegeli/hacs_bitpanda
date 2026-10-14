@@ -24,6 +24,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
     SelectSelectorMode,
 )
+from homeassistant.util.hass_dict import HassKey
 
 from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
 from .assets import (
@@ -55,7 +56,7 @@ _CATALOGUE_CACHE_TTL = timedelta(hours=1)
 
 # Its own top-level hass.data key, never inside hass.data[DOMAIN]: it serves
 # every flow and survives entry reloads.
-_CATALOGUE_KEY = f"{DOMAIN}_asset_catalogue"
+_CATALOGUE_KEY: HassKey[dict[str, list[dict[str, Any]]]] = HassKey(f"{DOMAIN}_asset_catalogue")
 
 # Bitpanda's old securities line: listed beside the current one with the
 # same symbol and ISIN and a near-equal price, but never buyable again. The
@@ -81,7 +82,7 @@ async def async_category_listing(
     Nothing here catches an API error: an error partway through a
     multi-filter category must not cache a partial listing.
     """
-    store: dict[str, list[dict[str, Any]]] = hass.data.setdefault(_CATALOGUE_KEY, {})
+    store = hass.data.setdefault(_CATALOGUE_KEY, {})
     cached = store.get(category)
     if cached is not None:
         return cached

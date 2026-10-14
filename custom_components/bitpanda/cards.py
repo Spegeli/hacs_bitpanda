@@ -26,9 +26,10 @@ from homeassistant.components.websocket_api.connection import ActiveConnection
 from homeassistant.components.websocket_api.decorators import websocket_command
 
 from homeassistant.components.frontend import add_extra_js_url
-# Defined in components.http at 2025.5; newer releases define it in
-# helpers.http and import it here without re-exporting it. Only this path
-# works on every release from the minimum on; mypy checks the newest.
+# Defined in components.http at 2025.5; at 2026.10 in components.http.server,
+# and still offered here without being re-exported, which mypy flags;
+# helpers.http has none. Only this path works on every release from the
+# minimum on.
 from homeassistant.components.http import StaticPathConfig  # type: ignore[attr-defined]
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, callback

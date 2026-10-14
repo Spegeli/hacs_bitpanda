@@ -102,6 +102,17 @@ def _log_unexpected(step: str, err: Exception) -> None:
     )
 
 
+def _form_error(step: str, err: Exception) -> str:
+    """The form error of a key check that raised: rate limited, no
+    connection, or -- logged by type only (_log_unexpected) -- unknown."""
+    if isinstance(err, BitpandaRateLimitError):
+        return "rate_limited"
+    if isinstance(err, BitpandaApiError):
+        return "cannot_connect"
+    _log_unexpected(step, err)
+    return "unknown"
+
+
 def _currency_select(options: list[str], *, multiple: bool = False) -> SelectSelector:
     """Currency codes labelled with their names through `selector.currency`.
 
@@ -307,13 +318,8 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self._currency_ids = await self._async_currency_ids()
                     if not self._currency_ids:
                         errors = {"base": "cannot_connect"}
-            except BitpandaRateLimitError:
-                errors = {"base": "rate_limited"}
-            except BitpandaApiError:
-                errors = {"base": "cannot_connect"}
             except Exception as err:  # noqa: BLE001 - a form error, never a traceback
-                _log_unexpected("portfolio", err)
-                errors = {"base": "unknown"}
+                errors = {"base": _form_error("portfolio", err)}
             if not errors:
                 self._api_key = api_key
                 return await self.async_step_currency()
@@ -511,8 +517,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 errors, extra = await self._async_validate_key(api_key)
             except Exception as err:  # noqa: BLE001 - a form error, never a traceback
-                _log_unexpected("reauth", err)
-                errors, extra = {"base": "unknown"}, {}
+                errors, extra = {"base": _form_error("reauth", err)}, {}
             placeholders.update(extra)
             if not errors:
                 return self._async_replace_key(
@@ -575,13 +580,8 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self._currency_ids = await self._async_currency_ids()
                     if currency not in self._currency_ids:
                         errors = {"base": "cannot_connect"}
-            except BitpandaRateLimitError:
-                errors = {"base": "rate_limited"}
-            except BitpandaApiError:
-                errors = {"base": "cannot_connect"}
             except Exception as err:  # noqa: BLE001 - a form error, never a traceback
-                _log_unexpected("reconfigure", err)
-                errors = {"base": "unknown"}
+                errors = {"base": _form_error("reconfigure", err)}
             if not errors:
                 if currency != stored:
                     self._api_key = api_key or None

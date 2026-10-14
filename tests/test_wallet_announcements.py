@@ -466,6 +466,21 @@ async def test_an_asset_still_missing_after_an_empty_spell_is_forgotten_once_con
     assert [event.data["asset_id"] for event in events] == [VSN["id"]]
 
 
+async def test_an_announcement_while_home_assistant_runs_adds_nothing_to_the_unload_list(
+    hass, portfolio_api, events, freezer
+):
+    """While Home Assistant runs, the announcement is made at once: nothing
+    waits for its start, so nothing is left for the unload to cancel --
+    not one callback more per announcement for the entry's whole life."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    before = len(entry._on_unload)
+    portfolio_api.return_value = _answer(BTC, VSN)
+    await _next_refresh(hass, freezer)
+    assert [event.data["asset_id"] for event in events] == [VSN["id"]]
+    assert len(entry._on_unload) == before
+
+
 async def test_an_asset_bought_again_after_the_user_deleted_its_wallet_is_announced(
     hass, portfolio_api, events, notifications, freezer, hass_ws_client
 ):

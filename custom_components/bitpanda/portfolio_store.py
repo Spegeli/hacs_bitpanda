@@ -19,6 +19,14 @@
   successful rewards refresh without it marks every asset's newest payout
   and announces nothing. A mark stays as long as the entry: it is what keeps
   an asset sold and bought back from announcing its old payouts again.
+- `operations` (OperationsHistory): what the rewards coordinator has read of
+  /operations so far -- when it last read the whole history, the newest time
+  it saw, the ids of the operations of the last day before it, the kinds it
+  evaluates (`staking` now) and, per kind, its evaluation: for `staking` the
+  totals and every timed payout per asset (portfolio_model.RewardTotals). It
+  lets the coordinator read only what is new; without it, the whole history
+  is read again, and nothing is lost but time. Nothing of the API key is
+  written here: a new key is told in memory (PortfolioStore.key_changed).
 
 Each section is read on its own. A missing one is that feature's first run,
 quietly: another section may have begun the file. A malformed one is a first
@@ -36,6 +44,7 @@ cancels such a save before deleting the file.
 from __future__ import annotations
 
 from collections.abc import Callable, Collection, Iterable, Mapping
+from datetime import datetime
 import logging
 from typing import Any
 
@@ -43,6 +52,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN
+from .portfolio_model import RewardTotals, totals_from_section, totals_to_section
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,6 +62,7 @@ _STORAGE_VERSION = 1
 _SAVE_DELAY = 1
 _WALLETS = "known_wallets"
 _REWARDS = "known_rewards"
+_OPERATIONS = "operations"
 # hass.data key of the stores, by entry id: they outlive the entries' reloads.
 _STORES = f"{DOMAIN}_portfolio_stores"
 # The type name a section reports for a value of the wrong shape.
@@ -84,6 +95,7 @@ class PortfolioStore:
 
     known_wallets: KnownWallets
     reward_marks: RewardMarks
+    operations: OperationsHistory
 
     def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
         self._store: Store[dict[str, Any]] = Store(
@@ -92,6 +104,9 @@ class PortfolioStore:
         # The file's sections as read, unknown ones included; each section
         # writes its own back here.
         self._data: dict[str, Any] = {}
+        # The API key the entry last started with: in memory only, never
+        # written (key_changed).
+        self._api_key: str | None = None
 
     async def async_load(self) -> None:
         """Read the file and build the sections from it."""
@@ -106,11 +121,28 @@ class PortfolioStore:
             read_error = _MALFORMED
         self.known_wallets = KnownWallets(self, self._data.get(_WALLETS), read_error)
         self.reward_marks = RewardMarks(self, self._data.get(_REWARDS), read_error)
+        self.operations = OperationsHistory(self, self._data.get(_OPERATIONS), read_error)
+
+    def key_changed(self, api_key: str) -> bool:
+        """Whether the entry starts with another API key than it last started
+        with in this run: the operations read so far may be another
+        account's. The key is kept in memory only. A restart forgets it,
+        which is safe: a key changes only through a dialog, which reloads the
+        entry at once."""
+        changed = self._api_key is not None and api_key != self._api_key
+        self._api_key = api_key
+        return changed
 
     def write_section(self, key: str, value: Any) -> None:
         """Set the section `key` to `value` and ask for the delayed save."""
         self._data[key] = value
         self._store.async_delay_save(self._data_to_save, _SAVE_DELAY)
+
+    def remove_section(self, key: str) -> None:
+        """Drop the section `key`, if there is one, and ask for the delayed
+        save."""
+        if self._data.pop(key, None) is not None:
+            self._store.async_delay_save(self._data_to_save, _SAVE_DELAY)
 
     async def async_remove(self) -> None:
         """Delete the file, a save still waiting included."""
@@ -127,6 +159,29 @@ def _is_asset_list(raw: object) -> bool:
 def _is_mark_map(raw: object) -> bool:
     return isinstance(raw, dict) and all(
         isinstance(asset, str) and isinstance(mark, str) for asset, mark in raw.items()
+    )
+
+
+def _read_time(raw: object) -> datetime | None:
+    """A time with its offset, as OperationsHistory writes it; None else."""
+    if not isinstance(raw, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else None
+
+
+def _is_operations_section(raw: object) -> bool:
+    return (
+        isinstance(raw, dict)
+        and isinstance(raw.get("kinds"), list)
+        and all(isinstance(kind, str) for kind in raw["kinds"])
+        and _read_time(raw.get("full_read_at")) is not None
+        and (raw.get("anchor") is None or isinstance(raw.get("anchor"), str))
+        and _is_mark_map(raw.get("recent_ids"))
+        and totals_from_section(raw.get("staking")) is not None
     )
 
 
@@ -226,6 +281,77 @@ class RewardMarks:
 
     def _save(self) -> None:
         self._store.write_section(_REWARDS, dict(sorted((self._marks or {}).items())))
+
+
+class OperationsHistory:
+    """What the rewards coordinator has read of /operations so far: the
+    section `operations`. `staking` is None while there is nothing to build
+    on -- no section, a malformed one, an unreadable file, or one dropped
+    after a new key -- and the whole history is read next."""
+
+    staking: dict[str, RewardTotals] | None
+    # The newest time seen, of any operation; operation id -> its time, for
+    # the last day before it; the kinds evaluated over the whole history;
+    # when it was last read whole.
+    anchor: str | None
+    recent_ids: dict[str, str]
+    kinds: list[str]
+    full_read_at: datetime | None
+
+    def __init__(self, store: PortfolioStore, raw: object, read_error: str | None) -> None:
+        self._store = store
+        section = _section_value(
+            raw,
+            read_error,
+            _is_operations_section,
+            "Could not read the Bitpanda operations read so far (%s); "
+            "reading the whole history again",
+        )
+        self._set_empty()
+        if section is not None:
+            self.staking = totals_from_section(section["staking"])
+            self.anchor = section["anchor"]
+            self.recent_ids = dict(section["recent_ids"])
+            self.kinds = list(section["kinds"])
+            self.full_read_at = _read_time(section["full_read_at"])
+
+    def _set_empty(self) -> None:
+        self.staking = None
+        self.anchor = None
+        self.recent_ids = {}
+        self.kinds = []
+        self.full_read_at = None
+
+    def replace(
+        self,
+        *,
+        staking: Mapping[str, RewardTotals],
+        anchor: str | None,
+        recent_ids: Mapping[str, str],
+        kinds: Iterable[str],
+        full_read_at: datetime,
+    ) -> None:
+        """Keep what was read now, and ask for the delayed save."""
+        self.staking = dict(staking)
+        self.anchor = anchor
+        self.recent_ids = dict(recent_ids)
+        self.kinds = list(kinds)
+        self.full_read_at = full_read_at
+        self._store.write_section(
+            _OPERATIONS,
+            {
+                "kinds": self.kinds,
+                "full_read_at": full_read_at.isoformat(),
+                "anchor": anchor,
+                "recent_ids": dict(sorted(self.recent_ids.items())),
+                "staking": totals_to_section(self.staking),
+            },
+        )
+
+    def drop(self) -> None:
+        """Forget what was read: the whole history is read next."""
+        self._set_empty()
+        self._store.remove_section(_OPERATIONS)
 
 
 async def async_get_portfolio_store(hass: HomeAssistant, entry_id: str) -> PortfolioStore:

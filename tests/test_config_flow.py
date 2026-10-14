@@ -309,13 +309,13 @@ async def test_portfolio_creates_the_entry(hass):
 
 async def test_the_setup_asks_about_new_wallets_on_and_staking_rewards_off(hass):
     """A section of its own between the currency and the language -- the
-    language comes last in every form -- open, the wallet switch on and the
-    staking reward switch off; the choices are stored flat beside the
+    language comes last in every form -- collapsed, the wallet switch on and
+    the staking reward switch off; the choices are stored flat beside the
     language, as Configure stores them."""
     result = await _submit_key(hass, await _portfolio_form(hass), "good")
     schema = result["data_schema"]
     assert list(schema.schema) == ["currency", "notifications", "language"]
-    assert dict(schema.schema)["notifications"].options == {"collapsed": False}
+    assert dict(schema.schema)["notifications"].options == {"collapsed": True}
     assert list(_section_schema(schema, "notifications").schema) == [
         "notify_new_wallets", "notify_staking_rewards",
     ]
@@ -1165,15 +1165,16 @@ async def test_both_services_have_options(hass):
     assert BitpandaConfigFlow.async_supports_options_flow(_portfolio_entry())
 
 
-async def test_the_price_tracker_options_come_in_two_open_sections(hass):
+async def test_the_price_tracker_options_come_in_two_collapsed_sections(hass):
     """The currencies first, then the language, each under a heading of its
-    own -- a Home Assistant form has no plain divider -- and both open."""
+    own -- a Home Assistant form has no plain divider -- and both collapsed:
+    on a phone, the headings show at a glance what can be changed."""
     result = await _options_form(hass, _price_tracker_entry(extra=["USD"]))
     assert result["step_id"] == "price_tracker"
     schema = result["data_schema"]
     assert list(schema.schema) == ["currencies", "language"]
     assert [dict(schema.schema)[key].options for key in schema.schema] == [
-        {"collapsed": False}, {"collapsed": False},
+        {"collapsed": True}, {"collapsed": True},
     ]
     assert list(_section_schema(schema, "currencies").schema) == ["extra_currencies"]
     assert list(_section_schema(schema, "language").schema) == ["language"]
@@ -1187,10 +1188,11 @@ async def test_the_price_tracker_options_come_in_two_open_sections(hass):
     }
 
 
-async def test_the_frontend_gets_the_two_sections_open_and_filled_in(hass, hass_client):
+async def test_the_frontend_gets_the_two_sections_collapsed_and_filled_in(hass, hass_client):
     """What the Configure dialog receives, through Home Assistant's own
-    options-flow API: two expandable sections, expanded, each with its
-    field and the stored value as its default."""
+    options-flow API: two expandable sections, collapsed, each with its
+    field and the stored value as its default -- so "Submit" without
+    opening one keeps what is stored."""
     entry = _with_options(_price_tracker_entry(extra=["USD"]), language="de")
     entry.add_to_hass(hass)
     assert await async_setup_component(hass, "config", {})
@@ -1202,7 +1204,7 @@ async def test_the_frontend_gets_the_two_sections_open_and_filled_in(hass, hass_
     assert shown["step_id"] == "price_tracker"
     assert [
         (field["name"], field["type"], field["expanded"]) for field in shown["data_schema"]
-    ] == [("currencies", "expandable", True), ("language", "expandable", True)]
+    ] == [("currencies", "expandable", False), ("language", "expandable", False)]
     assert [
         [(inner["name"], inner["default"]) for inner in field["schema"]]
         for field in shown["data_schema"]
@@ -1254,16 +1256,16 @@ async def test_the_price_tracker_options_store_the_language_and_reload(hass):
     listener.assert_called_once()
 
 
-async def test_the_portfolio_options_offer_the_language_in_an_open_section(hass):
+async def test_the_portfolio_options_offer_the_language_in_a_collapsed_section(hass):
     """The notifications in a section of their own, then the language in
-    one like the Price Tracker's -- last, as in every form; its key and
-    currency change through Reconfigure."""
+    one like the Price Tracker's -- last, as in every form, both collapsed;
+    its key and currency change through Reconfigure."""
     result = await _options_form(hass, _portfolio_entry())
     assert result["step_id"] == "portfolio"
     schema = result["data_schema"]
     assert list(schema.schema) == ["notifications", "language"]
     assert [dict(schema.schema)[key].options for key in schema.schema] == [
-        {"collapsed": False}, {"collapsed": False},
+        {"collapsed": True}, {"collapsed": True},
     ]
     assert list(_section_schema(schema, "language").schema) == ["language"]
     config = _selector_config(_section_schema(schema, "language"), "language")
@@ -1273,9 +1275,9 @@ async def test_the_portfolio_options_offer_the_language_in_an_open_section(hass)
     assert _form_defaults(result) == {"language": {"language": "en"}, **_notifications()}
 
 
-async def test_the_frontend_gets_the_portfolio_language_open_and_filled_in(hass, hass_client):
+async def test_the_frontend_gets_the_portfolio_language_collapsed_and_filled_in(hass, hass_client):
     """Through Home Assistant's own options-flow API: two expandable
-    sections, expanded, the stored language and the switch as defaults."""
+    sections, collapsed, the stored language and the switches as defaults."""
     entry = _with_options(_portfolio_entry(), language="de")
     entry.add_to_hass(hass)
     assert await async_setup_component(hass, "config", {})
@@ -1287,7 +1289,7 @@ async def test_the_frontend_gets_the_portfolio_language_open_and_filled_in(hass,
     assert shown["step_id"] == "portfolio"
     assert [
         (field["name"], field["type"], field["expanded"]) for field in shown["data_schema"]
-    ] == [("notifications", "expandable", True), ("language", "expandable", True)]
+    ] == [("notifications", "expandable", False), ("language", "expandable", False)]
     assert [
         [(inner["name"], inner["default"]) for inner in field["schema"]]
         for field in shown["data_schema"]
@@ -1422,17 +1424,17 @@ def _preselected(result) -> str:
 @pytest.mark.parametrize(
     ("service", "own_field"), [("price_tracker", "currencies"), ("portfolio", "currency")]
 )
-async def test_the_setup_asks_for_the_language_in_an_open_section_below(
+async def test_the_setup_asks_for_the_language_in_a_collapsed_section_below(
     hass, service, own_field
 ):
     """Last, below the service's own field, under a heading of its own and
-    open: every shipped language, one to pick -- the field Configure shows.
+    collapsed: every shipped language, one to pick -- the field Configure shows.
     The Portfolio's notifications come between, in a section of their own."""
     result = await _setup_form(hass, service)
     schema = result["data_schema"]
     between = ["notifications"] if service == "portfolio" else []
     assert list(schema.schema) == [own_field, *between, "language"]
-    assert dict(schema.schema)["language"].options == {"collapsed": False}
+    assert dict(schema.schema)["language"].options == {"collapsed": True}
     assert list(_section_schema(schema, "language").schema) == ["language"]
     config = _selector_config(_section_schema(schema, "language"), "language")
     assert config["options"] == _LANGUAGES
@@ -1441,17 +1443,17 @@ async def test_the_setup_asks_for_the_language_in_an_open_section_below(
 
 
 async def test_the_price_tracker_setup_shows_its_currencies_as_configure_does(hass):
-    """Under a heading of their own, open, in the section Configure shows
-    them in -- none chosen yet."""
+    """Under a heading of their own, collapsed, in the section Configure
+    shows them in -- none chosen yet."""
     schema = (await _setup_form(hass, "price_tracker"))["data_schema"]
-    assert dict(schema.schema)["currencies"].options == {"collapsed": False}
+    assert dict(schema.schema)["currencies"].options == {"collapsed": True}
     assert list(_section_schema(schema, "currencies").schema) == ["extra_currencies"]
     assert _section_schema(schema, "currencies")({}) == {"extra_currencies": []}
 
 
 async def test_the_portfolio_setup_shows_its_currency_in_an_open_section(hass):
-    """Like the language below it: under a heading of its own, open, with
-    EUR chosen until the user picks another."""
+    """Under a heading of its own and, unlike the sections below it, open:
+    the setup's one decision, with EUR chosen until the user picks another."""
     schema = (await _setup_form(hass, "portfolio"))["data_schema"]
     assert dict(schema.schema)["currency"].options == {"collapsed": False}
     assert list(_section_schema(schema, "currency").schema) == ["currency"]
@@ -1470,9 +1472,9 @@ async def test_the_setup_offers_home_assistants_language_first(hass, service, sy
     assert _preselected(await _setup_form(hass, service)) == shown
 
 
-async def test_the_frontend_gets_the_setup_language_open_and_preselected(hass, hass_client):
+async def test_the_frontend_gets_the_setup_language_collapsed_and_preselected(hass, hass_client):
     """What the Price Tracker's setup dialog receives, through Home
-    Assistant's own flow API: two expandable sections, expanded -- the
+    Assistant's own flow API: two expandable sections, collapsed -- the
     currencies with none chosen, then the language with the system language
     as its default."""
     hass.config.language = "de"
@@ -1488,7 +1490,7 @@ async def test_the_frontend_gets_the_setup_language_open_and_preselected(hass, h
     assert shown["step_id"] == "price_tracker"
     assert [
         (field["name"], field["type"], field["expanded"]) for field in shown["data_schema"]
-    ] == [("currencies", "expandable", True), ("language", "expandable", True)]
+    ] == [("currencies", "expandable", False), ("language", "expandable", False)]
     assert [
         [(inner["name"], inner["default"]) for inner in field["schema"]]
         for field in shown["data_schema"]

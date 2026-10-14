@@ -174,27 +174,29 @@ _SECTION_CURRENCIES = "currencies"
 _SECTION_CURRENCY = "currency"
 _SECTION_LANGUAGE = "language"
 _SECTION_NOTIFICATIONS = "notifications"
-# Every one open: a section is the only way a Home Assistant form sets fields
-# apart, not a place to hide them.
+# Collapsed: on a phone an open section pushes the next one out of sight,
+# while the headings alone show at a glance what can be set. Open only for
+# the Portfolio setup's currency, the one choice a setup asks for.
+_COLLAPSED: SectionConfig = {"collapsed": True}
 _OPEN: SectionConfig = {"collapsed": False}
 
 
 def _currencies_section(selected: list[str]) -> dict[vol.Required, section]:
-    """The extra currencies (extra_currencies_schema) in their open section."""
-    return {vol.Required(_SECTION_CURRENCIES): section(extra_currencies_schema(selected), _OPEN)}  # type: ignore[arg-type]
+    """The extra currencies (extra_currencies_schema) in their collapsed section."""
+    return {vol.Required(_SECTION_CURRENCIES): section(extra_currencies_schema(selected), _COLLAPSED)}  # type: ignore[arg-type]
 
 
 def _language_section(languages: list[str], current: str) -> dict[vol.Required, section]:
-    """The language field (see _language_field) in its open section."""
+    """The language field (see _language_field) in its collapsed section."""
     return {
         vol.Required(_SECTION_LANGUAGE): section(
-            vol.Schema(_language_field(languages, current)), _OPEN  # type: ignore[arg-type]
+            vol.Schema(_language_field(languages, current)), _COLLAPSED  # type: ignore[arg-type]
         )
     }
 
 
 def _notifications_section(wallets: bool, rewards: bool) -> dict[vol.Required, section]:
-    """The Portfolio's notification switches, in their open section -- new
+    """The Portfolio's notification switches, in their collapsed section -- new
     wallets, then staking rewards; `wallets` and `rewards` are what they
     show."""
     return {
@@ -205,7 +207,7 @@ def _notifications_section(wallets: bool, rewards: bool) -> dict[vol.Required, s
                     vol.Required(CONF_NOTIFY_STAKING_REWARDS, default=rewards): BooleanSelector(),
                 }
             ),
-            _OPEN,
+            _COLLAPSED,
         )
     }
 
@@ -281,7 +283,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         }
 
     async def _async_language_section(self) -> dict[vol.Required, section]:
-        """The new entry's language (language.py), in its open section, the
+        """The new entry's language (language.py), in its collapsed section, the
         last of the form: Home Assistant's system language first,
         where this integration ships it (language.preselected_language).
         Stored flat in the entry's options, as Configure stores it."""
@@ -715,7 +717,7 @@ class BitpandaOptionsFlow(config_entries.OptionsFlow):
         return await self.async_step_portfolio()
 
     async def _async_language_section(self) -> dict[vol.Required, section]:
-        """The language of the entry's own texts, in its open section."""
+        """The language of the entry's own texts, in its collapsed section."""
         return _language_section(
             await async_shipped_languages(self.hass), entry_language(self.config_entry)
         )

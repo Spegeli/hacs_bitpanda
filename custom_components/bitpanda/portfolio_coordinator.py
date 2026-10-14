@@ -6,9 +6,10 @@ Home Assistant turns into the reauth dialog.
 """
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import math
 from typing import Any
@@ -35,11 +36,13 @@ from .const import (
     ERROR_TIMEOUT,
     ERROR_UNREADABLE,
     FIRST_LOAD_RETRY_INTERVAL,
+    OPERATIONS_FULL_READ_INTERVAL,
+    OPERATIONS_OVERLAP,
     PORTFOLIO_TIMEFRAMES,
     PORTFOLIO_UPDATE_INTERVAL,
     REWARDS_UPDATE_INTERVAL,
 )
-from .portfolio_store import KnownWallets, RewardMarks
+from .portfolio_store import KnownWallets, OperationsHistory, RewardMarks
 from .portfolio_model import (
     PORTFOLIO_FIGURES,
     EarnData,
@@ -47,6 +50,9 @@ from .portfolio_model import (
     PortfolioData,
     PortfolioReturns,
     RewardTotals,
+    add_rewards,
+    newest_credited_at,
+    operation_credited_at,
     parse_earn_configs,
     parse_history_points,
     parse_portfolio,
@@ -235,6 +241,51 @@ class EarnCoordinator(DataUpdateCoordinator[EarnData]):
         return parse_earn_configs(configs)
 
 
+# The kinds of operations the section's evaluations cover (portfolio_store
+# OperationsHistory): a kind the code knows but a section lacks has the whole
+# history read once, so its totals cover all of it.
+_OPERATION_KINDS = ("staking",)
+
+
+def _parse_time(text: str) -> datetime | None:
+    """An API time as an aware datetime; None when it does not parse."""
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=dt_util.UTC)
+
+
+def _recent_ids(
+    operations: list[dict[str, Any]], kept: dict[str, str], anchor: str | None
+) -> dict[str, str]:
+    """The ids of `kept` and of `operations` credited from where the next
+    read begins (_window_start of `anchor`) on, with their times: what that
+    read must not count again."""
+    newest = _parse_time(anchor) if anchor else None
+    if newest is None:
+        return {}
+    since = _window_start(newest)
+    found = dict(kept)
+    for operation in operations:
+        operation_id = operation.get("operation_id")
+        credited = operation_credited_at(operation)
+        if isinstance(operation_id, str) and credited:
+            found[operation_id] = credited
+    return {
+        operation_id: credited
+        for operation_id, credited in found.items()
+        if (at := _parse_time(credited)) is not None and at >= since
+    }
+
+
+def _window_start(newest: datetime) -> datetime:
+    """Where an incremental read begins: OPERATIONS_OVERLAP before the
+    newest time seen, to the second -- Bitpanda's `from` takes whole seconds
+    and includes the bound."""
+    return (newest - OPERATIONS_OVERLAP).astimezone(dt_util.UTC).replace(microsecond=0)
+
+
 class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]):
     """Aggregates Earn rewards from the operation history.
 
@@ -244,24 +295,39 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]
     case is answered by a new key, so it raises ConfigEntryAuthFailed the
     same as every other coordinator, instead of degrading silently.
 
-    A listing that cannot be paged completely raises too (see
-    BitpandaApiClient._paginate) and becomes UpdateFailed: the rewards
-    attributes then stay absent, or keep the last complete totals, rather
-    than showing a recount over part of the history.
+    It reads only what is new: what it read before -- the totals, every
+    timed payout, the newest time seen -- is kept in the Portfolio's file
+    (portfolio_store.OperationsHistory), and a refresh asks for the
+    operations from that time less OPERATIONS_OVERLAP, counting the ones of
+    that last day it counted already once only. The whole history is read
+    when there is nothing to build on -- no section, an unreadable one, one
+    dropped after a new key (__init__._async_start_portfolio) --, for a kind
+    a section does not cover yet, and once every OPERATIONS_FULL_READ_INTERVAL.
+    What it read before is its data from the start, before any request.
+
+    A listing that cannot be paged completely raises (see
+    BitpandaApiClient._paginate) and becomes UpdateFailed, and so does any
+    other failed read: the section stays as it was, the rewards attributes
+    keep the last complete totals or stay absent, rather than showing a
+    recount over part of the history.
 
     Like every DataUpdateCoordinator it polls only while something listens,
     and only Staking sensors do: see async_refresh_if_stale.
 
     After every successful refresh it calls `on_refreshed`, the announcement
     of new payouts (announcements.RewardAnnouncer). That call is no listener:
-    a listener would keep the coordinator reading the whole history every
-    hour even with every Staking sensor disabled.
+    a listener would keep the coordinator reading every hour even with every
+    Staking sensor disabled.
     """
 
     config_entry: PortfolioConfigEntry
 
     def __init__(
-        self, hass: HomeAssistant, entry: PortfolioConfigEntry, client: BitpandaApiClient
+        self,
+        hass: HomeAssistant,
+        entry: PortfolioConfigEntry,
+        client: BitpandaApiClient,
+        history: OperationsHistory,
     ) -> None:
         super().__init__(
             hass,
@@ -271,17 +337,94 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]
             config_entry=entry,
         )
         self._client = client
+        self._history = history
         # Set by the announcer of new payouts; None where nothing announces.
         self.on_refreshed: Callable[[], None] | None = None
+        if history.staking is not None:
+            self.data = history.staking
+        # One read at a time: each builds on what the one before kept.
+        # Home Assistant locks each refresh from 2025.11 on; before, the
+        # hourly read could run while one a new Staking sensor asked for was
+        # under way.
+        self._read_lock = asyncio.Lock()
 
     async def _async_update_data(self) -> dict[str, RewardTotals]:
-        try:
-            operations = await self._client.async_get_operations()
-        except BitpandaAuthError:
-            raise _auth_failed() from None
-        except BitpandaApiError as err:
-            raise _update_failed(err) from None
-        return sum_rewards(operations)
+        async with self._read_lock:
+            try:
+                if self._whole_history_due():
+                    return await self._async_read_whole()
+                return await self._async_read_new()
+            except BitpandaAuthError:
+                raise _auth_failed() from None
+            except BitpandaApiError as err:
+                raise _update_failed(err) from None
+
+    def _whole_history_due(self) -> bool:
+        history = self._history
+        read_at = history.full_read_at
+        return (
+            history.staking is None
+            # Nothing to begin a read from.
+            or history.anchor is None
+            or _parse_time(history.anchor) is None
+            or not set(_OPERATION_KINDS) <= set(history.kinds)
+            or read_at is None
+            or dt_util.utcnow() - read_at >= OPERATIONS_FULL_READ_INTERVAL
+        )
+
+    async def _async_read_whole(self) -> dict[str, RewardTotals]:
+        read_at = dt_util.utcnow()
+        operations = await self._client.async_get_operations()
+        totals = sum_rewards(operations)
+        anchor = newest_credited_at(operations, None)
+        self._history.replace(
+            staking=totals,
+            anchor=anchor,
+            recent_ids=_recent_ids(operations, {}, anchor),
+            kinds=_OPERATION_KINDS,
+            full_read_at=read_at,
+        )
+        return totals
+
+    async def _async_read_new(self) -> dict[str, RewardTotals]:
+        history = self._history
+        # Both set, the anchor a time: _whole_history_due checked.
+        assert history.staking is not None and history.anchor is not None
+        newest = _parse_time(history.anchor)
+        assert newest is not None
+        since = _window_start(newest)
+        operations = await self._client.async_get_operations(
+            from_ts=since.strftime("%Y-%m-%dT%H:%M:%SZ")
+        )
+        # New: listed from `since` on -- should Bitpanda list older ones all
+        # the same, they were counted before, or wait for the weekly whole
+        # read -- and not counted in the day before already. An operation
+        # without its id or its time cannot be told from one counted: only
+        # the whole read counts it.
+        new = [
+            operation
+            for operation in operations
+            if isinstance(operation.get("operation_id"), str)
+            and operation["operation_id"] not in history.recent_ids
+            and (credited := operation_credited_at(operation)) is not None
+            and (at := _parse_time(credited)) is not None
+            and at >= since
+        ]
+        totals = add_rewards(history.staking, new) if new else history.staking
+        anchor = newest_credited_at(operations, history.anchor)
+        recent = _recent_ids(new, history.recent_ids, anchor)
+        if new or anchor != history.anchor or recent != history.recent_ids:
+            assert history.full_read_at is not None
+            history.replace(
+                staking=totals,
+                anchor=anchor,
+                recent_ids=recent,
+                # A later release's kind loses its totals here: never list
+                # it, so that release reads the whole history for it.
+                kinds=_OPERATION_KINDS,
+                full_read_at=history.full_read_at,
+            )
+        return totals
 
     @callback
     def _async_refresh_finished(self) -> None:

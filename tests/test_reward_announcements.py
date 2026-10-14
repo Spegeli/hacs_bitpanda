@@ -6,7 +6,7 @@ announcement. Never the payouts listed at the first refresh. End to end,
 Bitpanda mocked as in tests/test_wallet_announcements.py."""
 import asyncio
 from contextlib import contextmanager
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -117,8 +117,28 @@ def _lookup(**kwargs):
 
 @pytest.fixture
 def operations():
-    """/operations: Vision's first four payouts, unless a test lists others."""
-    with patch(f"{_CLIENT}async_get_operations", AsyncMock(return_value=_paid(4))) as listing:
+    """/operations: Vision's first four payouts, unless a test lists others
+    (`return_value`) -- from `from_ts` on, as Bitpanda answers it: the
+    Portfolio reads only what is new once it has read the whole history."""
+    listing = AsyncMock(return_value=_paid(4))
+
+    async def _answer(*, from_ts=None, to_ts=None):
+        listed = listing.return_value
+        if from_ts is None:
+            return listed
+        since = datetime.fromisoformat(from_ts)
+        return [
+            operation
+            for operation in listed
+            if any(
+                datetime.fromisoformat(tx["credited_at"]) >= since
+                for tx in operation["transactions"]
+                if tx.get("credited_at")
+            )
+        ]
+
+    listing.side_effect = _answer
+    with patch(f"{_CLIENT}async_get_operations", listing):
         yield listing
 
 
@@ -177,8 +197,11 @@ def _known(hass_storage, entry, mark: str) -> None:
 
 
 def _stored(hass_storage, entry) -> dict:
-    """The sections in the file of `entry`."""
-    return hass_storage[f"{DOMAIN}.portfolio.{entry.entry_id}"]["data"]
+    """The sections the announcements keep in the file of `entry`: the
+    operations read so far are the rewards coordinator's
+    (test_coordinator_earn.py)."""
+    data = hass_storage[f"{DOMAIN}.portfolio.{entry.entry_id}"]["data"]
+    return {key: value for key, value in data.items() if key != "operations"}
 
 
 async def _setup(hass, entry) -> None:
@@ -402,7 +425,9 @@ async def test_a_disabled_staking_sensor_holds_the_mark_until_it_is_enabled(
     assert operations.call_count == 1
     await _restart(hass, entry, freezer)
 
+    # The restart reads on from the file: no whole history.
     assert operations.call_count == 2
+    assert set(operations.await_args.kwargs) == {"from_ts"}
     assert events == []
     assert _mark(entry) == _WHEN[2]
 
@@ -415,6 +440,8 @@ async def test_a_disabled_staking_sensor_holds_the_mark_until_it_is_enabled(
         (2, _WHEN[4])
     ]
     assert _mark(entry) == _WHEN[4]
+    # Every payout counted once over the three reads.
+    assert entry.runtime_data.rewards.data[VSN["id"]].count == 5
 
 
 async def test_an_asset_missing_from_the_portfolio_waits(

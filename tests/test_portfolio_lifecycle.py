@@ -27,6 +27,7 @@ from custom_components.bitpanda.portfolio_model import (
     PortfolioData,
     PortfolioReturns,
 )
+from custom_components.bitpanda.portfolio_store import OperationsHistory, PortfolioStore
 from custom_components.bitpanda.portfolio_sensor import (
     PortfolioEntityManager,
     PortfolioReturnSensor,
@@ -82,7 +83,10 @@ def _current_rewards(hass, entry) -> RewardsCoordinator:
     """Rewards fetched just now, and never polled on their own: a Staking
     sensor added here has nothing to catch up on (async_refresh_if_stale)."""
     rewards = RewardsCoordinator(
-        hass, entry, SimpleNamespace(async_get_operations=AsyncMock(return_value=[]))
+        hass,
+        entry,
+        SimpleNamespace(async_get_operations=AsyncMock(return_value=[])),
+        OperationsHistory(PortfolioStore(hass, entry.entry_id), None, None),
     )
     rewards.update_interval = None
     rewards.data = {}

@@ -191,6 +191,36 @@ async def test_the_portfolio_keeps_its_store_sections_on_its_runtime(hass, portf
     assert entry.runtime_data.reward_marks is marks
 
 
+async def test_a_new_key_has_the_whole_operation_history_read_again(hass, portfolio_api):
+    """A setup reads the whole history; a reload with the same key reads on
+    from the newest time seen; a reload with another key -- maybe another
+    account's -- reads the whole history again."""
+    payout = {
+        "operation_id": "op-1",
+        "operation_type": "reward",
+        "transactions": [
+            {
+                "asset_id": VSN["id"],
+                "wallet_owner": "staking-service",
+                "asset_amount": {"value": "1"},
+                "fee_amount": {"value": "0.2"},
+                "credited_at": dt_util.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            }
+        ],
+    }
+    entry = _portfolio_entry(hass)
+    with patch(f"{_CLIENT}async_get_operations", AsyncMock(return_value=[payout])) as operations:
+        await _setup(hass, entry)
+        assert operations.await_args.kwargs == {}
+        await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        assert set(operations.await_args.kwargs) == {"from_ts"}
+        hass.config_entries.async_update_entry(entry, data={**entry.data, "api_key": "another"})
+        await hass.async_block_till_done()
+        assert entry.state is ConfigEntryState.LOADED
+        assert operations.await_args.kwargs == {}
+
+
 async def test_portfolio_setup_creates_its_devices_and_sensors(hass, portfolio_api):
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)

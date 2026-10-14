@@ -822,6 +822,16 @@ def test_adding_operations_leaves_the_totals_it_was_given_alone():
     assert added["vsn"].count == before["vsn"].count + 1
 
 
+def test_a_transaction_that_is_no_object_is_skipped():
+    """Bitpanda's operations are open-ended: a transaction in an unexpected
+    shape is no payout, and the valid one beside it still counts."""
+    operation = _reward("vsn", "10", "2", "2026-09-22T17:16:35Z")
+    operation["transactions"] = ["oops", None, *operation["transactions"]]
+    totals = add_rewards({}, [operation])
+    assert totals["vsn"].count == 1
+    assert totals["vsn"].net == 8.0
+
+
 def test_an_operation_is_as_new_as_its_newest_transaction():
     """A swap carries two legs; one may be credited later than the other,
     and one may lack its time. Times compare as times, not as text."""

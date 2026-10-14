@@ -587,7 +587,7 @@ def add_rewards(
         if operation.get("operation_type") != "reward":
             continue
         for tx in operation.get("transactions") or []:
-            if tx.get("wallet_owner") != "staking-service":
+            if not isinstance(tx, dict) or tx.get("wallet_owner") != "staking-service":
                 continue
             asset_id = tx.get("asset_id")
             gross = to_float(tx.get("asset_amount"))

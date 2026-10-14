@@ -1,8 +1,8 @@
 """Pure data model of the Portfolio service: no Home Assistant, no network."""
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass, field
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 import logging
 import math
@@ -557,8 +557,18 @@ def payouts_after(payouts: Sequence[RewardPayout], mark: str | None) -> list[Rew
     return [payout for payout in payouts if _is_later(payout.credited_at, mark)]
 
 
-def sum_rewards(operations: list[dict[str, Any]]) -> dict[str, RewardTotals]:
-    """Aggregate staking rewards per asset.
+def sum_rewards(operations: Iterable[dict[str, Any]]) -> dict[str, RewardTotals]:
+    """Aggregate staking rewards per asset over `operations`: add_rewards
+    onto nothing."""
+    return add_rewards({}, operations)
+
+
+def add_rewards(
+    totals: Mapping[str, RewardTotals], operations: Iterable[dict[str, Any]]
+) -> dict[str, RewardTotals]:
+    """`totals` with the staking rewards of `operations` added: new objects,
+    `totals` left as it is. Read in parts -- the history so far, then what
+    came since -- the result is that of one read over all of it.
 
     Only `operation_type == "reward"` with `wallet_owner == "staking-service"`
     counts. `earn_on_fiat_reward` is Cash Plus interest, a different product.
@@ -569,8 +579,9 @@ def sum_rewards(operations: list[dict[str, Any]]) -> dict[str, RewardTotals]:
     payouts showed exactly 20 % while lifetime aggregates sat near 17 %. Always
     read `fee_amount`.
     """
-    totals: dict[str, RewardTotals] = {}
-    payouts: dict[str, list[RewardPayout]] = {}
+    out = {asset_id: replace(entry) for asset_id, entry in totals.items()}
+    payouts = {asset_id: list(entry.payouts) for asset_id, entry in out.items()}
+    changed: set[str] = set()
 
     for operation in operations:
         if operation.get("operation_type") != "reward":
@@ -584,7 +595,8 @@ def sum_rewards(operations: list[dict[str, Any]]) -> dict[str, RewardTotals]:
                 continue
             fee = to_float(tx.get("fee_amount")) or 0.0
 
-            entry = totals.setdefault(asset_id, RewardTotals())
+            entry = out.setdefault(asset_id, RewardTotals())
+            changed.add(asset_id)
             entry.gross += gross
             entry.fee += fee
             entry.net += gross - fee
@@ -606,8 +618,11 @@ def sum_rewards(operations: list[dict[str, Any]]) -> dict[str, RewardTotals]:
                 )
 
     # The amounts are 8-decimal strings; summing them as floats leaves noise
-    # such as 751.4920099999999. Rounded once, at the end, not per step.
-    for asset_id, entry in totals.items():
+    # such as 751.4920099999999. Rounded once a part is added, not per step:
+    # the totals so far are exact to 8 decimals already, so a history read
+    # in parts rounds to the same as one read over all of it.
+    for asset_id in changed:
+        entry = out[asset_id]
         entry.gross = round(entry.gross, DECIMALS)
         entry.fee = round(entry.fee, DECIMALS)
         entry.net = round(entry.net, DECIMALS)
@@ -615,7 +630,98 @@ def sum_rewards(operations: list[dict[str, Any]]) -> dict[str, RewardTotals]:
             sorted(payouts.get(asset_id, ()), key=lambda payout: time_key(payout.credited_at))
         )
 
-    return totals
+    return out
+
+
+def operation_credited_at(operation: dict[str, Any]) -> str | None:
+    """When `operation` was credited: the newest `credited_at` of its
+    transactions -- a swap's two legs may differ -- or None without one."""
+    newest: str | None = None
+    for tx in operation.get("transactions") or []:
+        credited = tx.get("credited_at") if isinstance(tx, dict) else None
+        if isinstance(credited, str) and credited and _is_later(credited, newest):
+            newest = credited
+    return newest
+
+
+def newest_credited_at(
+    operations: Iterable[dict[str, Any]], current: str | None
+) -> str | None:
+    """The newest of `current` and the times `operations` were credited."""
+    newest = current
+    for operation in operations:
+        credited = operation_credited_at(operation)
+        if _is_later(credited, newest):
+            newest = credited
+    return newest
+
+
+def totals_to_section(totals: Mapping[str, RewardTotals]) -> dict[str, Any]:
+    """`totals` as the Portfolio's file keeps them (portfolio_store.py):
+    per asset the sums, the count, the newest time and every timed payout as
+    [credited_at, gross, fee, net]."""
+    return {
+        asset_id: {
+            "gross": entry.gross,
+            "fee": entry.fee,
+            "net": entry.net,
+            "count": entry.count,
+            "last_at": entry.last_at,
+            "payouts": [
+                [payout.credited_at, payout.gross, payout.fee, payout.net]
+                for payout in entry.payouts
+            ],
+        }
+        for asset_id, entry in sorted(totals.items())
+    }
+
+
+def _is_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _is_section_payout(raw: object) -> bool:
+    return (
+        isinstance(raw, list)
+        and len(raw) == 4
+        and isinstance(raw[0], str)
+        and all(_is_number(value) for value in raw[1:])
+    )
+
+
+def _is_section_entry(raw: object) -> bool:
+    return (
+        isinstance(raw, dict)
+        and all(_is_number(raw.get(key)) for key in ("gross", "fee", "net"))
+        and isinstance(raw.get("count"), int)
+        and not isinstance(raw.get("count"), bool)
+        and (raw.get("last_at") is None or isinstance(raw.get("last_at"), str))
+        and isinstance(raw.get("payouts"), list)
+        and all(_is_section_payout(payout) for payout in raw["payouts"])
+    )
+
+
+def totals_from_section(raw: object) -> dict[str, RewardTotals] | None:
+    """The totals totals_to_section wrote, or None for anything else: a
+    malformed section counts as none, and the whole history is read again."""
+    if not isinstance(raw, dict) or not all(
+        isinstance(asset_id, str) and _is_section_entry(entry) for asset_id, entry in raw.items()
+    ):
+        return None
+    return {
+        asset_id: RewardTotals(
+            gross=float(entry["gross"]),
+            fee=float(entry["fee"]),
+            net=float(entry["net"]),
+            count=entry["count"],
+            last_at=entry["last_at"],
+            payouts=tuple(
+                RewardPayout(credited, float(gross), float(fee), float(net))
+                for credited, gross, fee, net in entry["payouts"]
+            ),
+        )
+        for asset_id, entry in raw.items()
+    }
 
 
 @dataclass(frozen=True)

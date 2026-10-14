@@ -1,5 +1,7 @@
 """Tests for the Portfolio data model."""
+import copy
 from datetime import UTC, datetime, timedelta
+import json
 
 import pytest
 
@@ -13,13 +15,18 @@ from custom_components.bitpanda.portfolio_model import (
     PortfolioReturns,
     RewardPayout,
     _is_later,
+    add_rewards,
     lists_nothing,
+    newest_credited_at,
+    operation_credited_at,
     parse_earn_configs,
     parse_portfolio,
     payouts_after,
     staking_applies,
     sum_rewards,
     tolerate_failed_timeframes,
+    totals_from_section,
+    totals_to_section,
 )
 
 from tests.conftest import load_fixture
@@ -783,3 +790,104 @@ def test_is_later_survives_a_mixed_timezone_batch():
 def test_is_later_survives_a_non_string():
     result = _is_later(12345, "2026-09-21T00:00:00Z")
     assert isinstance(result, bool)
+
+
+# --- Rewards read in parts: add_rewards, operation times, the section form ----
+
+
+def _staking_history():
+    """Payouts of three assets, one of them without its time."""
+    return [
+        _reward("vsn", "10.00000001", "2.00000001", "2026-09-09T18:31:22.080Z"),
+        _reward("ada", "1", "0.2", "2026-09-10T10:00:00Z"),
+        _reward("vsn", "0.1", "0.02", "2026-09-22T17:16:35Z"),
+        _reward("eth", "0.00004", "0.00001", "2026-09-23T08:00:00Z"),
+        _reward("ada", "0.5", "0.1", None),
+    ]
+
+
+def test_adding_operations_to_totals_equals_summing_them_all_at_once():
+    """Read in two parts -- the history so far, then what came since -- the
+    totals and payouts are those of one read over all of it."""
+    history = _staking_history()
+    for cut in range(len(history) + 1):
+        assert add_rewards(sum_rewards(history[:cut]), history[cut:]) == sum_rewards(history), cut
+
+
+def test_adding_operations_leaves_the_totals_it_was_given_alone():
+    totals = sum_rewards(_staking_history()[:2])
+    before = copy.deepcopy(totals)
+    added = add_rewards(totals, [_reward("vsn", "1", "0", "2026-09-22T17:16:35Z")])
+    assert totals == before
+    assert added["vsn"].count == before["vsn"].count + 1
+
+
+def test_an_operation_is_as_new_as_its_newest_transaction():
+    """A swap carries two legs; one may be credited later than the other,
+    and one may lack its time. Times compare as times, not as text."""
+    swap = {
+        "operation_id": "swap",
+        "operation_type": "swap",
+        "transactions": [
+            {"credited_at": "2026-09-22T17:16:35Z"},
+            {"credited_at": "2026-09-22T17:16:35.500Z"},
+            {"credited_at": None},
+        ],
+    }
+    assert operation_credited_at(swap) == "2026-09-22T17:16:35.500Z"
+    assert operation_credited_at({"operation_type": "x", "transactions": None}) is None
+    assert operation_credited_at({"operation_type": "x", "transactions": [{}]}) is None
+
+
+def test_the_newest_time_of_operations_compares_times_not_text():
+    operations = [
+        _reward("vsn", "1", "0", "2026-09-22T17:16:35Z"),
+        _reward("vsn", "1", "0", "2026-09-22T17:16:34.999Z"),
+    ]
+    assert newest_credited_at(operations, None) == "2026-09-22T17:16:35Z"
+    assert newest_credited_at(operations, "2026-09-22T17:16:35.001Z") == "2026-09-22T17:16:35.001Z"
+    assert newest_credited_at([], "2026-09-01T00:00:00Z") == "2026-09-01T00:00:00Z"
+    assert newest_credited_at([], None) is None
+
+
+def test_totals_survive_the_section_form_through_json():
+    totals = sum_rewards(_staking_history())
+    stored = json.loads(json.dumps(totals_to_section(totals)))
+    assert totals_from_section(stored) == totals
+    assert totals_from_section({}) == {}
+
+
+def _section_entry(**changes):
+    entry = {
+        "gross": 1.0,
+        "fee": 0.2,
+        "net": 0.8,
+        "count": 1,
+        "last_at": "2026-09-22T17:16:35Z",
+        "payouts": [["2026-09-22T17:16:35Z", 1.0, 0.2, 0.8]],
+    }
+    entry.update(changes)
+    return entry
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        None,
+        [],
+        "vsn",
+        {"vsn": []},
+        {"vsn": {"gross": 1.0}},
+        {1: _section_entry()},
+        {"vsn": _section_entry(gross="1.0")},
+        {"vsn": _section_entry(count=True)},
+        {"vsn": _section_entry(count=1.5)},
+        {"vsn": _section_entry(last_at=5)},
+        {"vsn": _section_entry(payouts=None)},
+        {"vsn": _section_entry(payouts=[["2026-09-22T17:16:35Z", 1.0, 0.2]])},
+        {"vsn": _section_entry(payouts=[[None, 1.0, 0.2, 0.8]])},
+        {"vsn": _section_entry(payouts=[["2026-09-22T17:16:35Z", 1.0, False, 0.8]])},
+    ],
+)
+def test_a_malformed_section_form_reads_as_none(raw):
+    assert totals_from_section(raw) is None

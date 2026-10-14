@@ -499,6 +499,11 @@ class PortfolioEntityManager:
     a restart or reload in between included. It leaves the list once its
     wallet went -- removed after the misses, deleted by the user, gone with
     its group or with a currency change -- so that buying it again is news.
+    A refresh whose answer lists nothing at all, no asset and no fiat, cuts
+    nothing, and an asset whose wallet such a refresh removes leaves the list
+    only once answers that list something confirm it missing, as a wallet's
+    misses are confirmed: wallets coming back after Bitpanda answered empty
+    are no news, even when the first answer back lists only part of them.
     """
 
     def __init__(
@@ -522,6 +527,10 @@ class PortfolioEntityManager:
         self._staking: set[str] = set()
         # Asset id -> its misses in a row, and when the first was asked for.
         self._misses: dict[str, tuple[int, datetime]] = {}
+        # The assets whose wallet went while Bitpanda listed nothing at all:
+        # known until answers that list something confirm them missing --
+        # their misses in a row since, and when the first was asked for.
+        self._gone_while_empty: dict[str, tuple[int, datetime] | None] = {}
 
     def _registered(self) -> dict[str, set[str]]:
         """Asset id -> the kinds ("wallet", "staking", "total") registered for it."""
@@ -649,6 +658,19 @@ class PortfolioEntityManager:
             self._wallets.pop(asset_id, None)
             self._staking.discard(asset_id)
             self._remove(asset_id, ("wallet", "staking", "total"), device=True)
+            if not data.listed_any:
+                self._gone_while_empty[asset_id] = None
+        if data.listed_any:
+            for asset_id, seen in list(self._gone_while_empty.items()):
+                if asset_id in held:
+                    del self._gone_while_empty[asset_id]
+                    continue
+                misses, since = (0, asked_at) if seen is None else seen
+                misses += 1
+                if confirmed(misses, since, asked_at):
+                    del self._gone_while_empty[asset_id]
+                else:
+                    self._gone_while_empty[asset_id] = (misses, since)
 
         # One call per group: the group must exist before its sensors are
         # added, and the registry files each sensor and its device under it --
@@ -659,15 +681,22 @@ class PortfolioEntityManager:
             )
             self._add_entities(entities, config_subentry_id=group.subentry_id)
         self._remove_empty_groups()
-        if announcer is not None:
+        if announcer is not None and data.listed_any:
             # A held asset stays known, and so does a sold one whose wallet
             # still exists: tracked here while it waits out its misses, or
             # registered from before a restart or reload, which this manager
             # tracks only once it is held again. The registry is read afresh:
             # a wallet removed above, after its misses, counts no more. Any
             # other asset has no wallet left, and buying it again is news.
+            # An answer that lists nothing at all, not even cash, cuts
+            # nothing: its wallets go all the same, but listed again they
+            # are no news -- and stay known until answers that list
+            # something confirm them missing (_gone_while_empty).
             announcer.known.keep_only(
-                data.held | set(self._wallets) | set(self._registered())
+                data.held
+                | set(self._wallets)
+                | set(self._registered())
+                | set(self._gone_while_empty)
             )
 
     def _forget_wallets_without_group(self) -> None:

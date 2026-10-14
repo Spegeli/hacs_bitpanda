@@ -385,6 +385,87 @@ async def test_an_asset_bought_again_after_its_wallet_went_is_announced(
     notifications.assert_called_once()
 
 
+async def test_after_an_answer_that_listed_nothing_the_wallets_coming_back_are_no_news(
+    hass, portfolio_api, events, notifications, freezer, hass_storage
+):
+    """Bitpanda answers for a while with nothing at all, not even cash: the
+    wallets go after the confirmed misses (issue #12), but the assets stay
+    known. Listed again, their wallets are no news."""
+    portfolio_api.return_value = _answer(BTC, VSN)
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    portfolio_api.return_value = []
+    for _ in range(3):
+        await _next_refresh(hass, freezer)
+    assert _wallet_device(hass, entry, VSN) is None
+    known = entry.runtime_data.known_wallets
+    assert BTC["id"] in known and VSN["id"] in known
+
+    portfolio_api.return_value = _answer(BTC, VSN)
+    await _next_refresh(hass, freezer)
+
+    assert _wallet_device(hass, entry, VSN) is not None
+    assert events == []
+    notifications.assert_not_called()
+    await _flush(hass, freezer)
+    assert _stored(hass_storage, entry) == sorted([BTC["id"], VSN["id"]])
+
+
+async def _empty_spell(hass, portfolio_api, freezer) -> None:
+    """Bitpanda answers with nothing at all until the wallets went."""
+    portfolio_api.return_value = []
+    for _ in range(3):
+        await _next_refresh(hass, freezer)
+
+
+@pytest.mark.parametrize(
+    "first_back", [[_position(BTC), _CASH], [_CASH]], ids=["one asset back", "only cash back"]
+)
+async def test_an_incomplete_answer_right_after_an_empty_spell_forgets_no_wallet(
+    hass, portfolio_api, events, notifications, freezer, first_back
+):
+    """The first answer after the empty spell lists only part of the
+    portfolio; the next one all of it. An asset missing from one answer
+    is not confirmed gone: listed again, it is no news."""
+    portfolio_api.return_value = _answer(BTC, VSN)
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    await _empty_spell(hass, portfolio_api, freezer)
+    assert _wallet_device(hass, entry, VSN) is None
+
+    portfolio_api.return_value = first_back
+    await _next_refresh(hass, freezer)
+    portfolio_api.return_value = _answer(BTC, VSN)
+    await _next_refresh(hass, freezer)
+
+    assert _wallet_device(hass, entry, VSN) is not None
+    assert events == []
+    notifications.assert_not_called()
+
+
+async def test_an_asset_still_missing_after_an_empty_spell_is_forgotten_once_confirmed(
+    hass, portfolio_api, events, notifications, freezer
+):
+    """Sold while Bitpanda answered empty: once answers that list something
+    confirm it missing -- as a wallet's misses are confirmed --, it leaves
+    the list, and buying it again is news."""
+    portfolio_api.return_value = _answer(BTC, VSN)
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    await _empty_spell(hass, portfolio_api, freezer)
+
+    portfolio_api.return_value = _answer(BTC)
+    for _ in range(2):
+        await _next_refresh(hass, freezer)
+    assert VSN["id"] in entry.runtime_data.known_wallets
+    await _next_refresh(hass, freezer)
+    assert VSN["id"] not in entry.runtime_data.known_wallets
+
+    portfolio_api.return_value = _answer(BTC, VSN)
+    await _next_refresh(hass, freezer)
+    assert [event.data["asset_id"] for event in events] == [VSN["id"]]
+
+
 async def test_an_asset_bought_again_after_the_user_deleted_its_wallet_is_announced(
     hass, portfolio_api, events, notifications, freezer, hass_ws_client
 ):

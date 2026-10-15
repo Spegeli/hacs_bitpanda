@@ -327,9 +327,12 @@ export const cardStyles = css`
     flex: 1;
     min-width: 0;
   }
+  /* A name breaks between words only; a word too long for its line ends in
+     an ellipsis, as a name longer than two lines does. */
   .n {
     font-size: 14px;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
+    text-overflow: ellipsis;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -339,6 +342,10 @@ export const cardStyles = css`
      in the Price Tracker's list; longer names are still cut after two. */
   .wallet .n {
     text-wrap: balance;
+  }
+  /* A part of a text that never breaks inside itself, such as a date. */
+  .nw {
+    white-space: nowrap;
   }
   .s {
     font-size: 12px;

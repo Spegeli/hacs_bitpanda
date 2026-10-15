@@ -13,6 +13,7 @@ import {
   onActivate,
   returnChip,
   timeframeSwitch,
+  unbroken,
   walletRow,
 } from "../src/parts";
 import { BTC, ETH, EUNL, XAU, makeHass, portfolioDevice, walletDevice } from "./fixtures";
@@ -423,5 +424,19 @@ describe("the shared styles", () => {
     // A half-width card in a four-column dashboard: about 170 px.
     const tiny = css.match(/@container\s*\(max-width:\s*(\d+)px\)\s*\{([\s\S]*?)\n  \}/g)?.find((rule) => /max-width:\s*240px/.test(rule)) ?? "";
     expect(tiny).toMatch(/\.seg \[role="radio"\]\s*\{[^}]*padding:\s*4px 4px/);
+  });
+});
+
+describe("unbroken", () => {
+  it("keeps the placeholder's value in one piece and the text around it as it is", () => {
+    const host = mount(unbroken("Change since {date} here", "date", "Oct 14"));
+    expect(textOf(host)).toBe("Change since Oct 14 here");
+    expect(textOf(host.querySelector(".nw"))).toBe("Oct 14");
+  });
+
+  it("leaves a text without the placeholder as it is", () => {
+    const host = mount(unbroken("No date", "date", "Oct 14"));
+    expect(textOf(host)).toBe("No date");
+    expect(host.querySelector(".nw")).toBeNull();
   });
 });

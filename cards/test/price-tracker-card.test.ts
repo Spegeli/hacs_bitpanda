@@ -119,6 +119,34 @@ describe("the Bitpanda Price Tracker card", () => {
     expect(extras(card)[0]).toEqual({ amount: "+10.50 EUR", since: `Change since ${day}` });
   });
 
+  it("keeps the date of 'change since' in one piece, in every language", async () => {
+    const fresh = priceDevice({ symbol: "NEW", name: "Newcoin", category: "crypto", prices: { EUR: { state: "110.50" } } });
+    const firstSeen = Date.now() - 5 * HOUR;
+    for (const language of ["en", "de"]) {
+      const hass = makeHass({
+        devices: [fresh],
+        language,
+        callWS: async () => ({ "sensor.bitpanda_new_price_tracker_eur": [{ start: firstSeen, state: 100 }, { start: Date.now() - HOUR, state: 108 }] }),
+      });
+      const card = await mount({}, hass);
+      await linesDrawn(card);
+      const day = new Intl.DateTimeFormat(language, { day: "numeric", month: "short" }).format(firstSeen);
+      const date = one(card, ".since .nw");
+      expect(textOf(date), language).toBe(day);
+      expect(textOf(one(card, ".since")), language).toBe(language === "de" ? `Änderung seit ${day}` : `Change since ${day}`);
+    }
+    const css = (PriceTrackerCard.styles as unknown as { cssText: string }[]).map((sheet) => sheet.cssText).join("\n");
+    expect(css.match(/\.nw\s*\{([^}]*)\}/)?.[1]).toMatch(/white-space:\s*nowrap/);
+  });
+
+  it("never breaks a name inside a word: a word too long for its line ends in an ellipsis", () => {
+    const css = (PriceTrackerCard.styles as unknown as { cssText: string }[]).map((sheet) => sheet.cssText).join("\n");
+    const rule = css.match(/(?:^|\n)\s*\.n\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(rule).not.toMatch(/overflow-wrap:\s*anywhere/);
+    expect(rule).toMatch(/overflow-wrap:\s*normal/);
+    expect(rule).toMatch(/text-overflow:\s*ellipsis/);
+  });
+
   it("a change that rounds to 0.00 % shows neither arrow nor colour, nor does its amount", async () => {
     const still = priceDevice({ symbol: "EUNL", name: "iShares Core MSCI World UCITS ETF", category: "etf", prices: { EUR: { state: "132.21" } } });
     const hass = makeHass({

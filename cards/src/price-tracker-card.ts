@@ -8,7 +8,7 @@ import { PRICE_TRACKER_EDITOR, createEditor } from "./editor";
 import { assetList, currencyCode, editorHass, groupList, nonNegativeInt, oneOf, validateConfig } from "./forms";
 import { arrow, formatDay, formatLongDate, formatPercent, formatSignedLike, formatState, numericState, trendClass } from "./format";
 import { languageOf, t, type TextKey } from "./i18n";
-import { allFit, currencySwitch, emptyState, header, moreInfo, onActivate, timeframeSwitch } from "./parts";
+import { allFit, currencySwitch, emptyState, header, moreInfo, onActivate, timeframeSwitch, unbroken } from "./parts";
 import { defineCard } from "./register";
 import { renderSparkline } from "./sparkline";
 import { SeriesLoader, changeFromSeries, lineStepMs, windowFor, type Point, type StatWindow } from "./statistics";
@@ -435,7 +435,7 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
   }
 
   private since(hass: Hass, row: Row): TemplateResult | typeof nothing {
-    return row.since === undefined ? nothing : html`<div class="since">${t(hass, "change_since", { date: formatDay(hass, row.since) })}</div>`;
+    return row.since === undefined ? nothing : html`<div class="since">${unbroken(t(hass, "change_since"), "date", formatDay(hass, row.since))}</div>`;
   }
 
   private renderList(hass: Hass, rows: Row[]): TemplateResult {

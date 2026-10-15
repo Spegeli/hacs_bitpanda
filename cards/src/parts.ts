@@ -47,6 +47,13 @@ export function amount(text: string | undefined, hidden: boolean): TemplateResul
   return html`<span class="amount ${hidden ? "blur" : ""}">${text ?? "—"}</span>`;
 }
 
+/** A text whose {`name`} placeholder holds `value` that never breaks inside
+ * itself -- a date: the line breaks before it when space runs short. */
+export function unbroken(text: string, name: string, value: string): TemplateResult {
+  const [before, ...rest] = text.split(`{${name}}`);
+  return rest.length === 0 ? html`${text}` : html`${before}<span class="nw">${value}</span>${rest.join(`{${name}}`)}`;
+}
+
 export function emptyState(text: string): TemplateResult {
   return html`<div class="empty">${text}</div>`;
 }

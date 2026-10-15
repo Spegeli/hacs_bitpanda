@@ -91,6 +91,13 @@ export function formatPrice(hass: Hass, value: number, currency: string): string
   return formatCurrency(hass, value, currency, size >= 10 || size === 0 ? 2 : size >= 1 ? 4 : 8, false);
 }
 
+/** An asset's price in `currency`, with the decimals the Price Tracker
+ * gives a price of its size (priceDigits): a wallet's current price beside
+ * the Price Tracker's prices. */
+export function formatAssetPrice(hass: Hass, value: number, currency: string): string {
+  return formatCurrency(hass, value, currency, priceDigits(value), false);
+}
+
 function formatCurrency(hass: Hass, value: number, currency: string, digits: number, signed: boolean): string {
   try {
     return new Intl.NumberFormat(numberLocale(hass), {

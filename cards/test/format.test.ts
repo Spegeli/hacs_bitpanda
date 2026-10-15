@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   arrow,
   formatDay,
+  formatAssetPrice,
   formatDayTime,
   formatLike,
   formatLongDate,
@@ -58,6 +59,14 @@ describe("formatUnits", () => {
   it("keeps the symbol for crypto, indices and unknown categories", () => {
     expect(formatUnits(makeHass(), 3, "index", "BCI5")).toBe("3 BCI5");
     expect(formatUnits(makeHass(), 3, undefined, "XYZ")).toBe("3 XYZ");
+  });
+});
+
+describe("formatAssetPrice", () => {
+  it("gives a price the decimals the Price Tracker gives a price of its size", () => {
+    expect(formatAssetPrice(makeHass(), 0.03739083, "EUR")).toBe("€0.037391");
+    expect(formatAssetPrice(makeHass({ language: "de" }), 128.16, "EUR")).toBe("128,16\u00a0€");
+    expect(formatAssetPrice(makeHass(), 2309.09, "EUR")).toBe("€2,309.09");
   });
 });
 

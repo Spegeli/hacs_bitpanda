@@ -35,6 +35,28 @@ const textOf = (element: Element | null | undefined): string => (element?.textCo
 const all = (card: PortfolioCard, selector: string): HTMLElement[] => [...root(card).querySelectorAll<HTMLElement>(selector)];
 const one = (card: PortfolioCard, selector: string): HTMLElement | null => root(card).querySelector<HTMLElement>(selector);
 
+/** The value cells of an opened wallet's detail, both grids. */
+function valueCells(card: PortfolioCard): HTMLElement[] {
+  return all(card, ".detail .grid > span:nth-child(even)");
+}
+
+/** The rows of the staking block, "label value". */
+function stakingRows(card: PortfolioCard): string[] {
+  const cells = [...(all(card, ".detail .grid")[1]?.querySelectorAll(":scope > span") ?? [])].map((cell) => textOf(cell as HTMLElement));
+  return cells.filter((_, index) => index % 2 === 0).map((label, index) => `${label} ${cells[index * 2 + 1] ?? ""}`);
+}
+
+// Ethereum's price and its 24 hours on Balance (total).
+const ETH_DAY: Partial<FakeWallet> = { price: 2309.09, return24h: -12.5, change24h: -1.62 };
+
+/** A card of `wallet` alone, in one list, the wallet opened. */
+async function openWallet(wallet: FakeWallet, config: Record<string, unknown> = {}, language?: string): Promise<PortfolioCard> {
+  const card = await mount({ group_wallets: false, ...config }, makeHass({ devices: [portfolioDevice(), walletDevice(wallet)], ...(language ? { language } : {}) }));
+  (one(card, ".wallet .chevron") as HTMLElement | null)?.click();
+  await card.updateComplete;
+  return card;
+}
+
 /** The detail's rows as "Label value", from its two-column grids. */
 function detailRows(card: PortfolioCard): string[] {
   const cells = all(card, ".detail .grid > span").map((cell) => textOf(cell));
@@ -300,34 +322,85 @@ describe("the Bitpanda Portfolio card", () => {
     expect(all(card, ".wallet .n").map((name) => textOf(name))).toEqual(["Bitcoin", "Gold"]);
   });
 
-  it("the chevron opens the wallet detail with rewards", async () => {
-    const card = await mount({ group_wallets: false });
-    const eth = all(card, ".wallet").find((row) => textOf(row.querySelector(".n")) === "Ethereum");
-    (eth?.querySelector(".chevron") as HTMLElement | null)?.click();
-    await card.updateComplete;
+  it("the wallet detail lists price, average buy price, invested, 24-hour and total return, then staking", async () => {
+    const card = await openWallet({ ...ETH, ...ETH_DAY });
     const rows = detailRows(card);
-    expect(rows.slice(0, 6)).toEqual([
-      "Available 0.33 ETH · 762.00 EUR",
-      "Staked 0.22 ETH · 507.91 EUR",
-      "Staking APR 2.9%",
+    expect(rows.slice(0, 5)).toEqual([
+      "Current price €2,309.09",
       "Average buy price €2,377.00",
       "Invested €1,307.35",
-      "Profit / loss -€37.44 (-3.10%)",
+      "Return (24 h) -€12.50 (-1.62%)",
+      "Total return -€37.44 (-3.10%)",
     ]);
-    expect(textOf(one(card, ".detail h4"))).toBe("Staking rewards");
-    expect(rows[6]).toBe("Net, all time 0.0041 ETH · worth €9.47 today");
-    expect(rows[7]).toMatch(/^Payouts 12 · last .+/);
+    expect(textOf(one(card, ".detail h4"))).toBe("Staking");
+    expect(rows.slice(5, 9)).toEqual([
+      "Staked 0.22 ETH · 507.91 EUR",
+      "Staking APR 2.9%",
+      "Earned (net) 0.0041 ETH",
+      "Value today €9.47",
+    ]);
+    expect(rows[9]).toMatch(/^Payouts 12 · last .+/);
+    expect(rows).toHaveLength(10);
     // A value breaks only between its parts, after the middle dot, which
     // stays with the part before it.
-    const staked = all(card, ".detail .grid > span:nth-child(even)")[1]!;
+    const staked = valueCells(card)[5]!;
     expect(staked.textContent).toContain(" · ");
-    const parts = (index: number): string[] =>
-      [...all(card, ".detail .grid > span:nth-child(even)")[index]!.querySelectorAll(".part")].map((part) => textOf(part));
-    expect(parts(1)).toEqual(["0.22 ETH", "507.91 EUR"]);
-    expect(parts(6)).toEqual(["0.0041 ETH", "worth €9.47 today"]);
-    expect(parts(7)[0]).toBe("12");
-    expect(parts(7)[1]).toMatch(/^last .+/);
-    expect(parts(5)).toEqual(["-€37.44", "(-3.10%)"]);
+    const parts = (index: number): string[] => [...valueCells(card)[index]!.querySelectorAll(".part")].map((part) => textOf(part));
+    expect(parts(5)).toEqual(["0.22 ETH", "507.91 EUR"]);
+    expect(parts(9)[0]).toBe("12");
+    expect(parts(9)[1]).toMatch(/^last .+/);
+    expect(parts(3)).toEqual(["-€12.50", "(-1.62%)"]);
+    expect(parts(4)).toEqual(["-€37.44", "(-3.10%)"]);
+    expect(valueCells(card)[3]?.className).toContain("down");
+  });
+
+  it("keeps the staking rows with nothing staked", async () => {
+    const card = await openWallet({ ...ETH, staked: { ...ETH.staked!, units: 0, value: "0" } });
+    const rows = stakingRows(card);
+    expect(rows[0]).toMatch(/^Staked 0 ETH · /);
+    expect(rows.slice(1, 4)).toEqual(["Staking APR 2.9%", "Earned (net) 0.0041 ETH", "Value today €9.47"]);
+    expect(rows[4]).toMatch(/^Payouts 12 · last .+/);
+  });
+
+  it("a wallet never staked shows staked and the APR only", async () => {
+    const card = await openWallet({ ...ETH, staked: { units: 0, value: "0", apr: 6.2 } });
+    expect(textOf(one(card, ".detail h4"))).toBe("Staking");
+    const rows = stakingRows(card);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatch(/^Staked 0 ETH · /);
+    expect(rows[1]).toBe("Staking APR 6.2%");
+  });
+
+  it("leaves the 24-hour row out without its attributes", async () => {
+    const card = await openWallet({ ...ETH, price: 2309.09 });
+    expect(detailRows(card).slice(0, 4)).toEqual([
+      "Current price €2,309.09",
+      "Average buy price €2,377.00",
+      "Invested €1,307.35",
+      "Total return -€37.44 (-3.10%)",
+    ]);
+  });
+
+  it("the eye blurs the 24-hour amount and the rewards, never the price or a percentage", async () => {
+    const card = await openWallet({ ...ETH, ...ETH_DAY }, { hide_amounts: true });
+    const cells = valueCells(card);
+    expect(cells[0]?.querySelector(".blur")).toBeNull();
+    expect(textOf(cells[0])).toBe("€2,309.09");
+    expect(cells[3]?.querySelector(".amount")?.classList.contains("blur")).toBe(true);
+    expect(textOf(cells[3])).toContain("(-1.62%)");
+    expect(cells[6]?.querySelector(".blur")).toBeNull();
+    expect(cells[7]?.querySelector(".amount")?.classList.contains("blur")).toBe(true);
+    expect(cells[8]?.querySelector(".amount")?.classList.contains("blur")).toBe(true);
+  });
+
+  it("names the detail rows in German", async () => {
+    const card = await openWallet({ ...ETH, ...ETH_DAY }, {}, "de");
+    const labels = all(card, ".detail .grid > span:nth-child(odd)").map((cell) => textOf(cell));
+    expect(labels).toEqual([
+      "Aktueller Preis", "Ø Kaufpreis", "Investiert", "Rendite (24 h)", "Gesamtrendite",
+      "Im Staking", "Staking-APR", "Verdient (netto)", "Heutiger Wert", "Gutschriften",
+    ]);
+    expect(textOf(one(card, ".detail h4"))).toBe("Staking");
   });
 
   it("a wallet row shows its units to 4 decimals, its detail all of them", async () => {
@@ -343,18 +416,20 @@ describe("the Bitpanda Portfolio card", () => {
     expect(detailRows(card)).toContain("Staked 21,500.09377247 VSN · 823.63 EUR");
   });
 
-  it("no rewards line without a staking sensor", async () => {
+  it("no staking block without a staking sensor", async () => {
     const card = await mount({ group_wallets: false });
     const btc = all(card, ".wallet").find((row) => textOf(row.querySelector(".n")) === "Bitcoin");
     (btc?.querySelector(".chevron") as HTMLElement | null)?.click();
     await card.updateComplete;
     expect(one(card, ".detail h4")).toBeNull();
+    expect(all(card, ".detail .grid")).toHaveLength(1);
     expect(detailRows(card)).toEqual([
-      "Available 0.0653 BTC · 5890.11 EUR",
+      "Current price —",
       "Average buy price €80,200.00",
       "Invested €5,240.00",
-      "Profit / loss +€650.11 (+12.40%)",
+      "Total return +€650.11 (+12.40%)",
     ]);
+    expect(textOf(one(card, ".detail"))).not.toContain("Available");
   });
 
   it("names the allocation bar for screen readers", async () => {
@@ -380,7 +455,7 @@ describe("the Bitpanda Portfolio card", () => {
     expect(detailRows(card)[1]).toBe("Average buy price CHF 80,200.00");
   });
 
-  it("shows invested, profit / loss and the rewards' worth in cents, prices in full", async () => {
+  it("shows invested, the total return and the rewards' value in cents, prices in full", async () => {
     const small: FakeWallet = {
       symbol: "ADA", name: "Cardano", category: "crypto", units: 12, total: "4.20", available: "3.50",
       staked: { units: 2, value: "0.70", apr: 2.5, rewards: { net: 0.05, netValue: 0.01734, count: 3, lastAt: "2026-10-06T16:12:00Z" } },
@@ -391,8 +466,9 @@ describe("the Bitpanda Portfolio card", () => {
     (one(card, ".wallet .chevron") as HTMLElement | null)?.click();
     await card.updateComplete;
     const rows = detailRows(card);
-    expect(rows.slice(3, 6)).toEqual(["Average buy price €0.36012", "Invested €4.32", "Profit / loss -€0.12 (-2.86%)"]);
-    expect(rows[6]).toBe("Net, all time 0.05 ADA · worth €0.02 today");
+    expect(rows.slice(1, 4)).toEqual(["Average buy price €0.36012", "Invested €4.32", "Total return -€0.12 (-2.86%)"]);
+    expect(rows).toContain("Earned (net) 0.05 ADA");
+    expect(rows).toContain("Value today €0.02");
   });
 
   it("tapping total value, chip, cash, cash plus and a row opens more-info", async () => {
@@ -433,6 +509,17 @@ describe("the Bitpanda Portfolio card", () => {
     expect(shown).not.toMatch(/NaN|undefined|null|Invalid/);
     expect(textOf(one(card, ".hero"))).toBe("—");
     expect(textOf(one(card, ".chip"))).toBe("—");
+  });
+
+  it("opens a wallet whose Balance (total) is disabled without NaN", async () => {
+    const eth = walletDevice({ ...ETH, ...ETH_DAY });
+    eth.sensors = eth.sensors.filter((sensor) => sensor.translationKey !== "wallet_total");
+    const card = await mount({ group_wallets: false }, makeHass({ devices: [portfolioDevice(), eth] }));
+    all(card, ".chevron").forEach((chevron) => chevron.click());
+    await card.updateComplete;
+    expect(root(card).textContent ?? "").not.toMatch(/NaN|undefined|null|Invalid/);
+    expect(detailRows(card)[0]).toBe("Current price —");
+    expect(detailRows(card).some((row) => row.startsWith("Return (24 h)"))).toBe(false);
   });
 
   it("no portfolio asks to set it up or enable it, without the eye", async () => {

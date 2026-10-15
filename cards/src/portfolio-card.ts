@@ -8,6 +8,7 @@ import { PORTFOLIO_EDITOR, createEditor } from "./editor";
 import { assetList, bool, editorHass, groupList, nonNegativeInt, oneOf, validateConfig } from "./forms";
 import {
   arrow,
+  formatAssetPrice,
   formatDayTime,
   formatLike,
   formatMoney,
@@ -467,46 +468,50 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
       html`${part(amount(units(entityId), hidden))}${DOT}${part(amount(formatState(hass, entityId), hidden))}`;
     const profit = numberAttribute(totalState, "total_return");
     const percent = formatPercent(hass, numberAttribute(totalState, "total_return_percent"));
+    // The price is a market price, not the user's amount: never blurred.
+    const current = numberAttribute(totalState, "price");
+    const dayReturn = numberAttribute(totalState, "return_24h");
+    const dayChange = numberAttribute(totalState, "change_24h_pct");
+    const day = formatPercent(hass, dayChange);
     const apr = numberAttribute(stakingState, "apr_percent");
     const net = numberAttribute(stakingState, "rewards_net");
     const count = numberAttribute(stakingState, "rewards_count");
     const lastAt = stakingState?.attributes["rewards_last_at"];
     const last = typeof lastAt === "string" && Number.isFinite(Date.parse(lastAt)) ? formatDayTime(hass, Date.parse(lastAt)) : "—";
     const worth = money(numberAttribute(stakingState, "rewards_net_value"));
+    // The staking block keeps its rows whether something is staked or not;
+    // the rewards' rows come with the first payout.
     return html`<div class="detail">
       <div class="grid">
-        <span>${t(hass, "detail_available")}</span><span>${position(wallet.available)}</span>
-        ${wallet.staking ? html`<span>${t(hass, "detail_staked")}</span><span>${position(wallet.staking)}</span>` : nothing}
-        ${wallet.staking && apr !== undefined ? html`<span>${t(hass, "detail_staking_apr")}</span><span>${formatShare(hass, apr, 1)}</span>` : nothing}
+        <span>${t(hass, "detail_price")}</span><span>${current === undefined ? "—" : formatAssetPrice(hass, current, currency)}</span>
         <span>${t(hass, "detail_average_buy_price")}</span><span>${amount(price(numberAttribute(totalState, "average_buy_price")), hidden)}</span>
         <span>${t(hass, "detail_invested")}</span><span>${amount(money(numberAttribute(totalState, "invested_amount")), hidden)}</span>
-        <span>${t(hass, "detail_profit_loss")}</span
+        ${dayReturn !== undefined && dayChange !== undefined
+          ? html`<span>${t(hass, "detail_return_24h")}</span
+              ><span class=${trendClass(day.direction)}>${part(amount(money(dayReturn, true), hidden))} ${part(`(${day.text})`)}</span>`
+          : nothing}
+        <span>${t(hass, "detail_total_return")}</span
         ><span class=${trendClass(percent.direction)}>${part(amount(money(profit, true), hidden))} ${part(`(${percent.text})`)}</span>
       </div>
-      ${count !== undefined && count > 0
-        ? html`<h4>${t(hass, "detail_rewards")}</h4>
+      ${wallet.staking
+        ? html`<h4>${t(hass, "detail_staking")}</h4>
             <div class="grid">
-              <span>${t(hass, "detail_rewards_net")}</span>
-              <span
-                >${part(amount(net === undefined ? undefined : formatUnits(hass, net, wallet.category, wallet.symbol), hidden))}${worth
-                  ? html`${DOT}${part(this.worth(hass, worth))}`
-                  : nothing}</span
-              >
-              <span>${t(hass, "detail_payouts")}</span
-              ><span
-                >${t(hass, "detail_payouts_value", { count, date: last })
-                  .split(" · ")
-                  .map((text, index) => html`${index > 0 ? DOT : ""}${part(text)}`)}</span
-              >
+              <span>${t(hass, "detail_staked")}</span><span>${position(wallet.staking)}</span>
+              ${apr !== undefined ? html`<span>${t(hass, "detail_staking_apr")}</span><span>${formatShare(hass, apr, 1)}</span>` : nothing}
+              ${count !== undefined && count > 0
+                ? html`<span>${t(hass, "detail_rewards_net")}</span
+                    ><span>${amount(net === undefined ? undefined : formatUnits(hass, net, wallet.category, wallet.symbol), hidden)}</span>
+                    <span>${t(hass, "detail_rewards_value")}</span><span>${amount(worth, hidden)}</span>
+                    <span>${t(hass, "detail_payouts")}</span
+                    ><span
+                      >${t(hass, "detail_payouts_value", { count, date: last })
+                        .split(" · ")
+                        .map((text, index) => html`${index > 0 ? DOT : ""}${part(text)}`)}</span
+                    >`
+                : nothing}
             </div>`
         : nothing}
     </div>`;
-  }
-
-  /** "worth €9.47 today", with only the amount blurred. */
-  private worth(hass: Hass, value: string): TemplateResult {
-    const [before = "", after = ""] = t(hass, "detail_rewards_worth").split("{value}");
-    return html`${before}${amount(value, this.amountsHidden)}${after}`;
   }
 }
 

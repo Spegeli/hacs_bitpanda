@@ -168,6 +168,10 @@ export interface FakeWallet {
   averageBuyPrice?: number;
   invested?: number;
   totalReturn?: number;
+  /** The Balance (total) sensor's price and 24-hour figures. */
+  price?: number;
+  return24h?: number;
+  change24h?: number;
   nameByUser?: string;
   currency?: string;
 }
@@ -201,6 +205,9 @@ export function walletDevice(wallet: FakeWallet): FakeDevice {
         ...(wallet.invested !== undefined ? { invested_amount: wallet.invested } : {}),
         ...(wallet.totalReturn !== undefined ? { total_return: wallet.totalReturn } : {}),
         ...(wallet.returnPercent !== undefined ? { total_return_percent: wallet.returnPercent } : {}),
+        ...(wallet.price !== undefined ? { price: wallet.price } : {}),
+        ...(wallet.return24h !== undefined ? { return_24h: wallet.return24h } : {}),
+        ...(wallet.change24h !== undefined ? { change_24h_pct: wallet.change24h } : {}),
       },
     },
   ];

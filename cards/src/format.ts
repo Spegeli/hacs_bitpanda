@@ -32,24 +32,32 @@ export function formatNumber(hass: Hass, value: number, maximumFractionDigits: n
   }).format(value);
 }
 
-/** Units short, as the Bitpanda app lists them: up to 4 decimals, rounded
- * down; below 0.0001 the first two digits, so that a holding never reads 0. */
-function formatShortUnits(hass: Hass, units: number): string {
+/** The digits of units short, as the Bitpanda app lists them: up to 4
+ * decimals, rounded down; below 0.0001 the first two digits, so that a
+ * holding never reads 0. */
+function shortUnitDigits(units: number): Intl.NumberFormatOptions {
   const tiny = units !== 0 && Math.abs(units) < 0.0001;
+  return { ...(tiny ? { maximumSignificantDigits: 2 } : { maximumFractionDigits: 4 }), roundingMode: "trunc" };
+}
+
+function formatShortUnits(hass: Hass, units: number): string {
   return new Intl.NumberFormat(numberLocale(hass), {
-    ...(tiny ? { maximumSignificantDigits: 2 } : { maximumFractionDigits: 4 }),
-    roundingMode: "trunc",
+    ...shortUnitDigits(units),
     useGrouping: hass.locale.number_format !== "none",
   }).format(units);
 }
+
+const LONG_UNIT_DIGITS = 8;
 
 /** "0.0653 BTC", "21.4 shares" for stocks, ETFs and ETCs, "0.56 g" for
  * metals, which Bitpanda counts in grams; all decimals, or `short` for a
  * wallet row. */
 export function formatUnits(hass: Hass, units: number, category: Category | undefined, symbol: string, short = false): string {
-  const amount = short ? formatShortUnits(hass, units) : formatNumber(hass, units, 8);
+  const amount = short ? formatShortUnits(hass, units) : formatNumber(hass, units, LONG_UNIT_DIGITS);
   if (category === "stock" || category === "etf" || category === "etc") {
-    return `${amount} ${tCount(hass, "shares", units)}`;
+    // The count word follows the number as shown: 1.0004 shares, 1 share.
+    const digits = short ? shortUnitDigits(units) : { maximumFractionDigits: LONG_UNIT_DIGITS };
+    return `${amount} ${tCount(hass, "shares", units, digits)}`;
   }
   return `${amount} ${category === "metal" ? "g" : symbol}`;
 }

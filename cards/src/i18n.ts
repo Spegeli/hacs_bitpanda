@@ -53,9 +53,10 @@ export function t(hass: Hass | undefined, key: TextKey, vars: Record<string, str
 
 /** The text for `count`, in the plural form the language asks for, with
  * `count` in place of its {count}; test/i18n.test.ts holds every language
- * to every form it has. */
-export function tCount(hass: Hass | undefined, key: CountKey, count: number): string {
-  const rule = new Intl.PluralRules(languageOf(hass)).select(count);
+ * to every form it has. `digits` are the decimals `count` is shown with,
+ * which decide the form too: 1 share, 1.0004 shares. */
+export function tCount(hass: Hass | undefined, key: CountKey, count: number, digits: Intl.NumberFormatOptions = {}): string {
+  const rule = new Intl.PluralRules(languageOf(hass), digits as Intl.PluralRulesOptions).select(count);
   return ((table(hass) as Record<string, string>)[`${key}_${rule}`] as string).replace("{count}", String(count));
 }
 

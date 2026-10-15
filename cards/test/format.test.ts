@@ -41,6 +41,16 @@ describe("formatUnits", () => {
     expect(formatUnits(makeHass({ language: "de" }), 21.4, "etc", "PPFB")).toBe("21,4 Stück");
   });
 
+  it("counts a fraction of a share just above one by the decimals it shows", () => {
+    expect(formatUnits(makeHass(), 1.0004, "stock", "AAPL")).toBe("1.0004 shares");
+    expect(formatUnits(makeHass(), 1.00000001, "etf", "EUNL")).toBe("1.00000001 shares");
+    // French counts everything below 2 in the singular, fractions too.
+    expect(formatUnits(makeHass({ language: "fr" }), 1.0004, "stock", "AAPL")).toBe("1,0004 titre");
+    // Polish: fractions take the form "sztuki", whole numbers their own.
+    expect(formatUnits(makeHass({ language: "pl" }), 1.5, "stock", "AAPL")).toBe("1,5 sztuki");
+    expect(formatUnits(makeHass({ language: "pl" }), 5, "stock", "AAPL")).toBe("5 sztuk");
+  });
+
   it("counts metals in grams", () => {
     expect(formatUnits(makeHass(), 0.56, "metal", "XAU")).toBe("0.56 g");
   });
@@ -75,6 +85,8 @@ describe("formatUnits, short for a wallet row", () => {
 
   it("counts the shares it shows", () => {
     expect(short(1.00004, "stock", "AAPL")).toBe("1 share");
+    expect(short(1.00009, "stock", "AAPL")).toBe("1 share");
+    expect(short(1.0004, "stock", "AAPL")).toBe("1.0004 shares");
     expect(short(21.40009, "etf", "EUNL")).toBe("21.4 shares");
   });
 });

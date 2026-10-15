@@ -55,6 +55,7 @@ export function makeHass(options: FakeHassOptions = {}): FakeHass {
       name: device.name,
       name_by_user: device.nameByUser ?? null,
       serial_number: device.serial ?? null,
+      identifiers: [["bitpanda", `entry_${device.id}`]],
     };
     for (const sensor of device.sensors) {
       entities[sensor.entityId] = {

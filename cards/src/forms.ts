@@ -1,9 +1,9 @@
 // Configuration: what setConfig accepts, and the fields of the visual editor
 // (Home Assistant's own form, drawn by each card's editor, editor.ts). Toggles,
 // numbers and the title show their default where the configuration has none,
-// and nothing is saved for them; Home Assistant's select fields cannot, so a
-// card added from the picker starts with its choices written out (each card's
-// getStubConfig).
+// and nothing is saved for them; the editor shows a select field's default
+// itself (editor.ts). A card added from the picker still starts with its
+// choices written out (each card's getStubConfig).
 import { t, type TextKey } from "./i18n";
 import { ASSET_SELECTIONS, CATEGORIES, TIMEFRAMES, type BaseConfig, type Category, type Hass } from "./types";
 
@@ -135,21 +135,31 @@ export async function groupNames(hass: Hass | undefined): Promise<Partial<Record
   }
 }
 
+/** Whether a selection names groups or assets to choose: "all" chooses none. */
+export const chooses = (selection: unknown): boolean => selection === "only" || selection === "all_except";
+
 /** The asset groups a card shows, by their names; a group without one
- * shows its key. */
-export const groupFields = (names: Partial<Record<Category, string>>): [FormField, FormField] => [
+ * shows its key. The groups to choose only while the selection asks for
+ * them. */
+export const groupFields = (names: Partial<Record<Category, string>>, selection: unknown): FormField[] => [
   { name: "group_selection", selector: select(ASSET_SELECTIONS, (value) => t(undefined, `sel_${value}` as TextKey)) },
-  {
-    name: "groups",
-    selector: {
-      select: { multiple: true, mode: "dropdown", options: CATEGORIES.map((value) => ({ value, label: names[value] ?? value })) },
-    },
-  },
+  ...(chooses(selection)
+    ? [
+        {
+          name: "groups",
+          selector: {
+            select: { multiple: true, mode: "dropdown", options: CATEGORIES.map((value) => ({ value, label: names[value] ?? value })) },
+          },
+        },
+      ]
+    : []),
 ];
 
-export const assetFields = (model: DeviceModel): [FormField, FormField] => [
+/** The assets a card shows; the assets to choose only while the selection
+ * asks for them. */
+export const assetFields = (model: DeviceModel, selection: unknown): FormField[] => [
   { name: "asset_selection", selector: select(ASSET_SELECTIONS, (value) => t(undefined, `sel_${value}` as TextKey)) },
-  { name: "assets", selector: { device: { multiple: true, filter: [{ integration: "bitpanda", model }] } } },
+  ...(chooses(selection) ? [{ name: "assets", selector: { device: { multiple: true, filter: [{ integration: "bitpanda", model }] } } }] : []),
 ];
 
 /** A line between fields. Home Assistant releases without one (2025.5

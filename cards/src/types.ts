@@ -43,6 +43,8 @@ export interface HassDevice {
   name?: string | null;
   name_by_user?: string | null;
   serial_number?: string | null;
+  /** The (domain, identifier) pairs the integrations gave the device. */
+  identifiers?: [string, string][];
 }
 
 export interface HassLocale {

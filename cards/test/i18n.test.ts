@@ -13,7 +13,8 @@ import { en } from "../src/translations/en";
 import { makeHass } from "./fixtures";
 
 const placeholders = (text: string): string[] => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1] ?? "").sort();
-const PLURAL_EXTRAS = /^shares_(zero|two|few|many)$/;
+const COUNTED = ["shares", "assets_missing"] as const;
+const PLURAL_EXTRAS = /^(shares|assets_missing)_(zero|two|few|many)$/;
 
 describe("the card texts", () => {
   it("come in the integration's seven languages", () => {
@@ -31,7 +32,7 @@ describe("the card texts", () => {
   it("every language has the plural forms Intl.PluralRules asks for", () => {
     for (const [language, texts] of Object.entries(LANGUAGES)) {
       for (const rule of new Intl.PluralRules(language).resolvedOptions().pluralCategories) {
-        expect((texts as Record<string, string>)[`shares_${rule}`], `${language} ${rule}`).toBeTruthy();
+        for (const key of COUNTED) expect((texts as Record<string, string>)[`${key}_${rule}`], `${language} ${key} ${rule}`).toBeTruthy();
       }
     }
   });
@@ -39,7 +40,8 @@ describe("the card texts", () => {
   it("every text keeps the placeholders of its English original", () => {
     for (const [language, texts] of Object.entries(LANGUAGES)) {
       for (const [key, text] of Object.entries(texts as Record<string, string>)) {
-        const original = (en as Record<string, string>)[key] ?? (en as Record<string, string>)["shares_other"] ?? "";
+        const counted = COUNTED.find((name) => key.startsWith(`${name}_`));
+        const original = (en as Record<string, string>)[key] ?? (counted ? (en as Record<string, string>)[`${counted}_other`] : undefined) ?? "";
         expect(placeholders(text), `${language} ${key}`).toEqual(placeholders(original));
       }
     }

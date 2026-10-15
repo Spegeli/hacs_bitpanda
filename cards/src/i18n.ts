@@ -12,7 +12,7 @@ import { pl } from "./translations/pl";
 import type { Category, Hass } from "./types";
 
 export type TextKey = keyof typeof en;
-export type CountKey = "shares";
+export type CountKey = "shares" | "assets_missing";
 
 export const LANGUAGES = { en, de, fr, nl, it, es, pl } satisfies Record<string, Texts>;
 type Language = keyof typeof LANGUAGES;
@@ -51,11 +51,12 @@ export function t(hass: Hass | undefined, key: TextKey, vars: Record<string, str
   );
 }
 
-/** The count word for `count`, in the plural form the language asks for;
- * test/i18n.test.ts holds every language to every form it has. */
+/** The text for `count`, in the plural form the language asks for, with
+ * `count` in place of its {count}; test/i18n.test.ts holds every language
+ * to every form it has. */
 export function tCount(hass: Hass | undefined, key: CountKey, count: number): string {
   const rule = new Intl.PluralRules(languageOf(hass)).select(count);
-  return (table(hass) as Record<string, string>)[`${key}_${rule}`] as string;
+  return ((table(hass) as Record<string, string>)[`${key}_${rule}`] as string).replace("{count}", String(count));
 }
 
 export async function loadCategoryNames(hass: Hass): Promise<void> {

@@ -143,20 +143,20 @@ describe("groupNames", () => {
 
 describe("editor fields", () => {
   it("the device field filters to the integration and model", () => {
-    const [selection, assets] = assetFields("Wallet");
+    const [selection, assets] = assetFields("Wallet", "only");
     expect(selection).toMatchObject({ name: "asset_selection" });
     expect(assets).toEqual({
       name: "assets",
       selector: { device: { multiple: true, filter: [{ integration: "bitpanda", model: "Wallet" }] } },
     });
-    expect(assetFields("Price Tracker")[1]).toMatchObject({
+    expect(assetFields("Price Tracker", "all_except")[1]).toMatchObject({
       selector: { device: { filter: [{ integration: "bitpanda", model: "Price Tracker" }] } },
     });
   });
 
   it("the asset group fields offer every group, named as the integration names them", () => {
     rememberLocale(makeHass());
-    const [selection, groups] = groupFields({ crypto: "Cryptocurrencies", etf: "ETFs" });
+    const [selection, groups] = groupFields({ crypto: "Cryptocurrencies", etf: "ETFs" }, "only");
     expect(selection).toEqual({
       name: "group_selection",
       selector: {
@@ -171,7 +171,7 @@ describe("editor fields", () => {
       },
     });
     expect(groups).toMatchObject({ name: "groups", selector: { select: { multiple: true, mode: "dropdown" } } });
-    const options = (groups.selector as { select: { options: { value: string; label: string }[] } }).select.options;
+    const options = (groups?.selector as { select: { options: { value: string; label: string }[] } }).select.options;
     expect(options.map((option) => option.value)).toEqual(["crypto", "stock", "etf", "etc", "index", "metal", "other"]);
     expect(options[0]).toEqual({ value: "crypto", label: "Cryptocurrencies" });
     expect(options[2]).toEqual({ value: "etf", label: "ETFs" });
@@ -180,7 +180,7 @@ describe("editor fields", () => {
   });
 
   it("the form sets no defaults", () => {
-    const schema = [timeframeField(), ...groupFields({}), ...assetFields("Wallet"), expandable("group_content", [timeframeField()])];
+    const schema = [timeframeField(), ...groupFields({}, "only"), ...assetFields("Wallet", "only"), expandable("group_content", [timeframeField()])];
     expect(JSON.stringify(schema)).not.toContain('"default"');
   });
 

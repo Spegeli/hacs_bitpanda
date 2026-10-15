@@ -38,6 +38,8 @@ export const nl: Texts = {
   detail_payouts_value: "{count} · laatste {date}",
   shares_one: "stuk",
   shares_other: "stuks",
+  assets_missing_one: "Hieronder valt een gekozen asset die er nu niet is. Die blijft bewaard en geldt weer zodra die terug is.",
+  assets_missing_other: "Hieronder vallen {count} gekozen assets die er nu niet zijn. Ze blijven bewaard en gelden weer zodra ze terug zijn.",
   eye_hide: "Bedragen verbergen",
   eye_show: "Bedragen tonen",
   change_since: "Verandering sinds {date}",

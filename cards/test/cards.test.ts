@@ -79,8 +79,8 @@ describe("every card", () => {
   });
 
   it("a card added from the picker starts with its choices written out", () => {
-    // Home Assistant's select fields cannot show a default: the picker's
-    // card carries them, so the editor shows them selected.
+    // The editor shows a choice's default where a configuration makes none;
+    // a card from the picker carries its choices written out all the same.
     const stub = (tag: string): unknown => (customElements.get(tag) as unknown as { getStubConfig(): unknown }).getStubConfig();
     expect(stub("bitpanda-portfolio-card")).toEqual({ timeframe: "day", sort: "value", group_selection: "all", asset_selection: "all" });
     expect(stub("bitpanda-price-tracker-card")).toEqual({

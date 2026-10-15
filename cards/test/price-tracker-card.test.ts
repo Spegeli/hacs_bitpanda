@@ -640,7 +640,8 @@ describe("the Bitpanda Price Tracker card", () => {
   it("the editor form lists exactly the card's options", async () => {
     const fieldNames = (fields: { name: string; type?: string; schema?: { name: string; type?: string }[] }[]): string[] =>
       fields.flatMap((field) => (field.schema ? fieldNames(field.schema) : field.type === "divider" ? [] : [field.name]));
-    const { form } = await openEditor("bitpanda-price-tracker-card");
+    // Every field: the groups and assets to choose show while some are chosen.
+    const { form } = await openEditor("bitpanda-price-tracker-card", { group_selection: "only", asset_selection: "only" });
     expect(fieldNames(form.schema).sort()).toEqual(
       ["asset_selection", "assets", "currency", "group_selection", "groups", "layout", "limit", "sort", "timeframe", "title"].sort(),
     );

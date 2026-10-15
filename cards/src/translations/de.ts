@@ -38,6 +38,8 @@ export const de: Texts = {
   detail_payouts_value: "{count} · zuletzt {date}",
   shares_one: "Stück",
   shares_other: "Stück",
+  assets_missing_one: "Dazu gehört ein gewähltes Asset, das es gerade nicht gibt. Es bleibt gespeichert und gilt wieder, sobald es wieder da ist.",
+  assets_missing_other: "Dazu gehören {count} gewählte Assets, die es gerade nicht gibt. Sie bleiben gespeichert und gelten wieder, sobald sie wieder da sind.",
   eye_hide: "Beträge verbergen",
   eye_show: "Beträge anzeigen",
   change_since: "Änderung seit {date}",

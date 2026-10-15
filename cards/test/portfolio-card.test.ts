@@ -448,7 +448,8 @@ describe("the Bitpanda Portfolio card", () => {
   it("the editor form lists exactly the card's options", async () => {
     const names = (fields: { name: string; type?: string; schema?: { name: string; type?: string }[] }[]): string[] =>
       fields.flatMap((field) => (field.schema ? names(field.schema) : field.type === "divider" ? [] : [field.name]));
-    const { form } = await openEditor("bitpanda-portfolio-card");
+    // Every field: the groups and assets to choose show while some are chosen.
+    const { form } = await openEditor("bitpanda-portfolio-card", { group_selection: "only", asset_selection: "only" });
     expect(names(form.schema).sort()).toEqual(
       ["asset_selection", "assets", "group_selection", "group_wallets", "groups", "hide_amounts", "limit", "show_allocation", "show_cash", "show_graph", "show_search", "show_total", "show_wallets", "sort", "timeframe", "title"].sort(),
     );

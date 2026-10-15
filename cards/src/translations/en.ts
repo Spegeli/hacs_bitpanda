@@ -39,6 +39,8 @@ export const en = {
   detail_payouts_value: "{count} · last {date}",
   shares_one: "share",
   shares_other: "shares",
+  assets_missing_one: "This includes a chosen asset that is not there right now. It stays saved and applies again once it is back.",
+  assets_missing_other: "This includes {count} chosen assets that are not there right now. They stay saved and apply again once they are back.",
   eye_hide: "Hide amounts",
   eye_show: "Show amounts",
   change_since: "Change since {date}",
@@ -111,5 +113,5 @@ export const en = {
 };
 
 /** Plural forms beyond one and other, for the languages that have them. */
-export type PluralExtraKey = "shares_zero" | "shares_two" | "shares_few" | "shares_many";
+export type PluralExtraKey = `${"shares" | "assets_missing"}_${"zero" | "two" | "few" | "many"}`;
 export type Texts = Record<keyof typeof en, string> & Partial<Record<PluralExtraKey, string>>;

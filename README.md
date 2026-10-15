@@ -330,8 +330,10 @@ Gains and losses take your theme's success and error colours, green and red in H
 | `group_selection` | `all`, `all_except`, `only` | `all` | which asset groups' wallets the card shows |
 | `groups` | `crypto`, `stock`, `etf`, `etc`, `index`, `metal`, `other` | — | with `all_except` or `only`: the asset groups left out or shown |
 | `asset_selection` | `all`, `all_except`, `only` | `all` | which wallets the card shows, within the asset groups shown |
-| `assets` | device IDs | — | with `all_except` or `only`: the wallets left out or shown |
+| `assets` | asset IDs | — | with `all_except` or `only`: the wallets left out or shown |
 | `hide_amounts` | `true`, `false` | `false` | start with amounts hidden |
+
+`assets` holds Bitpanda's asset IDs — a device's serial number; the visual editor fills it in. Device IDs from older configurations still work.
 
 Hiding a section, an asset group or a wallet changes only what the card shows: the total value, Cash, Cash Plus and the allocation always cover your whole portfolio, while a group's count, return and sum cover the wallets it shows.
 
@@ -348,7 +350,9 @@ Hiding a section, an asset group or a wallet changes only what the card shows: t
 | `group_selection` | `all`, `all_except`, `only` | `all` | which asset groups' prices the card shows |
 | `groups` | `crypto`, `stock`, `etf`, `etc`, `index`, `metal`, `other` | — | with `all_except` or `only`: the asset groups left out or shown |
 | `asset_selection` | `all`, `all_except`, `only` | `all` | which assets the card shows, within the asset groups shown |
-| `assets` | device IDs | — | with `all_except` or `only`: the price trackers left out or shown |
+| `assets` | asset IDs | — | with `all_except` or `only`: the price trackers left out or shown |
+
+`assets` holds Bitpanda's asset IDs — a device's serial number; the visual editor fills it in. Device IDs from older configurations still work.
 
 ```yaml
 type: custom:bitpanda-price-tracker-card

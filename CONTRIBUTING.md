@@ -107,6 +107,7 @@ The integration lives in `custom_components/bitpanda/`; the dashboard cards' sou
 | `brand/` | The integration's icon and logo, light and dark |
 | `config_flow.py` | Service menu, Portfolio setup/reauth/reconfigure, Price Tracker setup, the options (Configure) of both services, import |
 | `const.py` | Domain, URLs, scopes, currencies, intervals |
+| `day_ago.py` | The 24-hour references of both services: `DayAgoPrices` looks up a price of about 24 hours ago for all sensors of an entry, every 5 minutes, from Home Assistant's recorder |
 | `devices.py` | Device lookups scoped to their config entry |
 | `diagnostics.py` | Diagnostics per service, API key redacted |
 | `ecb.py` | ECB daily reference rates |
@@ -122,7 +123,7 @@ The integration lives in `custom_components/bitpanda/`; the dashboard cards' sou
 | `portfolio_sensor.py` | Portfolio sensors and the wallet lifecycle manager, which also keeps the wallet groups |
 | `portfolio_store.py` | What each Portfolio remembers, in `.storage/bitpanda.portfolio.<entry_id>`, one section per feature: the assets known — announced, or there when the list began — (`known_wallets`), the newest announced staking payout per asset (`known_rewards`), and the operations read so far (`operations`) |
 | `price_coordinator.py` | Keyless ticker coordinator, every 60 seconds and slowed down after a 429; ECB coordinator |
-| `price_sensor.py` | Price sensors per asset and currency, with their 24-hour change from Home Assistant's 5-minute statistics, one query for all every 5 minutes |
+| `price_sensor.py` | Price sensors per asset and currency, with their 24-hour change from Home Assistant's 5-minute statistics (`day_ago.py`) |
 | `purge.py` | On a currency change, deletes the Portfolio's sensors and devices with their history and long-term statistics, and the history and statistics of its sensors removed earlier; at setup, the history and statistics an earlier Portfolio left in another currency |
 | `repairs.py` | The fix flow of the upgrade's repair issue for entities not migrated: after a confirmation, deletes them and each old device left empty |
 | `sensor.py` | Dispatches the sensor platform to the service |

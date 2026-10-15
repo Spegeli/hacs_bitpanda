@@ -7,9 +7,6 @@ for the monetary device class; each sensor's currency never changes.
 """
 from __future__ import annotations
 
-from collections.abc import Callable
-from datetime import datetime, timedelta
-import logging
 from typing import Any, cast
 
 from homeassistant.components.sensor import (
@@ -22,13 +19,9 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from homeassistant.helpers.event import async_call_later, async_track_time_interval
-from homeassistant.util import dt as dt_util
 
 from .assets import asset_attributes
 from .const import (
-    CHANGE_24H_TOLERANCE,
-    CHANGE_24H_UPDATE_INTERVAL,
     CONF_ASSETS,
     CONF_EXTRA_CURRENCIES,
     DOMAIN,
@@ -36,6 +29,7 @@ from .const import (
     PRICES_URL,
     SUBENTRY_TYPE_PRICE_GROUP,
 )
+from .day_ago import DayAgoPrices, async_prices_24h_ago
 from .devices import device_identifiers
 from .groups import groups_of_type, tracked_assets
 from .naming import (
@@ -55,8 +49,6 @@ from .price_coordinator import (
     convert_price,
 )
 from .tolerance import TolerantEntity
-
-_LOGGER = logging.getLogger(__name__)
 
 
 def display_precision(value: float | None) -> int:
@@ -100,115 +92,6 @@ def price_device_info(entry_id: str, asset: dict[str, Any]) -> DeviceInfo:
 def tracked_currencies(entry: ConfigEntry) -> list[str]:
     """EUR, always, then the configured extras."""
     return ["EUR", *entry.options.get(CONF_EXTRA_CURRENCIES, [])]
-
-
-# The length of a short-term statistics period.
-_PERIOD = timedelta(minutes=5)
-# How long the first lookup waits after a sensor joined: the sensors of an
-# entry join one after the other, and one query serves them all.
-_FIRST_LOOKUP_DELAY = timedelta(seconds=1)
-
-
-async def async_prices_24h_ago(
-    hass: HomeAssistant, statistic_ids: set[str], now: datetime
-) -> dict[str, float]:
-    """Each statistic's price of 24 hours before `now`, from Home
-    Assistant's 5-minute statistics, in one query: the value nearest to that
-    time, within CHANGE_24H_TOLERANCE either side -- never an average, and
-    never one further off. An id without such a value is left out.
-
-    A 5-minute row's `state` is the sensor's last state in its period, so
-    it stood at the period's end: the row's `end` is the time compared. A
-    row without a state -- a period the sensor was unavailable throughout
-    -- is no value.
-    """
-    # The recorder is an after-dependency, imported only when it is needed.
-    from homeassistant.components.recorder import get_instance
-    from homeassistant.components.recorder.statistics import statistics_during_period
-
-    target = now - timedelta(hours=24)
-    rows = await get_instance(hass).async_add_executor_job(
-        statistics_during_period,
-        hass,
-        target - CHANGE_24H_TOLERANCE - _PERIOD,
-        target + CHANGE_24H_TOLERANCE,
-        statistic_ids,
-        "5minute",
-        None,
-        {"state"},
-    )
-    target_ts = target.timestamp()
-    tolerance = CHANGE_24H_TOLERANCE.total_seconds()
-    found: dict[str, float] = {}
-    for statistic_id, series in rows.items():
-        nearest: tuple[float, float] | None = None
-        for row in series:
-            state, end = row.get("state"), row.get("end")
-            if state is None or end is None:
-                continue
-            distance = abs(end - target_ts)
-            if distance <= tolerance and (nearest is None or distance < nearest[0]):
-                nearest = (distance, state)
-        if nearest is not None:
-            found[statistic_id] = nearest[1]
-    return found
-
-
-class DayAgoPrices:
-    """The 24 h references of one Price Tracker entry's price sensors.
-
-    Every sensor joins as Home Assistant adds it and leaves as it is
-    removed -- at an unload, when it is disabled, or when it is no longer
-    tracked; Home Assistant's stop removes none, and a lookup due while it
-    stops fails quietly, as any failed one. One query
-    (async_prices_24h_ago) serves all that are there: a second after
-    the first joins -- the others join meanwhile -- and then every
-    CHANGE_24H_UPDATE_INTERVAL, until the last one leaves. A sensor without
-    a value of a day ago, and every sensor after a failed query, gets no
-    reference: its 24 h attributes are absent, never stale. The next price
-    publishes them.
-    """
-
-    def __init__(self, hass: HomeAssistant) -> None:
-        self._hass = hass
-        self._sensors: dict[str, PriceSensor] = {}
-        self._timers: list[Callable[[], None]] = []
-
-    @callback
-    def join(self, sensor: PriceSensor) -> Callable[[], None]:
-        """Add `sensor` to the lookups; returns its removal."""
-        if not self._sensors:
-            self._timers = [
-                async_call_later(self._hass, _FIRST_LOOKUP_DELAY, self.async_look_up),
-                async_track_time_interval(
-                    self._hass, self.async_look_up, CHANGE_24H_UPDATE_INTERVAL
-                ),
-            ]
-        self._sensors[sensor.entity_id] = sensor
-
-        @callback
-        def _leave() -> None:
-            if self._sensors.get(sensor.entity_id) is sensor:
-                del self._sensors[sensor.entity_id]
-            if not self._sensors:
-                for cancel in self._timers:
-                    cancel()
-                self._timers = []
-
-        return _leave
-
-    async def async_look_up(self, _: datetime | None = None) -> None:
-        """Look up every joined sensor's reference, in one query."""
-        sensors = dict(self._sensors)
-        if not sensors:
-            return
-        try:
-            found = await async_prices_24h_ago(self._hass, set(sensors), dt_util.utcnow())
-        except Exception as err:  # noqa: BLE001 - optional data, never fatal
-            _LOGGER.debug("No 24 h statistics: %s", type(err).__name__)
-            found = {}
-        for entity_id, sensor in sensors.items():
-            sensor.set_price_24h_ago(found.get(entity_id))
 
 
 class PriceSensor(TolerantEntity[TickerCoordinator], SensorEntity):
@@ -371,7 +254,7 @@ async def async_setup_price_entities(
     runtime: PriceTrackerRuntime = entry.runtime_data
     currencies = tracked_currencies(entry)
     _remove_untracked(hass, entry, currencies)
-    day_ago = DayAgoPrices(hass)
+    day_ago = DayAgoPrices(hass, async_prices_24h_ago)
     for group in groups_of_type(entry, SUBENTRY_TYPE_PRICE_GROUP):
         add_entities(
             [

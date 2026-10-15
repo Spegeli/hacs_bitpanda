@@ -2,7 +2,7 @@
 
 Every 5 minutes one query asks the 5-minute statistics of every price
 sensor of the entry for its price of 24 hours before -- the value nearest
-to that time within half an hour (price_sensor.async_prices_24h_ago) --,
+to that time within half an hour (day_ago.async_prices_24h_ago) --,
 and the next price publishes it with the change since. Without such a
 value, or after a failed query, both attributes are absent: never a
 reference older than a day. The lookup turns any failure into missing
@@ -31,7 +31,7 @@ from homeassistant.helpers import entity_registry as er
 
 from custom_components.bitpanda.const import DOMAIN, PRICE_UPDATE_INTERVAL_BASE
 from custom_components.bitpanda.naming import price_unique_id
-from custom_components.bitpanda.price_sensor import async_prices_24h_ago
+from custom_components.bitpanda.day_ago import async_prices_24h_ago
 
 from tests.conftest import load_fixture, price_group
 

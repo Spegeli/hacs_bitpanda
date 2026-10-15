@@ -375,7 +375,8 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
   /** Tiles show the amount beside the percentage only when every tile has
    * room for it, below it otherwise. */
   protected override fitLayout(): void {
-    const width = (element: Element | null): number | undefined => element?.getBoundingClientRect().width;
+    const measure = this.widthMeter();
+    const width = (element: Element | null): number | undefined => (element ? measure(element) : undefined);
     const cells = [...(this.shadowRoot?.querySelectorAll<HTMLElement>(".tile .c") ?? [])].map((cell) => {
       const amount = width(cell.querySelector(".a"));
       return { room: cell.clientWidth, pct: width(cell.querySelector(".pct")) ?? 0, ...(amount === undefined ? {} : { amount }) };
@@ -388,7 +389,7 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
     // widths in every layout.
     const lineRoom = this.clientWidth > NARROW_LIST ? LINE_WIDTH + ROW_GAP : 0;
     const rows = [...this.renderRoot.querySelectorAll<HTMLElement>(".price-row")].map((row) => {
-      const part = (selector: string): number => (row.querySelector(selector) as Element).getBoundingClientRect().width;
+      const part = (selector: string): number => measure(row.querySelector(selector) as Element);
       return { room: row.clientWidth - lineRoom, price: part(".p"), change: Math.max(part(".c .pct"), width(row.querySelector(".c .a")) ?? 0) };
     });
     const layout = priceRowLayout(rows);

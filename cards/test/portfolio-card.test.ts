@@ -675,6 +675,35 @@ describe("a group's return", () => {
 });
 
 describe("a wallet row's chip and value", () => {
+  it("are measured in layout pixels, units included, while a dialog shows the card scaled down", async () => {
+    // As the Price Tracker's columns: Home Assistant's card dialog scales
+    // the card in, and the units' line boxes are screen pixels too.
+    const scale = 0.9;
+    const room = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(221);
+    const layoutWidth = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this.tagName === "BITPANDA-PORTFOLIO-CARD" ? 400 : 0;
+    });
+    const rect = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const own = this.tagName === "BITPANDA-PORTFOLIO-CARD" ? 400 : this.classList.contains("wchip") ? 80 : this.classList.contains("val") ? 70 : 0;
+      const width = own * scale;
+      return { width, height: 0, x: 0, y: 0, top: 0, left: 0, right: width, bottom: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    const lines = vi.spyOn(Element.prototype, "getClientRects").mockImplementation(function (this: Element) {
+      const widths = this.classList.contains("units") ? [90 * scale, 40 * scale] : [];
+      return widths.map((width) => ({ width }) as DOMRect) as unknown as DOMRectList;
+    });
+    try {
+      const card = await mount({ group_wallets: false });
+      // 130 units + 12 + 80 = 222 layout pixels: one more than the row has.
+      await vi.waitFor(() => expect(one(card, ".wallets")?.classList.contains("rows-wrapped")).toBe(true));
+    } finally {
+      room.mockRestore();
+      layoutWidth.mockRestore();
+      rect.mockRestore();
+      lines.mockRestore();
+    }
+  });
+
   it("stand beside the units, below the name side by side, or below it stacked: the same in every row", async () => {
     const room = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(300);
     const rect = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {

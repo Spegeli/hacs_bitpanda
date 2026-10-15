@@ -234,10 +234,11 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
     const all = (selector: string): HTMLElement[] => [...this.renderRoot.querySelectorAll<HTMLElement>(selector)];
     // A part every row or group renders, and one it may lack.
     const part = (parent: Element, selector: string): Element => parent.querySelector(selector) as Element;
-    const width = (element: Element | null): number | undefined => element?.getBoundingClientRect().width;
+    const measure = this.widthMeter();
+    const width = (element: Element | null): number | undefined => (element ? measure(element) : undefined);
     const cells = all(".wallet .sub").map((sub) => {
       const badge = width(sub.querySelector(".stake .badge"));
-      return { room: sub.clientWidth, first: part(sub, ".s").getBoundingClientRect().width, ...(badge === undefined ? {} : { second: badge }) };
+      return { room: sub.clientWidth, first: measure(part(sub, ".s")), ...(badge === undefined ? {} : { second: badge }) };
     });
     const inline = allFit(cells, STAKE_GAP);
     if (inline !== this.stakeInline) this.stakeInline = inline;
@@ -246,9 +247,9 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
       const chip = width(group.querySelector(".gchip"));
       return {
         room: group.clientWidth,
-        left: part(group, ".gleft").getBoundingClientRect().width,
+        left: measure(part(group, ".gleft")),
         ...(chip === undefined ? {} : { chip }),
-        value: part(group, ".sum").getBoundingClientRect().width,
+        value: measure(part(group, ".sum")),
       };
     });
     const groupsLayout = blockLayout(groups);
@@ -259,9 +260,9 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
       // Below the name, the row reaches under the chevron. Not the whole
       // row's width: in an open group that counts its indent.
       below: tap.clientWidth + UNDER_CHEVRON,
-      left: [...part(tap, ".s .units").getClientRects()].reduce((sum, rect) => sum + rect.width, 0),
-      chip: part(tap, ".wchip").getBoundingClientRect().width,
-      value: part(tap, ".val").getBoundingClientRect().width,
+      left: measure(part(tap, ".s .units"), true),
+      chip: measure(part(tap, ".wchip")),
+      value: measure(part(tap, ".val")),
     }));
     const rowsLayout = blockLayout(rows);
     if (rowsLayout !== this.rowsLayout) this.rowsLayout = rowsLayout;

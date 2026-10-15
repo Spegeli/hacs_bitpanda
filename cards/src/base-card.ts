@@ -100,6 +100,26 @@ export abstract class BitpandaCard<C extends BaseConfig> extends LitElement {
    * width changes. */
   protected fitLayout(): void {}
 
+  /** A function giving an element's width in layout pixels, the unit of
+   * clientWidth and of the CSS widths the card sets. getBoundingClientRect
+   * reports what the screen shows: smaller while Home Assistant's card
+   * dialog scales the card in, and no resize follows when the animation
+   * ends. Its share of the card's own width says by how much; to a
+   * hundredth of a pixel, so that undoing it adds no fraction a column
+   * would round up to a pixel more. */
+  protected widthMeter(): (element: Element, lines?: boolean) => number {
+    const shown = this.getBoundingClientRect().width;
+    const scale = shown > 0 && this.offsetWidth > 0 ? shown / this.offsetWidth : 1;
+    // With `lines`, the widths of an inline element's line boxes added up:
+    // what it needs on one line, however it wraps now.
+    return (element, lines = false) => {
+      const width = lines
+        ? [...element.getClientRects()].reduce((sum, rect) => sum + rect.width, 0)
+        : element.getBoundingClientRect().width;
+      return Math.round((width / scale) * 100) / 100;
+    };
+  }
+
   /** Whether an update can change what fitLayout measures: any, unless a
    * card knows better. */
   protected remeasures(_changed: PropertyValues): boolean {

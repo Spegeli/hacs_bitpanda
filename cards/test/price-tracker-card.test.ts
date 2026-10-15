@@ -526,6 +526,34 @@ describe("the Bitpanda Price Tracker card", () => {
     }
   });
 
+  it("measures the columns in layout pixels, also while a dialog shows the card scaled down", async () => {
+    // Home Assistant's card dialog opens with a scale animation: the boxes
+    // the browser reports are smaller than the layout, and a column set from
+    // them would be too narrow for its widest price.
+    const scale = 0.9;
+    const room = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(393);
+    const layout = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this.tagName === "BITPANDA-PRICE-TRACKER-CARD" ? 393 : 0;
+    });
+    const rect = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const list = this.classList;
+      const own = this.tagName === "BITPANDA-PRICE-TRACKER-CARD" ? 393 : list.contains("p") ? (this.textContent ?? "").trim().length * 7 : list.contains("pct") ? 60 : list.contains("a") ? 65 : 0;
+      const width = own * scale;
+      return { width, height: 0, x: 0, y: 0, top: 0, left: 0, right: width, bottom: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    try {
+      const card = await mount();
+      const widest = Math.max(...all(card, ".price-row .p").map((price) => (price.textContent ?? "").trim().length * 7));
+      const rows = one(card, ".rows") as HTMLElement;
+      await vi.waitFor(() => expect(rows.style.getPropertyValue("--bp-price")).toBe(`${widest}px`));
+      expect(rows.style.getPropertyValue("--bp-change")).toBe("78px");
+    } finally {
+      room.mockRestore();
+      layout.mockRestore();
+      rect.mockRestore();
+    }
+  });
+
   it("a list row's columns are the shared widths, before the first measurement as wide as their contents", () => {
     const css = (PriceTrackerCard.styles as unknown as { cssText: string }[]).map((sheet) => sheet.cssText).join("\n");
     const rule = (selector: string): string | undefined =>

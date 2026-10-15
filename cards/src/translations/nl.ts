@@ -43,7 +43,7 @@ export const nl: Texts = {
   eye_hide: "Bedragen verbergen",
   eye_show: "Bedragen tonen",
   change_since: "Verandering sinds {date}",
-  ecb_footer: "Prijzen in {currency}: de EUR-prijzen van Bitpanda, omgerekend tegen de ECB-referentiekoers van {date}. Hun verandering omvat de beweging van de koers.",
+  ecb_footer: "Prijzen in {currency}: de EUR-prijzen van Bitpanda, omgerekend tegen de ECB-referentiekoers van {date}. De percentages en bedragen in {currency} bevatten daardoor ook de beweging van de wisselkoers.",
   empty_portfolio: "Stel het Bitpanda Portfolio in of schakel het in om het hier te zien.",
   empty_wallets: "Nog geen wallets.",
   empty_selection_wallets: "Geen wallets in de selectie van deze kaart.",

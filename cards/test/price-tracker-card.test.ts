@@ -252,10 +252,15 @@ describe("the Bitpanda Price Tracker card", () => {
     expect(rows(card)[0]?.price).toBe("105312.09 USD");
   });
 
-  it("the footer names the ECB date outside EUR", async () => {
+  it("the footer names the ECB date outside EUR, and that the change in that currency includes the rate's", async () => {
+    // German first: the last card mounted sets the editors' language.
+    const german = await mount({ currency: "USD" }, trackerHass({ language: "de" }));
+    expect(textOf(one(german, ".foot"))).toBe(
+      "Preise in USD: Bitpandas Euro-Preise, umgerechnet zum EZB-Referenzkurs vom 10. Oktober. Die Prozente und Beträge in USD enthalten deshalb auch die Bewegung des Wechselkurses.",
+    );
     const card = await mount({ currency: "USD" });
     expect(textOf(one(card, ".foot"))).toBe(
-      "Prices in USD: Bitpanda's EUR prices converted at the ECB reference rate of October 10. Their change includes the rate's move.",
+      "Prices in USD: Bitpanda's EUR prices converted at the ECB reference rate of October 10. The percentages and amounts in USD therefore also include the exchange rate's move.",
     );
   });
 

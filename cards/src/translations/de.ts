@@ -43,7 +43,7 @@ export const de: Texts = {
   eye_hide: "Beträge verbergen",
   eye_show: "Beträge anzeigen",
   change_since: "Änderung seit {date}",
-  ecb_footer: "Preise in {currency}: Bitpandas Euro-Preise, umgerechnet zum EZB-Referenzkurs vom {date}. Ihre Änderung enthält die Bewegung des Kurses.",
+  ecb_footer: "Preise in {currency}: Bitpandas Euro-Preise, umgerechnet zum EZB-Referenzkurs vom {date}. Die Prozente und Beträge in {currency} enthalten deshalb auch die Bewegung des Wechselkurses.",
   empty_portfolio: "Richte das Bitpanda Portfolio ein oder aktiviere es, dann erscheint es hier.",
   empty_wallets: "Noch keine Wallets.",
   empty_selection_wallets: "Keine Wallets in der Auswahl dieser Karte.",

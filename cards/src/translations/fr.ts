@@ -45,7 +45,7 @@ export const fr: Texts = {
   eye_hide: "Masquer les montants",
   eye_show: "Afficher les montants",
   change_since: "Variation depuis le {date}",
-  ecb_footer: "Prix en {currency} : prix en EUR de Bitpanda convertis au taux de référence de la BCE du {date}. Leur variation inclut celle du taux.",
+  ecb_footer: "Prix en {currency} : prix en EUR de Bitpanda convertis au taux de référence de la BCE du {date}. Les pourcentages et les montants en {currency} incluent donc aussi la variation du taux de change.",
   empty_portfolio: "Configurez le Bitpanda Portfolio ou activez-le pour le voir ici.",
   empty_wallets: "Aucun wallet pour le moment.",
   empty_selection_wallets: "Aucun wallet dans la sélection de cette carte.",

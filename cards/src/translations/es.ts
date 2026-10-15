@@ -45,7 +45,7 @@ export const es: Texts = {
   eye_hide: "Ocultar importes",
   eye_show: "Mostrar importes",
   change_since: "Variación desde el {date}",
-  ecb_footer: "Precios en {currency}: precios en EUR de Bitpanda convertidos al tipo de referencia del BCE del {date}. Su variación incluye la del tipo.",
+  ecb_footer: "Precios en {currency}: precios en EUR de Bitpanda convertidos al tipo de referencia del BCE del {date}. Los porcentajes y los importes en {currency} incluyen por tanto también la variación del tipo de cambio.",
   empty_portfolio: "Configura el Bitpanda Portfolio o actívalo para verlo aquí.",
   empty_wallets: "Todavía no hay wallets.",
   empty_selection_wallets: "Ningún wallet en la selección de esta tarjeta.",

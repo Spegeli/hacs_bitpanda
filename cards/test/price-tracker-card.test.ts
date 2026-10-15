@@ -722,9 +722,11 @@ describe("the Bitpanda Price Tracker card", () => {
   it("no tracked asset shows the empty state, for a Price Tracker not set up or set up without assets", async () => {
     // German first: the last card mounted sets the editors' language.
     const german = await mount({}, makeHass({ devices: [portfolioDevice()], language: "de" }));
-    expect(textOf(one(german, ".empty"))).toBe("Richte den Bitpanda Price Tracker ein und füge Assets hinzu, dann erscheinen hier Preise.");
+    expect(textOf(one(german, ".empty"))).toBe(
+      "Richte den Bitpanda Price Tracker ein oder aktiviere ihn und füge Assets hinzu, dann erscheinen sie hier.",
+    );
     const card = await mount({}, makeHass({ devices: [portfolioDevice()] }));
-    expect(textOf(one(card, ".empty"))).toBe("Set up the Bitpanda Price Tracker and add assets to it to see prices here.");
+    expect(textOf(one(card, ".empty"))).toBe("Set up the Bitpanda Price Tracker or enable it and add assets to it to see them here.");
   });
 
   it("the editor form lists exactly the card's options", async () => {

@@ -435,9 +435,13 @@ describe("the Bitpanda Portfolio card", () => {
     expect(textOf(one(card, ".chip"))).toBe("—");
   });
 
-  it("no portfolio shows the empty state", async () => {
+  it("no portfolio asks to set it up or enable it, without the eye", async () => {
+    const german = await mount({}, makeHass({ language: "de" }));
+    expect(textOf(one(german, ".empty"))).toBe("Richte das Bitpanda Portfolio ein oder aktiviere es, dann erscheint es hier.");
     const card = await mount({}, makeHass());
-    expect(textOf(one(card, ".empty"))).toBe("Set up the Bitpanda Portfolio to see it here.");
+    expect(textOf(one(card, ".empty"))).toBe("Set up the Bitpanda Portfolio or enable it to see it here.");
+    // Nothing to hide: no eye.
+    expect(one(card, ".eye")).toBeNull();
   });
 
   it("no wallets says so", async () => {

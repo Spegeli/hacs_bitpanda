@@ -309,7 +309,8 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
     const refs = findPortfolio(hass);
     const eye = { hidden: this.amountsHidden, toggle: () => this.toggleAmounts() };
     const title = config.title || "Bitpanda Portfolio";
-    if (!refs) return html`<ha-card>${header(hass, title, eye)}${emptyState(t(hass, "empty_portfolio"))}</ha-card>`;
+    // Without a Portfolio there is nothing to hide: no eye.
+    if (!refs) return html`<ha-card>${header(hass, title)}${emptyState(t(hass, "empty_portfolio"))}</ha-card>`;
     // A divider stands between two shown parts, never at the top.
     const top = config.show_total !== false || config.show_graph !== false;
     const pair = config.show_cash !== false || config.show_allocation !== false;

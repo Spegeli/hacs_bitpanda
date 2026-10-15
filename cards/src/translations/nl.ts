@@ -51,7 +51,7 @@ export const nl: Texts = {
   picker_price_tracker: "Prijzen en veranderingen van de assets die je volgt, elk met een lijn, als lijst of tegels.",
   invalid_option: "Ongeldige waarde voor ‘{option}’: {value}. Toegestaan: {allowed}.",
   allowed_text: "tekst",
-  allowed_devices: "een lijst met apparaat-ID's",
+  allowed_assets: "een lijst met asset-ID's of apparaat-ID's",
   allowed_groups: "een lijst met waarden uit {values}",
   group_content: "Inhoud",
   group_wallets: "Wallets",

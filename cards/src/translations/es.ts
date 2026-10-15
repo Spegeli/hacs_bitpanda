@@ -52,7 +52,7 @@ export const es: Texts = {
   picker_price_tracker: "Precios y cambios de los activos que sigues, cada uno con su línea, en lista o en mosaicos.",
   invalid_option: "Valor no válido para «{option}»: {value}. Permitidos: {allowed}.",
   allowed_text: "texto",
-  allowed_devices: "una lista de ID de dispositivo",
+  allowed_assets: "una lista de ID de activo o ID de dispositivo",
   allowed_groups: "una lista de {values}",
   group_content: "Contenido",
   group_wallets: "Wallets",

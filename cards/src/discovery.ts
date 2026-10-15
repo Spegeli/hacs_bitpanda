@@ -147,18 +147,27 @@ export function selectGroups<T extends AssetInfo>(items: readonly T[], mode: Ass
   return items.filter((item) => picked.includes(item.category ?? "other") === keep);
 }
 
+/** Whether `id` names `item`: its Bitpanda asset ID -- what a card's
+ * configuration holds -- or its device ID, as configurations from before
+ * hold it. */
+const names = (item: AssetInfo, id: string): boolean => id === item.deviceId || (id !== "" && id === item.assetId);
+
 /** The assets a card shows: all, all but the picked, or only the picked in
- * the order picked. A picked device that no longer exists is skipped. */
+ * the order picked, each once. A picked asset without a device right now is
+ * skipped. */
 export function selectAssets<T extends AssetInfo>(
   items: readonly T[],
   mode: AssetSelection,
   picked: readonly string[],
 ): T[] {
-  if (mode === "all_except") return items.filter((item) => !picked.includes(item.deviceId));
+  if (mode === "all_except") return items.filter((item) => !picked.some((id) => names(item, id)));
   if (mode === "only") {
-    return picked
-      .map((deviceId) => items.find((item) => item.deviceId === deviceId))
-      .filter((item): item is T => item !== undefined);
+    const shown: T[] = [];
+    for (const id of picked) {
+      const item = items.find((candidate) => names(candidate, id));
+      if (item && !shown.includes(item)) shown.push(item);
+    }
+    return shown;
   }
   return [...items];
 }

@@ -52,7 +52,7 @@ export const it: Texts = {
   picker_price_tracker: "Prezzi e variazioni degli asset che segui, ognuno con la sua linea, come elenco o riquadri.",
   invalid_option: "Valore non valido per «{option}»: {value}. Consentiti: {allowed}.",
   allowed_text: "testo",
-  allowed_devices: "un elenco di ID dispositivo",
+  allowed_assets: "un elenco di ID asset o ID dispositivo",
   allowed_groups: "un elenco di valori tra {values}",
   group_content: "Contenuto",
   group_wallets: "Wallet",

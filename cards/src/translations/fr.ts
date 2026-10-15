@@ -52,7 +52,7 @@ export const fr: Texts = {
   picker_price_tracker: "Prix et variations des actifs que vous suivez, chacun avec sa courbe, en liste ou en tuiles.",
   invalid_option: "Valeur non valide pour « {option} » : {value}. Valeurs possibles : {allowed}.",
   allowed_text: "texte",
-  allowed_devices: "une liste d'ID d'appareils",
+  allowed_assets: "une liste d'ID d'actifs ou d'ID d'appareils",
   allowed_groups: "une liste d'éléments parmi {values}",
   group_content: "Contenu",
   group_wallets: "Wallets",

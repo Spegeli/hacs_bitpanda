@@ -7,7 +7,7 @@ import {
   computeHelper,
   computeLabel,
   currencyCode,
-  deviceList,
+  assetList,
   divider,
   expandable,
   groupFields,
@@ -26,7 +26,7 @@ import { rememberLocale } from "../src/i18n";
 import { makeHass } from "./fixtures";
 
 describe("validateConfig", () => {
-  const options = { title: text, timeframe: oneOf(["day", "week"]), hide_amounts: bool, limit: nonNegativeInt, assets: deviceList, currency: currencyCode };
+  const options = { title: text, timeframe: oneOf(["day", "week"]), hide_amounts: bool, limit: nonNegativeInt, assets: assetList, currency: currencyCode };
 
   it("accepts a valid configuration and leaves unknown keys alone", () => {
     const config = { type: "custom:x", title: "Mine", timeframe: "week", hide_amounts: true, limit: 0, assets: ["a"], currency: "USD", something: 1 };
@@ -74,15 +74,15 @@ describe("validateConfig", () => {
 
   it("names the allowed values in the user's language", () => {
     rememberLocale(makeHass());
-    expect(() => validateConfig({ type: "custom:x", assets: "Bitcoin" }, { assets: deviceList })).toThrowError(
-      'Invalid value for “assets”: "Bitcoin". Allowed: a list of device IDs.',
+    expect(() => validateConfig({ type: "custom:x", assets: "Bitcoin" }, { assets: assetList })).toThrowError(
+      'Invalid value for “assets”: "Bitcoin". Allowed: a list of asset IDs or device IDs.',
     );
     expect(() => validateConfig({ type: "custom:x", title: 5 }, { title: text })).toThrowError('Invalid value for “title”: 5. Allowed: text.');
     rememberLocale(makeHass({ language: "de" }));
     expect(() => validateConfig({ type: "custom:x", groups: ["future"] }, { groups: groupList })).toThrowError(
       'Ungültiger Wert für „groups“: ["future"]. Erlaubt: eine Liste aus crypto, stock, etf, etc, index, metal, other.',
     );
-    expect(() => validateConfig({ type: "custom:x", assets: "Bitcoin" }, { assets: deviceList })).toThrowError(/Erlaubt: eine Liste von Geräte-IDs\./);
+    expect(() => validateConfig({ type: "custom:x", assets: "Bitcoin" }, { assets: assetList })).toThrowError(/Erlaubt: eine Liste von Asset-IDs oder Geräte-IDs\./);
     rememberLocale(makeHass());
   });
 

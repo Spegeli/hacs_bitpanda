@@ -9,7 +9,7 @@ import {
   computeHelper,
   computeLabel,
   currencyCode,
-  deviceList,
+  assetList,
   divider,
   editorHass,
   expandable,
@@ -349,7 +349,7 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
       group_selection: oneOf(ASSET_SELECTIONS),
       groups: groupList,
       asset_selection: oneOf(ASSET_SELECTIONS),
-      assets: deviceList,
+      assets: assetList,
       limit: nonNegativeInt,
     });
   }

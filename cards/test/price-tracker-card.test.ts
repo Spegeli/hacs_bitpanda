@@ -239,6 +239,23 @@ describe("the Bitpanda Price Tracker card", () => {
     expect(textOf(one(tiles, ".empty"))).toBe("No assets in this card's selection.");
   });
 
+  it("finds the chosen assets by their asset IDs, in the order chosen", async () => {
+    const card = await mount({ asset_selection: "only", assets: ["id-sui", "id-btc"], sort: "selection" });
+    expect(rows(card).map((row) => row.name)).toEqual(["Sui", "Bitcoin"]);
+    const except = await mount({ asset_selection: "all_except", assets: ["id-eth"] });
+    expect(rows(except).map((row) => row.name)).not.toContain("Ethereum");
+  });
+
+  it("keeps a choice by asset ID when the Price Tracker was set up again, a choice by device ID not", async () => {
+    // Deleted and set up again, the service creates its devices anew: new
+    // device IDs, the same asset IDs.
+    const again = ASSETS.map((device) => ({ ...device, id: `${device.id}-new` }));
+    const byAsset = await mount({ asset_selection: "only", assets: ["id-btc"] }, trackerHass({ devices: again }));
+    expect(rows(byAsset).map((row) => row.name)).toEqual(["Bitcoin"]);
+    const byDevice = await mount({ asset_selection: "only", assets: ["dev-price-btc"] }, trackerHass({ devices: again }));
+    expect(rows(byDevice)).toEqual([]);
+  });
+
   it("all except leaves the picked out", async () => {
     const card = await mount({ asset_selection: "all_except", assets: ["dev-price-eth"] });
     expect(rows(card).map((row) => row.name)).not.toContain("Ethereum");

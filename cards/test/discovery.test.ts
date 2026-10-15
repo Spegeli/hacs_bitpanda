@@ -248,6 +248,20 @@ describe("selectAssets", () => {
     expect(selectAssets(items, "only", ["gone", "b"]).map((item) => item.deviceId)).toEqual(["b"]);
     expect(selectAssets(items, "all_except", ["gone"]).map((item) => item.deviceId)).toEqual(["a", "b", "c"]);
   });
+
+  it("picks an asset by its asset ID as by its device ID", () => {
+    expect(selectAssets(items, "only", ["3", "a"]).map((item) => item.deviceId)).toEqual(["c", "a"]);
+    expect(selectAssets(items, "all_except", ["2"]).map((item) => item.deviceId)).toEqual(["a", "c"]);
+  });
+
+  it("shows an asset named twice, as device and as asset ID, once, at its first mention", () => {
+    expect(selectAssets(items, "only", ["c", "2", "3", "b", "c"]).map((item) => item.deviceId)).toEqual(["c", "b"]);
+  });
+
+  it("matches no asset by an empty asset ID", () => {
+    const blank = [{ deviceId: "x", assetId: "", name: "X", shortName: "X", symbol: "X" }];
+    expect(selectAssets(blank, "only", [""])).toEqual([]);
+  });
 });
 
 describe("selectGroups", () => {

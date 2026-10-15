@@ -51,7 +51,7 @@ export const de: Texts = {
   picker_price_tracker: "Preise und Änderungen deiner verfolgten Assets, je mit Verlauf, als Liste oder Kacheln.",
   invalid_option: "Ungültiger Wert für „{option}“: {value}. Erlaubt: {allowed}.",
   allowed_text: "Text",
-  allowed_devices: "eine Liste von Geräte-IDs",
+  allowed_assets: "eine Liste von Asset-IDs oder Geräte-IDs",
   allowed_groups: "eine Liste aus {values}",
   group_content: "Inhalt",
   group_wallets: "Wallets",

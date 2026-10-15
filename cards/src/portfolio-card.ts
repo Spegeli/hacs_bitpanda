@@ -8,7 +8,7 @@ import {
   booleanField,
   computeHelper,
   computeLabel,
-  deviceList,
+  assetList,
   divider,
   editorHass,
   expandable,
@@ -250,7 +250,7 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
       group_selection: oneOf(ASSET_SELECTIONS),
       groups: groupList,
       asset_selection: oneOf(ASSET_SELECTIONS),
-      assets: deviceList,
+      assets: assetList,
       hide_amounts: bool,
     });
   }

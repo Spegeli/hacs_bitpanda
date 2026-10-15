@@ -52,7 +52,7 @@ export const en = {
   picker_price_tracker: "Prices and changes of the assets you track, each with a line, as a list or tiles.",
   invalid_option: "Invalid value for “{option}”: {value}. Allowed: {allowed}.",
   allowed_text: "text",
-  allowed_devices: "a list of device IDs",
+  allowed_assets: "a list of asset IDs or device IDs",
   allowed_groups: "a list of {values}",
   group_content: "Content",
   group_wallets: "Wallets",

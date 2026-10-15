@@ -53,7 +53,7 @@ export const pl: Texts = {
   picker_price_tracker: "Ceny i zmiany śledzonych aktywów, każde z wykresem, jako lista lub kafelki.",
   invalid_option: "Nieprawidłowa wartość dla „{option}”: {value}. Dozwolone: {allowed}.",
   allowed_text: "tekst",
-  allowed_devices: "lista identyfikatorów urządzeń",
+  allowed_assets: "lista identyfikatorów aktywów lub urządzeń",
   allowed_groups: "lista wartości spośród {values}",
   group_content: "Zawartość",
   group_wallets: "Portfele",

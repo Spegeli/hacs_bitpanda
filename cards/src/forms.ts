@@ -26,8 +26,8 @@ export const nonNegativeInt: Validator = {
   check: (value) => typeof value === "number" && Number.isInteger(value) && value >= 0,
 };
 
-export const deviceList: Validator = {
-  allowed: () => t(undefined, "allowed_devices"),
+export const assetList: Validator = {
+  allowed: () => t(undefined, "allowed_assets"),
   check: (value) => Array.isArray(value) && value.every((item) => typeof item === "string"),
 };
 

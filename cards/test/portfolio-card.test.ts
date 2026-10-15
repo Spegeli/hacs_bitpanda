@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { PortfolioCard, blockLayout, groupReturn } from "../src/portfolio-card";
+import { PortfolioCard, allocationShare, blockLayout, groupReturn } from "../src/portfolio-card";
 import { windowFor } from "../src/statistics";
 import type { Timeframe } from "../src/types";
 import { BTC, ETH, EUNL, XAU, makeHass, openEditor, portfolioDevice, walletDevice, type FakeHass, type FakeWallet } from "./fixtures";
@@ -165,7 +165,7 @@ describe("the Bitpanda Portfolio card", () => {
     const legend = all(card, ".legend > span").map((item) => textOf(item));
     // crypto 5890.11 + 1269.91, etf 2045.10, cash plus 2000, cash 812.40, metal 67.01 of 12084.53;
     // without translations a category shows its key.
-    expect(legend).toEqual(["crypto 59%", "etf 17%", "Cash Plus 17%", "Cash 7%", "metal <1%"]);
+    expect(legend).toEqual(["crypto 59.25%", "etf 16.92%", "Cash Plus 16.55%", "Cash 6.72%", "metal <1%"]);
     expect(all(card, ".bar > span")).toHaveLength(5);
   });
 
@@ -552,6 +552,20 @@ describe("what the Portfolio card shows, by choice", () => {
     const hass = sixWallets();
     expect(entry?.getEntitySuggestion?.(hass, "sensor.bitpanda_portfolio_total_value")).toMatchObject({ config: { type: "custom:bitpanda-portfolio-card" } });
     expect(entry?.getEntitySuggestion?.(hass, "sensor.bitpanda_btc_wallet_total")).toMatchObject({ config: { type: "custom:bitpanda-portfolio-card" } });
+  });
+});
+
+describe("allocationShare", () => {
+  it("reads a share from 1 % up with two decimals and one under 1 % as <1 %, as Bitpanda's app does", () => {
+    const en = makeHass();
+    expect(allocationShare(en, 99.76)).toBe("99.76%");
+    expect(allocationShare(en, 99.997)).toBe("100.00%");
+    expect(allocationShare(en, 100)).toBe("100.00%");
+    expect(allocationShare(en, 1)).toBe("1.00%");
+    expect(allocationShare(en, 0.999)).toBe("<1%");
+    const de = makeHass({ language: "de" });
+    expect(allocationShare(de, 99.76)).toBe("99,76 %");
+    expect(allocationShare(de, 0.2)).toBe("<1 %");
   });
 });
 

@@ -150,10 +150,11 @@ export function formatPercent(hass: Hass, value: number | undefined): { text: st
   return { text: `${number}${space}%`, direction };
 }
 
-/** A share or a rate without a sign: "40%", "2.9%", "59 %" in German. */
-export function formatShare(hass: Hass, value: number, digits: number): string {
+/** A share or a rate without a sign: "40%", "2.9%", "59 %" in German; with
+ * `fixed` always `digits` decimals ("99.76%", "100.00%"). */
+export function formatShare(hass: Hass, value: number, digits: number, fixed = false): string {
   const space = percentSpace(hass);
-  return `${formatNumber(hass, value, digits)}${space}%`;
+  return `${formatNumber(hass, value, digits, fixed ? digits : 0)}${space}%`;
 }
 
 /** The class that colours a change: gains in the theme's success colour,

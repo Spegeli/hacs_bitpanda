@@ -69,6 +69,12 @@ const COLORS: Record<Category | "cash" | "cash_plus", string> = {
 
 const categoryOf = (wallet: WalletRefs): Category => wallet.category ?? "other";
 
+/** A part's share of the allocation, as Bitpanda's app shows it: from 1 %
+ * up with two decimals, below it "<1 %". */
+export function allocationShare(hass: Hass, value: number): string {
+  return value < 1 ? `<${formatShare(hass, 1, 0)}` : formatShare(hass, value, 2, true);
+}
+
 /** The wallets a card shows: those of its asset groups, then of its assets. */
 const shownWallets = (refs: PortfolioRefs, config: PortfolioConfig): WalletRefs[] =>
   selectAssets(selectGroups(refs.wallets, config.group_selection ?? "all", config.groups ?? []), config.asset_selection ?? "all", config.assets ?? []);
@@ -367,12 +373,11 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
       .map((part) => ({ ...part, share: total > 0 ? ((part.value as number) / total) * 100 : 0 }))
       .filter((part) => part.share > 0)
       .sort((a, b) => b.share - a.share);
-    const share = (value: number): string => (value < 1 ? `<${formatShare(hass, 1, 0)}` : formatShare(hass, value, 0));
     return html`<div class="bar" role="img" aria-label=${t(hass, "opt_show_allocation")}>
         ${shown.map((part) => html`<span style="width:${part.share}%;background:${COLORS[part.key]}"></span>`)}
       </div>
       <div class="legend">
-        ${shown.map((part) => html`<span><i style="background:${COLORS[part.key]}"></i>${part.label} ${share(part.share)}</span>`)}
+        ${shown.map((part) => html`<span><i style="background:${COLORS[part.key]}"></i>${part.label} ${allocationShare(hass, part.share)}</span>`)}
       </div>`;
   }
 

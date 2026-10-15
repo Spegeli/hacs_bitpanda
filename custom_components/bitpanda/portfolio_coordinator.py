@@ -1,8 +1,9 @@
 """Coordinators of the Portfolio service.
 
 Every request here carries the API key, except the asset lookups, which the
-AssetDirectory makes keyless. Every 401 raises ConfigEntryAuthFailed, which
-Home Assistant turns into the reauth dialog.
+AssetDirectory makes keyless, and the wallets' ticker prices (WalletPrices),
+read keyless too. Every 401 of a keyed request raises ConfigEntryAuthFailed,
+which Home Assistant turns into the reauth dialog.
 """
 from __future__ import annotations
 
@@ -24,7 +25,12 @@ from homeassistant.helpers.update_coordinator import (
 )
 from homeassistant.util import dt as dt_util
 
-from .api import BitpandaApiClient, BitpandaApiError, BitpandaAuthError
+from .api import (
+    BitpandaApiClient,
+    BitpandaApiError,
+    BitpandaAuthError,
+    BitpandaRateLimitError,
+)
 from .assets import AssetDirectory
 from .const import (
     DOMAIN,
@@ -43,6 +49,7 @@ from .const import (
     REWARDS_UPDATE_INTERVAL,
 )
 from .portfolio_store import KnownWallets, OperationsHistory, RewardMarks
+from .price_coordinator import EcbCoordinator, convert_price
 from .portfolio_model import (
     PORTFOLIO_FIGURES,
     EarnData,
@@ -103,6 +110,199 @@ def _update_failed(err: BitpandaApiError) -> UpdateFailed:
         translation_key=key,
         translation_placeholders={name: str(value) for name, value in placeholders.items()},
     )
+
+
+# Ticker requests in a row without any answer -- a timeout, or no
+# connection -- that end a round of wallet prices, as the Price Tracker's.
+_TICKER_UNANSWERED_IN_A_ROW = 2
+
+# A round less than this after the last that read the same assets asks
+# nothing: a refresh by hand (bitpanda.refresh, 10 seconds apart at the least
+# for the Portfolio) drives ticker requests no faster than the Price
+# Tracker's 60 seconds.
+_TICKER_REUSE = timedelta(seconds=60)
+
+# How long a wallet keeps its last ticker price through failed requests.
+_TICKER_HOLD = timedelta(minutes=15)
+
+
+class WalletPrices:
+    """Each wallet asset's price from Bitpanda's public ticker, in a round of
+    its own after every successful portfolio refresh (async_request_round):
+    keyless, one request per asset after the other, each with the ticker's
+    timeout. Each asset's listeners hear of its price as soon as it arrives;
+    the Portfolio's figures never wait for a round.
+
+    /tickers answers in EUR. A Portfolio in another currency converts with
+    the ECB rate of that currency (`ecb`, read every 6 hours) as the Price
+    Tracker does, and reads no ticker while it has no such rate: never an
+    EUR price shown in another currency.
+
+    A failed request, or an unusable price, leaves the asset's last ticker
+    price; a 429, or _TICKER_UNANSWERED_IN_A_ROW requests in a row without
+    any answer -- an error the client does not know counts as none --, ends
+    the round. A price is kept while it is at most _TICKER_HOLD old; after
+    that, and before the first, the wallet has none (price_of). Rounds never
+    overlap: rounds asked for while one runs become one that starts when it
+    ends. A round less than _TICKER_REUSE after the last that read the same
+    assets asks nothing. A wallet without a price for more than _TICKER_HOLD
+    -- since its last one, or since it was first asked -- is warned about
+    once, and its return logged once at INFO.
+    """
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: BitpandaApiClient,
+        currency: str,
+        ecb: EcbCoordinator | None,
+    ) -> None:
+        self._hass = hass
+        self._client = client
+        self._currency = currency
+        self._ecb = ecb
+        # Asset id -> its last ticker price, and when it was read.
+        self._prices: dict[str, tuple[float, datetime]] = {}
+        # Asset id -> what to call when its price changes.
+        self._listeners: dict[str, list[Callable[[], None]]] = {}
+        # The last round that asked: when, and the assets it read.
+        self._last: tuple[datetime, frozenset[str]] | None = None
+        self._task: asyncio.Task[None] | None = None
+        # The assets of a round asked for while one runs.
+        self._next: list[str] | None = None
+        # Asset id -> when it was first asked for while it never had a price.
+        self._asked_since: dict[str, datetime] = {}
+        # The assets warned about: without a price for too long.
+        self._warned: set[str] = set()
+
+    def price_of(self, asset_id: str) -> float | None:
+        """The asset's last ticker price, in the Portfolio currency, while it
+        is at most _TICKER_HOLD old; else None."""
+        known = self._prices.get(asset_id)
+        if known is None or dt_util.utcnow() - known[1] > _TICKER_HOLD:
+            return None
+        return known[0]
+
+    @callback
+    def async_listen(self, asset_id: str, update: Callable[[], None]) -> Callable[[], None]:
+        """Call `update` whenever the asset's price arrives; returns the
+        removal."""
+        listeners = self._listeners.setdefault(asset_id, [])
+        listeners.append(update)
+
+        @callback
+        def _remove() -> None:
+            if update in listeners:
+                listeners.remove(update)
+
+        return _remove
+
+    @callback
+    def async_request_round(self, asset_ids: list[str]) -> None:
+        """A round over `asset_ids`: now, or after the one under way."""
+        if self._task is not None and not self._task.done():
+            self._next = list(asset_ids)
+            return
+        self._task = self._hass.async_create_background_task(
+            self._async_rounds(list(asset_ids)), f"{DOMAIN} wallet prices"
+        )
+
+    async def _async_rounds(self, asset_ids: list[str]) -> None:
+        while True:
+            await self.async_round(asset_ids)
+            if self._next is None:
+                return
+            asset_ids, self._next = self._next, None
+
+    async def async_wait_for_round(self, timeout: float) -> None:
+        """Wait, at most `timeout` seconds, for the round under way -- and a
+        round asked for to follow it -- to end. Never ends it."""
+        task = self._task
+        if task is not None and not task.done():
+            await asyncio.wait({task}, timeout=timeout)
+
+    @callback
+    def async_stop(self) -> None:
+        """End the round under way and forget one asked for: the entry
+        unloads."""
+        self._next = None
+        if self._task is not None:
+            self._task.cancel()
+
+    async def async_round(self, asset_ids: list[str]) -> None:
+        """Read the price of each of `asset_ids`, telling each asset's
+        listeners as its price arrives. One round itself: rounds are asked
+        for with async_request_round, which keeps them from overlapping."""
+        now = dt_util.utcnow()
+        if (
+            self._last is not None
+            and now - self._last[0] < _TICKER_REUSE
+            and self._last[1].issuperset(asset_ids)
+        ):
+            return
+        rate: float | None = None
+        if self._currency != "EUR":
+            rates = None if self._ecb is None else self._ecb.data
+            rate = None if rates is None else rates.rates.get(self._currency)
+            if rate is None:
+                return
+        self._last = (now, frozenset(asset_ids))
+        try:
+            await self._async_ask(asset_ids, rate)
+        finally:
+            self._warn_about_the_unpriced(asset_ids)
+
+    async def _async_ask(self, asset_ids: list[str], rate: float | None) -> None:
+        unanswered = 0
+        for asset_id in asset_ids:
+            try:
+                ticker = await self._client.async_get_ticker(asset_id)
+            except BitpandaApiError as err:
+                _LOGGER.debug("No ticker price for %s: %s", asset_id, err.kind)
+                if isinstance(err, BitpandaRateLimitError) or err.kind == ERROR_RATE_LIMITED:
+                    break
+                if err.kind in (ERROR_TIMEOUT, ERROR_CONNECTION):
+                    unanswered += 1
+                    if unanswered >= _TICKER_UNANSWERED_IN_A_ROW:
+                        break
+                else:
+                    unanswered = 0
+                continue
+            except Exception as err:  # noqa: BLE001 - optional data, never fatal
+                # An error the client does not know: no answer either.
+                _LOGGER.debug("No ticker price for %s: %s", asset_id, type(err).__name__)
+                unanswered += 1
+                if unanswered >= _TICKER_UNANSWERED_IN_A_ROW:
+                    break
+                continue
+            unanswered = 0
+            price = convert_price(ticker.get("price"), rate)
+            if price is None or price <= 0:
+                _LOGGER.debug("No usable ticker price for %s", asset_id)
+                continue
+            self._prices[asset_id] = (price, dt_util.utcnow())
+            self._asked_since.pop(asset_id, None)
+            if asset_id in self._warned:
+                self._warned.discard(asset_id)
+                _LOGGER.info("Bitpanda's price ticker gives a price for asset %s again", asset_id)
+            for update in list(self._listeners.get(asset_id, ())):
+                update()
+
+    def _warn_about_the_unpriced(self, asset_ids: list[str]) -> None:
+        """Warn, once, about each of `asset_ids` without a price for more than
+        _TICKER_HOLD: its wallet shows none until the ticker answers."""
+        now = dt_util.utcnow()
+        for asset_id in asset_ids:
+            known = self._prices.get(asset_id)
+            since = known[1] if known else self._asked_since.setdefault(asset_id, now)
+            if now - since > _TICKER_HOLD and asset_id not in self._warned:
+                self._warned.add(asset_id)
+                _LOGGER.warning(
+                    "Bitpanda's price ticker has given no price for asset %s for more "
+                    "than 15 minutes: its wallet shows no price, no 24-hour figures and "
+                    "no value of its rewards until the ticker answers again",
+                    asset_id,
+                )
 
 
 class PortfolioCoordinator(TolerantCoordinator[PortfolioData]):
@@ -644,6 +844,12 @@ class PortfolioRuntime:
     known_wallets: KnownWallets = field(repr=False)
     reward_marks: RewardMarks = field(repr=False)
     operations: OperationsHistory = field(repr=False)
+    # The ECB rates of a Portfolio whose currency is not EUR, for its
+    # wallets' ticker prices (WalletPrices); None in EUR.
+    ecb: EcbCoordinator | None = None
+    # The wallets' ticker prices, read in a round after each portfolio
+    # refresh.
+    prices: WalletPrices | None = None
 
 
 # A Portfolio config entry, its runtime data typed.

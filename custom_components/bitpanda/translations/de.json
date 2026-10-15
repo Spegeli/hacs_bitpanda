@@ -414,6 +414,9 @@
           "units": {
             "name": "Asset: Menge"
           },
+          "price": {
+            "name": "Asset: Preis"
+          },
           "average_buy_price": {
             "name": "Bilanz: Ø Kaufpreis"
           },
@@ -421,10 +424,19 @@
             "name": "Bilanz: investiert"
           },
           "total_return": {
-            "name": "Bilanz: Gewinn/Verlust"
+            "name": "Bilanz: Gesamtrendite"
           },
           "total_return_percent": {
-            "name": "Bilanz: Gewinn/Verlust %"
+            "name": "Bilanz: Gesamtrendite %"
+          },
+          "price_24h_ago": {
+            "name": "24 h: Preis davor"
+          },
+          "change_24h_pct": {
+            "name": "24 h: Änderung %"
+          },
+          "return_24h": {
+            "name": "24 h: Rendite"
           }
         }
       },

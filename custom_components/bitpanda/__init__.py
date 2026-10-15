@@ -30,6 +30,7 @@ from .cards import async_register_cards
 from .const import (
     CONF_API_KEY,
     CONF_ASSETS,
+    CONF_CURRENCY,
     CONF_CURRENCY_ID,
     CONF_EXTRA_CURRENCIES,
     CONF_LEGACY_ADOPT,
@@ -63,6 +64,7 @@ from .portfolio_coordinator import (
     PortfolioCoordinator,
     PortfolioRuntime,
     RewardsCoordinator,
+    WalletPrices,
 )
 from .price_coordinator import (
     EcbCoordinator,
@@ -161,6 +163,20 @@ async def _async_start_portfolio(
         BitpandaApiClient(None, session), hass.data.setdefault(_ASSET_DIRECTORY_KEY, {})
     )
     currency_id = entry.data[CONF_CURRENCY_ID]
+    # The wallets' prices come from the public ticker, keyless; a Portfolio
+    # in another currency converts them with the ECB rates, read before the
+    # first refresh and never blocking setup.
+    currency = entry.data[CONF_CURRENCY]
+    # Named apart from the Price Tracker's, so that its log lines tell
+    # which service they are about.
+    ecb = (
+        EcbCoordinator(hass, entry, session, name=f"{DOMAIN}_portfolio_ecb")
+        if currency != "EUR"
+        else None
+    )
+    if ecb is not None:
+        await ecb.async_refresh()
+    prices = WalletPrices(hass, BitpandaApiClient(None, session), currency, ecb)
     # Before the first refreshes: the wallets' reconcile reads the list, and
     # the rewards' first refresh may set the marks.
     store = await async_get_portfolio_store(hass, entry.entry_id)
@@ -179,14 +195,28 @@ async def _async_start_portfolio(
         known_wallets=store.known_wallets,
         reward_marks=store.reward_marks,
         operations=store.operations,
+        ecb=ecb,
+        prices=prices,
     )
     await _async_first_refresh(runtime.portfolio)
+
+    # The wallets' prices: a round of their own after every successful
+    # portfolio refresh -- the first one's now --, never holding it up.
+    @callback
+    def _price_round() -> None:
+        data = runtime.portfolio.data
+        if runtime.portfolio.last_update_success and data is not None:
+            prices.async_request_round(data.wallet_ids)
+
+    entry.async_on_unload(runtime.portfolio.async_add_listener(_price_round))
+    entry.async_on_unload(prices.async_stop)
+    _price_round()
     # New staking payouts are announced after every successful refresh of
     # the rewards, the first one below included (announcements.py). The
     # coordinators are handed over: entry.runtime_data is set only once this
     # start returns.
     announcer = RewardAnnouncer(
-        hass, entry, store.reward_marks, runtime.rewards, runtime.portfolio
+        hass, entry, store.reward_marks, runtime.rewards, runtime.portfolio, prices
     )
     runtime.rewards.on_refreshed = announcer.async_rewards_refreshed
     # Earn, rewards and history are additive: a failure there must not block

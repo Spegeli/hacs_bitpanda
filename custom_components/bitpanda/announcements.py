@@ -76,6 +76,7 @@ from .portfolio_coordinator import (
     PortfolioConfigEntry,
     PortfolioCoordinator,
     RewardsCoordinator,
+    WalletPrices,
 )
 from .portfolio_model import DECIMALS, PortfolioData, RewardPayout, payouts_after, time_key
 from .portfolio_store import KnownWallets, RewardMarks
@@ -344,6 +345,13 @@ def _warn_reward_notification_failed(wallet: str, error: str) -> None:
     )
 
 
+# How long a pass waits, in seconds, for the wallets' price round under way:
+# the rewards' first refresh of a setup or reload may come before the round
+# reached a staked asset, whose payout would then go without its value today
+# for good.
+_ROUND_WAIT = 30.0
+
+
 class RewardAnnouncer:
     """Announces the new staking payouts of one Portfolio entry, each once."""
 
@@ -354,12 +362,14 @@ class RewardAnnouncer:
         marks: RewardMarks,
         rewards: RewardsCoordinator,
         portfolio: PortfolioCoordinator,
+        prices: WalletPrices | None = None,
     ) -> None:
         self._hass = hass
         self._entry = entry
         self._marks = marks
         self._rewards = rewards
         self._portfolio = portfolio
+        self._prices = prices
         # A refresh came while Home Assistant had not started yet: a pass
         # runs once it has.
         self._due = False
@@ -433,6 +443,10 @@ class RewardAnnouncer:
                 texts = await _async_texts(self._hass, self._entry)
             except Exception as err:  # noqa: BLE001 - the events and the marks come all the same
                 texts_error = type(err).__name__
+        # The payouts' value today needs the wallet's ticker price: a round
+        # under way -- at a setup or reload -- is given a while to bring it.
+        if self._prices is not None:
+            await self._prices.async_wait_for_round(_ROUND_WAIT)
         self._announce(texts, texts_error)
 
     @callback
@@ -459,8 +473,9 @@ class RewardAnnouncer:
 
     def _wallet_device_id(self, asset_id: str, portfolio: PortfolioData) -> str | None:
         """The wallet device of `asset_id` while its payouts may be
-        announced: the Portfolio's data names the asset -- its name, its
-        symbol and its price -- and its Balance (staking) sensor is
+        announced: the Portfolio's data names the asset -- its name and
+        its symbol (its price, if any, comes from WalletPrices) -- and its
+        Balance (staking) sensor is
         registered for this entry and enabled. None otherwise: its mark
         stays, and its payouts come together once it may be announced.
 
@@ -495,10 +510,10 @@ class RewardAnnouncer:
         wallet = wallet_device_name(asset)
         newest = payouts[-1].credited_at
         net = round(sum(payout.net for payout in payouts), DECIMALS)
-        holding = portfolio.holdings.get(asset_id)
-        price = None if holding is None else holding.price
-        # At today's price, as the Staking sensor's rewards_net_value: no
-        # endpoint prices a past date.
+        price = None if self._prices is None else self._prices.price_of(asset_id)
+        # At today's price, the wallet's (the ticker's; none without one), as
+        # the Staking sensor's rewards_net_value: no endpoint prices a past
+        # date.
         value = None if price is None else round(net * price, 2)
         # An interface for the users' automations: later versions may add
         # fields, never rename or drop one.

@@ -30,11 +30,11 @@ The integration offers two services. Set up either or both — each one once.
 
 ### Bitpanda Portfolio
 - A **Portfolio** device: **Total value** (all holdings, Cash Plus included, and all fiat), **Cash** (all fiat, including money reserved by an open order), **Cash Plus**, and your **return** in percent over a day, a week, a month, six months and a year — every amount in your Portfolio currency, as Bitpanda reports it
-- A wallet device for every asset you hold, such as **Vision (VSN) Wallet**, with **Balance (available)** (the value of the units you can trade), **Balance (total)** (the whole position, with invested amount, average buy price and return) and — while something is staked or Bitpanda offers Earn for the asset — **Balance (staking)** (with APR and rewards)
+- A wallet device for every asset you hold, such as **Vision (VSN) Wallet**, with **Balance (available)** (the value of the units you can trade), **Balance (total)** (the whole position, with its price, invested amount, average buy price, total return and the change over 24 hours) and — while something is staked or Bitpanda offers Earn for the asset — **Balance (staking)** (with APR and rewards)
 - Nothing to maintain: a wallet appears at the next update after you buy an asset and goes 10 to 15 minutes after you sell it, in groups by asset type such as Cryptocurrencies or Precious metals
 - A notification under **Notifications** when a new wallet appears — you can switch it off — and the event `bitpanda_wallet_added` for your own automations
 - A notification under **Notifications** when Bitpanda pays out a staking reward — switch it on if you want it — and the event `bitpanda_staking_reward_received` for your own automations
-- Updates every 5 minutes; Earn offers and rewards hourly
+- Updates every 5 minutes, each held asset's price from Bitpanda's price ticker right after them; Earn offers and rewards hourly
 
 ### Bitpanda Price Tracker
 - Live prices for more than 14,000 assets — crypto, stocks, ETFs, ETCs, Bitpanda Crypto Indices and tokenized precious metals — **without an API key**
@@ -239,7 +239,7 @@ Each sensor's attributes appear in its **Details** view (before Home Assistant 2
 | Sensor | Attributes |
 |---|---|
 | Balance (available) — every wallet | `asset`, `asset_name`, `asset_category`, `asset_isin`, `units` (tradable units) |
-| Balance (total) — every wallet | `asset`, `asset_name`, `asset_category`, `asset_isin`, `units` (whole position), and the position performance: `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent` |
+| Balance (total) — every wallet | `asset`, `asset_name`, `asset_category`, `asset_isin`, `units` (whole position), the asset's `price`, the position performance: `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent`, and over 24 hours `price_24h_ago`, `change_24h_pct` and `return_24h` |
 | Balance (staking) — while something is staked or an Earn product is offered | `asset`, `asset_name`, `asset_category`, `asset_isin`, `units` (staked), `apr_percent`, `rewards_gross`, `rewards_fee`, `rewards_net`, `rewards_net_value`, `rewards_count`, `rewards_last_at` |
 | Portfolio Cash Plus | `eur`, `usd`, `gbp` — the amount of each held Cash Plus product in its own currency |
 | Price (EUR) | `asset`, `asset_name`, `asset_category`, `asset_isin`, `change_24h_pct`, `price_24h_ago` |
@@ -249,7 +249,7 @@ Each sensor's attributes appear in its **Details** view (before Home Assistant 2
 
 `asset_category` is the asset's category key: `crypto`, `stock`, `etf`, `etc`, `index`, `metal` or `other`.
 
-An attribute without a value is left out rather than set to `null`: `apr_percent` without an Earn rate, the `rewards_…` attributes before the first payout, `rewards_net_value` without a price, `change_24h_pct` and `price_24h_ago` until Home Assistant's statistics hold a price from about 24 hours ago (within half an hour). A price in another currency carries either `conversion` (`no_rate`, before the first ECB rate) or `conversion_rate`, `rate_date` and `rate_source`. `rewards_last_at` is when Bitpanda credited the newest payout, in UTC.
+An attribute without a value is left out rather than set to `null`: `apr_percent` without an Earn rate, the `rewards_…` attributes before the first payout, `rewards_net_value` without a price, `change_24h_pct` and `price_24h_ago` until Home Assistant's statistics hold a price from about 24 hours ago (within half an hour); a wallet's `price`, `change_24h_pct`, `price_24h_ago`, `return_24h` and `rewards_net_value` without a ticker price of the last 15 minutes; its `price_24h_ago`, `change_24h_pct` and `return_24h` also until a ticker price from about 24 hours ago is recorded (within half an hour). A price in another currency carries either `conversion` (`no_rate`, before the first ECB rate) or `conversion_rate`, `rate_date` and `rate_source`. `rewards_last_at` is when Bitpanda credited the newest payout, in UTC.
 
 The lifetime reward amounts `rewards_gross`, `rewards_fee` and `rewards_net` are in units of the asset, and `rewards_count` is the number of payouts; `rewards_net_value` is what the net rewards are worth at today's price, as the Bitpanda app shows it — not their value when they were paid out.
 
@@ -263,7 +263,7 @@ Every value sensor keeps long-term statistics: the Portfolio's figures, returns 
 
 ### Refreshing by hand
 
-The action `bitpanda.refresh` fetches the portfolio — Total value, Cash, Cash Plus, the wallets and the returns — and the prices right away and finishes when both are done. Earn offers, staking rewards and exchange rates keep their own schedule.
+The action `bitpanda.refresh` fetches the portfolio — Total value, Cash, Cash Plus, the wallets and the returns — and the prices right away and finishes when both are done; a wallet's `price` and its 24-hour figures follow right after, from Bitpanda's price ticker, at most once a minute. Earn offers, staking rewards and exchange rates keep their own schedule.
 
 - **Cooldown:** a call within the cooldown of the last accepted one is ignored. The cooldown is the price interval — 60 seconds, longer while Bitpanda rate-limits the price requests (up to 16 minutes) — or 10 seconds with the Portfolio alone.
 - **Failures:** when a refresh fails — Bitpanda cannot be reached or answers with an error — the action fails with an error naming the service; the other service is refreshed all the same. The returns are fetched only when the portfolio was; returns that could not be fetched keep their last value and fail nothing. The action also fails while neither service is loaded.
@@ -539,8 +539,8 @@ It needs Home Assistant **2025.5** or newer. On 2025.3 or 2025.4 the entry stays
 - **Cloud polling only.** Bitpanda sends no updates by itself: the integration asks at the intervals under [Features](#-features), and `bitpanda.refresh` asks right away (see [Refreshing by hand](#refreshing-by-hand)).
 - **Short outages are bridged, longer ones show.** When Bitpanda cannot be reached — while your Internet connection is down, say — the sensors keep their last value through two failed refreshes. The third failed refresh in a row, at least two regular intervals after the first, makes them `unavailable`: for the Portfolio and its returns after about 15 minutes, for prices after about 3 minutes (longer while Bitpanda rate-limits the requests). A rejected API key makes them `unavailable` at once. After a restart of Home Assistant during an outage, there is no last value to show.
 - **What disappears waits ten minutes.** When Bitpanda's answer no longer lists something the Portfolio showed — an asset, all fiat, all Cash Plus, or anything at all — the sensors that show it are `unavailable` at first, not 0: a short glitch at Bitpanda then leaves a gap in their history instead of a drop. Once three answers in a row, at least ten minutes apart from first to last, confirm it, the wallet is removed, and Total value, Cash or Cash Plus shows 0. Refreshing by hand does not make that sooner. What is already missing when the Portfolio starts shows 0 at once.
-- **Prices in other currencies are converted, not quoted.** Bitpanda's price endpoint answers in EUR only; every other currency is the EUR price × the ECB's daily reference rate, which can differ from the price Bitpanda itself shows in that currency. The ECB publishes its rates once per working day around 16:00 CET; at weekends and on holidays the last rate stays in use, and the `rate_date` attribute shows which day's rate a price uses.
-- **The 24-hour change needs a day of history.** `change_24h_pct` and `price_24h_ago` compare the price with its value from 24 hours ago in Home Assistant's statistics — the one nearest to that time within half an hour: a newly tracked price shows them only after a day, and they are missing while there is no value within that half hour, such as after Home Assistant was off, and never while the recorder does not record the sensor.
+- **Prices in other currencies are converted, not quoted.** Bitpanda's price endpoint answers in EUR only; every other currency — the Price Tracker's, and a wallet's `price` in a Portfolio outside EUR — is the EUR price × the ECB's daily reference rate, which can differ from the price Bitpanda itself shows in that currency. The ECB publishes its rates once per working day around 16:00 CET; at weekends and on holidays the last rate stays in use, and the `rate_date` attribute shows which day's rate a price uses.
+- **The 24-hour change needs a day of history.** `change_24h_pct` and `price_24h_ago` compare the price with its value from 24 hours ago in Home Assistant's statistics — the one nearest to that time within half an hour: a newly tracked price shows them only after a day, and they are missing while there is no value within that half hour, such as after Home Assistant was off, and never while the recorder does not record the sensor. A wallet's 24-hour figures compare its ticker price with the one its Balance (total) recorded about 24 hours ago, the same way: they appear one day after the update to this version, and the recorder keeps them for 10 days by default.
 
 ---
 

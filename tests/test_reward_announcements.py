@@ -28,6 +28,7 @@ from pytest_homeassistant_custom_component.common import (
     async_mock_service,
 )
 
+from custom_components.bitpanda.api import BitpandaApiError
 from custom_components.bitpanda import announcements
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.devices import find_entry_device
@@ -152,6 +153,9 @@ def portfolio_api(operations):
         f"{_CLIENT}async_get_portfolio_history", AsyncMock(return_value={"return_percentage": 1.5})
     ), patch(f"{_CLIENT}async_get_earn_configs", AsyncMock(return_value=[])), patch(
         f"{_CLIENT}async_get_assets", AsyncMock(side_effect=_lookup)
+    ), patch(
+        # The ticker's price: 0.0066 a unit, as the positions are worth.
+        f"{_CLIENT}async_get_ticker", AsyncMock(return_value={"price": "0.00660000"})
     ):
         yield portfolio
 
@@ -331,6 +335,71 @@ async def test_a_new_payout_fires_the_event_and_the_notification(
     )
     await _flush(hass, freezer)
     assert _stored(hass_storage, entry)["known_rewards"] == {VSN["id"]: _WHEN[4]}
+
+
+async def test_a_payouts_value_today_uses_the_wallets_ticker_price(
+    hass, portfolio_api, operations, events, notifications, hass_storage, freezer
+):
+    """At the wallet's price, as the card's „Heutiger Wert“: the ticker's
+    0.01 a unit, not the 0.0066 the portfolio's value over its units gives."""
+    entry = _portfolio_entry(hass, notify_staking_rewards=True)
+    _known(hass_storage, entry, _WHEN[3])
+    with patch(f"{_CLIENT}async_get_ticker", AsyncMock(return_value={"price": "0.01000000"})):
+        await _setup(hass, entry)
+        operations.return_value = _paid(5)
+        await _next_hour(hass, freezer)
+    assert [event.data["value"] for event in events] == [round(9.87654312 * 0.01, 2)]
+    assert "Worth about 0.10 EUR today." in notifications.call_args.args[1]
+
+
+async def test_a_payout_announced_at_a_reload_waits_for_the_price_round(
+    hass, portfolio_api, operations, events, notifications, hass_storage
+):
+    """A setup or reload announces a payout read with the rewards' first
+    refresh while the price round may still run: the announcement waits for
+    it -- at most a while -- and carries the value at the ticker's price."""
+    entry = _portfolio_entry(hass, notify_staking_rewards=True)
+    _known(hass_storage, entry, _WHEN[3])
+    await _setup(hass, entry)
+    operations.return_value = _paid(5)
+    gate = asyncio.Event()
+
+    async def _price_later(asset_id):
+        await gate.wait()
+        return {"asset_id": asset_id, "price": "0.01000000"}
+
+    with patch(f"{_CLIENT}async_get_ticker", AsyncMock(side_effect=_price_later)):
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        assert events == []
+        gate.set()
+        await hass.async_block_till_done(wait_background_tasks=True)
+    assert [event.data["value"] for event in events] == [round(9.87654312 * 0.01, 2)]
+
+
+async def test_a_round_that_takes_too_long_is_not_waited_for(
+    hass, portfolio_api, operations, events, notifications, hass_storage
+):
+    """A ticker that never answers holds the announcement up only a while:
+    then it comes without a value."""
+    entry = _portfolio_entry(hass, notify_staking_rewards=True)
+    _known(hass_storage, entry, _WHEN[3])
+    await _setup(hass, entry)
+    operations.return_value = _paid(5)
+    hang = asyncio.Event()
+
+    async def _never(asset_id):
+        await hang.wait()
+
+    with patch(f"{_CLIENT}async_get_ticker", AsyncMock(side_effect=_never)), patch.object(
+        announcements, "_ROUND_WAIT", 0.05
+    ):
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        await asyncio.sleep(0.2)
+        await hass.async_block_till_done()
+        assert [event.data["value"] for event in events] == [None]
+        assert await hass.config_entries.async_unload(entry.entry_id)
 
 
 async def test_payouts_missed_in_a_pause_come_together(
@@ -912,16 +981,16 @@ async def test_switched_off_only_the_event_fires(
 async def test_without_a_price_the_value_is_none_and_the_sentence_left_out(
     hass, portfolio_api, operations, events, notifications, hass_storage, freezer
 ):
-    """/portfolio sent no value for Vision, so there is no price: the
-    event's value is None, and the notification says nothing of what the
-    payout is worth."""
-    portfolio_api.return_value = _answer(_position(BTC), _position(VSN, staked=True, worth=None))
+    """The ticker gives no price for Vision -- and the value over the units
+    never stands in for it --: the event's value is None, and the
+    notification says nothing of what the payout is worth."""
     entry = _portfolio_entry(hass, notify_staking_rewards=True)
     _known(hass_storage, entry, _WHEN[3])
-    await _setup(hass, entry)
-    operations.return_value = _paid(5)
-
-    await _next_hour(hass, freezer)
+    failing = BitpandaApiError("no price", kind="http_status", path="/tickers")
+    with patch(f"{_CLIENT}async_get_ticker", AsyncMock(side_effect=failing)):
+        await _setup(hass, entry)
+        operations.return_value = _paid(5)
+        await _next_hour(hass, freezer)
 
     device = _wallet_device(hass, entry)
     assert [(event.data["net"], event.data["value"]) for event in events] == [(9.87654312, None)]

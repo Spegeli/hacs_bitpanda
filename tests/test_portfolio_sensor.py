@@ -1,4 +1,5 @@
 """Tests for the Portfolio service's sensor entities."""
+import pytest
 from homeassistant.components.sensor import SensorStateClass
 
 from custom_components.bitpanda.naming import PORTFOLIO_DEVICE_NAME
@@ -38,6 +39,19 @@ class _Coordinator:
         self.data = data
         self.last_update_success = last_update_success
         self.data_available = last_update_success if data_available is None else data_available
+
+
+class _Prices:
+    """The wallets' ticker prices as WalletPrices gives them."""
+
+    def __init__(self, prices=None):
+        self.prices = dict(prices or {})
+
+    def price_of(self, asset_id):
+        return self.prices.get(asset_id)
+
+    def async_listen(self, asset_id, update):
+        return lambda: None
 
 
 def _data(**holdings) -> PortfolioData:
@@ -418,7 +432,9 @@ def test_staking_is_the_staked_value_with_earn_attributes():
     rewards = _Coordinator({VSN["id"]: RewardTotals(
         gross=12.0, fee=2.4, net=9.6, count=3, last_at="2026-09-22T17:16:35Z")})
     earn = _Coordinator(EarnData(apr={VSN["id"]: 0.0544}, offered=frozenset({VSN["id"]})))
-    sensor = StakingSensor(_portfolio(**{VSN["id"]: _vsn()}), earn, rewards, "eid", "EUR", VSN)
+    sensor = StakingSensor(
+        _portfolio(**{VSN["id"]: _vsn()}), earn, rewards, "eid", "EUR", VSN, _Prices({VSN["id"]: 2.0})
+    )
     assert sensor.entity_id == "sensor.bitpanda_vision_vsn_wallet_staking"
     assert sensor.unique_id == f"eid_staking_{VSN['id']}"
     assert sensor.translation_key == "staking"
@@ -435,29 +451,28 @@ def test_staking_is_the_staked_value_with_earn_attributes():
 
 
 def test_the_net_rewards_are_valued_at_todays_price():
-    """As the Bitpanda app shows them: the net reward units at the price the
-    same /portfolio answer implies, value over units, in the Portfolio
-    currency and to the cent. Today's value of the coins -- no endpoint
-    prices the day they were paid out."""
+    """As the Bitpanda app shows them: the net reward units at the wallet's
+    ticker price, in the Portfolio currency and to the cent. Today's value of
+    the coins -- no endpoint prices the day they were paid out."""
     rewards = _Coordinator({VSN["id"]: RewardTotals(
         gross=2136.65, fee=371.12, net=1765.53, count=62, last_at="2026-09-22T17:16:35Z")})
     holding = _vsn(balance=21466.95, available=0.0, value=826.72)
     sensor = StakingSensor(_portfolio(**{VSN["id"]: holding}), _Coordinator(None), rewards,
-                           "eid", "EUR", VSN)
-    # 1,765.53 VSN at 826.72 / 21,466.95 EUR each: 67.9928... EUR.
-    assert sensor.extra_state_attributes["rewards_net_value"] == 67.99
+                           "eid", "EUR", VSN, _Prices({VSN["id"]: 0.0385}))
+    # 1,765.53 VSN at 0.0385 EUR each: 67.97... EUR.
+    assert sensor.extra_state_attributes["rewards_net_value"] == 67.97
 
 
 def test_the_net_rewards_have_no_value_while_the_price_is_unknown():
-    """Bitpanda sent no value, there are no units to divide it by, or the
-    asset's entry could not be read: the key is absent -- never None or 0 --
-    while the rewards themselves are shown."""
+    """No ticker price of the last 15 minutes -- never the value over the
+    units instead --, or the asset's entry could not be read: the key is
+    absent -- never None or 0 -- while the rewards themselves are shown."""
     rewards = _Coordinator({VSN["id"]: RewardTotals(gross=12.0, fee=2.4, net=9.6, count=3)})
     unreadable = _data()
     unreadable.unparsed_assets = {VSN["id"]}
     for data in (
+        _data(**{VSN["id"]: _vsn()}),
         _data(**{VSN["id"]: _vsn(value=None)}),
-        _data(**{VSN["id"]: _vsn(balance=0.0, available=0.0, value=0.0)}),
         unreadable,
     ):
         sensor = StakingSensor(_Coordinator(data), _Coordinator(None), rewards, "eid", "EUR", VSN)
@@ -503,6 +518,75 @@ def test_a_performance_figure_bitpanda_did_not_send_is_left_out():
         "asset": "VSN", "asset_name": "Vision", "asset_category": "other", "units": 100.0,
         "average_buy_price": 1.5, "total_return": 50.0,
     }
+
+
+def test_without_a_ticker_price_there_is_no_price():
+    """Never the value over the units, which /portfolio gives in cents: no
+    ticker price of the last 15 minutes, no price and no 24-hour figures,
+    whatever the price of a day ago."""
+    holding = _vsn(balance=21516.68407659, available=0.0, value=805.96)
+    sensor = WalletTotalSensor(_portfolio(**{VSN["id"]: holding}), "eid", "EUR", VSN, prices=_Prices())
+    sensor.set_price_24h_ago(0.0387)
+    attributes = sensor.extra_state_attributes
+    for key in ("price", "price_24h_ago", "change_24h_pct", "return_24h"):
+        assert key not in attributes, key
+
+
+def test_a_ticker_price_keeps_its_significant_digits():
+    """Also for a token worth a fraction of a cent."""
+    prices = _Prices({VSN["id"]: 0.0000081199123456})
+    sensor = WalletTotalSensor(_portfolio(**{VSN["id"]: _vsn()}), "eid", "EUR", VSN, prices=prices)
+    assert sensor.extra_state_attributes["price"] == pytest.approx(0.0000081199123456, rel=1e-9)
+
+
+def test_the_price_comes_from_the_ticker_when_there_is_one():
+    """The ticker's price, not the value over the units -- which /portfolio
+    gives in cents; without one, none."""
+    holding = _vsn(balance=21516.68407659, available=0.0, value=805.96)
+    prices = _Prices({VSN["id"]: 0.03727184})
+    sensor = WalletTotalSensor(_portfolio(**{VSN["id"]: holding}), "eid", "EUR", VSN, prices=prices)
+    assert sensor.extra_state_attributes["price"] == 0.03727184
+    prices.prices = {}
+    assert "price" not in sensor.extra_state_attributes
+
+
+def test_the_24h_figures_use_the_ticker_price():
+    holding = _vsn(balance=1000.0, available=1000.0, value=100.0)
+    sensor = WalletTotalSensor(
+        _portfolio(**{VSN["id"]: holding}), "eid", "EUR", VSN, prices=_Prices({VSN["id"]: 0.11})
+    )
+    sensor.set_price_24h_ago(0.1)
+    attributes = sensor.extra_state_attributes
+    assert attributes["change_24h_pct"] == 10.0
+    assert attributes["return_24h"] == pytest.approx(10.0)
+
+
+def test_the_rewards_value_today_uses_the_same_price():
+    """„Aktueller Preis“ × „Verdient (netto)“ = „Heutiger Wert“."""
+    rewards = _Coordinator({VSN["id"]: RewardTotals(
+        gross=12.0, fee=2.0, net=10.0, count=3, last_at="2026-09-22T17:16:35Z")})
+    sensor = StakingSensor(
+        _portfolio(**{VSN["id"]: _vsn()}), _Coordinator(None), rewards, "eid", "EUR", VSN,
+        _Prices({VSN["id"]: 0.0373}),
+    )
+    assert sensor.extra_state_attributes["rewards_net_value"] == 0.37
+
+
+def test_the_24h_figures_follow_the_price_of_a_day_ago():
+    """The change of the price, and what it made of today's units."""
+    units = 21516.684
+    holding = _vsn(balance=units, available=0.0, value=0.0374 * units)
+    sensor = WalletTotalSensor(
+        _portfolio(**{VSN["id"]: holding}), "eid", "EUR", VSN, prices=_Prices({VSN["id"]: 0.0374})
+    )
+    assert "price_24h_ago" not in sensor.extra_state_attributes
+    sensor.set_price_24h_ago(0.0382)
+    attributes = sensor.extra_state_attributes
+    assert attributes["price_24h_ago"] == 0.0382
+    assert attributes["change_24h_pct"] == round((0.0374 - 0.0382) / 0.0382 * 100, 2)
+    assert attributes["return_24h"] == pytest.approx(units * (0.0374 - 0.0382))
+    sensor.set_price_24h_ago(None)
+    assert "return_24h" not in sensor.extra_state_attributes
 
 
 def test_a_stock_etf_or_etc_shows_its_isin_on_every_wallet_part():

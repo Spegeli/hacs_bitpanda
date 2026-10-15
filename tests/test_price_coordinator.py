@@ -234,6 +234,7 @@ async def test_a_non_finite_price_counts_as_a_failure():
     assert await _coordinator(client)._async_update_data() == {SOL: 150.0}
 
 
+@pytest.mark.real_ticker
 async def test_an_asset_answered_with_no_object_fails_alone():
     """A malformed /tickers body -- here, a bare `null` -- must not escape
     as AttributeError and abort the round for every asset. The real

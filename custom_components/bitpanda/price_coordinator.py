@@ -307,7 +307,9 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
 
 
 class EcbCoordinator(DataUpdateCoordinator[EcbRates]):
-    """ECB reference rates. Created only when extra currencies are configured.
+    """ECB reference rates. Created only where a price is converted: for a
+    Price Tracker with extra currencies, and for a Portfolio whose currency
+    is not EUR (its wallets' ticker prices, portfolio_coordinator.WalletPrices).
 
     A failed fetch leaves `data` at the last rates -- DataUpdateCoordinator
     keeps them -- and the price sensors keep converting with those, showing
@@ -316,18 +318,17 @@ class EcbCoordinator(DataUpdateCoordinator[EcbRates]):
     instead of the 6 hours the rates themselves need.
     """
 
-    config_entry: PriceTrackerConfigEntry
-
     def __init__(
         self,
         hass: HomeAssistant,
-        entry: PriceTrackerConfigEntry,
+        entry: ConfigEntry[Any],
         session: aiohttp.ClientSession,
+        name: str = f"{DOMAIN}_ecb",
     ) -> None:
         super().__init__(
             hass,
             _LOGGER,
-            name=f"{DOMAIN}_ecb",
+            name=name,
             update_interval=ECB_UPDATE_INTERVAL,
             config_entry=entry,
         )

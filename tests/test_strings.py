@@ -1788,6 +1788,22 @@ def _cash_plus_portfolio_data() -> PortfolioData:
     return data
 
 
+class _TickerPrices:
+    """Every wallet's ticker price, 2.0, as WalletPrices gives it."""
+
+    def price_of(self, asset_id):
+        return 2.0
+
+    def async_listen(self, asset_id, update):
+        return lambda: None
+
+
+def _with_a_day_ago(sensor):
+    """`sensor` once its price of 24 hours ago is known."""
+    sensor.set_price_24h_ago(1.0)
+    return sensor
+
+
 def _attribute_scenarios() -> list[tuple[str, dict]]:
     """(translation_key, published attributes) for every sensor class that
     publishes attributes. A translation_key may appear more than once, when
@@ -1822,11 +1838,14 @@ def _attribute_scenarios() -> list[tuple[str, dict]]:
                 wallet_coordinator, "eid", "EUR", asset
             ).extra_state_attributes),
             ("staking", StakingSensor(
-                wallet_coordinator, earn, rewards, "eid", "EUR", asset
+                wallet_coordinator, earn, rewards, "eid", "EUR", asset, _TickerPrices()
             ).extra_state_attributes),
             ("wallet_total", WalletTotalSensor(
                 wallet_coordinator, "eid", "EUR", asset
             ).extra_state_attributes),
+            ("wallet_total", _with_a_day_ago(WalletTotalSensor(
+                wallet_coordinator, "eid", "EUR", asset, prices=_TickerPrices()
+            )).extra_state_attributes),
         )
     ]
     return [
@@ -1964,32 +1983,32 @@ def test_the_reward_attributes_say_what_they_count():
 _POSITION_KEYS = ("average_buy_price", "invested_amount", "total_return", "total_return_percent")
 _POSITION_LABELS = {
     "de": (
-        "Bilanz: Ø Kaufpreis", "Bilanz: investiert", "Bilanz: Gewinn/Verlust",
-        "Bilanz: Gewinn/Verlust %",
+        "Bilanz: Ø Kaufpreis", "Bilanz: investiert", "Bilanz: Gesamtrendite",
+        "Bilanz: Gesamtrendite %",
     ),
     "en": (
-        "Position: average buy price", "Position: invested", "Position: profit/loss",
-        "Position: profit/loss %",
+        "Position: average buy price", "Position: invested", "Position: total return",
+        "Position: total return %",
     ),
     "es": (
         "Posición: precio medio de compra", "Posición: importe invertido",
-        "Posición: ganancia/pérdida", "Posición: ganancia/pérdida %",
+        "Posición: rentabilidad total", "Posición: rentabilidad total %",
     ),
     "fr": (
         "Position\u00a0: prix d'achat moyen", "Position\u00a0: montant investi",
-        "Position\u00a0: gain/perte", "Position\u00a0: gain/perte en\u00a0%",
+        "Position\u00a0: rendement total", "Position\u00a0: rendement total en\u00a0%",
     ),
     "it": (
         "Posizione: prezzo medio di acquisto", "Posizione: importo investito",
-        "Posizione: profitto/perdita", "Posizione: profitto/perdita %",
+        "Posizione: rendimento totale", "Posizione: rendimento totale %",
     ),
     "nl": (
         "Positie: gemiddelde aankoopprijs", "Positie: geïnvesteerd bedrag",
-        "Positie: winst/verlies", "Positie: winst/verlies %",
+        "Positie: totaalrendement", "Positie: totaalrendement %",
     ),
     "pl": (
         "Pozycja: średnia cena zakupu", "Pozycja: zainwestowana kwota",
-        "Pozycja: zysk/strata", "Pozycja: zysk/strata %",
+        "Pozycja: całkowity zwrot", "Pozycja: całkowity zwrot %",
     ),
 }
 
@@ -2010,6 +2029,36 @@ def test_the_position_figures_are_not_labelled_like_the_wallet_sensors():
         [prefix] = prefixes
         for key in ("wallet", "staking", "wallet_total"):
             assert not sensors[key]["name"].startswith(prefix), (language, key)
+
+
+# The asset's price and the 24 hours on a wallet's Total sensor, by
+# language: the price under the asset's prefix, the 24 hours under the
+# prefix the Price Tracker uses, its two keys named as there.
+_WALLET_PRICE_LABELS = {
+    "de": {"price": "Asset: Preis", "return_24h": "24 h: Rendite"},
+    "en": {"price": "Asset: price", "return_24h": "24 h: return"},
+    "es": {"price": "Activo: precio", "return_24h": "24 h: rentabilidad"},
+    "fr": {"price": "Actif\u00a0: prix", "return_24h": "24\u00a0h\u00a0: rendement"},
+    "it": {"price": "Asset: prezzo", "return_24h": "24 h: rendimento"},
+    "nl": {"price": "Asset: prijs", "return_24h": "24 uur: rendement"},
+    "pl": {"price": "Aktywo: cena", "return_24h": "24 h: zwrot"},
+}
+
+
+def test_a_wallets_price_and_24_hours_are_named_like_the_price_trackers():
+    assert sorted(_WALLET_PRICE_LABELS) == _LANGUAGES
+    for language, labels in _WALLET_PRICE_LABELS.items():
+        sensors = _load(f"translations/{language}.json")["entity"]["sensor"]
+        total = sensors["wallet_total"]["state_attributes"]
+        price = sensors["price"]["state_attributes"]
+        assert {key: total[key]["name"] for key in labels} == labels, language
+        for key in ("price_24h_ago", "change_24h_pct"):
+            assert total[key]["name"] == price[key]["name"], (language, key)
+        assert labels["price"].split(":", 1)[0] == total["asset"]["name"].split(":", 1)[0], language
+    german = _load("translations/de.json")["entity"]["sensor"]["wallet_total"]["state_attributes"]
+    assert (german["price_24h_ago"]["name"], german["change_24h_pct"]["name"]) == (
+        "24 h: Preis davor", "24 h: Änderung %",
+    )
 
 
 def test_the_conversion_status_has_a_translated_name_and_state():

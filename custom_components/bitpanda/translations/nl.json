@@ -414,6 +414,9 @@
           "units": {
             "name": "Asset: hoeveelheid"
           },
+          "price": {
+            "name": "Asset: prijs"
+          },
           "average_buy_price": {
             "name": "Positie: gemiddelde aankoopprijs"
           },
@@ -421,10 +424,19 @@
             "name": "Positie: geïnvesteerd bedrag"
           },
           "total_return": {
-            "name": "Positie: winst/verlies"
+            "name": "Positie: totaalrendement"
           },
           "total_return_percent": {
-            "name": "Positie: winst/verlies %"
+            "name": "Positie: totaalrendement %"
+          },
+          "price_24h_ago": {
+            "name": "24 uur: vorige prijs"
+          },
+          "change_24h_pct": {
+            "name": "24 uur: wijziging %"
+          },
+          "return_24h": {
+            "name": "24 uur: rendement"
           }
         }
       },

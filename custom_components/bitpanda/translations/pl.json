@@ -414,6 +414,9 @@
           "units": {
             "name": "Aktywo: ilość"
           },
+          "price": {
+            "name": "Aktywo: cena"
+          },
           "average_buy_price": {
             "name": "Pozycja: średnia cena zakupu"
           },
@@ -421,10 +424,19 @@
             "name": "Pozycja: zainwestowana kwota"
           },
           "total_return": {
-            "name": "Pozycja: zysk/strata"
+            "name": "Pozycja: całkowity zwrot"
           },
           "total_return_percent": {
-            "name": "Pozycja: zysk/strata %"
+            "name": "Pozycja: całkowity zwrot %"
+          },
+          "price_24h_ago": {
+            "name": "24 h: poprzednia cena"
+          },
+          "change_24h_pct": {
+            "name": "24 h: zmiana %"
+          },
+          "return_24h": {
+            "name": "24 h: zwrot"
           }
         }
       },

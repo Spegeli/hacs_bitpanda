@@ -1,7 +1,8 @@
 """European Central Bank daily reference rates.
 
 The Price Tracker converts Bitpanda's EUR ticker prices into other currencies
-with these rates. The ECB publishes them once per working day around 16:00
+with these rates, and so does a Portfolio whose currency is not EUR for its
+wallets' prices. The ECB publishes them once per working day around 16:00
 CET; weekends and holidays carry the last working day's rates.
 """
 from __future__ import annotations

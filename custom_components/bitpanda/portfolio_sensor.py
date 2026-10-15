@@ -36,6 +36,7 @@ from .const import (
     PRICES_URL,
     SUBENTRY_TYPE_WALLET_GROUP,
 )
+from .day_ago import DayAgoPrices, async_wallet_prices_24h_ago
 from .devices import find_wallet_device
 from .groups import (
     async_get_or_create_wallet_group,
@@ -66,6 +67,7 @@ from .portfolio_coordinator import (
     PortfolioCoordinator,
     PortfolioRuntime,
     RewardsCoordinator,
+    WalletPrices,
 )
 from .portfolio_model import (
     DECIMALS,
@@ -238,6 +240,12 @@ class PortfolioReturnSensor(TolerantEntity[HistoryCoordinator], SensorEntity):
 # --- Wallet devices -----------------------------------------------------------------
 
 
+def _significant(value: float) -> float:
+    """`value` to 10 significant digits: a price of a token worth a fraction
+    of a cent keeps its digits, which DECIMALS would cut."""
+    return float(f"{value:.10g}")
+
+
 def _performance(holding: Holding) -> dict[str, float]:
     """The position performance Bitpanda computes for the whole position."""
     out: dict[str, float] = {}
@@ -272,12 +280,22 @@ class _WalletPart(TolerantEntity[PortfolioCoordinator], SensorEntity):
         entry_id: str,
         currency: str,
         asset: dict[str, Any],
+        prices: WalletPrices | None = None,
     ) -> None:
         super().__init__(coordinator)
         self._asset = asset
         self._asset_id = asset["id"]
+        self._prices = prices
         self._attr_native_unit_of_measurement = currency
         self._attr_device_info = wallet_device_info(entry_id, asset)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        # The price arrives after the portfolio's figures (WalletPrices).
+        if self._prices is not None:
+            self.async_on_remove(
+                self._prices.async_listen(self._asset_id, self.async_write_ha_state)
+            )
 
     @property
     def _holding(self) -> Holding | None:
@@ -304,6 +322,13 @@ class _WalletPart(TolerantEntity[PortfolioCoordinator], SensorEntity):
         cannot be told is unknown."""
         data: PortfolioData | None = self.coordinator.data
         return super().available and data is not None and self._asset_id in data.held
+
+    def _price(self) -> float | None:
+        """One unit's worth: the ticker's price of the last 15 minutes
+        (WalletPrices), else none -- never the value over the units, which
+        /portfolio gives in cents and which would mix with the ticker's in
+        the 24-hour figures."""
+        return None if self._prices is None else self._prices.price_of(self._asset_id)
 
     def _attributes(self) -> dict[str, Any]:
         attrs: dict[str, Any] = asset_attributes(self._asset)
@@ -358,8 +383,9 @@ class StakingSensor(_WalletPart):
         entry_id: str,
         currency: str,
         asset: dict[str, Any],
+        prices: WalletPrices | None = None,
     ) -> None:
-        super().__init__(coordinator, entry_id, currency, asset)
+        super().__init__(coordinator, entry_id, currency, asset, prices)
         self._earn = earn
         self._rewards = rewards
         self._attr_unique_id = staking_unique_id(entry_id, asset["id"])
@@ -398,11 +424,11 @@ class StakingSensor(_WalletPart):
             attrs["rewards_fee"] = rewards.fee
             attrs["rewards_net"] = rewards.net
             # What the net units are worth today, in the Portfolio currency,
-            # at the price this /portfolio answer implies -- as the Bitpanda
-            # app shows it. Never their value when paid out: no endpoint
-            # prices a past date.
+            # at the wallet's price (the ticker's, as `price` on Balance
+            # (total)) -- as the Bitpanda app shows it. Never their value when
+            # paid out: no endpoint prices a past date.
             holding = self._holding
-            price = None if holding is None else holding.price
+            price = None if holding is None else self._price()
             if price is not None:
                 attrs["rewards_net_value"] = round(rewards.net * price, 2)
             attrs["rewards_count"] = rewards.count
@@ -411,10 +437,13 @@ class StakingSensor(_WalletPart):
 
 
 class WalletTotalSensor(_WalletPart):
-    """Value of the whole position, with its performance.
+    """Value of the whole position, with its performance, the asset's price
+    and the price's change over 24 hours.
 
     Every wallet has one for as long as the wallet exists, staking or not:
-    the performance stays on this sensor when staking starts or stops.
+    the performance stays on this sensor when staking starts or stops. The
+    price of 24 hours ago comes from `day_ago` (day_ago.py), which every
+    Balance (total) of the entry joins; the next refresh publishes it.
     """
 
     _attr_translation_key = "wallet_total"
@@ -425,10 +454,23 @@ class WalletTotalSensor(_WalletPart):
         entry_id: str,
         currency: str,
         asset: dict[str, Any],
+        day_ago: DayAgoPrices | None = None,
+        prices: WalletPrices | None = None,
     ) -> None:
-        super().__init__(coordinator, entry_id, currency, asset)
+        super().__init__(coordinator, entry_id, currency, asset, prices)
         self._attr_unique_id = total_unique_id(entry_id, asset["id"])
         self.entity_id = total_entity_id(asset)
+        self._day_ago = day_ago
+        self._price_24h_ago: float | None = None
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self._day_ago is not None:
+            self.async_on_remove(self._day_ago.join(self))
+
+    def set_price_24h_ago(self, value: float | None) -> None:
+        """The price of 24 hours ago (DayAgoPrices); None: none known."""
+        self._price_24h_ago = value
 
     def _value(self, holding: Holding) -> float | None:
         return holding.value
@@ -440,8 +482,18 @@ class WalletTotalSensor(_WalletPart):
     def extra_state_attributes(self) -> dict[str, Any]:
         attrs = self._attributes()
         holding = self._holding
-        if holding is not None:
-            attrs.update(_performance(holding))
+        if holding is None:
+            return attrs
+        price = self._price()
+        if price is not None:
+            attrs["price"] = _significant(price)
+        attrs.update(_performance(holding))
+        then = self._price_24h_ago
+        if price is not None and then:
+            # What the price's change made of today's units.
+            attrs["price_24h_ago"] = _significant(then)
+            attrs["change_24h_pct"] = round((price - then) / then * 100, 2)
+            attrs["return_24h"] = round(holding.balance * (price - then), DECIMALS)
         return attrs
 
 
@@ -514,8 +566,10 @@ class PortfolioEntityManager:
         currency: str,
         add_entities: AddConfigEntryEntitiesCallback,
         announcer: WalletAnnouncer,
+        day_ago: DayAgoPrices | None = None,
     ) -> None:
         self._hass = hass
+        self._day_ago = day_ago
         self._entry = entry
         self._runtime = runtime
         self._currency = currency
@@ -621,7 +675,12 @@ class PortfolioEntityManager:
                 if asset_id not in announcer.known:
                     announcer.mark(asset, category)
                 entities.append(WalletSensor(portfolio, entry_id, self._currency, asset))
-                entities.append(WalletTotalSensor(portfolio, entry_id, self._currency, asset))
+                entities.append(
+                    WalletTotalSensor(
+                        portfolio, entry_id, self._currency, asset, self._day_ago,
+                        self._runtime.prices,
+                    )
+                )
             applies = staking_applies(data.holdings[asset_id], earn)
             kinds = registered.get(asset_id, set())
             wanted = applies is True or (applies is None and "staking" in kinds)
@@ -630,7 +689,7 @@ class PortfolioEntityManager:
                 entities.append(
                     StakingSensor(
                         portfolio, self._runtime.earn, self._runtime.rewards,
-                        entry_id, self._currency, asset,
+                        entry_id, self._currency, asset, self._runtime.prices,
                     )
                 )
             elif applies is False and (asset_id in self._staking or "staking" in kinds):
@@ -768,7 +827,12 @@ async def async_setup_portfolio_entities(
     announcer = WalletAnnouncer(hass, entry, runtime.known_wallets, runtime.group_titles)
     # Before the first reconcile, which may create a new wallet's device.
     entry.async_on_unload(announcer.async_listen_for_wallet_devices())
-    manager = PortfolioEntityManager(hass, entry, runtime, currency, add_entities, announcer)
+    # The 24-hour references of every wallet's Balance (total), one lookup
+    # for all of them.
+    day_ago = DayAgoPrices(hass, async_wallet_prices_24h_ago)
+    manager = PortfolioEntityManager(
+        hass, entry, runtime, currency, add_entities, announcer, day_ago
+    )
     manager.async_reconcile()
     entry.async_on_unload(runtime.portfolio.async_add_listener(manager.async_reconcile))
     # Keep Earn polling even without a Staking sensor around (see
@@ -779,3 +843,7 @@ async def async_setup_portfolio_entities(
     entry.async_on_unload(runtime.earn.async_add_listener(_keep_polling))
     # And the value history, for the Portfolio card's line.
     entry.async_on_unload(runtime.history.async_add_listener(_keep_polling))
+    # And the ECB rates of a Portfolio outside EUR, which nothing else
+    # listens to (portfolio_coordinator.WalletPrices reads them).
+    if runtime.ecb is not None:
+        entry.async_on_unload(runtime.ecb.async_add_listener(_keep_polling))

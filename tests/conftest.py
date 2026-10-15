@@ -24,6 +24,7 @@ from homeassistant.helpers import device_registry as dr, issue_registry as ir
 from homeassistant.util import dt as dt_util
 import pytest
 
+from custom_components.bitpanda.api import BitpandaApiError
 from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.portfolio_coordinator import PortfolioRuntime
 from custom_components.bitpanda.portfolio_store import (
@@ -63,6 +64,10 @@ def pytest_configure(config):
     # written to stderr, and the recorder's thread can write one between two
     # tests, outside pytest's capture. Its warnings still show.
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+    # A test that runs the real ticker request (no_real_ticker).
+    config.addinivalue_line(
+        "markers", "real_ticker: the test runs the real BitpandaApiClient.async_get_ticker"
+    )
 
 _FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -76,6 +81,27 @@ def stub_the_dashboard_cards(request):
         yield
         return
     with patch("custom_components.bitpanda.async_register_cards", AsyncMock()):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def no_real_ticker(request):
+    """A Portfolio reads each wallet's price from Bitpanda's ticker in a round
+    after every successful refresh: in tests no ticker answers -- a request
+    fails at once, as an HTTP error, and the wallets have no price.
+    A test that wants ticker prices patches async_get_ticker itself; the API
+    tests (test_api_*.py) and a test marked `real_ticker` run the real
+    method."""
+    if request.node.path.name.startswith("test_api") or request.node.get_closest_marker(
+        "real_ticker"
+    ):
+        yield
+        return
+    failure = BitpandaApiError("no ticker in tests", kind="http_status", path="/tickers")
+    with patch(
+        "custom_components.bitpanda.api.BitpandaApiClient.async_get_ticker",
+        AsyncMock(side_effect=failure),
+    ):
         yield
 
 

@@ -4,12 +4,12 @@ sensors of an entry at once (DayAgoPrices).
 """
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import datetime, timedelta
 import logging
-from typing import Protocol
+from typing import Any, Protocol
 
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.util import dt as dt_util
 
@@ -89,11 +89,11 @@ class DayAgoPrices:
 
     Every sensor joins as Home Assistant adds it and leaves as it is
     removed -- at an unload, when it is disabled, or when it is no longer
-    tracked; Home Assistant's stop removes none, and a lookup due while it
-    stops fails quietly, as any failed one. One lookup (`look_up`) serves
-    all that are there: a second after the first joins -- the others join
-    meanwhile -- and then every CHANGE_24H_UPDATE_INTERVAL, until the last
-    one leaves. A sensor without a value of a day ago, and every sensor
+    tracked; Home Assistant's stop removes none, but ends the periodic
+    lookup, and one due while it stops fails quietly, as any failed one.
+    One lookup (`look_up`) serves all that are there: a second after the
+    first joins -- the others join meanwhile -- and then every
+    CHANGE_24H_UPDATE_INTERVAL, until the last one leaves. A sensor without a value of a day ago, and every sensor
     after a failed lookup, gets no reference: its 24 h attributes are
     absent, never stale. The sensor's next update publishes them.
     """
@@ -111,7 +111,10 @@ class DayAgoPrices:
             self._timers = [
                 async_call_later(self._hass, _FIRST_LOOKUP_DELAY, self.async_look_up),
                 async_track_time_interval(
-                    self._hass, self.async_look_up, CHANGE_24H_UPDATE_INTERVAL
+                    self._hass,
+                    self.async_look_up,
+                    CHANGE_24H_UPDATE_INTERVAL,
+                    cancel_on_shutdown=True,
                 ),
             ]
         self._sensors[sensor.entity_id] = sensor
@@ -139,3 +142,111 @@ class DayAgoPrices:
             found = {}
         for entity_id, sensor in sensors.items():
             sensor.set_price_24h_ago(found.get(entity_id))
+
+
+async def async_wallet_prices_24h_ago(
+    hass: HomeAssistant, entity_ids: set[str], now: datetime
+) -> dict[str, float]:
+    """Each wallet's price of 24 hours before `now`: the ticker price its
+    Balance (total) sensor recorded then (`price`).
+
+    When: the 5-minute statistics, as for a price sensor
+    (async_prices_24h_ago) -- a row every 5 minutes, whether the value
+    changed or not (a stablecoin, a stock over the weekend), and none while
+    Home Assistant was off. What: the recorded state in effect at the row's
+    end. The nearest row within CHANGE_24H_TOLERANCE either side whose state
+    recorded a price, in the sensor's currency of today, counts -- after a
+    change of the Portfolio's currency the old rows may still be there. A
+    state recorded without a price -- by the version before, or while there
+    was no ticker price -- is no reference: never the value over the units,
+    which /portfolio gives in cents. A wallet without a reference is left
+    out. Two queries for all wallets, in one recorder job.
+    """
+    # The recorder is an after-dependency, imported only when it is needed.
+    from homeassistant.components.recorder import get_instance, history
+    from homeassistant.components.recorder.statistics import statistics_during_period
+
+    target = now - timedelta(hours=24)
+    start = target - CHANGE_24H_TOLERANCE - _PERIOD
+    end = target + CHANGE_24H_TOLERANCE
+    currencies = {
+        entity_id: state.attributes.get("unit_of_measurement")
+        for entity_id in entity_ids
+        if (state := hass.states.get(entity_id)) is not None
+    }
+
+    def _read() -> tuple[Mapping[str, list[Any]], Mapping[str, list[Any]]]:
+        rows = statistics_during_period(
+            hass, start, end, entity_ids, "5minute", None, {"state"}
+        )
+        states = history.get_significant_states(
+            hass,
+            start,
+            end,
+            entity_ids=list(entity_ids),
+            include_start_time_state=True,
+            significant_changes_only=False,
+            minimal_response=False,
+            no_attributes=False,
+        )
+        return rows, states
+
+    rows, recorded = await get_instance(hass).async_add_executor_job(_read)
+    target_ts = target.timestamp()
+    tolerance = CHANGE_24H_TOLERANCE.total_seconds()
+    found: dict[str, float] = {}
+    for entity_id, series in rows.items():
+        near = sorted(
+            (
+                row
+                for row in series
+                if row.get("state") is not None
+                and row.get("end") is not None
+                and abs(row["end"] - target_ts) <= tolerance
+            ),
+            key=lambda row: abs(row["end"] - target_ts),
+        )
+        states = [state for state in recorded.get(entity_id, []) if isinstance(state, State)]
+        for row in near:
+            then = _price_then(states, row, currencies.get(entity_id))
+            if then is not None:
+                found[entity_id] = then
+                break
+    return found
+
+
+def _price_then(states: list[State], row: Any, currency: Any) -> float | None:
+    """The price at a statistics row's end: the `price` the state in effect
+    then recorded."""
+    state = _state_at(states, row["end"], currency)
+    return None if state is None else _positive(state.attributes.get("price"))
+
+
+def _positive(value: Any) -> float | None:
+    """`value` as a number above 0, or None."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+        return float(value)
+    return None
+
+
+def _state_at(states: list[State], moment: float, currency: Any) -> State | None:
+    """The recorded state in effect at `moment` (a timestamp), a row's end:
+    the newest one written before it -- one written at the end is the next
+    period's, as for the statistics. None when it is not a number -- the
+    wallet unavailable then -- or was in another currency than `currency`,
+    today's (None: not known, not compared)."""
+    current = None
+    for state in states:
+        if state.last_updated.timestamp() < moment and (
+            current is None or state.last_updated >= current.last_updated
+        ):
+            current = state
+    if current is None:
+        return None
+    if currency is not None and current.attributes.get("unit_of_measurement") != currency:
+        return None
+    try:
+        float(current.state)
+    except ValueError:
+        return None
+    return current

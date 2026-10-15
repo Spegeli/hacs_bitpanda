@@ -4,27 +4,8 @@ import { css, html, nothing, type PropertyValues, type TemplateResult } from "li
 
 import { BitpandaCard, COMMON_OPTIONS } from "./base-card";
 import { findPriceAssets, priceCurrencies, selectAssets, selectGroups } from "./discovery";
-import {
-  assetFields,
-  computeHelper,
-  computeLabel,
-  currencyCode,
-  assetList,
-  divider,
-  editorHass,
-  expandable,
-  groupFields,
-  groupList,
-  groupNames,
-  limitField,
-  nonNegativeInt,
-  oneOf,
-  select,
-  sortField,
-  timeframeField,
-  titleField,
-  validateConfig,
-} from "./forms";
+import { PRICE_TRACKER_EDITOR, createEditor } from "./editor";
+import { assetList, currencyCode, editorHass, groupList, nonNegativeInt, oneOf, validateConfig } from "./forms";
 import { arrow, formatDay, formatLongDate, formatPercent, formatSignedLike, formatState, numericState, trendClass } from "./format";
 import { languageOf, t, type TextKey } from "./i18n";
 import { allFit, currencySwitch, emptyState, header, moreInfo, numberAttribute, onActivate, timeframeSwitch } from "./parts";
@@ -281,13 +262,6 @@ export function amountsFit(cells: readonly { room: number; pct: number; amount?:
   );
 }
 
-/** The currencies the editor offers: those the Price Tracker has prices in;
- * every supported currency when there is no state to read them from. */
-function editorCurrencies(hass: Hass | undefined): readonly string[] {
-  const offered = hass ? priceCurrencies(findPriceAssets(hass)) : [];
-  return offered.length > 0 ? offered : CURRENCIES;
-}
-
 export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
   static override properties = {
     ...BitpandaCard.properties,
@@ -309,25 +283,8 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
   private window: StatWindow = windowFor("day", Date.now());
   private readonly lines = new SeriesLoader(() => this.seriesArrived());
 
-  static async getConfigForm() {
-    const hass = editorHass();
-    const names = await groupNames(hass);
-    return {
-      schema: [
-        titleField("Bitpanda Price Tracker"),
-        expandable("group_content", [
-          { name: "layout", selector: select(LAYOUTS, (value) => t(undefined, `layout_${value}` as TextKey)) },
-          timeframeField(),
-          { name: "currency", selector: { select: { mode: "dropdown", options: editorCurrencies(hass).map((value) => ({ value, label: value })) } } },
-        ]),
-        // Like the Portfolio's Wallets: the list's order and length, then
-        // the asset groups and the assets.
-        expandable("group_assets", [sortField(PRICE_SORTS), limitField(0), divider(), ...groupFields(names), divider(), ...assetFields("Price Tracker")]),
-      ],
-      computeLabel,
-      // "Order as chosen" needs assets chosen with "Only".
-      computeHelper: (field: { name: string }) => (field.name === "sort" ? t(undefined, "opt_sort_help_tracker") : computeHelper(field)),
-    };
+  static async getConfigElement(): Promise<HTMLElement> {
+    return createEditor(PRICE_TRACKER_EDITOR);
   }
 
   static getStubConfig(): Record<string, unknown> {

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PortfolioCard, blockLayout, groupReturn } from "../src/portfolio-card";
 import { windowFor } from "../src/statistics";
 import type { Timeframe } from "../src/types";
-import { BTC, ETH, EUNL, XAU, makeHass, portfolioDevice, walletDevice, type FakeHass, type FakeWallet } from "./fixtures";
+import { BTC, ETH, EUNL, XAU, makeHass, openEditor, portfolioDevice, walletDevice, type FakeHass, type FakeWallet } from "./fixtures";
 
 const HOUR = 3_600_000;
 const TOTAL = "sensor.bitpanda_portfolio_total_value";
@@ -448,7 +448,7 @@ describe("the Bitpanda Portfolio card", () => {
   it("the editor form lists exactly the card's options", async () => {
     const names = (fields: { name: string; type?: string; schema?: { name: string; type?: string }[] }[]): string[] =>
       fields.flatMap((field) => (field.schema ? names(field.schema) : field.type === "divider" ? [] : [field.name]));
-    const form = await PortfolioCard.getConfigForm();
+    const { form } = await openEditor("bitpanda-portfolio-card");
     expect(names(form.schema).sort()).toEqual(
       ["asset_selection", "assets", "group_selection", "group_wallets", "groups", "hide_amounts", "limit", "show_allocation", "show_cash", "show_graph", "show_search", "show_total", "show_wallets", "sort", "timeframe", "title"].sort(),
     );
@@ -536,7 +536,7 @@ describe("what the Portfolio card shows, by choice", () => {
   });
 
   it("explains that the limit holds without grouping only", async () => {
-    const form = await PortfolioCard.getConfigForm();
+    const { form } = await openEditor("bitpanda-portfolio-card");
     expect(form.computeHelper({ name: "limit" })).toBe("Only while “Wallets in asset groups” is off; 0 shows all");
     expect(form.computeLabel({ name: "group_wallets" })).toBe("Wallets in asset groups");
     expect(form.computeHelper({ name: "show_graph" })).toBeUndefined();

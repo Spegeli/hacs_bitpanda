@@ -124,6 +124,9 @@ export const CURRENCIES: readonly string[] = [
 export type WalletSort = "value" | "return" | "name";
 export const WALLET_SORTS: readonly WalletSort[] = ["value", "return", "name"];
 
+/** Wallets listed before Show all, without groups. */
+export const DEFAULT_WALLET_LIMIT = 5;
+
 export type PriceSort = "selection" | "name" | "change_desc" | "change_asc";
 export const PRICE_SORTS: readonly PriceSort[] = ["selection", "name", "change_desc", "change_asc"];
 

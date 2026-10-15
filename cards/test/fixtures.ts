@@ -288,3 +288,48 @@ export const EUNL: FakeWallet = {
 export const XAU: FakeWallet = {
   symbol: "XAU", name: "Gold", category: "metal", units: 0.56, total: "67.01", returnPercent: 4.2,
 };
+
+// --- The cards' editors ----------------------------------------------------------
+
+/** A field of an editor's form, or a group of fields. */
+export interface EditorField {
+  name: string;
+  type?: string;
+  title?: string;
+  default?: unknown;
+  schema?: EditorField[];
+  selector?: Record<string, unknown>;
+}
+
+/** What an editor gave Home Assistant's form. */
+export type EditorFormElement = HTMLElement & {
+  hass?: unknown;
+  data: Record<string, unknown>;
+  schema: EditorField[];
+  computeLabel: (field: { name: string }) => string | undefined;
+  computeHelper: (field: { name: string }) => string | undefined;
+};
+
+export type CardEditor = HTMLElement & {
+  hass?: unknown;
+  setConfig(config: Record<string, unknown>): void;
+  updateComplete: Promise<boolean>;
+};
+
+/** A card's editor as Home Assistant opens it: getConfigElement(), hass, the
+ * configuration; drawn, the group names asked for. */
+export async function openEditor(
+  tag: string,
+  config: Record<string, unknown> = {},
+  hass?: FakeHass,
+): Promise<{ editor: CardEditor; form: EditorFormElement }> {
+  const card = customElements.get(tag) as unknown as { getConfigElement(): Promise<HTMLElement> };
+  const editor = (await card.getConfigElement()) as CardEditor;
+  if (hass) editor.hass = hass;
+  editor.setConfig({ type: `custom:${tag}`, ...config });
+  document.body.append(editor);
+  await editor.updateComplete;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await editor.updateComplete;
+  return { editor, form: editor.shadowRoot?.querySelector("ha-form") as EditorFormElement };
+}

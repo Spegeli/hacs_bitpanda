@@ -1,8 +1,9 @@
 // Configuration: what setConfig accepts, and the fields of the visual editor
-// (Home Assistant's own form, getConfigForm). Toggles, numbers and the title
-// show their default where the configuration has none, and nothing is saved
-// for them; Home Assistant's select fields cannot, so a card added from the
-// picker starts with its choices written out (each card's getStubConfig).
+// (Home Assistant's own form, drawn by each card's editor, editor.ts). Toggles,
+// numbers and the title show their default where the configuration has none,
+// and nothing is saved for them; Home Assistant's select fields cannot, so a
+// card added from the picker starts with its choices written out (each card's
+// getStubConfig).
 import { t, type TextKey } from "./i18n";
 import { ASSET_SELECTIONS, CATEGORIES, TIMEFRAMES, type BaseConfig, type Category, type Hass } from "./types";
 
@@ -93,8 +94,8 @@ export const sortField = (values: readonly string[]): FormField => ({
   selector: select(values, (value) => t(undefined, `sort_${value}` as TextKey)),
 });
 
-/** Home Assistant's state for an editor: getConfigForm gets no hass, so it
- * is read from the page's root element when the editor opens. */
+/** Home Assistant's state where nothing hands it over -- the card picker's
+ * texts: read from the page's root element. */
 export function editorHass(): Hass | undefined {
   return (document.querySelector("home-assistant") as { hass?: Hass } | null)?.hass;
 }

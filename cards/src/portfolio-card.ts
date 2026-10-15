@@ -4,27 +4,8 @@ import { html, nothing, type PropertyValues, type TemplateResult } from "lit";
 
 import { BitpandaCard, COMMON_OPTIONS } from "./base-card";
 import { findPortfolio, selectAssets, selectGroups } from "./discovery";
-import {
-  booleanField,
-  computeHelper,
-  computeLabel,
-  assetList,
-  divider,
-  editorHass,
-  expandable,
-  groupFields,
-  groupList,
-  groupNames,
-  limitField,
-  nonNegativeInt,
-  oneOf,
-  bool,
-  sortField,
-  timeframeField,
-  titleField,
-  validateConfig,
-  assetFields,
-} from "./forms";
+import { PORTFOLIO_EDITOR, createEditor } from "./editor";
+import { assetList, bool, editorHass, groupList, nonNegativeInt, oneOf, validateConfig } from "./forms";
 import {
   arrow,
   formatDayTime,
@@ -60,6 +41,7 @@ import { summary } from "./summary";
 import {
   ASSET_SELECTIONS,
   CATEGORIES,
+  DEFAULT_WALLET_LIMIT,
   TIMEFRAMES,
   WALLET_SORTS,
   type Category,
@@ -86,20 +68,6 @@ const COLORS: Record<Category | "cash" | "cash_plus", string> = {
 };
 
 const categoryOf = (wallet: WalletRefs): Category => wallet.category ?? "other";
-
-// The editor's shared fields in the Portfolio's own words: its list holds
-// wallets, its limit holds without groups only, and its filters leave the
-// total, Cash, Cash Plus and the allocation whole.
-const WALLET_LABELS: Record<string, TextKey> = {
-  limit: "opt_limit_wallets",
-  asset_selection: "opt_asset_selection_wallets",
-  assets: "opt_assets_wallets",
-};
-const WALLET_HELPERS: Record<string, TextKey> = {
-  limit: "opt_limit_help_wallets",
-  group_selection: "opt_group_selection_help",
-  assets: "opt_assets_help_wallets",
-};
 
 /** The wallets a card shows: those of its asset groups, then of its assets. */
 const shownWallets = (refs: PortfolioRefs, config: PortfolioConfig): WalletRefs[] =>
@@ -165,9 +133,6 @@ const UNDER_CHEVRON = 30;
 /** Pixels between the units and the staked share beside them. */
 const STAKE_GAP = 8;
 
-/** Wallets listed before Show all, without groups. */
-const DEFAULT_LIMIT = 5;
-
 export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
   static override properties = {
     ...BitpandaCard.properties,
@@ -194,40 +159,8 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
   private window: StatWindow = windowFor("day", Date.now());
   private readonly lines = new SeriesLoader(() => this.seriesArrived(), fetchPortfolioLine);
 
-  static async getConfigForm() {
-    const names = await groupNames(editorHass());
-    return {
-      schema: [
-        titleField("Bitpanda Portfolio"),
-        expandable("group_content", [
-          timeframeField(),
-          booleanField("show_total", true),
-          booleanField("show_graph", true),
-          booleanField("show_cash", true),
-          booleanField("show_allocation", true),
-          booleanField("show_wallets", true),
-        ]),
-        expandable("group_wallets", [
-          booleanField("show_search", false),
-          booleanField("group_wallets", true),
-          sortField(WALLET_SORTS),
-          limitField(DEFAULT_LIMIT),
-          divider(),
-          ...groupFields(names),
-          divider(),
-          ...assetFields("Wallet"),
-        ]),
-        expandable("group_appearance", [booleanField("hide_amounts", false)]),
-      ],
-      computeLabel: (field: { name: string }) => {
-        const key = WALLET_LABELS[field.name];
-        return key ? t(undefined, key) : computeLabel(field);
-      },
-      computeHelper: (field: { name: string }) => {
-        const key = WALLET_HELPERS[field.name];
-        return key ? t(undefined, key) : computeHelper(field);
-      },
-    };
+  static async getConfigElement(): Promise<HTMLElement> {
+    return createEditor(PORTFOLIO_EDITOR);
   }
 
   static getStubConfig(): Record<string, unknown> {
@@ -463,7 +396,7 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
       // Without groups, the list stops at the limit, with Show all and
       // Show less.
       const sorted = sortWallets(hass, shown, sort);
-      const limit = config.limit ?? DEFAULT_LIMIT;
+      const limit = config.limit ?? DEFAULT_WALLET_LIMIT;
       const folds = limit > 0 && sorted.length > limit;
       const rows = folds && !this.showAll ? sorted.slice(0, limit) : sorted;
       return html`<div class=${this.walletsClass()}>${rows.map((wallet) => this.renderWallet(hass, refs, wallet))}</div>

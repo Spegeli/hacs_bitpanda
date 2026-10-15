@@ -88,6 +88,8 @@ To see a change in Home Assistant, run `npm run build` and restart Home Assistan
 
 The Portfolio card draws its line from Bitpanda's own value history (`bitpanda/portfolio_history`), the Price Tracker its lines from the recorder's statistics.
 
+Each card's visual editor is an element of its own (`cards/src/editor.ts`) that draws Home Assistant's form, `ha-form`. Home Assistant loads that form on demand: where no other editor has loaded it yet, the editor loads it through a built-in card's editor first.
+
 Every change that can alter the build — under `cards/src`, or to `build.mjs`, `tsconfig.json` or `package-lock.json` — commits the rebuilt bundle with it, and nothing else ever changes the bundle: the check "Repository / Cards" rebuilds it and fails when the committed file differs. Pin every package to an exact version.
 
 ## Project layout

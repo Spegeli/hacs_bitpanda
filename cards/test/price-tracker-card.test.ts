@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PriceTrackerCard, amountsFit, priceColumns, priceRowLayout } from "../src/price-tracker-card";
-import { makeHass, portfolioDevice, priceDevice, type FakeHass } from "./fixtures";
+import { makeHass, openEditor, portfolioDevice, priceDevice, type FakeHass } from "./fixtures";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -640,7 +640,7 @@ describe("the Bitpanda Price Tracker card", () => {
   it("the editor form lists exactly the card's options", async () => {
     const fieldNames = (fields: { name: string; type?: string; schema?: { name: string; type?: string }[] }[]): string[] =>
       fields.flatMap((field) => (field.schema ? fieldNames(field.schema) : field.type === "divider" ? [] : [field.name]));
-    const form = await PriceTrackerCard.getConfigForm();
+    const { form } = await openEditor("bitpanda-price-tracker-card");
     expect(fieldNames(form.schema).sort()).toEqual(
       ["asset_selection", "assets", "currency", "group_selection", "groups", "layout", "limit", "sort", "timeframe", "title"].sort(),
     );
@@ -670,25 +670,16 @@ describe("the Bitpanda Price Tracker card", () => {
   it("the editor offers the currencies the Price Tracker has prices in, else every supported one", async () => {
     type Field = { name: string; schema?: Field[]; selector?: { select?: { options: { value: string }[] } } };
     const flat = (fields: Field[]): Field[] => fields.flatMap((field) => (field.schema ? flat(field.schema) : [field]));
-    const options = async (): Promise<string[]> =>
-      (flat((await PriceTrackerCard.getConfigForm()).schema as Field[]).find((field) => field.name === "currency")?.selector?.select?.options ?? []).map(
+    const options = async (hass?: FakeHass): Promise<string[]> =>
+      (flat((await openEditor("bitpanda-price-tracker-card", {}, hass)).form.schema as Field[]).find((field) => field.name === "currency")?.selector?.select?.options ?? []).map(
         (option) => option.value,
       );
     const supported = ["EUR", "CHF", "CZK", "DKK", "GBP", "HUF", "NOK", "PLN", "RON", "SEK", "TRY", "USD"];
-    // getConfigForm gets no hass: it reads Home Assistant's own state from
-    // the page's root element when the editor opens.
+    // Before Home Assistant hands the editor its state, and without a Price
+    // Tracker: every supported currency.
     expect(await options()).toEqual(supported);
-    const root = document.createElement("home-assistant") as HTMLElement & { hass?: FakeHass };
-    document.body.append(root);
-    try {
-      expect(await options()).toEqual(supported);
-      root.hass = trackerHass();
-      expect(await options()).toEqual(["EUR", "USD"]);
-      root.hass = makeHass({ devices: [portfolioDevice()] });
-      expect(await options()).toEqual(supported);
-    } finally {
-      root.remove();
-    }
+    expect(await options(trackerHass())).toEqual(["EUR", "USD"]);
+    expect(await options(makeHass({ devices: [portfolioDevice()] }))).toEqual(supported);
   });
 
   it("has a size for both kinds of dashboard view", async () => {

@@ -8,7 +8,7 @@ import { PRICE_TRACKER_EDITOR, createEditor } from "./editor";
 import { assetList, currencyCode, editorHass, groupList, nonNegativeInt, oneOf, validateConfig } from "./forms";
 import { arrow, formatDay, formatLongDate, formatPercent, formatSignedLike, formatState, numericState, trendClass } from "./format";
 import { languageOf, t, type TextKey } from "./i18n";
-import { allFit, currencySwitch, emptyState, header, moreInfo, numberAttribute, onActivate, timeframeSwitch } from "./parts";
+import { allFit, currencySwitch, emptyState, header, moreInfo, onActivate, timeframeSwitch } from "./parts";
 import { defineCard } from "./register";
 import { renderSparkline } from "./sparkline";
 import { SeriesLoader, changeFromSeries, lineStepMs, windowFor, type Point, type StatWindow } from "./statistics";
@@ -337,15 +337,8 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
       const state = entityId ? hass.states[entityId] : undefined;
       const points = entityId ? this.lines.series(entityId) : undefined;
       const current = numericState(hass, entityId);
-      // 1D: the sensor's own 24 h change while it has one; otherwise, and
-      // beyond a day, the statistics from the window's start or, when they
-      // start later, from their first point.
-      const dayChange = this.timeframe === "day" ? numberAttribute(state, "change_24h_pct") : undefined;
-      if (dayChange !== undefined) {
-        const before = numberAttribute(state, "price_24h_ago");
-        const amount = current !== undefined && before !== undefined ? current - before : undefined;
-        return { asset, entityId, change: dayChange, amount, points, since: undefined };
-      }
+      // Every timeframe, 1D included, from the statistics: from the window's
+      // start or, when they start later, from their first point.
       const measured = changeFromSeries(points ?? [], current, this.window);
       return { asset, entityId, change: measured?.change, amount: measured?.amount, points, since: measured?.since };
     });
@@ -371,10 +364,10 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
     this.window = windowFor(this.timeframe, Date.now());
     if (!this.hass || !this.config) return;
     const { rows, ranked } = this.visible(this.hass, this.config);
-    // Beyond a day the change comes from the statistics: sorting by it needs
-    // them for every row, not only for the rows shown.
+    // The change comes from the statistics: sorting by it needs them for
+    // every row, not only for the rows shown.
     const sort = this.config.sort ?? "name";
-    const needed = this.timeframe !== "day" && (sort === "change_desc" || sort === "change_asc") ? ranked : rows;
+    const needed = sort === "change_desc" || sort === "change_asc" ? ranked : rows;
     const entityIds = needed.map((row) => row.entityId).filter((entityId): entityId is string => entityId !== undefined);
     this.lines.request(this.hass, entityIds, this.window);
   }

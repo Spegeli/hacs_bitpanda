@@ -76,25 +76,36 @@ describe("the Bitpanda Price Tracker card", () => {
     expect(textOf(one(card, ".title"))).toBe("Bitpanda Price Tracker");
     expect(one(card, ".eye")).toBeNull();
     expect(rows(card)).toEqual([
-      { name: "Bitcoin", sub: "BTC", price: "90200.77 EUR", change: "▲ +1.82%" },
-      { name: "Ethereum", sub: "ETH", price: "2308.93 EUR", change: "▼ -0.64%" },
-      { name: "iShares Core MSCI World UCITS ETF", sub: "IE00B4L5Y983", price: "95.57 EUR", change: "▲ +0.21%" },
+      { name: "Bitcoin", sub: "BTC", price: "90200.77 EUR", change: "▲ +4.16%" },
+      { name: "Ethereum", sub: "ETH", price: "2308.93 EUR", change: "▼ -3.79%" },
+      { name: "iShares Core MSCI World UCITS ETF", sub: "IE00B4L5Y983", price: "95.57 EUR", change: "▲ +0.94%" },
       { name: "Sui", sub: "SUI", price: "3.12 EUR", change: "▲ +4.00%" },
     ]);
     expect(all(card, ".price-row svg.mini")).toHaveLength(4);
   });
 
-  it("the 1D change is the sensor's own 24 h change", async () => {
-    const card = await mount();
-    expect(rows(card)[0]?.change).toBe("▲ +1.82%");
+  it("takes 1D from the statistics, whatever the sensor's own 24-hour change says", async () => {
+    const coin = priceDevice({ symbol: "BTC", name: "Bitcoin", category: "crypto", prices: { EUR: { state: "110", change24h: 10, price24hAgo: 100 } } });
+    const hass = makeHass({
+      devices: [coin],
+      callWS: async (message) => ({
+        "sensor.bitpanda_btc_price_tracker_eur": [{ start: Date.parse(String(message["start_time"])), state: 105 }, { start: Date.now() - HOUR, state: 108 }],
+      }),
+    });
+    const card = await mount({}, hass);
+    await linesDrawn(card);
+    expect(rows(card)[0]?.change).toBe("▲ +4.76%");
+    expect(extras(card)[0]).toEqual({ amount: "+5.00 EUR", since: "" });
   });
 
-  it("the 1D change also shows its amount, from the sensor's price 24 hours ago", async () => {
-    const card = await mount();
-    expect(extras(card)[0]).toEqual({ amount: "+1612.37 EUR", since: "" });
+  it("asks the statistics of every row to sort 1D by change", async () => {
+    const hass = trackerHass();
+    await mount({ sort: "change_desc", limit: 1 }, hass);
+    await vi.waitFor(() => expect(hass.messages.length).toBeGreaterThan(0));
+    expect(hass.messages[0]?.["statistic_ids"]).toHaveLength(4);
   });
 
-  it("1D without the sensor's 24 h change counts from the statistics' start", async () => {
+  it("1D of a fresh asset counts from the statistics' start", async () => {
     const fresh = priceDevice({ symbol: "NEW", name: "Newcoin", category: "crypto", prices: { EUR: { state: "110.50" } } });
     const firstSeen = Date.now() - 5 * HOUR;
     const hass = makeHass({
@@ -109,8 +120,15 @@ describe("the Bitpanda Price Tracker card", () => {
   });
 
   it("a change that rounds to 0.00 % shows neither arrow nor colour, nor does its amount", async () => {
-    const still = priceDevice({ symbol: "EUNL", name: "iShares Core MSCI World UCITS ETF", category: "etf", prices: { EUR: { state: "132.21", change24h: -0.004, price24hAgo: 132.215 } } });
-    const card = await mount({}, trackerHass({ devices: [still] }));
+    const still = priceDevice({ symbol: "EUNL", name: "iShares Core MSCI World UCITS ETF", category: "etf", prices: { EUR: { state: "132.21" } } });
+    const hass = makeHass({
+      devices: [still],
+      callWS: async (message) => ({
+        "sensor.bitpanda_eunl_price_tracker_eur": [{ start: Date.parse(String(message["start_time"])), state: 132.215 }, { start: Date.now() - HOUR, state: 132.21 }],
+      }),
+    });
+    const card = await mount({}, hass);
+    await linesDrawn(card);
     expect(rows(card)[0]?.change).toBe("0.00%");
     expect(extras(card)[0]?.amount).toBe("0.00 EUR");
     expect(one(card, ".price-row .c")?.className.trim()).toBe("c");
@@ -177,7 +195,8 @@ describe("the Bitpanda Price Tracker card", () => {
     (switches[1]!.querySelectorAll<HTMLElement>("[role=radio]")[1])?.click();
     await card.updateComplete;
     expect(rows(card)[0]?.price).toBe("105312.09 USD");
-    expect(rows(card)[0]?.change).toBe("▲ +1.85%");
+    // 105312.09 against the USD sensor's statistics, at 86600 a day back here.
+    await vi.waitFor(() => expect(rows(card)[0]?.change).toBe("▲ +21.61%"));
   });
 
   it("hides the currency switch with EUR alone", async () => {
@@ -214,9 +233,11 @@ describe("the Bitpanda Price Tracker card", () => {
 
   it("sorts by change, dashes last, and by the picked order", async () => {
     const desc = await mount({ sort: "change_desc" });
-    expect(rows(desc).map((row) => row.name)).toEqual(["Bitcoin", "iShares Core MSCI World UCITS ETF", "Ethereum", "Sui"]);
+    await linesDrawn(desc);
+    expect(rows(desc).map((row) => row.name)).toEqual(["Bitcoin", "Sui", "iShares Core MSCI World UCITS ETF", "Ethereum"]);
     const asc = await mount({ sort: "change_asc" });
-    expect(rows(asc).map((row) => row.name)).toEqual(["Ethereum", "iShares Core MSCI World UCITS ETF", "Bitcoin", "Sui"]);
+    await linesDrawn(asc);
+    expect(rows(asc).map((row) => row.name)).toEqual(["Ethereum", "iShares Core MSCI World UCITS ETF", "Sui", "Bitcoin"]);
     const picked = await mount({ sort: "selection", asset_selection: "only", assets: ["dev-price-sui", "dev-price-btc"] });
     expect(rows(picked).map((row) => row.name)).toEqual(["Sui", "Bitcoin"]);
     const unpicked = await mount({ sort: "selection" });
@@ -293,11 +314,12 @@ describe("the Bitpanda Price Tracker card", () => {
     });
     try {
       const card = await mount({ layout: "tiles" });
+      await linesDrawn(card);
       await vi.waitFor(() => expect(one(card, ".tiles")?.classList.contains("inline")).toBe(true));
       // The chip sets the percentage apart: no middle dot between them.
       expect(one(card, ".tile .c .sep")).toBeNull();
-      expect(textOf(one(card, ".tile .c .pct"))).toBe("▲ +1.82%");
-      expect(textOf(one(card, ".tile .c .pct + .a"))).toBe("+1612.37 EUR");
+      expect(textOf(one(card, ".tile .c .pct"))).toBe("▲ +4.16%");
+      expect(textOf(one(card, ".tile .c .pct + .a"))).toBe("+3600.77 EUR");
       room.mockReturnValue(130);
       card.requestUpdate();
       await card.updateComplete;
@@ -318,6 +340,7 @@ describe("the Bitpanda Price Tracker card", () => {
   it("the change's percentage stands in a chip, in the list and in tiles, like the Portfolio card's", async () => {
     for (const layout of ["list", "tiles"]) {
       const card = await mount({ layout });
+      await linesDrawn(card);
       const chip = one(card, ".c .pct");
       expect(chip?.classList.contains("pchip")).toBe(true);
       // The colour comes from the change around it.
@@ -605,7 +628,18 @@ describe("the Bitpanda Price Tracker card", () => {
       ...ASSETS,
       priceDevice({ symbol: "ADA", name: "Cardano", category: "crypto", prices: { EUR: { state: "0.56" } } }),
     ];
-    const card = await mount({ sort: "change_asc" }, trackerHass({ devices }));
+    const base = trackerHass({ devices });
+    const hass: FakeHass = {
+      ...base,
+      callWS: async <T>(message: Record<string, unknown>): Promise<T> => {
+        const answer = await base.callWS<Record<string, unknown>>(message);
+        delete answer["sensor.bitpanda_ada_price_tracker_eur"];
+        delete answer["sensor.bitpanda_sui_price_tracker_eur"];
+        return answer as T;
+      },
+    };
+    const card = await mount({ sort: "change_asc" }, hass);
+    await linesDrawn(card);
     expect(rows(card).slice(-2).map((row) => row.name)).toEqual(["Cardano", "Sui"]);
   });
 

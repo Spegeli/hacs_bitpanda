@@ -2,7 +2,7 @@
 // Assistant's own formatting for sensor states, its number format setting
 // for everything the cards compute.
 import { speaksLanguageOf, tCount } from "./i18n";
-import type { Category, Hass } from "./types";
+import type { Category, Hass, HassEntityState } from "./types";
 
 export type Direction = "up" | "down" | "flat" | "none";
 
@@ -75,8 +75,9 @@ export function formatMoney(hass: Hass, value: number, currency: string, signed 
   return formatCurrency(hass, value, currency, 2, signed);
 }
 
-/** A price in `currency`, with as many decimals as its size needs (2 from
- * 10 up, 4 from 1, up to 8 below), as the integration shows prices. */
+/** A price in `currency`, with as many decimals as its size needs: 2 from
+ * 10 up, 4 from 1, 8 below. Used for the average buy price, it allows more
+ * decimals below 1 than the price sensors show (5 to 7). */
 export function formatPrice(hass: Hass, value: number, currency: string): string {
   const size = Math.abs(value);
   return formatCurrency(hass, value, currency, size >= 10 || size === 0 ? 2 : size >= 1 ? 4 : 8, false);
@@ -120,6 +121,13 @@ export function formatSignedLike(hass: Hass, entityId: string | undefined, value
   const rounded = Number(value.toFixed(digits)) === 0 ? (0).toFixed(digits) : value.toFixed(digits);
   const text = hass.formatEntityState({ ...state, state: rounded });
   return Number(rounded) > 0 ? `+${text}` : text;
+}
+
+/** A numeric attribute of a state that has its value. */
+export function numberAttribute(state: HassEntityState | undefined, key: string): number | undefined {
+  if (!state || MISSING.has(state.state)) return undefined;
+  const value = state.attributes[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 export function numericState(hass: Hass, entityId: string | undefined): number | undefined {

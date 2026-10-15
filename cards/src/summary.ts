@@ -4,7 +4,7 @@ import { html, nothing, type TemplateResult } from "lit";
 
 import { formatDay, formatDayTime, formatMoney, formatPercent, formatState, numericState, trendClass } from "./format";
 import { t } from "./i18n";
-import { amount, moreInfo, onActivate, returnChip, timeframeSwitch } from "./parts";
+import { amount, onActivate, opener, returnChip, timeframeSwitch } from "./parts";
 import { lineTop, longEnough, nearestIndex, renderSparkline } from "./sparkline";
 import type { Point, StatWindow } from "./statistics";
 import type { Hass, PortfolioRefs, Timeframe } from "./types";
@@ -114,9 +114,7 @@ export function summary(options: SummaryOptions): TemplateResult {
   // The line takes the colour of the return beside it; grey when it is
   // unchanged or unknown.
   const lineClass = trendClass(formatPercent(hass, value).direction) || "flat";
-  const open = (entityId: string | undefined) => () => {
-    if (entityId) moreInfo(host, entityId);
-  };
+  const open = (entityId: string | undefined) => opener(host, entityId);
   // The timeframe buttons stay while the return or the line uses them.
   return html`${options.total
       ? html`<div class="hero" role="button" tabindex="0" @click=${open(refs.totalValue)} @keydown=${onActivate(open(refs.totalValue))}>

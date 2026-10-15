@@ -16,6 +16,7 @@ import {
   formatShare,
   formatState,
   formatUnits,
+  numberAttribute,
   numericState,
   trendClass,
 } from "./format";
@@ -28,8 +29,7 @@ import {
   header,
   icon,
   matchesWallet,
-  moreInfo,
-  numberAttribute,
+  opener,
   onActivate,
   searchField,
   sortWallets,
@@ -296,11 +296,6 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
     return next;
   }
 
-  private open(entityId: string | undefined): () => void {
-    return () => {
-      if (entityId) moreInfo(this, entityId);
-    };
-  }
 
   protected override render(): TemplateResult | typeof nothing {
     const hass = this.hass;
@@ -353,7 +348,7 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
 
   private renderCash(hass: Hass, refs: PortfolioRefs): TemplateResult {
     const item = (label: string, entityId: string | undefined, end: boolean) =>
-      html`<div class=${end ? "end" : ""} role="button" tabindex="0" @click=${this.open(entityId)} @keydown=${onActivate(this.open(entityId))}>
+      html`<div class=${end ? "end" : ""} role="button" tabindex="0" @click=${opener(this, entityId)} @keydown=${onActivate(opener(this, entityId))}>
         <span class="k">${label}</span><span class="v">${amount(formatState(hass, entityId), this.amountsHidden)}</span>
       </div>`;
     return html`<div class="pair">${item(t(hass, "cash"), refs.cash, false)}${item(t(hass, "cash_plus"), refs.cashPlus, true)}</div>`;
@@ -440,7 +435,7 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
       hass,
       wallet,
       hidden: this.amountsHidden,
-      onTap: this.open(wallet.total),
+      onTap: opener(this, wallet.total),
       chevron: {
         open,
         toggle: () => {

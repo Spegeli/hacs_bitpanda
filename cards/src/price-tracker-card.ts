@@ -8,7 +8,7 @@ import { PRICE_TRACKER_EDITOR, createEditor } from "./editor";
 import { assetList, currencyCode, editorHass, groupList, nonNegativeInt, oneOf, validateConfig } from "./forms";
 import { arrow, formatDay, formatLongDate, formatPercent, formatSignedLike, formatState, numericState, trendClass } from "./format";
 import { languageOf, t, type TextKey } from "./i18n";
-import { allFit, currencySwitch, emptyState, header, moreInfo, onActivate, timeframeSwitch, unbroken } from "./parts";
+import { allFit, currencySwitch, emptyState, header, onActivate, opener, timeframeSwitch, unbroken } from "./parts";
 import { defineCard } from "./register";
 import { renderSparkline } from "./sparkline";
 import { SeriesLoader, changeFromSeries, lineStepMs, windowFor, type Point, type StatWindow } from "./statistics";
@@ -407,11 +407,6 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
     return 6;
   }
 
-  private open(entityId: string | undefined): () => void {
-    return () => {
-      if (entityId) moreInfo(this, entityId);
-    };
-  }
 
   /** The row's line: on the window's axis, or from the statistics' start
    * when they start later, the span its change covers. */
@@ -447,7 +442,7 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
         const change = this.change(hass, row);
         // As in the tiles: the name, and below it the symbol, or a
         // security's ISIN.
-        return html`<div class="price-row" role="button" tabindex="0" @click=${this.open(row.entityId)} @keydown=${onActivate(this.open(row.entityId))}>
+        return html`<div class="price-row" role="button" tabindex="0" @click=${opener(this, row.entityId)} @keydown=${onActivate(opener(this, row.entityId))}>
           <div class="lead"><div class="n" title=${row.asset.shortName}>${row.asset.shortName}</div><div class="s">${row.asset.isin ?? row.asset.symbol}</div>${this.since(hass, row)}</div>
           ${this.line(row, change.lineClass)}
           <div class="p">${formatState(hass, row.entityId) ?? "—"}</div>
@@ -461,7 +456,7 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
     return html`<div class="tiles ${this.amountsInline ? "inline" : ""}">
       ${rows.map((row) => {
         const change = this.change(hass, row);
-        return html`<div class="tile" role="button" tabindex="0" @click=${this.open(row.entityId)} @keydown=${onActivate(this.open(row.entityId))}>
+        return html`<div class="tile" role="button" tabindex="0" @click=${opener(this, row.entityId)} @keydown=${onActivate(opener(this, row.entityId))}>
           <div class="n" title=${row.asset.shortName}>${row.asset.shortName}</div>
           <div class="s">${row.asset.isin ?? row.asset.symbol}</div>
           <div class="p">${formatState(hass, row.entityId) ?? "—"}</div>

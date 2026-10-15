@@ -285,3 +285,28 @@ describe("selectGroups", () => {
     expect(selectGroups(items, "only", [])).toEqual([]);
   });
 });
+
+describe("the registry search", () => {
+  it("reads Home Assistant's entity registry again only when it changed", () => {
+    const base = makeHass({ devices: [portfolioDevice(), walletDevice(BTC), priceDevice({ symbol: "EUNL", name: "iShares", category: "etf", prices: { EUR: { state: "95.57" } } })] });
+    let reads = 0;
+    const counted = (entities: typeof base.entities): typeof base.entities =>
+      new Proxy(entities, {
+        ownKeys(target) {
+          reads += 1;
+          return Reflect.ownKeys(target);
+        },
+      });
+    const hass = { ...base, entities: counted(base.entities) };
+    expect(findPriceAssets(hass)).toHaveLength(1);
+    expect(findPortfolio(hass)?.wallets).toHaveLength(1);
+    findPriceAssets({ ...hass, states: { ...hass.states } });
+    expect(reads).toBe(1);
+    // A device registry of its own: the devices are looked at again.
+    const renamed = { ...hass, devices: { ...hass.devices, "dev-price-eunl": { ...hass.devices["dev-price-eunl"]!, model: "Something else" } } };
+    expect(findPriceAssets(renamed)).toHaveLength(0);
+    // A new entity registry: searched again.
+    findPriceAssets({ ...hass, entities: counted({ ...base.entities }) });
+    expect(reads).toBe(2);
+  });
+});

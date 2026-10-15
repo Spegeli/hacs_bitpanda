@@ -34,8 +34,14 @@ export function assetLabel(name: string | undefined, symbol: string): string {
   return trimmed && squash(trimmed) !== squash(symbol) ? `${trimmed} (${symbol})` : symbol;
 }
 
-/** The integration's entities by device, for devices of one model. */
-function devicesOf(hass: Hass, model: string): [HassDevice, HassEntityRegistryEntry[]][] {
+// The integration's entities by device, per entity registry: Home Assistant
+// hands a card a new hass on every state change in the house, and a new
+// entity registry object only when the registry changed.
+const searched = new WeakMap<Hass["entities"], Map<string, HassEntityRegistryEntry[]>>();
+
+function entitiesByDevice(hass: Hass): Map<string, HassEntityRegistryEntry[]> {
+  const known = searched.get(hass.entities);
+  if (known) return known;
   const byDevice = new Map<string, HassEntityRegistryEntry[]>();
   for (const entry of Object.values(hass.entities)) {
     if (!entry || entry.platform !== PLATFORM || !entry.device_id) continue;
@@ -43,6 +49,13 @@ function devicesOf(hass: Hass, model: string): [HassDevice, HassEntityRegistryEn
     list.push(entry);
     byDevice.set(entry.device_id, list);
   }
+  searched.set(hass.entities, byDevice);
+  return byDevice;
+}
+
+/** The integration's entities by device, for devices of one model. */
+function devicesOf(hass: Hass, model: string): [HassDevice, HassEntityRegistryEntry[]][] {
+  const byDevice = entitiesByDevice(hass);
   const found: [HassDevice, HassEntityRegistryEntry[]][] = [];
   for (const [deviceId, entries] of byDevice) {
     const device = hass.devices[deviceId];

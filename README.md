@@ -79,6 +79,7 @@ Entity IDs, device names and log messages are always English. A group you rename
 ## 📋 Requirements
 
 - Home Assistant **2025.5** or newer
+- For the installation through HACS: [HACS](https://hacs.xyz) installed in Home Assistant
 - For the Portfolio: a Bitpanda account and an API key (see [Set up the Portfolio](#set-up-the-portfolio)). The Price Tracker needs neither.
 
 ---

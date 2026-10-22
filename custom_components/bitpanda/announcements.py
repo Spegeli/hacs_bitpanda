@@ -9,7 +9,9 @@ the entry's option for it is on (on by default for new wallets, off for
 staking rewards), in the entry's language, linking to the wallet's device.
 During a start, both wait until Home Assistant has started: it arms the
 automations' triggers only as it finishes starting, and an event fired
-before would reach none.
+before would reach none. At any setup they wait until the entry's platforms
+are set up (PortfolioRuntime.ready): an event fired before would miss the
+event entities.
 
 A new wallet (WalletAnnouncer). The wallet lifecycle manager
 (portfolio_sensor.py) creates wallet entities at every start, after a
@@ -190,10 +192,13 @@ class WalletAnnouncer:
         entry: PortfolioConfigEntry,
         known: KnownWallets,
         group_titles: dict[str, str],
+        ready: asyncio.Event,
     ) -> None:
         self._hass = hass
         self._entry = entry
         self.known = known
+        # PortfolioRuntime.ready: set once the entry's platforms are set up.
+        self._ready = ready
         # Category -> group title, in the entry's language (runtime.group_titles).
         self._group_titles = group_titles
         # Asset id -> its record and the category of the group its wallet
@@ -276,11 +281,14 @@ class WalletAnnouncer:
         Assistant starts drops an announcement still waiting; the asset is
         not known yet, so the entry's next setup marks it again -- and
         announces it at once, its device being there (mark). While it runs,
-        nothing waits, and nothing is left for the unload to cancel."""
+        only a setup's announcement waits, until the entry's platforms are
+        set up -- the event entities with them -- which setup lets happen
+        whatever becomes of them."""
         asset, category = self._pending.pop(asset_id)
         self._scheduled.add(asset_id)
 
         async def _announce(hass: HomeAssistant) -> None:
+            await self._ready.wait()
             # Up to Home Assistant 2026.6, an automation arms its trigger in a
             # listener of its own for the start's end, which may run after
             # this one: yield once, so that the event comes after them all.
@@ -401,6 +409,7 @@ class RewardAnnouncer:
         marks: RewardMarks,
         rewards: RewardsCoordinator,
         portfolio: PortfolioCoordinator,
+        ready: asyncio.Event,
         prices: WalletPrices | None = None,
     ) -> None:
         self._hass = hass
@@ -408,6 +417,8 @@ class RewardAnnouncer:
         self._marks = marks
         self._rewards = rewards
         self._portfolio = portfolio
+        # PortfolioRuntime.ready: set once the entry's platforms are set up.
+        self._ready = ready
         self._prices = prices
         # A refresh came while Home Assistant had not started yet: a pass
         # runs once it has.
@@ -473,6 +484,8 @@ class RewardAnnouncer:
         # one that started this pass: yield once, so that the events come
         # after them all.
         await asyncio.sleep(0)
+        # A setup's first refresh comes before the event entities exist.
+        await self._ready.wait()
         texts: dict[str, str] | None = None
         texts_error: str | None = None
         if notifies_staking_rewards(self._entry):

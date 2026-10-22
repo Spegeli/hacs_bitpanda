@@ -144,7 +144,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> 
             hass, cast(PortfolioConfigEntry, entry), group_titles
         )
         reload_listener = _async_reload_on_new_data_or_options
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    try:
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    finally:
+        if not is_price_tracker:
+            # The announcements wait for the event entities; in any case,
+            # so that none waits for good.
+            cast(PortfolioConfigEntry, entry).runtime_data.ready.set()
     entry.async_on_unload(entry.add_update_listener(reload_listener))
     if is_price_tracker and _price_tracker_config(entry) != at_start:
         # Changed while the start awaited its first prices, before the
@@ -217,7 +223,7 @@ async def _async_start_portfolio(
     # coordinators are handed over: entry.runtime_data is set only once this
     # start returns.
     announcer = RewardAnnouncer(
-        hass, entry, store.reward_marks, runtime.rewards, runtime.portfolio, prices
+        hass, entry, store.reward_marks, runtime.rewards, runtime.portfolio, runtime.ready, prices
     )
     runtime.rewards.on_refreshed = announcer.async_rewards_refreshed
     # Earn, rewards and history are additive: a failure there must not block

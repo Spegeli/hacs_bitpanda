@@ -29,7 +29,7 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.bitpanda.api import BitpandaApiError
-from custom_components.bitpanda import announcements
+from custom_components.bitpanda import announcements, event as event_platform
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.devices import find_entry_device
 
@@ -375,6 +375,97 @@ async def test_a_payout_announced_at_a_reload_waits_for_the_price_round(
         gate.set()
         await hass.async_block_till_done(wait_background_tasks=True)
     assert [event.data["value"] for event in events] == [round(9.87654312 * 0.01, 2)]
+
+
+async def test_a_payout_announced_at_a_reload_shows_on_the_event_entity(
+    hass, portfolio_api, operations, events, hass_storage
+):
+    """A reload while Home Assistant runs, a payout due and a price round
+    that answers at once: the event waits until the Portfolio's platforms
+    are set up -- however long the event platform takes -- and the staking
+    reward entity shows it."""
+    entry = _portfolio_entry(hass)
+    _known(hass_storage, entry, _WHEN[3])
+    await _setup(hass, entry)
+    operations.return_value = _paid(5)
+    order: list[str] = []
+    set_up = event_platform.async_setup_entry
+
+    async def _recorded(hass, entry, add):
+        await asyncio.sleep(0.05)
+        await set_up(hass, entry, add)
+        order.append("platform")
+
+    hass.bus.async_listen(_EVENT, lambda event: order.append("bus"))
+    with patch.object(event_platform, "async_setup_entry", _recorded):
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done(wait_background_tasks=True)
+    assert order == ["platform", "bus"]
+    state = hass.states.get("event.bitpanda_portfolio_staking_reward")
+    assert state.attributes["event_type"] == "staking_reward_received"
+    assert state.attributes["credited_at"] == _WHEN[4]
+
+
+# Home Assistant 2025.5 leaves a failed setup's refresh timers behind; later
+# releases shut its coordinators down.
+@pytest.mark.parametrize("expected_lingering_timers", [True])
+async def test_the_announcements_are_let_go_when_the_platforms_fail_to_set_up(
+    hass, portfolio_api, operations, hass_storage
+):
+    """Readiness is given in any case: a failed setup leaves no announcer
+    waiting for good."""
+    entry = _portfolio_entry(hass)
+    with patch.object(
+        hass.config_entries, "async_forward_entry_setups", AsyncMock(side_effect=RuntimeError)
+    ):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.runtime_data.ready.is_set()
+
+
+@pytest.mark.parametrize("expected_lingering_timers", [True])
+async def test_the_announcements_are_let_go_when_setting_up_the_platforms_is_cancelled(
+    hass, portfolio_api, operations, hass_storage
+):
+    """A cancellation is no Exception: readiness is given all the same."""
+    entry = _portfolio_entry(hass)
+    with patch.object(
+        hass.config_entries,
+        "async_forward_entry_setups",
+        AsyncMock(side_effect=asyncio.CancelledError),
+    ):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.runtime_data.ready.is_set()
+
+
+async def test_a_pass_cancelled_while_setup_waits_leaves_the_others_and_the_setup_alone(
+    hass, portfolio_api, operations, events, hass_storage
+):
+    """The staking reward pass, cancelled while it waits for the platforms,
+    takes the readiness from no one: the wallet new since the last run is
+    announced all the same, and the setup ends loaded."""
+    entry = _portfolio_entry(hass)
+    # Vision's wallet is new since: only Bitcoin's is known.
+    _remember(
+        hass_storage, entry, known_wallets=[BTC["id"]], known_rewards={VSN["id"]: _WHEN[3]}
+    )
+    operations.return_value = _paid(5)
+    wallets = async_capture_events(hass, "bitpanda_wallet_added")
+    set_up = event_platform.async_setup_entry
+
+    async def _cancel_the_pass_first(hass, entry, add):
+        for task in asyncio.all_tasks():
+            if task.get_name() == f"{DOMAIN} staking reward announcement":
+                task.cancel()
+        await asyncio.sleep(0)
+        await set_up(hass, entry, add)
+
+    with patch.object(event_platform, "async_setup_entry", _cancel_the_pass_first):
+        await _setup(hass, entry)
+    # Cancelled: its payout comes with the next pass.
+    assert events == []
+    assert [event.data["asset_id"] for event in wallets] == [VSN["id"]]
 
 
 async def test_a_round_that_takes_too_long_is_not_waited_for(

@@ -850,6 +850,10 @@ class PortfolioRuntime:
     # The wallets' ticker prices, read in a round after each portfolio
     # refresh.
     prices: WalletPrices | None = None
+    # Set once setup has set up the entry's platforms, failed or not: the
+    # announcements wait for it, so that none reaches the bus before the
+    # event entities exist (announcements.py).
+    ready: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
 
 
 # A Portfolio config entry, its runtime data typed.

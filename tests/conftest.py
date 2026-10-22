@@ -153,10 +153,10 @@ def price_group(category: str, *assets: dict, title: str | None = None) -> Confi
 def portfolio_runtime(hass, entry_id: str = "eid", **fields: Any) -> PortfolioRuntime:
     """A Portfolio's runtime data built by hand: `fields` as given -- the
     coordinators at least --, no group titles and setup data unless given,
-    and the Portfolio's file as at a first start: no list of known wallets,
-    no marks, nothing read of the operations."""
+    the Portfolio's file as at a first start: no list of known wallets, no
+    marks, nothing read of the operations -- and its platforms set up."""
     store = PortfolioStore(hass, entry_id)
-    return PortfolioRuntime(**{
+    runtime = PortfolioRuntime(**{
         "group_titles": {},
         "data_at_setup": {},
         "options_at_setup": {},
@@ -165,6 +165,9 @@ def portfolio_runtime(hass, entry_id: str = "eid", **fields: Any) -> PortfolioRu
         "operations": OperationsHistory(store, None, None),
         **fields,
     })
+    # Set up already: nothing waits for the platforms.
+    runtime.ready.set()
+    return runtime
 
 
 def wallet_group(category: str, title: str | None = None) -> ConfigSubentryData:

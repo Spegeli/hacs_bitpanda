@@ -29,7 +29,7 @@ from pytest_homeassistant_custom_component.common import (
     async_mock_service,
 )
 
-from custom_components.bitpanda import purge
+from custom_components.bitpanda import event as event_platform, purge
 from custom_components.bitpanda.announcements import WalletAnnouncer, escape_markdown
 from custom_components.bitpanda.api import BitpandaApiError
 from custom_components.bitpanda.const import DOMAIN, UNKNOWN_ASSET_RETRY
@@ -936,6 +936,31 @@ async def test_an_announcement_dropped_by_an_unload_before_the_start_comes_at_th
     assert VSN["id"] in entry.runtime_data.known_wallets
 
 
+async def test_a_wallet_announced_at_a_setup_shows_on_the_event_entity(
+    hass, portfolio_api, events, notifications, hass_storage
+):
+    """Bought while the Portfolio was not loaded, announced at its setup
+    while Home Assistant runs: the event waits until the Portfolio's
+    platforms are set up -- however long the event platform takes -- and
+    the new wallet entity shows it."""
+    entry = _portfolio_entry(hass)
+    _remember(hass_storage, entry, BTC)
+    portfolio_api.return_value = _answer(BTC, VSN)
+    set_up = event_platform.async_setup_entry
+
+    async def _slow(hass, entry, add):
+        await asyncio.sleep(0.05)
+        await set_up(hass, entry, add)
+
+    with patch.object(event_platform, "async_setup_entry", _slow):
+        await _setup(hass, entry)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    [event] = events
+    state = hass.states.get("event.bitpanda_portfolio_new_wallet")
+    assert state.attributes["event_type"] == "wallet_added"
+    assert state.attributes["device_id"] == event.data["device_id"]
+
+
 # --- Review focus ----------------------------------------------------------------------
 
 
@@ -1079,7 +1104,9 @@ async def test_only_a_wallet_device_of_this_entry_announces_a_waiting_asset(
     other = MockConfigEntry(domain=DOMAIN, title="Another Bitpanda Portfolio")
     other.add_to_hass(hass)
     runtime = entry.runtime_data
-    announcer = WalletAnnouncer(hass, entry, runtime.known_wallets, runtime.group_titles)
+    announcer = WalletAnnouncer(
+        hass, entry, runtime.known_wallets, runtime.group_titles, runtime.ready
+    )
     entry.async_on_unload(announcer.async_listen_for_wallet_devices())
     announcer.mark(VSN, "crypto")
     announcer.mark(SOL, "crypto")
@@ -1138,7 +1165,9 @@ async def test_a_price_device_created_while_an_asset_waits_is_no_news(
     )
     tracker.add_to_hass(hass)
     runtime = entry.runtime_data
-    announcer = WalletAnnouncer(hass, entry, runtime.known_wallets, runtime.group_titles)
+    announcer = WalletAnnouncer(
+        hass, entry, runtime.known_wallets, runtime.group_titles, runtime.ready
+    )
     entry.async_on_unload(announcer.async_listen_for_wallet_devices())
     announcer.mark(VSN, "crypto")
     dev_reg = dr.async_get(hass)
@@ -1172,7 +1201,9 @@ async def test_a_creation_heard_after_the_device_went_again_announces_nothing(
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
     runtime = entry.runtime_data
-    announcer = WalletAnnouncer(hass, entry, runtime.known_wallets, runtime.group_titles)
+    announcer = WalletAnnouncer(
+        hass, entry, runtime.known_wallets, runtime.group_titles, runtime.ready
+    )
     entry.async_on_unload(announcer.async_listen_for_wallet_devices())
     announcer.mark(VSN, "crypto")
     caplog.clear()

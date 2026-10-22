@@ -150,7 +150,9 @@ class _Harness:
 
         self.manager = PortfolioEntityManager(
             hass, self.entry, self.runtime, "EUR", add,
-            WalletAnnouncer(hass, self.entry, self.runtime.known_wallets, _TITLES),
+            WalletAnnouncer(
+                hass, self.entry, self.runtime.known_wallets, _TITLES, self.runtime.ready
+            ),
         )
 
     async def refresh(self, data=None, success=True, *, after=PORTFOLIO_UPDATE_INTERVAL):

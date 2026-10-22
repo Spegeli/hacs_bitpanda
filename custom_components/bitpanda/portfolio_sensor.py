@@ -1108,7 +1108,9 @@ async def async_setup_portfolio_entities(
             ),
         ]
     )
-    announcer = WalletAnnouncer(hass, entry, runtime.known_wallets, runtime.group_titles)
+    announcer = WalletAnnouncer(
+        hass, entry, runtime.known_wallets, runtime.group_titles, runtime.ready
+    )
     # Before the first reconcile, which may create a new wallet's device.
     entry.async_on_unload(announcer.async_listen_for_wallet_devices())
     # The 24-hour references of every wallet's Balance (total), one lookup

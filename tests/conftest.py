@@ -6,6 +6,7 @@ from functools import partial
 import json
 import logging
 from pathlib import Path
+import re
 import string
 from typing import Any
 from unittest.mock import AsyncMock, patch
@@ -23,6 +24,7 @@ from homeassistant.data_entry_flow import FlowManager, FlowResultType
 from homeassistant.helpers import device_registry as dr, issue_registry as ir
 from homeassistant.util import dt as dt_util
 import pytest
+import yaml
 
 from custom_components.bitpanda.api import BitpandaApiError
 from custom_components.bitpanda.assets import slim_asset
@@ -398,3 +400,17 @@ async def statistics_units(hass, entity_ids) -> dict[str, str | None]:
         statistic_id: meta["unit_of_measurement"]
         for statistic_id, (_, meta) in metadata.items()
     }
+
+
+def readme_event_guard() -> tuple[dict, list]:
+    """The README's state trigger on an event entity (section "Event
+    entities"): its `not_from` and `not_to`, which keep a reload from running
+    it, and its conditions, which keep an entity coming back with its last
+    event restored -- after a currency change, say -- from running it."""
+    readme = (Path(__file__).parent.parent / "README.md").read_text(encoding="utf-8")
+    section = readme[readme.index("### Event entities"):]
+    block = re.search(r"```yaml\n(.*?)```", section, re.DOTALL)
+    assert block is not None
+    config = yaml.safe_load(block.group(1))
+    [trigger] = config["triggers"]
+    return {key: trigger[key] for key in ("not_from", "not_to")}, config.get("conditions", [])

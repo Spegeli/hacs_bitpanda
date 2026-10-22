@@ -6,6 +6,7 @@ into a new automation's YAML editor, so each must load as a valid
 automation, and use the entity IDs the integration creates and the event
 it fires.
 """
+import asyncio
 from datetime import timedelta
 import json
 from pathlib import Path
@@ -63,7 +64,12 @@ def test_the_examples_are_an_alert_a_big_move_a_report_a_reward_and_a_new_wallet
         ("numeric_state", "change_24h_pct", {"below"}),
     ]
     refreshed, notified = report["actions"]
-    assert refreshed == {"action": "bitpanda.refresh", "continue_on_error": True}
+    # The Portfolio alone: the editor's "Service" field fills in its entry.
+    assert refreshed == {
+        "action": "bitpanda.refresh",
+        "continue_on_error": True,
+        "data": {"config_entry_id": "YOUR_PORTFOLIO_ENTRY_ID"},
+    }
     # The step the example exists for: it runs even when the refresh failed,
     # and then shows the last figures.
     assert notified["action"] == "persistent_notification.create"
@@ -73,6 +79,8 @@ def test_the_examples_are_an_alert_a_big_move_a_report_a_reward_and_a_new_wallet
     )
     [pushed] = reward["actions"]
     assert pushed["action"] == "notify.mobile_app_your_phone"
+    # Two announcements in one pass: neither is dropped.
+    assert reward["mode"] == wallet["mode"] == "queued"
     [added] = wallet["triggers"]
     assert (added["trigger"], added["event_type"]) == ("event", EVENT_WALLET_ADDED)
     [pushed] = wallet["actions"]
@@ -241,58 +249,80 @@ async def test_the_morning_report_names_the_amount_of_todays_return(hass):
     await _turn_off(hass)
 
 
-async def test_the_staking_reward_example_sends_the_net_amount_and_the_count(hass):
-    """One push message per announcement, with what it adds up: one payout,
-    or several after a pause -- a small one written out, never as 4.8e-05."""
+async def _slow_push(hass) -> list[tuple[str, str]]:
+    """notify.mobile_app_your_phone, a while in answering, as a phone's
+    push is: the title and message of each push, once sent."""
+    sent: list[tuple[str, str]] = []
+
+    async def push(call) -> None:
+        await asyncio.sleep(0.01)
+        sent.append((call.data["title"], call.data["message"]))
+
+    hass.services.async_register("notify", "mobile_app_your_phone", push)
+    return sent
+
+
+async def _pushed_after(hass, event_type: str, *data: dict) -> None:
+    """`event_type` fired once per `data`, back to back, and every push
+    the automation then runs done."""
+    for each in data:
+        hass.bus.async_fire(event_type, each)
+    await asyncio.sleep(0.1)
+    await hass.async_block_till_done()
+
+
+async def test_the_staking_reward_example_pushes_each_events_message(hass):
+    """The event's ready message, one push per announcement: two fired
+    back to back -- two assets paid in one pass -- while the first push is
+    still on its way are both sent (`mode: queued`)."""
     assert await async_setup_component(hass, "automation", {"automation": [_examples()[3]]})
     await hass.async_block_till_done()
-    pushed = async_mock_service(hass, "notify", "mobile_app_your_phone")
-    for count, net in ((1, 9.87654312), (3, 29.62962936), (1, 0.000048)):
-        hass.bus.async_fire(
-            EVENT_STAKING_REWARD_RECEIVED,
-            {
-                "device_id": "wallet-device",
-                "asset_id": "vision-asset",
-                "symbol": "VSN",
-                "name": "Vision",
-                "wallet": "Vision (VSN) Wallet",
-                "count": count,
-                "gross": net * 1.25,
-                "fee": net * 0.25,
-                "net": net,
-                "value": 0.07,
-                "currency": "EUR",
-                "credited_at": "2026-09-22T16:20:00Z",
-            },
-        )
-        await hass.async_block_till_done()
-    assert [(call.data["title"], call.data["message"]) for call in pushed] == [
-        ("Staking reward", "Vision (VSN) Wallet received 9.87654312 VSN from 1 payout."),
-        ("Staking reward", "Vision (VSN) Wallet received 29.62962936 VSN from 3 payouts."),
-        ("Staking reward", "Vision (VSN) Wallet received 0.000048 VSN from 1 payout."),
-    ]
+    sent = await _slow_push(hass)
+    messages = (
+        "Vision (VSN) Wallet received a staking reward of 9.87654312 VSN. "
+        "Worth about 0.37 EUR today.",
+        "Solana (SOL) Wallet received 3 staking rewards, together 0.05016771 SOL.",
+    )
+    await _pushed_after(hass, EVENT_STAKING_REWARD_RECEIVED, *(
+        {"wallet": "Vision (VSN) Wallet", "count": 1, "message": message} for message in messages
+    ))
+    assert sent == [("Staking reward", message) for message in messages]
 
 
-async def test_the_new_wallet_example_sends_the_wallets_name(hass):
-    """One push message per announced wallet, named as the event names it."""
+async def test_the_new_wallet_example_pushes_each_events_message(hass):
+    """One push per announced wallet, with the event's ready message: two
+    wallets in one refresh are both sent (`mode: queued`)."""
     assert await async_setup_component(hass, "automation", {"automation": [_examples()[4]]})
     await hass.async_block_till_done()
-    pushed = async_mock_service(hass, "notify", "mobile_app_your_phone")
-    hass.bus.async_fire(
-        EVENT_WALLET_ADDED,
-        {
-            "device_id": "wallet-device",
-            "asset_id": "vision-asset",
-            "symbol": "VSN",
-            "name": "Vision",
-            "wallet": "Vision (VSN) Wallet",
-            "category": "crypto",
-        },
+    sent = await _slow_push(hass)
+    messages = (
+        "The Portfolio added a new wallet: Vision (VSN) Wallet in the group Cryptocurrencies.",
+        "The Portfolio added a new wallet: Gold (XAU) Wallet in the group Precious metals.",
     )
+    await _pushed_after(hass, EVENT_WALLET_ADDED, *(
+        {"wallet": "a wallet", "category": "crypto", "message": message} for message in messages
+    ))
+    assert sent == [("New Bitpanda wallet", message) for message in messages]
+
+
+@pytest.mark.parametrize(
+    ("index", "event_type"),
+    [(3, EVENT_STAKING_REWARD_RECEIVED), (4, EVENT_WALLET_ADDED)],
+    ids=["staking_reward", "new_wallet"],
+)
+async def test_the_push_examples_send_more_than_ten_announcements_of_one_go(
+    hass, index, event_type
+):
+    """Eleven assets paid out, or eleven wallets added, in one go: Home
+    Assistant's queue holds ten runs by default and would drop the
+    eleventh (`max: 50`)."""
+    assert await async_setup_component(hass, "automation", {"automation": [_examples()[index]]})
     await hass.async_block_till_done()
-    assert [(call.data["title"], call.data["message"]) for call in pushed] == [
-        ("New Bitpanda wallet", "Vision (VSN) Wallet was added to your Portfolio.")
-    ]
+    sent = await _slow_push(hass)
+    await _pushed_after(hass, event_type, *(
+        {"message": f"announcement {number}"} for number in range(11)
+    ))
+    assert [message for _, message in sent] == [f"announcement {number}" for number in range(11)]
 
 
 async def test_every_example_loads_as_an_automation(hass):

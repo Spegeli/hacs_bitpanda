@@ -177,6 +177,40 @@ async def test_a_currency_change_brings_the_event_entities_back_with_their_histo
     assert shown in [state for state, _ in await recorded_history(hass, _NEW_WALLET)]
 
 
+async def test_the_readmes_guarded_trigger_stays_quiet_through_a_currency_change(
+    hass, portfolio_api
+):
+    """The change takes the event entities out of the state machine and
+    brings them back with their last event restored: no news, so the
+    README's trigger on an event entity does not run."""
+    from homeassistant.setup import async_setup_component
+    from pytest_homeassistant_custom_component.common import async_mock_service
+
+    from tests.conftest import readme_event_guard
+
+    entry = _portfolio(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    announcements.async_announce(
+        hass, entry.entry_id, bus_event="bitpanda_wallet_added", entity_key="new_wallet",
+        event_type="wallet_added", data={"wallet": "Gold (XAU) Wallet"},
+    )
+    await async_wait_recording_done(hass)
+    guard, conditions = readme_event_guard()
+    calls = async_mock_service(hass, "test", "guarded")
+    assert await async_setup_component(hass, "automation", {"automation": [{
+        "alias": "guarded",
+        "triggers": [{"trigger": "state", "entity_id": _NEW_WALLET, **guard}],
+        "conditions": conditions,
+        "actions": [{"action": "test.guarded"}],
+    }]})
+    await hass.async_block_till_done()
+    await _change_currency_to_usd(hass, entry)
+    await async_wait_recording_done(hass)
+    assert hass.states.get(_NEW_WALLET) is not None
+    assert calls == []
+
+
 async def test_a_currency_change_recreates_the_sensors_without_the_old_history(
     hass, portfolio_api, caplog
 ):

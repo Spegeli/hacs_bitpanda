@@ -34,6 +34,8 @@ The integration offers two services. Set up either or both — each one once.
 - Nothing to maintain: a wallet appears at the next update after you buy an asset and goes 10 to 15 minutes after you sell it, in groups by asset type such as Cryptocurrencies or Precious metals
 - A notification under **Notifications** when a new wallet appears — you can switch it off — and the event `bitpanda_wallet_added` for your own automations
 - A notification under **Notifications** when Bitpanda pays out a staking reward — switch it on if you want it — and the event `bitpanda_staking_reward_received` for your own automations
+- The event `bitpanda_earn_changed` when Bitpanda changes the Earn offer of an asset you hold, and the three announcements as event entities on the Portfolio device, for the automation editor's triggers
+- Actions that return the portfolio, its value history and the staking payouts in one call, for scripts and automations
 - Updates every 5 minutes, each held asset's price from Bitpanda's price ticker right after them; Earn offers and rewards hourly
 
 ### Bitpanda Price Tracker
@@ -196,7 +198,7 @@ On the Price Tracker, deleting a device or a group stops tracking (see [Stop tra
 When the Portfolio adds a wallet for an asset that is new to it — one you bought, one you bought again after its wallet had gone, or one Bitpanda's catalogue lists only later — it announces the wallet as soon as its device is created:
 
 - **A notification** under **Notifications**, linking to the wallet's device, in the Portfolio's language (see [Languages](#languages)). If its sensors are disabled, the notification says so and links to its device page. Switch it off under **Configure** (see [Changing settings later](#changing-settings-later)). Home Assistant does not keep notifications through a restart.
-- **The event `bitpanda_wallet_added`**, whether or not the notification is on, for your own automations (see [the example](#5-new-wallet-a-push-message-to-your-phone)). Its data: `device_id` (the wallet's device), `asset_id` (Bitpanda's ID of the asset, the device's serial number), `symbol`, `name`, `wallet` (the wallet's name, such as `Vision (VSN) Wallet`) and `category` (`crypto`, `stock`, `etf`, `etc`, `index`, `metal` or `other`).
+- **The event `bitpanda_wallet_added`**, whether or not the notification is on, for your own automations (see [the example](#5-new-wallet-a-push-message-to-your-phone)). Its data: `device_id` (the wallet's device), `asset_id` (Bitpanda's ID of the asset, the device's serial number), `symbol`, `name`, `wallet` (the wallet's name, such as `Vision (VSN) Wallet`), `category` (`crypto`, `stock`, `etf`, `etc`, `index`, `metal` or `other`), `units` and `value` (the wallet's units and value at the announcement, `null` when Bitpanda no longer lists the asset by then), `currency` and `message` — the notification's text without its formatting, in the Portfolio's language, whether the notification is on or not; `null` when the texts cannot be loaded. `message` is for people: its wording may change, so automations should not read figures from it.
 
 Wallets that exist when you set up the Portfolio or upgrade from a date version are not announced, and neither are wallets that come back after a restart, a reload, a currency change, a deleted group, or an answer from Bitpanda that listed nothing at all.
 
@@ -205,9 +207,49 @@ Wallets that exist when you set up the Portfolio or upgrade from a date version 
 When Bitpanda pays out a staking reward, the Portfolio announces it at the next hourly update of the rewards, for every asset whose **Balance (staking)** sensor is enabled:
 
 - **A notification** under **Notifications**, if you switch it on under **Configure** (see [Changing settings later](#changing-settings-later)); it is off by default. One per asset, linking to the wallet's device, in the Portfolio's language (see [Languages](#languages)); the asset's next payout replaces it. Home Assistant does not keep notifications through a restart.
-- **The event `bitpanda_staking_reward_received`**, whether or not the notification is on, for your own automations (see [the example](#4-staking-reward-a-push-message-for-each-payout)). Its data: `device_id` (the wallet's device), `asset_id`, `symbol`, `name`, `wallet` (such as `Vision (VSN) Wallet`), `count` (the number of payouts it covers, usually 1), `gross`, `fee` and `net` (their sum, in units of the asset), `value` (the net amount at today's price, in the Portfolio currency; `null` without a price), `currency` and `credited_at` (when Bitpanda paid the newest of them, in UTC).
+- **The event `bitpanda_staking_reward_received`**, whether or not the notification is on, for your own automations (see [the example](#4-staking-reward-a-push-message-for-each-payout)). Its data: `device_id` (the wallet's device), `asset_id`, `symbol`, `name`, `wallet` (such as `Vision (VSN) Wallet`), `count` (the number of payouts it covers, usually 1), `gross`, `fee` and `net` (their sum, in units of the asset), `value` (the net amount at today's price, in the Portfolio currency; `null` without a price), `currency`, `credited_at` (when Bitpanda paid the newest of them, in UTC), `apr_percent` (as Balance (staking) shows it; `null` without an Earn rate), `rewards_net` (the net of every payout so far, in units of the asset) and `message`, the notification's text as for a new wallet.
 
 Payouts that could not be announced — while Home Assistant was off, the Portfolio was disabled or the asset's Balance (staking) sensor was disabled — come later, added up: one notification and one event per asset, with their number. Payouts made before you set up the Portfolio, or before you updated to a version with this feature, are not announced.
+
+### Earn changes
+
+When Bitpanda changes the Earn offer of an asset you hold, the Portfolio fires the event `bitpanda_earn_changed` — there is no notification. Its data: `device_id` (the wallet's device; `null` without one), `asset_id`, `symbol`, `name`, `wallet`, `change`, and `apr_before` and `apr_after` (in percent; `null` where there is none). `change` says what happened:
+
+- `offered` — Bitpanda now offers Earn for the asset, sold out or not;
+- `withdrawn` — it no longer does;
+- `sold_out` and `available_again` — the offer is sold out, or open again;
+- `apr` — the APR moved by 0.25 percentage points or more from the one last announced, or first seen.
+
+The Portfolio compares every hourly read of Bitpanda's Earn catalogue with the one before, for every asset you hold, with or without a Balance (staking) sensor. The first read after a start or reload, a wallet new since, and an asset bought back are no news, so a change while Home Assistant was off is not announced. A read that fails, or that lists no offer at all, changes nothing.
+
+### Event entities
+
+The Portfolio device has three event entities that show the same announcements, so that the automation editor offers them as triggers: **New wallet** (`event.bitpanda_portfolio_new_wallet`), **Staking reward** (`event.bitpanda_portfolio_staking_reward`) and **Earn change** (`event.bitpanda_portfolio_earn_change`). Each fires together with its event above, with the event's data as its attributes; its event type is `wallet_added`, `staking_reward_received` or the Earn change's `change`. Several announcements at once each get a state of their own. A disabled event entity misses them; the events fire all the same.
+
+Home Assistant restores an event entity's last event at a start, without firing it. During a reload of the Portfolio the entity is `unavailable` for a moment and then shows its last event again; after a currency change, or when you enable the entity, it comes back with its last event and no state before it. A state trigger on it should fire on none of these: not on the way to or from `unavailable`, and not without a state before. Leave `unknown` out of it — an entity that never fired is `unknown`, and its first event would be lost:
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: event.bitpanda_portfolio_new_wallet
+    not_from: unavailable
+    not_to: unavailable
+conditions:
+  - condition: template
+    value_template: "{{ trigger.from_state is not none }}"
+```
+
+The events above are not repeated by a reload.
+
+### Reading the Portfolio in one call
+
+Three actions answer with data — try them under **Settings → Tools → Actions** (before Home Assistant 2026.8: **Developer tools → Actions**), or use `response_variable` in a script. They answer from what the Portfolio holds already and never ask Bitpanda:
+
+- **`bitpanda.get_portfolio`** — `currency`, `total_value`, `cash`, `cash_plus`, `invested`, `total_return`, `total_return_percent`, the `returns` per timeframe (`day`, `week`, `month`, `six_month`, `year`) as `percent` and `amount`, and every wallet, largest first: `asset_id`, `symbol`, `name`, `category`, `device_id`, `units`, `staked_units`, `value`, `price`, `invested_amount`, `total_return`, `total_return_percent`, `change_24h_pct`, `return_24h`, `portfolio_share_percent`, `apr_percent`, `rewards_net` and `rewards_net_value`. A figure that is unknown, or that waits after Bitpanda stopped listing it, is `null`, as are a wallet's 24-hour figures while its Balance (total) is disabled.
+- **`bitpanda.get_portfolio_history`** with a `timeframe` — the Portfolio's value over it as `points` (`time` in UTC, `value`), the line the Portfolio card draws; empty while the history is unavailable.
+- **`bitpanda.get_staking_rewards`**, optionally with `start` and `end` (in Home Assistant's time zone; a payout at `start` counts, one at `end` does not) — every staking payout read so far, oldest first, each with `asset_id`, `symbol` (`null` for an asset you no longer hold), `credited_at`, `gross`, `fee` and `net`; and `updated_at`, when the rewards were last read. They are read every hour only while a Balance (staking) sensor is enabled. For a long history, give a `start`: the trace keeps the whole answer.
+
+Without a loaded Portfolio the actions fail; while its figures are unavailable — before Bitpanda's first answer, during an outage or with a rejected key — `bitpanda.get_portfolio` and `bitpanda.get_portfolio_history` fail too.
 
 ### Entity IDs
 
@@ -221,6 +263,7 @@ You can change an entity ID in the sensor's settings: the sensor keeps working u
 | Portfolio returns | `sensor.bitpanda_portfolio_return_day`, `_week`, `_month`, `_6_months`, `_year` |
 | Portfolio Invested / Total return / Total return % | `sensor.bitpanda_portfolio_invested`, `sensor.bitpanda_portfolio_total_return`, `sensor.bitpanda_portfolio_total_return_percent` |
 | Portfolio value of each asset group | `sensor.bitpanda_portfolio_value_crypto`, `_stock`, `_etf`, `_etc`, `_index`, `_metal`, `_other` |
+| Portfolio event entities | `event.bitpanda_portfolio_new_wallet`, `event.bitpanda_portfolio_staking_reward`, `event.bitpanda_portfolio_earn_change` |
 | Vision (VSN) Wallet: Balance (available) / (staking) / (total) | `sensor.bitpanda_vision_vsn_wallet_available`, `sensor.bitpanda_vision_vsn_wallet_staking`, `sensor.bitpanda_vision_vsn_wallet_total` |
 | Amundi PEA S&P 500 UCITS ETF (LYY1 / FR0011871136) Wallet: Balance (available) / (total) | `sensor.bitpanda_amundi_pea_s_p_500_ucits_etf_lyy1_fr0011871136_wallet_available`, `sensor.bitpanda_amundi_pea_s_p_500_ucits_etf_lyy1_fr0011871136_wallet_total` |
 | Bitcoin (BTC) Price Tracker: EUR / USD | `sensor.bitpanda_bitcoin_btc_price_tracker_eur`, `sensor.bitpanda_bitcoin_btc_price_tracker_usd` |
@@ -244,7 +287,7 @@ Each sensor's attributes appear in its **Details** view (before Home Assistant 2
 |---|---|
 | Balance (available) — every wallet | `asset`, `asset_name`, `asset_category`, `asset_isin`, `units` (tradable units) |
 | Balance (total) — every wallet | `asset`, `asset_name`, `asset_category`, `asset_isin`, `units` (whole position), the asset's `price`, the position performance: `average_buy_price`, `invested_amount`, `total_return`, `total_return_percent`, `portfolio_share_percent` (the position's share of Total value), and over 24 hours `price_24h_ago`, `change_24h_pct` and `return_24h` |
-| Balance (staking) — while something is staked or an Earn product is offered | `asset`, `asset_name`, `asset_category`, `asset_isin`, `units` (staked), `apr_percent`, `rewards_gross`, `rewards_fee`, `rewards_net`, `rewards_net_value`, `rewards_count`, `rewards_last_at`, `rewards_net_30d`, `rewards_net_value_30d`, `rewards_last_net`, `rewards_last_value` |
+| Balance (staking) — while something is staked or an Earn product is offered | `asset`, `asset_name`, `asset_category`, `asset_isin`, `units` (staked), `apr_percent`, `earn_type`, `earn_mode`, `earn_sold_out`, `rewards_gross`, `rewards_fee`, `rewards_net`, `rewards_net_value`, `rewards_count`, `rewards_last_at`, `rewards_net_30d`, `rewards_net_value_30d`, `rewards_last_net`, `rewards_last_value` |
 | Portfolio returns | `return_amount` — what the return means in money on today's Total value |
 | Portfolio Invested / Total return / Total return % | `wallets` — the number of positions they add up |
 | Portfolio value of an asset group | `share_percent` (its share of Total value), `invested_amount`, `total_return`, `total_return_percent`, `wallets` (the number of wallets it adds up) |
@@ -255,6 +298,8 @@ Each sensor's attributes appear in its **Details** view (before Home Assistant 2
 `asset_isin`, the ISIN, is there for stocks, ETFs and ETCs only.
 
 `asset_category` is the asset's category key: `crypto`, `stock`, `etf`, `etc`, `index`, `metal` or `other`.
+
+`earn_type` (`flexible` or `locked`), `earn_mode` (`staking` or `stable_coin`) and `earn_sold_out` describe the asset's Earn offer while Bitpanda's catalogue lists it; `earn_type` or `earn_mode` is left out when Bitpanda sends a value the integration does not know.
 
 An attribute without a value is left out rather than set to `null`: `apr_percent` without an Earn rate, the `rewards_…` attributes before the first payout, `rewards_net_value` without a price, `change_24h_pct` and `price_24h_ago` until Home Assistant's statistics hold a price from about 24 hours ago (within half an hour); a wallet's `price`, `change_24h_pct`, `price_24h_ago`, `return_24h`, `rewards_net_value`, `rewards_net_value_30d` and `rewards_last_value` without a ticker price of the last 15 minutes; its `price_24h_ago`, `change_24h_pct` and `return_24h` also until a ticker price from about 24 hours ago is recorded (within half an hour); `rewards_last_net` without a payout whose time Bitpanda sent; `return_amount` while Total value is unknown; `portfolio_share_percent` and a group's `share_percent` while Total value is unknown or not above 0; a group's `invested_amount`, `total_return` and `total_return_percent` while one of its wallets lacks an invested amount, and `total_return_percent` unless something was invested. A price in another currency carries either `conversion` (`no_rate`, before the first ECB rate) or `conversion_rate`, `rate_date` and `rate_source`. `rewards_last_at` is when Bitpanda credited the newest payout, in UTC.
 
@@ -270,10 +315,10 @@ Every value sensor keeps long-term statistics: the Portfolio's figures and retur
 
 ### Refreshing by hand
 
-The action `bitpanda.refresh` fetches the portfolio — Total value, Cash, Cash Plus, Invested, the total return, the asset groups' values, the wallets and the returns — and the prices right away and finishes when both are done; a wallet's `price` and its 24-hour figures follow right after, from Bitpanda's price ticker, at most once a minute. Earn offers, staking rewards and exchange rates keep their own schedule.
+The action `bitpanda.refresh` fetches the portfolio — Total value, Cash, Cash Plus, Invested, the total return, the asset groups' values, the wallets and the returns — and the prices right away, or with its **Service** field (`config_entry_id`) only one of them, and finishes when it is done; a wallet's `price` and its 24-hour figures follow right after, from Bitpanda's price ticker, at most once a minute. Earn offers, staking rewards and exchange rates keep their own schedule.
 
-- **Cooldown:** a call within the cooldown of the last accepted one is ignored. The cooldown is the price interval — 60 seconds, longer while Bitpanda rate-limits the price requests (up to 16 minutes) — or 10 seconds with the Portfolio alone.
-- **Failures:** when a refresh fails — Bitpanda cannot be reached or answers with an error — the action fails with an error naming the service; the other service is refreshed all the same. The returns are fetched only when the portfolio was; returns that could not be fetched keep their last value and fail nothing. The action also fails while neither service is loaded.
+- **Cooldown:** each service has its own; a service refreshed within it is skipped, the other is refreshed. The Portfolio's is 10 seconds, the Price Tracker's the price interval — 60 seconds, longer while Bitpanda rate-limits the price requests (up to 16 minutes). So a call without the field refreshes the Portfolio every 10 seconds at most, and the prices once their interval has passed.
+- **Failures:** when a refresh fails — Bitpanda cannot be reached or answers with an error — the action fails with an error naming the service; the other service is refreshed all the same. The returns are fetched only when the portfolio was; returns that could not be fetched keep their last value and fail nothing. The action also fails while neither service is loaded, and when its **Service** is no loaded Bitpanda service.
 - **In automations:** a failed action stops a script or automation at that step, unless the step sets `continue_on_error: true` (see the [Morning report](#3-morning-report-portfolio-value-and-todays-return-at-a-set-time) example).
 
 ---
@@ -435,7 +480,7 @@ actions:
 
 ### 3. Morning report: portfolio value and today's return at a set time
 
-Ask Bitpanda for the portfolio and its returns at a set time instead of waiting for the next regular update, then show its total value and its return over the last 24 hours, with the amount that return means today when it is known. With `continue_on_error: true`, a failed refresh (see [Refreshing by hand](#refreshing-by-hand)) does not stop the automation: the report still comes, with the last figures.
+Ask Bitpanda for the portfolio and its returns at a set time instead of waiting for the next regular update, then show its total value and its return over the last 24 hours, with the amount that return means today when it is known. In the editor, pick your **Bitpanda Portfolio** in the refresh's **Service** field: it fills in `config_entry_id`, so that the prices are not asked for. With `continue_on_error: true`, a failed refresh (see [Refreshing by hand](#refreshing-by-hand)) does not stop the automation: the report still comes, with the last figures.
 
 ```yaml
 alias: Bitpanda morning report
@@ -445,6 +490,9 @@ triggers:
 actions:
   - action: bitpanda.refresh
     continue_on_error: true
+    data:
+      # The Portfolio alone: the editor's "Service" field fills it in.
+      config_entry_id: YOUR_PORTFOLIO_ENTRY_ID
   # Runs even when the refresh failed, then with the last figures.
   - action: persistent_notification.create
     data:
@@ -458,10 +506,12 @@ The same steps work in a script, which you can start from anywhere — from a bu
 
 ### 4. Staking reward: a push message for each payout
 
-A push message when Bitpanda pays out a staking reward (see [Staking rewards](#staking-rewards)). Use your phone's `notify.mobile_app_…` action instead of `notify.mobile_app_your_phone`.
+A push message when Bitpanda pays out a staking reward (see [Staking rewards](#staking-rewards)), with the event's ready text. Use your phone's `notify.mobile_app_…` action instead of `notify.mobile_app_your_phone`. `mode: queued` with `max: 50` sends one message per asset when several are paid out at once — Home Assistant's default queue would drop those after the tenth.
 
 ```yaml
 alias: New Bitpanda staking reward
+mode: queued
+max: 50
 triggers:
   - trigger: event
     event_type: bitpanda_staking_reward_received
@@ -469,20 +519,19 @@ actions:
   - action: notify.mobile_app_your_phone
     data:
       title: Staking reward
-      message: >-
-        {{ trigger.event.data.wallet }} received {{ ('%.8f' | format(trigger.event.data.net)).rstrip('0').rstrip('.') }}
-        {{ trigger.event.data.symbol }} from {{ trigger.event.data.count }}
-        payout{{ 's' if trigger.event.data.count > 1 else '' }}.
+      message: "{{ trigger.event.data.message }}"
 ```
 
 ---
 
 ### 5. New wallet: a push message to your phone
 
-A push message when the Portfolio adds a wallet (see [New wallets](#new-wallets)). Use your phone's `notify.mobile_app_…` action instead of `notify.mobile_app_your_phone`.
+A push message when the Portfolio adds a wallet (see [New wallets](#new-wallets)), with the event's ready text. Use your phone's `notify.mobile_app_…` action instead of `notify.mobile_app_your_phone`. `mode: queued` with `max: 50` sends one message per wallet when several arrive at once — Home Assistant's default queue would drop those after the tenth.
 
 ```yaml
 alias: New Bitpanda wallet
+mode: queued
+max: 50
 triggers:
   - trigger: event
     event_type: bitpanda_wallet_added
@@ -490,7 +539,7 @@ actions:
   - action: notify.mobile_app_your_phone
     data:
       title: New Bitpanda wallet
-      message: "{{ trigger.event.data.wallet }} was added to your Portfolio."
+      message: "{{ trigger.event.data.message }}"
 ```
 
 ---

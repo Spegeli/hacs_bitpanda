@@ -6,6 +6,7 @@ from custom_components.bitpanda.naming import PORTFOLIO_DEVICE_NAME
 from custom_components.bitpanda.portfolio_model import (
     PORTFOLIO_FIGURES,
     EarnData,
+    EarnProduct,
     Holding,
     PortfolioData,
     PortfolioReturns,
@@ -816,6 +817,51 @@ def test_without_rewards_there_are_no_recent_rewards():
     for rewards in (_Coordinator(None), _Coordinator({VSN["id"]: RewardTotals()})):
         attributes = _staking(rewards).extra_state_attributes
         assert not set(_RECENT) & set(attributes)
+
+
+def _earn(**product) -> _Coordinator:
+    values = dict(apr=0.024, type="LOCKED", mode="STAKING_EARN", sold_out=False, enabled=True)
+    values.update(product)
+    return _Coordinator(EarnData(
+        apr={VSN["id"]: 0.024}, offered=frozenset({VSN["id"]}),
+        products={VSN["id"]: EarnProduct(**values)},
+    ))
+
+
+def test_the_staking_sensor_shows_the_earn_type_mode_and_sold_out():
+    sensor = StakingSensor(_portfolio(**{VSN["id"]: _vsn()}), _earn(), _Coordinator(None),
+                           "eid", "EUR", VSN)
+    attributes = sensor.extra_state_attributes
+    assert (attributes["earn_type"], attributes["earn_mode"], attributes["earn_sold_out"]) == (
+        "locked", "staking", False
+    )
+    sensor = StakingSensor(
+        _portfolio(**{VSN["id"]: _vsn()}),
+        _earn(type="FLEXIBLE", mode="STABLE_COIN_EARN", sold_out=True), _Coordinator(None),
+        "eid", "EUR", VSN,
+    )
+    attributes = sensor.extra_state_attributes
+    assert (attributes["earn_type"], attributes["earn_mode"], attributes["earn_sold_out"]) == (
+        "flexible", "stable_coin", True
+    )
+
+
+def test_an_unknown_earn_type_or_mode_is_left_out():
+    sensor = StakingSensor(
+        _portfolio(**{VSN["id"]: _vsn()}), _earn(type="DUAL", mode=None), _Coordinator(None),
+        "eid", "EUR", VSN,
+    )
+    attributes = sensor.extra_state_attributes
+    assert "earn_type" not in attributes and "earn_mode" not in attributes
+    assert attributes["earn_sold_out"] is False
+
+
+def test_without_a_product_there_are_no_earn_attributes():
+    for earn in (_Coordinator(None), _Coordinator(EarnData(apr={}, offered=frozenset()))):
+        attributes = StakingSensor(
+            _portfolio(**{VSN["id"]: _vsn()}), earn, _Coordinator(None), "eid", "EUR", VSN
+        ).extra_state_attributes
+        assert not {"earn_type", "earn_mode", "earn_sold_out"} & set(attributes)
 
 
 def test_apr_percent_keeps_every_decimal_the_api_sends():

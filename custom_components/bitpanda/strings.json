@@ -655,6 +655,23 @@
           "apr_percent": {
             "name": "Rewards: APR %"
           },
+          "earn_type": {
+            "name": "Earn: type",
+            "state": {
+              "flexible": "Flexible",
+              "locked": "Locked"
+            }
+          },
+          "earn_mode": {
+            "name": "Earn: mode",
+            "state": {
+              "staking": "Staking",
+              "stable_coin": "Stablecoin"
+            }
+          },
+          "earn_sold_out": {
+            "name": "Earn: sold out"
+          },
           "rewards_gross": {
             "name": "Rewards: gross (quantity)"
           },

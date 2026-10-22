@@ -655,6 +655,23 @@
           "apr_percent": {
             "name": "Recompensas: tasa anual (APR %)"
           },
+          "earn_type": {
+            "name": "Earn: tipo",
+            "state": {
+              "flexible": "Flexible",
+              "locked": "Bloqueado"
+            }
+          },
+          "earn_mode": {
+            "name": "Earn: modo",
+            "state": {
+              "staking": "Staking",
+              "stable_coin": "Stablecoin"
+            }
+          },
+          "earn_sold_out": {
+            "name": "Earn: agotado"
+          },
           "rewards_gross": {
             "name": "Recompensas: bruto (cantidad)"
           },

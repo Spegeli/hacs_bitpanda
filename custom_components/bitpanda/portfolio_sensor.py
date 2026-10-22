@@ -89,6 +89,12 @@ from .portfolio_model import (
 )
 from .tolerance import TolerantEntity
 
+# An Earn product's type and mode as Bitpanda sends them -> the values of the
+# Staking sensor's attributes `earn_type` and `earn_mode`; any other is left
+# out.
+_EARN_TYPES = {"FLEXIBLE": "flexible", "LOCKED": "locked"}
+_EARN_MODES = {"STAKING_EARN": "staking", "STABLE_COIN_EARN": "stable_coin"}
+
 # The window of a Staking sensor's recent rewards, up to now.
 RECENT_REWARDS = timedelta(days=30)
 
@@ -618,6 +624,13 @@ class StakingSensor(_WalletPart):
         if apr is not None:
             # The API reports a fraction: 0.0544 means 5.44 %.
             attrs["apr_percent"] = round(apr * 100, DECIMALS)
+        product = earn.products.get(self._asset_id) if earn is not None else None
+        if product is not None:
+            if (kind := _EARN_TYPES.get(product.type or "")) is not None:
+                attrs["earn_type"] = kind
+            if (mode := _EARN_MODES.get(product.mode or "")) is not None:
+                attrs["earn_mode"] = mode
+            attrs["earn_sold_out"] = product.sold_out
         # After a failed refresh `data` still holds the last complete totals;
         # a listing that could not be paged completely never replaces them.
         # Gross, fee and net are units of the asset; `count` counts payouts.

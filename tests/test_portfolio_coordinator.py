@@ -22,7 +22,7 @@ from custom_components.bitpanda.portfolio_coordinator import (
     PortfolioCoordinator,
     WalletPrices,
 )
-from custom_components.bitpanda.portfolio_model import EarnData
+from custom_components.bitpanda.portfolio_model import EarnData, EarnProduct
 
 from tests.conftest import async_settle
 
@@ -636,7 +636,8 @@ async def test_earn_update_returns_the_catalogue():
     configs = [{"asset_id": VSN, "annual_percentage_rate": 0.05, "enabled": True}]
     coordinator = EarnCoordinator(None, None, _EarnClient(configs))
     assert await coordinator._async_update_data() == EarnData(
-        apr={VSN: 0.05}, offered=frozenset({VSN})
+        apr={VSN: 0.05}, offered=frozenset({VSN}),
+        products={VSN: EarnProduct(apr=0.05, type=None, mode=None, sold_out=False, enabled=True)},
     )
 
 

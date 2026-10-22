@@ -21,6 +21,7 @@ from custom_components.bitpanda.ecb import EcbError, EcbRates
 from custom_components.bitpanda.portfolio_coordinator import _update_failed
 from custom_components.bitpanda.portfolio_model import (
     EarnData,
+    EarnProduct,
     Holding,
     PortfolioData,
     PortfolioReturns,
@@ -1838,7 +1839,12 @@ def _attribute_scenarios() -> list[tuple[str, dict]]:
         gross=12.0, fee=2.4, net=9.6, count=3, last_at=last_at,
         payouts=(RewardPayout(last_at, 4.0, 0.8, 3.2),),
     )})
-    earn = _Coordinator(EarnData(apr={_VSN["id"]: 0.0544}, offered=frozenset({_VSN["id"]})))
+    earn = _Coordinator(EarnData(
+        apr={_VSN["id"]: 0.0544}, offered=frozenset({_VSN["id"]}),
+        products={_VSN["id"]: EarnProduct(
+            apr=0.0544, type="FLEXIBLE", mode="STAKING_EARN", sold_out=False, enabled=True
+        )},
+    ))
 
     price_with_rate = PriceSensor(
         _Coordinator({_BTC["id"]: 100.0}),
@@ -2324,6 +2330,38 @@ def test_an_event_entitys_asset_fields_are_labelled_like_a_wallets():
         assert sensors["event"]["new_wallet"]["state_attributes"]["category"]["name"] == (
             total["asset_category"]["name"]
         ), language
+
+
+# The Earn attributes of the Staking sensor, in English and German, with the
+# names of their values.
+_EARN_LABELS = {
+    "en": {
+        "earn_type": ("Earn: type", {"flexible": "Flexible", "locked": "Locked"}),
+        "earn_mode": ("Earn: mode", {"staking": "Staking", "stable_coin": "Stablecoin"}),
+        "earn_sold_out": ("Earn: sold out", None),
+    },
+    "de": {
+        "earn_type": ("Earn: Typ", {"flexible": "Flexibel", "locked": "Gebunden"}),
+        "earn_mode": ("Earn: Modus", {"staking": "Staking", "stable_coin": "Stablecoin"}),
+        "earn_sold_out": ("Earn: ausverkauft", None),
+    },
+}
+
+
+def test_the_earn_attributes_and_their_values_are_named():
+    for language in _LANGUAGES:
+        attributes = _load(f"translations/{language}.json")["entity"]["sensor"]["staking"][
+            "state_attributes"
+        ]
+        assert set(attributes["earn_type"]["state"]) == {"flexible", "locked"}, language
+        assert set(attributes["earn_mode"]["state"]) == {"staking", "stable_coin"}, language
+    for language, labels in _EARN_LABELS.items():
+        attributes = _load(f"translations/{language}.json")["entity"]["sensor"]["staking"][
+            "state_attributes"
+        ]
+        for key, (name, states) in labels.items():
+            assert attributes[key]["name"] == name, (language, key)
+            assert attributes[key].get("state") == states, (language, key)
 
 
 def test_the_conversion_status_has_a_translated_name_and_state():

@@ -655,6 +655,23 @@
           "apr_percent": {
             "name": "Belohnungen: Zinssatz (APR %)"
           },
+          "earn_type": {
+            "name": "Earn: Typ",
+            "state": {
+              "flexible": "Flexibel",
+              "locked": "Gebunden"
+            }
+          },
+          "earn_mode": {
+            "name": "Earn: Modus",
+            "state": {
+              "staking": "Staking",
+              "stable_coin": "Stablecoin"
+            }
+          },
+          "earn_sold_out": {
+            "name": "Earn: ausverkauft"
+          },
           "rewards_gross": {
             "name": "Belohnungen: brutto (Menge)"
           },

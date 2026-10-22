@@ -9,6 +9,7 @@ from custom_components.bitpanda.const import PORTFOLIO_UPDATE_INTERVAL
 from custom_components.bitpanda.portfolio_model import (
     PORTFOLIO_FIGURES,
     EarnData,
+    EarnProduct,
     FigureWatch,
     Holding,
     PortfolioData,
@@ -697,6 +698,38 @@ def test_parse_earn_configs_counts_sold_out_products_but_not_disabled_ones():
     assert earn.offered == frozenset({"a", "c"})
     # A boolean is not a rate, even though bool subclasses int.
     assert earn.apr == {"a": 0.05, "b": 0.04}
+
+
+def test_the_earn_catalogue_keeps_each_products_type_mode_and_sold_out():
+    configs = load_fixture("earn-configs.json")
+    earn = parse_earn_configs(configs)
+    first = configs[0]
+    assert earn.products[first["asset_id"]] == EarnProduct(
+        apr=0.0544, type="FLEXIBLE", mode="STAKING_EARN", sold_out=False, enabled=True
+    )
+    earn = parse_earn_configs([{"asset_id": "a", "enabled": True, "soldout": True}])
+    assert earn.products["a"] == EarnProduct(
+        apr=None, type=None, mode=None, sold_out=True, enabled=True
+    )
+
+
+def test_an_asset_with_two_products_takes_the_enabled_one():
+    """Bitpanda sends one product per asset; should it send two, the enabled
+    one counts -- for the APR and for whether the asset is offered alike."""
+    for configs in (
+        [
+            {"asset_id": "a", "annual_percentage_rate": 0.02, "enabled": False, "type": "LOCKED"},
+            {"asset_id": "a", "annual_percentage_rate": 0.05, "enabled": True, "type": "FLEXIBLE"},
+        ],
+        [
+            {"asset_id": "a", "annual_percentage_rate": 0.05, "enabled": True, "type": "FLEXIBLE"},
+            {"asset_id": "a", "annual_percentage_rate": 0.02, "enabled": False, "type": "LOCKED"},
+        ],
+    ):
+        earn = parse_earn_configs(configs)
+        assert (earn.apr, earn.offered, earn.products["a"].type) == (
+            {"a": 0.05}, frozenset({"a"}), "FLEXIBLE"
+        )
 
 
 # --- When a wallet has a Staking sensor ------------------------------------------

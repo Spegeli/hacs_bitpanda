@@ -819,30 +819,57 @@ def totals_from_section(raw: object) -> dict[str, RewardTotals] | None:
 
 
 @dataclass(frozen=True)
+class EarnProduct:
+    """One asset's Earn product, as /earn/configs lists it: its APR (a
+    fraction; None when not a number), its `type` (FLEXIBLE, LOCKED) and
+    `mode` (STAKING_EARN, STABLE_COIN_EARN) as Bitpanda sends them, None
+    without one, and whether it is sold out and enabled."""
+
+    apr: float | None
+    type: str | None
+    mode: str | None
+    sold_out: bool
+    enabled: bool
+
+
+@dataclass(frozen=True)
 class EarnData:
-    """The Earn catalogue: APR per asset (a fraction) and the offered assets."""
+    """The Earn catalogue: APR per asset (a fraction), the offered assets,
+    and each asset's product."""
 
     apr: dict[str, float]
     offered: frozenset[str]
+    products: dict[str, EarnProduct] = field(default_factory=dict)
 
 
 def parse_earn_configs(configs: list[dict[str, Any]]) -> EarnData:
     """An asset is offered while it has an enabled product -- sold out or not:
     `soldout` and `enabled` are separate flags, and a sold-out product still
     pays the users already in it. The APR is a JSON number and a fraction:
-    0.0544 means 5.44 %."""
-    apr: dict[str, float] = {}
-    offered: set[str] = set()
+    0.0544 means 5.44 %. Bitpanda sends one product per asset; should one
+    have two, the enabled one counts, for the APR and the offer alike."""
+    products: dict[str, EarnProduct] = {}
     for config in configs:
         asset_id = config.get("asset_id")
         if not asset_id:
             continue
-        if config.get("enabled") is True:
-            offered.add(asset_id)
         rate = config.get("annual_percentage_rate")
-        if isinstance(rate, (int, float)) and not isinstance(rate, bool):
-            apr[asset_id] = float(rate)
-    return EarnData(apr=apr, offered=frozenset(offered))
+        kind, mode = config.get("type"), config.get("mode")
+        product = EarnProduct(
+            apr=float(rate) if isinstance(rate, (int, float)) and not isinstance(rate, bool) else None,
+            type=kind if isinstance(kind, str) else None,
+            mode=mode if isinstance(mode, str) else None,
+            sold_out=config.get("soldout") is True,
+            enabled=config.get("enabled") is True,
+        )
+        known = products.get(asset_id)
+        if known is None or product.enabled or not known.enabled:
+            products[asset_id] = product
+    return EarnData(
+        apr={asset_id: p.apr for asset_id, p in products.items() if p.apr is not None},
+        offered=frozenset(asset_id for asset_id, p in products.items() if p.enabled),
+        products=products,
+    )
 
 
 def staking_applies(holding: Holding, earn: EarnData | None) -> bool | None:

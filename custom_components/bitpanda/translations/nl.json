@@ -655,6 +655,23 @@
           "apr_percent": {
             "name": "Beloningen: jaarlijks rendement (APR %)"
           },
+          "earn_type": {
+            "name": "Earn: type",
+            "state": {
+              "flexible": "Flexibel",
+              "locked": "Vastgezet"
+            }
+          },
+          "earn_mode": {
+            "name": "Earn: modus",
+            "state": {
+              "staking": "Staking",
+              "stable_coin": "Stablecoin"
+            }
+          },
+          "earn_sold_out": {
+            "name": "Earn: uitverkocht"
+          },
           "rewards_gross": {
             "name": "Beloningen: bruto (hoeveelheid)"
           },

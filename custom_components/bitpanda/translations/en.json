@@ -325,6 +325,18 @@
           },
           "category": {
             "name": "Asset: category"
+          },
+          "units": {
+            "name": "Wallet: quantity"
+          },
+          "value": {
+            "name": "Wallet: value"
+          },
+          "currency": {
+            "name": "Wallet: currency"
+          },
+          "message": {
+            "name": "Message"
           }
         }
       },
@@ -371,6 +383,15 @@
           },
           "credited_at": {
             "name": "Payouts: last"
+          },
+          "apr_percent": {
+            "name": "Rewards: APR %"
+          },
+          "rewards_net": {
+            "name": "Rewards: net (quantity)"
+          },
+          "message": {
+            "name": "Message"
           }
         }
       },

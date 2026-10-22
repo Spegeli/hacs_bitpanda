@@ -324,6 +324,12 @@ async def test_a_new_payout_fires_the_event_and_the_notification(
             "value": 0.07,
             "currency": "EUR",
             "credited_at": "2026-09-29T16:20:00Z",
+            # Nothing offered: no APR.
+            "apr_percent": None,
+            # Every payout so far, the five of them.
+            "rewards_net": 49.10617248,
+            "message": "Vision (VSN) Wallet received a staking reward of 9.87654312 VSN. "
+            "Worth about 0.07 EUR today.",
         }
     ]
     notifications.assert_called_once_with(
@@ -521,6 +527,10 @@ async def test_payouts_missed_in_a_pause_come_together(
             "value": 0.2,
             "currency": "EUR",
             "credited_at": "2026-09-29T16:20:00Z",
+            "apr_percent": None,
+            "rewards_net": 49.10617248,
+            "message": "Vision (VSN) Wallet received 3 staking rewards, together 29.90617248 VSN. "
+            "Worth about 0.20 EUR today.",
         }
     ]
     notifications.assert_called_once_with(
@@ -1067,6 +1077,28 @@ async def test_switched_off_only_the_event_fires(
     assert [event.data["credited_at"] for event in events] == [_WHEN[4]]
     notifications.assert_not_called()
     assert _mark(entry) == _WHEN[4]
+    # The text for people is there all the same.
+    assert [event.data["message"] for event in events] == [
+        "Vision (VSN) Wallet received a staking reward of 9.87654312 VSN. "
+        "Worth about 0.07 EUR today."
+    ]
+
+
+async def test_a_staking_event_brings_the_apr_and_the_lifetime_net(
+    hass, portfolio_api, operations, events, hass_storage, freezer
+):
+    """Vision offered at 5.44 %: the event names the APR as Balance
+    (staking) does, and every payout's net so far."""
+    entry = _portfolio_entry(hass)
+    _known(hass_storage, entry, _WHEN[3])
+    offered = [{"asset_id": VSN["id"], "annual_percentage_rate": 0.0544, "enabled": True}]
+    with patch(f"{_CLIENT}async_get_earn_configs", AsyncMock(return_value=offered)):
+        await _setup(hass, entry)
+        operations.return_value = _paid(5)
+        await _next_hour(hass, freezer)
+    assert [(event.data["apr_percent"], event.data["rewards_net"]) for event in events] == [
+        (5.44, 49.10617248)
+    ]
 
 
 async def test_without_a_price_the_value_is_none_and_the_sentence_left_out(
@@ -1085,6 +1117,9 @@ async def test_without_a_price_the_value_is_none_and_the_sentence_left_out(
 
     device = _wallet_device(hass, entry)
     assert [(event.data["net"], event.data["value"]) for event in events] == [(9.87654312, None)]
+    assert [event.data["message"] for event in events] == [
+        "Vision (VSN) Wallet received a staking reward of 9.87654312 VSN."
+    ]
     notifications.assert_called_once_with(
         hass,
         f"**[Vision (VSN) Wallet](/config/devices/device/{device.id})** received a staking "
@@ -1117,6 +1152,10 @@ async def test_the_notification_follows_the_entrys_language(
     )
     assert [(event.data["count"], event.data["net"], event.data["value"]) for event in events] == [
         (4, 39.50617248, 0.26)
+    ]
+    assert [event.data["message"] for event in events] == [
+        "Vision (VSN) Wallet hat 4 Staking-Belohnungen erhalten, zusammen 39,50617248 VSN. "
+        "Heute etwa 0,26 EUR wert."
     ]
 
 
@@ -1196,6 +1235,7 @@ async def test_texts_that_cannot_be_loaded_still_fire_the_event_and_advance_the_
         await _next_hour(hass, freezer)
 
     assert [event.data["credited_at"] for event in events] == [_WHEN[4]]
+    assert [event.data["message"] for event in events] == [None]
     assert _mark(entry) == _WHEN[4]
     notifications.assert_not_called()
     [record] = [r for r in caplog.records if r.name == "custom_components.bitpanda.announcements"]
@@ -1251,6 +1291,11 @@ async def test_a_name_with_markdown_characters_shows_as_it_is(
     device = _wallet_device(hass, entry)
     assert [(event.data["wallet"], event.data["symbol"]) for event in events] == [
         ("QuickSwap [Old] (QUICK_OLD) Wallet", "QUICK_OLD")
+    ]
+    # The message is plain text: name and symbol as they are, nothing escaped.
+    assert [event.data["message"] for event in events] == [
+        "QuickSwap [Old] (QUICK_OLD) Wallet received a staking reward of 9.87654312 QUICK_OLD. "
+        "Worth about 0.07 EUR today."
     ]
     assert notifications.call_args.args[1] == (
         rf"**[QuickSwap \[Old\] (QUICK\_OLD) Wallet](/config/devices/device/{device.id})** "

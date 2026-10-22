@@ -325,6 +325,18 @@
           },
           "category": {
             "name": "Asset: Kategorie"
+          },
+          "units": {
+            "name": "Wallet: Menge"
+          },
+          "value": {
+            "name": "Wallet: Wert"
+          },
+          "currency": {
+            "name": "Wallet: Währung"
+          },
+          "message": {
+            "name": "Nachricht"
           }
         }
       },
@@ -371,6 +383,15 @@
           },
           "credited_at": {
             "name": "Gutschriften: zuletzt"
+          },
+          "apr_percent": {
+            "name": "Belohnungen: Zinssatz (APR %)"
+          },
+          "rewards_net": {
+            "name": "Belohnungen: netto (Menge)"
+          },
+          "message": {
+            "name": "Nachricht"
           }
         }
       },

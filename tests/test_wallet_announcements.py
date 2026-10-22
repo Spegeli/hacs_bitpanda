@@ -350,6 +350,10 @@ async def test_a_bought_asset_is_announced_once_its_device_exists(
             "name": "Vision",
             "wallet": "Vision (VSN) Wallet",
             "category": "crypto",
+            "units": 1.0,
+            "value": 100.0,
+            "currency": "EUR",
+            "message": "The Portfolio added a new wallet: Vision (VSN) Wallet in the group Cryptocurrencies.",
         }
     ]
     notifications.assert_called_once_with(
@@ -591,6 +595,10 @@ async def test_with_new_entities_disabled_a_bought_asset_is_announced_with_the_h
             "name": "Vision",
             "wallet": "Vision (VSN) Wallet",
             "category": "crypto",
+            "units": 1.0,
+            "value": 100.0,
+            "currency": "EUR",
+            "message": "The Portfolio added a new wallet: Vision (VSN) Wallet in the group Cryptocurrencies.",
         }
     ]
     notifications.assert_called_once_with(
@@ -1105,7 +1113,8 @@ async def test_only_a_wallet_device_of_this_entry_announces_a_waiting_asset(
     other.add_to_hass(hass)
     runtime = entry.runtime_data
     announcer = WalletAnnouncer(
-        hass, entry, runtime.known_wallets, runtime.group_titles, runtime.ready
+        hass, entry, runtime.known_wallets, runtime.group_titles, runtime.ready,
+        runtime.portfolio,
     )
     entry.async_on_unload(announcer.async_listen_for_wallet_devices())
     announcer.mark(VSN, "crypto")
@@ -1141,6 +1150,11 @@ async def test_only_a_wallet_device_of_this_entry_announces_a_waiting_asset(
             "name": "Vision",
             "wallet": "Vision (VSN) Wallet",
             "category": "crypto",
+            # Not held at the announcement: nothing to count.
+            "units": None,
+            "value": None,
+            "currency": "EUR",
+            "message": "The Portfolio added a new wallet: Vision (VSN) Wallet in the group Cryptocurrencies.",
         }
     ]
     notifications.assert_called_once_with(
@@ -1166,7 +1180,8 @@ async def test_a_price_device_created_while_an_asset_waits_is_no_news(
     tracker.add_to_hass(hass)
     runtime = entry.runtime_data
     announcer = WalletAnnouncer(
-        hass, entry, runtime.known_wallets, runtime.group_titles, runtime.ready
+        hass, entry, runtime.known_wallets, runtime.group_titles, runtime.ready,
+        runtime.portfolio,
     )
     entry.async_on_unload(announcer.async_listen_for_wallet_devices())
     announcer.mark(VSN, "crypto")
@@ -1202,7 +1217,8 @@ async def test_a_creation_heard_after_the_device_went_again_announces_nothing(
     await _setup(hass, entry)
     runtime = entry.runtime_data
     announcer = WalletAnnouncer(
-        hass, entry, runtime.known_wallets, runtime.group_titles, runtime.ready
+        hass, entry, runtime.known_wallets, runtime.group_titles, runtime.ready,
+        runtime.portfolio,
     )
     entry.async_on_unload(announcer.async_listen_for_wallet_devices())
     announcer.mark(VSN, "crypto")
@@ -1380,6 +1396,10 @@ async def test_switched_off_the_event_still_fires_without_a_notification(
     await _next_refresh(hass, freezer)
 
     assert [event.data["asset_id"] for event in events] == [VSN["id"]]
+    # The text for people is there all the same.
+    assert [event.data["message"] for event in events] == [
+        "The Portfolio added a new wallet: Vision (VSN) Wallet in the group Cryptocurrencies."
+    ]
     notifications.assert_not_called()
     assert VSN["id"] in entry.runtime_data.known_wallets
 
@@ -1405,6 +1425,43 @@ async def test_the_notification_is_in_the_portfolios_language(
         "Neues Bitpanda-Wallet",
         notification_id=f"bitpanda_wallet_added_{VSN['id']}",
     )
+
+
+async def test_the_events_message_is_in_the_portfolios_language_without_markup(
+    hass, portfolio_api, events, notifications, freezer
+):
+    entry = _portfolio_entry(hass, language="de")
+    await _setup(hass, entry)
+    portfolio_api.return_value = _answer(BTC, VSN)
+
+    await _next_refresh(hass, freezer)
+
+    assert [event.data["message"] for event in events] == [
+        "Das Portfolio hat ein neues Wallet angelegt: Vision (VSN) Wallet in der Gruppe "
+        "Kryptowährungen."
+    ]
+
+
+async def test_a_wallet_event_fires_without_a_message_when_the_texts_cannot_load(
+    hass, portfolio_api, events, notifications, freezer
+):
+    """The texts fail to load: the event fires all the same, its message
+    null, and the asset becomes known."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    portfolio_api.return_value = _answer(BTC, VSN)
+
+    with patch(
+        "custom_components.bitpanda.announcements.async_get_translations",
+        AsyncMock(side_effect=HomeAssistantError("the texts could not be read")),
+    ):
+        await _next_refresh(hass, freezer)
+
+    assert [(event.data["asset_id"], event.data["message"]) for event in events] == [
+        (VSN["id"], None)
+    ]
+    notifications.assert_not_called()
+    assert VSN["id"] in entry.runtime_data.known_wallets
 
 
 async def test_a_missing_text_falls_back_to_english(hass, portfolio_api, notifications, freezer):
@@ -1542,6 +1599,11 @@ async def test_a_name_with_markdown_characters_shows_as_it_is(
 
     device = _wallet_device(hass, entry, VSN)
     assert [event.data["wallet"] for event in events] == ["QuickSwap [Old] (QUICK) Wallet"]
+    # The message is plain text: the name as it is, nothing escaped.
+    assert [event.data["message"] for event in events] == [
+        "The Portfolio added a new wallet: QuickSwap [Old] (QUICK) Wallet in the group "
+        "Cryptocurrencies."
+    ]
     assert notifications.call_args.args[1] == (
         "The Portfolio added a new wallet: "
         rf"**[QuickSwap \[Old\] (QUICK) Wallet](/config/devices/device/{device.id})** "

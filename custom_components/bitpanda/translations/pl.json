@@ -325,6 +325,18 @@
           },
           "category": {
             "name": "Aktywo: kategoria"
+          },
+          "units": {
+            "name": "Portfel: ilość"
+          },
+          "value": {
+            "name": "Portfel: wartość"
+          },
+          "currency": {
+            "name": "Portfel: waluta"
+          },
+          "message": {
+            "name": "Wiadomość"
           }
         }
       },
@@ -371,6 +383,15 @@
           },
           "credited_at": {
             "name": "Naliczenia: ostatnie"
+          },
+          "apr_percent": {
+            "name": "Nagrody: roczne oprocentowanie (APR %)"
+          },
+          "rewards_net": {
+            "name": "Nagrody: netto (ilość)"
+          },
+          "message": {
+            "name": "Wiadomość"
           }
         }
       },

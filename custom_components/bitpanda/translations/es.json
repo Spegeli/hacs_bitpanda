@@ -325,6 +325,18 @@
           },
           "category": {
             "name": "Activo: categoría"
+          },
+          "units": {
+            "name": "Wallet: cantidad"
+          },
+          "value": {
+            "name": "Wallet: valor"
+          },
+          "currency": {
+            "name": "Wallet: moneda"
+          },
+          "message": {
+            "name": "Mensaje"
           }
         }
       },
@@ -371,6 +383,15 @@
           },
           "credited_at": {
             "name": "Pagos: último"
+          },
+          "apr_percent": {
+            "name": "Recompensas: tasa anual (APR %)"
+          },
+          "rewards_net": {
+            "name": "Recompensas: neto (cantidad)"
+          },
+          "message": {
+            "name": "Mensaje"
           }
         }
       },

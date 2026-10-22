@@ -52,6 +52,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 import logging
+import re
 from typing import Any
 
 from homeassistant.components import persistent_notification
@@ -78,6 +79,7 @@ from .naming import (
     wallet_device_name,
 )
 from .portfolio_coordinator import (
+    EarnCoordinator,
     PortfolioConfigEntry,
     PortfolioCoordinator,
     RewardsCoordinator,
@@ -126,6 +128,18 @@ def async_announce(
     same."""
     hass.bus.async_fire(bus_event, data)
     async_dispatcher_send(hass, portfolio_event_signal(entry_id), entity_key, event_type, dict(data))
+
+
+# A link in a notification's text: `[{wallet}]({link})`.
+_LINKED = re.compile(r"\[(\{[a-z_]+\})\]\(\{link\}\)")
+
+
+def plain_template(template: str) -> str:
+    """`template`, a notification's text, without its markup -- bold dropped,
+    a link `[{wallet}]({link})` its text alone -- for an event's `message`.
+    Taken out of the template before it is filled, never out of the text:
+    a name holding Markdown's characters stays whole."""
+    return _LINKED.sub(r"\1", template).replace("**", "")
 
 
 def escape_markdown(text: str) -> str:
@@ -183,6 +197,15 @@ def _is_creation(event_data: dr.EventDeviceRegistryUpdatedData) -> bool:
     return event_data["action"] == "create"
 
 
+def _warn_wallet_notification_failed(wallet: str, error: str) -> None:
+    """Log that the notification about the new wallet `wallet` could not be
+    shown, `error` naming the type of the error: its message and its
+    traceback stay out of the log."""
+    _LOGGER.warning(
+        "Could not show the notification about the new Bitpanda wallet %s (%s)", wallet, error
+    )
+
+
 class WalletAnnouncer:
     """Announces the wallets new to one Portfolio entry, each once."""
 
@@ -193,12 +216,15 @@ class WalletAnnouncer:
         known: KnownWallets,
         group_titles: dict[str, str],
         ready: asyncio.Event,
+        portfolio: PortfolioCoordinator,
     ) -> None:
         self._hass = hass
         self._entry = entry
         self.known = known
         # PortfolioRuntime.ready: set once the entry's platforms are set up.
         self._ready = ready
+        # The units and the value of the wallet announced.
+        self._portfolio = portfolio
         # Category -> group title, in the entry's language (runtime.group_titles).
         self._group_titles = group_titles
         # Asset id -> its record and the category of the group its wallet
@@ -309,9 +335,23 @@ class WalletAnnouncer:
     ) -> None:
         """The event, the notification unless switched off, and only then
         the asset in the list -- also when the notification failed: rather a
-        notification missed than the event again at every start."""
+        notification missed than the event again at every start.
+
+        The texts load first, for the event's message too, before anything
+        is announced: an unload cancelling their load leaves the asset
+        unknown, and the next setup announces it. Texts that fail to load
+        leave the message null; the event fires all the same."""
+        wallet = wallet_device_name(asset)
+        texts: dict[str, str] | None = None
+        texts_error: str | None = None
         try:
-            wallet = wallet_device_name(asset)
+            texts = await _async_texts(self._hass, self._entry)
+        except Exception as err:  # noqa: BLE001 - the event fires without its message
+            texts_error = type(err).__name__
+        try:
+            data = self._portfolio.data
+            holding = None if data is None else data.holdings.get(asset_id)
+            value = None if holding is None or holding.value is None else holding.value
             # An interface for the users' automations: later versions may add
             # fields, never rename or drop one.
             async_announce(
@@ -327,29 +367,45 @@ class WalletAnnouncer:
                     "name": asset.get("name"),
                     "wallet": wallet,
                     "category": category,
+                    # Not listed at the announcement -- sold again by now --:
+                    # nothing to count.
+                    "units": None if holding is None else round(holding.balance, DECIMALS),
+                    "value": None if value is None else round(value, DECIMALS),
+                    "currency": self._entry.data[CONF_CURRENCY],
+                    "message": None if texts is None else self._message(texts, wallet, category),
                 },
             )
             if notifies_new_wallets(self._entry):
-                try:
-                    await self._async_notify(asset_id, device_id, wallet, category)
-                except Exception as err:  # noqa: BLE001 - the event has fired; the notification is extra
-                    _LOGGER.warning(
-                        "Could not show the notification about the new Bitpanda wallet %s (%s)",
-                        wallet,
-                        type(err).__name__,
-                    )
+                if texts_error is not None:
+                    _warn_wallet_notification_failed(wallet, texts_error)
+                elif texts is not None:
+                    try:
+                        self._notify(texts, asset_id, device_id, wallet, category)
+                    except Exception as err:  # noqa: BLE001 - the event has fired; the notification is extra
+                        _warn_wallet_notification_failed(wallet, type(err).__name__)
         finally:
             self.known.add(asset_id)
             self._scheduled.discard(asset_id)
 
-    async def _async_notify(
-        self, asset_id: str, device_id: str, wallet: str, category: str
+    def _message(self, texts: dict[str, str], wallet: str, category: str) -> str | None:
+        """The notification's text as plain text, without the hint on
+        disabled sensors: for people, not to be parsed. None without the
+        text."""
+        message = texts.get(f"{_TEXTS}.wallet_added.message")
+        if not message:
+            return None
+        return plain_template(message).format(
+            wallet=wallet, link="", group=self._group_titles.get(category, category)
+        )
+
+    def _notify(
+        self, translations: dict[str, str], asset_id: str, device_id: str, wallet: str,
+        category: str,
     ) -> None:
         """The notification, in the entry's language (_async_texts). A text
         missing even in English -- a broken install -- leaves the wallet
         without a notification, or the notification without its hint on
         disabled sensors."""
-        translations = await _async_texts(self._hass, self._entry)
         title = translations.get(f"{_TEXTS}.wallet_added_title.message")
         message = translations.get(f"{_TEXTS}.wallet_added.message")
         if not title or not message:
@@ -409,6 +465,7 @@ class RewardAnnouncer:
         marks: RewardMarks,
         rewards: RewardsCoordinator,
         portfolio: PortfolioCoordinator,
+        earn: EarnCoordinator,
         ready: asyncio.Event,
         prices: WalletPrices | None = None,
     ) -> None:
@@ -417,6 +474,8 @@ class RewardAnnouncer:
         self._marks = marks
         self._rewards = rewards
         self._portfolio = portfolio
+        # The APR the event names, as Balance (staking) shows it.
+        self._earn = earn
         # PortfolioRuntime.ready: set once the entry's platforms are set up.
         self._ready = ready
         self._prices = prices
@@ -488,13 +547,13 @@ class RewardAnnouncer:
         await self._ready.wait()
         texts: dict[str, str] | None = None
         texts_error: str | None = None
-        if notifies_staking_rewards(self._entry):
-            # An unload's cancellation is no Exception: it still ends the
-            # pass here, before its first event.
-            try:
-                texts = await _async_texts(self._hass, self._entry)
-            except Exception as err:  # noqa: BLE001 - the events and the marks come all the same
-                texts_error = type(err).__name__
+        # For the events' message and the notification alike. An unload's
+        # cancellation is no Exception: it still ends the pass here, before
+        # its first event.
+        try:
+            texts = await _async_texts(self._hass, self._entry)
+        except Exception as err:  # noqa: BLE001 - the events and the marks come all the same
+            texts_error = type(err).__name__
         # The payouts' value today needs the wallet's ticker price: a round
         # under way -- at a setup or reload -- is given a while to bring it.
         if self._prices is not None:
@@ -504,10 +563,11 @@ class RewardAnnouncer:
     @callback
     def _announce(self, texts: dict[str, str] | None, texts_error: str | None) -> None:
         """The events, the marks and the notifications, with nothing awaited
-        in between. `texts` are the notification's, None while it is
-        switched off -- or while `texts_error` names the type of the error
-        that kept them from loading: each asset announced then logs it, as a
-        notification that failed does."""
+        in between. `texts` are the notifications' and the messages', None
+        while `texts_error` names the type of the error that kept them from
+        loading: the messages are null then, and each asset announced logs
+        it while the notification is on, as a notification that failed
+        does."""
         # Never None: setup makes this announcer once the Portfolio's first
         # refresh has succeeded.
         portfolio = self._portfolio.data
@@ -518,10 +578,13 @@ class RewardAnnouncer:
         ]
         # In the order they were paid, each asset by its newest payout.
         news.sort(key=lambda item: time_key(item[1][-1].credited_at))
+        notify = notifies_staking_rewards(self._entry)
         for asset_id, payouts in news:
             device_id = self._wallet_device_id(asset_id, portfolio)
             if device_id is not None:
-                self._announce_asset(asset_id, payouts, device_id, portfolio, texts, texts_error)
+                self._announce_asset(
+                    asset_id, payouts, device_id, portfolio, texts, texts_error, notify
+                )
 
     def _wallet_device_id(self, asset_id: str, portfolio: PortfolioData) -> str | None:
         """The wallet device of `asset_id` while its payouts may be
@@ -553,11 +616,12 @@ class RewardAnnouncer:
         portfolio: PortfolioData,
         texts: dict[str, str] | None,
         texts_error: str | None,
+        notify: bool,
     ) -> None:
         """The event about `payouts`, the payouts of `asset_id` after its
-        mark; the mark on the newest of them; then the notification, if
-        `texts` are given -- or the warning that it could not be shown, if
-        `texts_error` is."""
+        mark; the mark on the newest of them; then, if `notify`, the
+        notification -- or the warning that it could not be shown, if
+        `texts_error` names why."""
         asset = portfolio.assets[asset_id]
         wallet = wallet_device_name(asset)
         newest = payouts[-1].credited_at
@@ -567,6 +631,10 @@ class RewardAnnouncer:
         # the Staking sensor's rewards_net_value: no endpoint prices a past
         # date.
         value = None if price is None else round(net * price, 2)
+        symbol = asset["symbol"]
+        earn = self._earn.data
+        apr = None if earn is None else earn.apr.get(asset_id)
+        totals = (self._rewards.data or {})[asset_id]
         # An interface for the users' automations: later versions may add
         # fields, never rename or drop one.
         async_announce(
@@ -588,11 +656,20 @@ class RewardAnnouncer:
                 "value": value,
                 "currency": self._entry.data[CONF_CURRENCY],
                 "credited_at": newest,
+                # As Balance (staking)'s attribute: percent, none without one.
+                "apr_percent": None if apr is None else round(apr * 100, DECIMALS),
+                # Every payout so far, in units of the asset.
+                "rewards_net": totals.net,
+                "message": None if texts is None else self._message(
+                    texts, wallet, symbol=symbol, count=len(payouts), net=net, value=value
+                ),
             },
         )
         # Before the notification, whatever becomes of it: rather a
         # notification missed than the payouts announced again.
         self._marks.advance(asset_id, newest)
+        if not notify:
+            return
         if texts_error is not None:
             _warn_reward_notification_failed(wallet, texts_error)
         elif texts is not None:
@@ -603,6 +680,33 @@ class RewardAnnouncer:
                 )
             except Exception as err:  # noqa: BLE001 - the event has fired; the notification is extra
                 _warn_reward_notification_failed(wallet, type(err).__name__)
+
+    def _message(
+        self,
+        texts: dict[str, str],
+        wallet: str,
+        *,
+        symbol: str,
+        count: int,
+        net: float,
+        value: float | None,
+    ) -> str | None:
+        """The notification's text as plain text -- for people, not to be
+        parsed -- with the value sentence when a value is known. None
+        without the text."""
+        key = "staking_reward" if count == 1 else "staking_rewards"
+        message = texts.get(f"{_TEXTS}.{key}.message")
+        if not message:
+            return None
+        language = entry_language(self._entry)
+        text = plain_template(message).format(
+            wallet=wallet, link="", count=count, net=format_amount(net, language), symbol=symbol
+        )
+        worth = texts.get(f"{_TEXTS}.staking_reward_value.message")
+        if value is not None and worth:
+            money = format_money(value, language)
+            text = f"{text} {plain_template(worth).format(value=money, currency=self._entry.data[CONF_CURRENCY])}"
+        return text
 
     def _notify(
         self,

@@ -151,7 +151,8 @@ class _Harness:
         self.manager = PortfolioEntityManager(
             hass, self.entry, self.runtime, "EUR", add,
             WalletAnnouncer(
-                hass, self.entry, self.runtime.known_wallets, _TITLES, self.runtime.ready
+                hass, self.entry, self.runtime.known_wallets, _TITLES, self.runtime.ready,
+                self.runtime.portfolio,
             ),
         )
 

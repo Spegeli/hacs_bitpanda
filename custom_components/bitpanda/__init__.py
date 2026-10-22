@@ -223,7 +223,8 @@ async def _async_start_portfolio(
     # coordinators are handed over: entry.runtime_data is set only once this
     # start returns.
     announcer = RewardAnnouncer(
-        hass, entry, store.reward_marks, runtime.rewards, runtime.portfolio, runtime.ready, prices
+        hass, entry, store.reward_marks, runtime.rewards, runtime.portfolio, runtime.earn,
+        runtime.ready, prices,
     )
     runtime.rewards.on_refreshed = announcer.async_rewards_refreshed
     # Earn, rewards and history are additive: a failure there must not block

@@ -325,6 +325,18 @@
           },
           "category": {
             "name": "Asset: categorie"
+          },
+          "units": {
+            "name": "Wallet: hoeveelheid"
+          },
+          "value": {
+            "name": "Wallet: waarde"
+          },
+          "currency": {
+            "name": "Wallet: valuta"
+          },
+          "message": {
+            "name": "Bericht"
           }
         }
       },
@@ -371,6 +383,15 @@
           },
           "credited_at": {
             "name": "Uitbetalingen: laatste"
+          },
+          "apr_percent": {
+            "name": "Beloningen: jaarlijks rendement (APR %)"
+          },
+          "rewards_net": {
+            "name": "Beloningen: netto (hoeveelheid)"
+          },
+          "message": {
+            "name": "Bericht"
           }
         }
       },

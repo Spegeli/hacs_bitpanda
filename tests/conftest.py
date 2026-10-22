@@ -185,10 +185,13 @@ def wallet_group(category: str, title: str | None = None) -> ConfigSubentryData:
 # (announcements.PORTFOLIO_EVENT_TYPES): the bus event's fields, which the
 # entity shows as its attributes.
 ANNOUNCEMENT_FIELDS = {
-    "new_wallet": frozenset({"device_id", "asset_id", "symbol", "name", "wallet", "category"}),
+    "new_wallet": frozenset({
+        "device_id", "asset_id", "symbol", "name", "wallet", "category", "units", "value",
+        "currency", "message",
+    }),
     "staking_reward": frozenset({
         "device_id", "asset_id", "symbol", "name", "wallet", "count", "gross", "fee", "net",
-        "value", "currency", "credited_at",
+        "value", "currency", "credited_at", "apr_percent", "rewards_net", "message",
     }),
     "earn_change": frozenset(),
 }

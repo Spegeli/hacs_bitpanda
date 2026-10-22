@@ -941,6 +941,9 @@
     },
     "rewards_start_after_end": {
       "message": "Le début se situe après la fin."
+    },
+    "refresh_unknown_entry": {
+      "message": "Le service choisi n'est pas un service Bitpanda chargé."
     }
   },
   "issues": {
@@ -980,7 +983,13 @@
   "services": {
     "refresh": {
       "name": "Actualiser",
-      "description": "Récupère maintenant le portefeuille et les prix auprès de Bitpanda et attend que les deux soient terminés. Ignorée pendant le délai d'attente après le dernier appel ; échoue si une actualisation échoue."
+      "description": "Récupère maintenant le portefeuille et les prix auprès de Bitpanda, ou seulement le service choisi, et attend la fin. Un service encore dans son délai d'attente est ignoré ; échoue si une actualisation échoue.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Service",
+          "description": "Uniquement ce service : Bitpanda Portfolio ou Bitpanda Price Tracker. Vide : les deux."
+        }
+      }
     },
     "get_portfolio": {
       "name": "Obtenir le portefeuille",

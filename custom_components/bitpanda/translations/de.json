@@ -941,6 +941,9 @@
     },
     "rewards_start_after_end": {
       "message": "Der Beginn liegt nach dem Ende."
+    },
+    "refresh_unknown_entry": {
+      "message": "Der gewählte Dienst ist kein geladener Bitpanda-Dienst."
     }
   },
   "issues": {
@@ -980,7 +983,13 @@
   "services": {
     "refresh": {
       "name": "Aktualisieren",
-      "description": "Holt Portfolio und Preise sofort und wartet, bis beides fertig ist. Innerhalb der Sperrzeit ignoriert; schlägt fehl, wenn eine Aktualisierung fehlschlägt."
+      "description": "Holt Portfolio und Preise sofort, oder nur den gewählten Dienst, und wartet, bis es fertig ist. Ein Dienst innerhalb seiner Sperrzeit wird übersprungen; schlägt fehl, wenn eine Aktualisierung fehlschlägt.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Dienst",
+          "description": "Nur dieser Dienst: Bitpanda Portfolio oder Bitpanda Price Tracker. Leer: beide."
+        }
+      }
     },
     "get_portfolio": {
       "name": "Portfolio abrufen",

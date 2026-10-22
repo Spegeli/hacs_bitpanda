@@ -941,6 +941,9 @@
     },
     "rewards_start_after_end": {
       "message": "Het begin ligt na het einde."
+    },
+    "refresh_unknown_entry": {
+      "message": "De gekozen dienst is geen geladen Bitpanda-dienst."
     }
   },
   "issues": {
@@ -980,7 +983,13 @@
   "services": {
     "refresh": {
       "name": "Vernieuwen",
-      "description": "Haalt je portfolio en de prijzen nu op bij Bitpanda en wacht tot beide klaar zijn. Genegeerd binnen de wachttijd na de vorige aanroep; mislukt als een vernieuwing mislukt."
+      "description": "Haalt je portfolio en de prijzen nu op bij Bitpanda, of alleen de gekozen dienst, en wacht tot dat klaar is. Een dienst binnen zijn wachttijd wordt overgeslagen; mislukt als een vernieuwing mislukt.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Dienst",
+          "description": "Alleen deze dienst: Bitpanda Portfolio of Bitpanda Price Tracker. Leeg: beide."
+        }
+      }
     },
     "get_portfolio": {
       "name": "Portfolio ophalen",

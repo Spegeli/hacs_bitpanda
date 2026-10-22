@@ -941,6 +941,9 @@
     },
     "rewards_start_after_end": {
       "message": "L'inizio è successivo alla fine."
+    },
+    "refresh_unknown_entry": {
+      "message": "Il servizio scelto non è un servizio Bitpanda caricato."
     }
   },
   "issues": {
@@ -980,7 +983,13 @@
   "services": {
     "refresh": {
       "name": "Aggiorna",
-      "description": "Recupera subito il portafoglio e i prezzi da Bitpanda e attende che entrambi siano completati. Ignorata durante il tempo di attesa dopo l'ultima chiamata; non riesce se un aggiornamento non riesce."
+      "description": "Recupera subito il portafoglio e i prezzi da Bitpanda, o solo il servizio scelto, e attende che sia completato. Un servizio ancora nel suo tempo di attesa viene saltato; non riesce se un aggiornamento non riesce.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Servizio",
+          "description": "Solo questo servizio: Bitpanda Portfolio o Bitpanda Price Tracker. Vuoto: entrambi."
+        }
+      }
     },
     "get_portfolio": {
       "name": "Ottieni il portafoglio",

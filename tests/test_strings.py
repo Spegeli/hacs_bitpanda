@@ -1455,17 +1455,21 @@ def test_no_language_but_german_names_a_permission_in_german():
 
 def test_the_refresh_action_says_what_it_does():
     """The action picker shows this text alone. It says what the action
-    fetches, that the call waits for it, that a call within the cooldown is
-    ignored and that a failed refresh fails the call -- in the approved
-    English and German wording."""
+    fetches -- both services, or the one picked --, that the call waits for
+    it, that a service within its cooldown is skipped and that a failed
+    refresh fails the call -- in English and German."""
     assert _load("strings.json")["services"]["refresh"]["description"] == (
-        "Fetches the portfolio and the prices from Bitpanda now and waits until both are "
-        "done. Ignored within the cooldown of the last call; fails when a refresh fails."
+        "Fetches the portfolio and the prices from Bitpanda now, or only the chosen service, "
+        "and waits until it is done. A service within its cooldown is skipped; fails when a "
+        "refresh fails."
     )
     assert _load("translations/de.json")["services"]["refresh"]["description"] == (
-        "Holt Portfolio und Preise sofort und wartet, bis beides fertig ist. Innerhalb der "
-        "Sperrzeit ignoriert; schlägt fehl, wenn eine Aktualisierung fehlschlägt."
+        "Holt Portfolio und Preise sofort, oder nur den gewählten Dienst, und wartet, bis es "
+        "fertig ist. Ein Dienst innerhalb seiner Sperrzeit wird übersprungen; schlägt fehl, "
+        "wenn eine Aktualisierung fehlschlägt."
     )
+    field = _load("translations/de.json")["services"]["refresh"]["fields"]["config_entry_id"]
+    assert field["name"] == "Dienst"
 
 
 # The steps whose field has no help text: the Portfolio's setup and the

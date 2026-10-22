@@ -941,6 +941,9 @@
     },
     "rewards_start_after_end": {
       "message": "The start lies after the end."
+    },
+    "refresh_unknown_entry": {
+      "message": "The chosen service is not a loaded Bitpanda service."
     }
   },
   "issues": {
@@ -980,7 +983,13 @@
   "services": {
     "refresh": {
       "name": "Refresh",
-      "description": "Fetches the portfolio and the prices from Bitpanda now and waits until both are done. Ignored within the cooldown of the last call; fails when a refresh fails."
+      "description": "Fetches the portfolio and the prices from Bitpanda now, or only the chosen service, and waits until it is done. A service within its cooldown is skipped; fails when a refresh fails.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Service",
+          "description": "Only this service: Bitpanda Portfolio or Bitpanda Price Tracker. Empty: both."
+        }
+      }
     },
     "get_portfolio": {
       "name": "Get portfolio",

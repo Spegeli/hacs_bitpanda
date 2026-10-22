@@ -941,6 +941,9 @@
     },
     "rewards_start_after_end": {
       "message": "Początek przypada po końcu."
+    },
+    "refresh_unknown_entry": {
+      "message": "Wybrana usługa nie jest załadowaną usługą Bitpanda."
     }
   },
   "issues": {
@@ -980,7 +983,13 @@
   "services": {
     "refresh": {
       "name": "Odśwież",
-      "description": "Pobiera teraz portfolio i ceny z platformy Bitpanda i czeka na zakończenie obu operacji. Ignorowana w czasie blokady po ostatnim wywołaniu; kończy się błędem, gdy odświeżenie się nie powiedzie."
+      "description": "Pobiera teraz portfolio i ceny z platformy Bitpanda, albo tylko wybraną usługę, i czeka na zakończenie. Usługa w czasie swojej blokady jest pomijana; kończy się błędem, gdy odświeżenie się nie powiedzie.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Usługa",
+          "description": "Tylko ta usługa: Bitpanda Portfolio lub Bitpanda Price Tracker. Puste: obie."
+        }
+      }
     },
     "get_portfolio": {
       "name": "Pobierz portfolio",

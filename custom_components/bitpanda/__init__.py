@@ -7,6 +7,8 @@ import logging
 from time import monotonic
 from typing import Any, cast
 
+import voluptuous as vol
+
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
@@ -88,6 +90,9 @@ PLATFORMS: list[Platform] = [Platform.EVENT, Platform.SENSOR]
 # Set up through the UI only: a `bitpanda:` block in configuration.yaml is
 # reported, never read. Required beside async_setup (hassfest).
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+# bitpanda.refresh's field: the one service to refresh.
+_CONFIG_ENTRY_ID = "config_entry_id"
 
 # Records of held assets, shared across reloads of the Portfolio entry.
 _ASSET_DIRECTORY_KEY: HassKey[dict[str, dict[str, Any]]] = HassKey(f"{DOMAIN}_asset_directory")
@@ -364,17 +369,17 @@ def _loaded_entries(hass: HomeAssistant) -> list[BitpandaConfigEntry]:
     ]
 
 
-def _refresh_cooldown(runtimes: list[PortfolioRuntime | PriceTrackerRuntime]) -> float:
-    """Seconds between two accepted `bitpanda.refresh` calls: the ticker
-    interval, never below REFRESH_MIN_COOLDOWN. A shorter cooldown would let
-    an automation drive ticker requests above the polling rate, and past a
+def _refresh_cooldown(runtime: PortfolioRuntime | PriceTrackerRuntime) -> float:
+    """Seconds between two accepted `bitpanda.refresh` calls of one service:
+    REFRESH_MIN_COOLDOWN for the Portfolio, the ticker interval -- never
+    below it -- for the Price Tracker. A shorter one would let an
+    automation drive ticker requests above the polling rate, and past a
     429's backoff."""
     seconds = REFRESH_MIN_COOLDOWN.total_seconds()
-    for runtime in runtimes:
-        if isinstance(runtime, PriceTrackerRuntime):
-            interval = runtime.tickers.update_interval
-            if interval is not None:
-                seconds = max(seconds, interval.total_seconds())
+    if isinstance(runtime, PriceTrackerRuntime):
+        interval = runtime.tickers.update_interval
+        if interval is not None:
+            seconds = max(seconds, interval.total_seconds())
     return seconds
 
 
@@ -409,41 +414,56 @@ async def _async_refresh_now(runtime: PortfolioRuntime | PriceTrackerRuntime) ->
 def _async_register_refresh_service(hass: HomeAssistant) -> None:
     """Register `bitpanda.refresh`, shared by both services (async_setup).
 
-    It refreshes every loaded entry, one after the other, and returns once
-    they are done. A call within the cooldown of the last accepted one is
-    ignored. The call fails with a translated error -- the frontend shows it
-    in the user's language, the log and automation traces in English -- when
-    no entry is loaded (a ServiceValidationError: there is nothing to
-    refresh), and when a refresh failed (a HomeAssistantError naming each
-    service whose refresh failed by its entry's title; the others are
-    refreshed all the same). A script or automation stops at a failed call
-    unless that step continues on error.
+    It refreshes every loaded entry, one after the other -- or only the one
+    `config_entry_id` names -- and returns once they are done. Each service
+    has its own cooldown (_refresh_cooldown): an entry refreshed within it
+    is skipped, the others are refreshed. The call fails with a translated
+    error -- the frontend shows it in the user's language, the log and
+    automation traces in English -- when no entry is loaded (a
+    ServiceValidationError: there is nothing to refresh), when
+    `config_entry_id` names no loaded Bitpanda entry (one too), and when a
+    refresh failed (a HomeAssistantError naming each service whose refresh
+    failed by its entry's title; the others are refreshed all the same). A
+    script or automation stops at a failed call unless that step continues
+    on error.
     """
-    # None until the first accepted call: the monotonic clock can start near
-    # zero after a boot.
-    last_accepted: float | None = None
+    # Entry id -> the monotonic time of its last accepted refresh; none
+    # before the first: the clock can start near zero after a boot.
+    last_accepted: dict[str, float] = {}
 
     async def handle_refresh(call: ServiceCall) -> None:
-        nonlocal last_accepted
-        entries = _loaded_entries(hass)
-        if not entries:
-            # Before the cooldown: a refused call refreshed nothing, so it
-            # starts no cooldown either.
-            raise ServiceValidationError(
-                translation_domain=DOMAIN, translation_key="nothing_to_refresh"
-            )
+        entry_id: str | None = call.data.get(_CONFIG_ENTRY_ID)
+        if entry_id is not None:
+            # Looked up among the entries, as _loaded_entries does: Home
+            # Assistant 2025.5 has no helper for it.
+            named = hass.config_entries.async_get_entry(entry_id)
+            if named is None or named.domain != DOMAIN or named.state is not ConfigEntryState.LOADED:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN, translation_key="refresh_unknown_entry"
+                )
+            entries: list[BitpandaConfigEntry] = [named]
+        else:
+            entries = _loaded_entries(hass)
+            if not entries:
+                # Before the cooldown: a refused call refreshed nothing, so
+                # it starts no cooldown either.
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN, translation_key="nothing_to_refresh"
+                )
         now = monotonic()
-        if last_accepted is not None and now - last_accepted < _refresh_cooldown(
-            [entry.runtime_data for entry in entries]
-        ):
-            _LOGGER.debug("Refresh cooldown active, ignoring call")
-            return
-        # A refresh that fails has asked Bitpanda all the same: it starts the
-        # cooldown like any other. Set before the first await: a call that
-        # arrives while this one refreshes falls within the cooldown.
-        last_accepted = now
-        failed: list[str] = []
+        due: list[BitpandaConfigEntry] = []
         for entry in entries:
+            last = last_accepted.get(entry.entry_id)
+            if last is not None and now - last < _refresh_cooldown(entry.runtime_data):
+                _LOGGER.debug("Refresh cooldown of %s active, skipping it", entry.title)
+                continue
+            # A refresh that fails has asked Bitpanda all the same: it starts
+            # the cooldown like any other. Set before the first await: a call
+            # that arrives while this one refreshes falls within it.
+            last_accepted[entry.entry_id] = now
+            due.append(entry)
+        failed: list[str] = []
+        for entry in due:
             # An earlier refresh can take a while -- a long ticker round. An
             # entry unloaded meanwhile, by a reload or a currency change, has
             # lost its runtime data and has nothing to refresh; one reloaded
@@ -459,7 +479,13 @@ def _async_register_refresh_service(hass: HomeAssistant) -> None:
                 translation_placeholders={"services": ", ".join(failed)},
             )
 
-    hass.services.async_register(DOMAIN, "refresh", handle_refresh)
+    # Newer releases type schemas with probatio; voluptuous works the same
+    # at runtime on every release from the minimum on, and mypy checks the
+    # newest.
+    hass.services.async_register(
+        DOMAIN, "refresh", handle_refresh,
+        schema=vol.Schema({vol.Optional(_CONFIG_ENTRY_ID): cv.string}),  # type: ignore[arg-type]
+    )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> bool:

@@ -96,17 +96,26 @@ class DayAgoPrices:
     CHANGE_24H_UPDATE_INTERVAL, until the last one leaves. A sensor without a value of a day ago, and every sensor
     after a failed lookup, gets no reference: its 24 h attributes are
     absent, never stale. The sensor's next update publishes them.
+
+    `last` keeps each joined sensor's last reference, None without one, by
+    the key it joined with -- a wallet's asset, whatever its entity ID --
+    or by its entity ID: for what answers without a sensor (services.py).
+    A sensor that leaves takes it along.
     """
 
     def __init__(self, hass: HomeAssistant, look_up: LookUp) -> None:
         self._hass = hass
         self._look_up = look_up
         self._sensors: dict[str, DayAgoSensor] = {}
+        # Entity ID -> the key of `last` its sensor joined with.
+        self._keys: dict[str, str] = {}
+        self.last: dict[str, float | None] = {}
         self._timers: list[Callable[[], None]] = []
 
     @callback
-    def join(self, sensor: DayAgoSensor) -> Callable[[], None]:
-        """Add `sensor` to the lookups; returns its removal."""
+    def join(self, sensor: DayAgoSensor, key: str | None = None) -> Callable[[], None]:
+        """Add `sensor` to the lookups, its result kept in `last` under
+        `key`, else its entity ID; returns its removal."""
         if not self._sensors:
             self._timers = [
                 async_call_later(self._hass, _FIRST_LOOKUP_DELAY, self.async_look_up),
@@ -118,11 +127,13 @@ class DayAgoPrices:
                 ),
             ]
         self._sensors[sensor.entity_id] = sensor
+        self._keys[sensor.entity_id] = key or sensor.entity_id
 
         @callback
         def _leave() -> None:
             if self._sensors.get(sensor.entity_id) is sensor:
                 del self._sensors[sensor.entity_id]
+                self.last.pop(self._keys.pop(sensor.entity_id), None)
             if not self._sensors:
                 for cancel in self._timers:
                     cancel()
@@ -141,7 +152,11 @@ class DayAgoPrices:
             _LOGGER.debug("No 24 h statistics: %s", type(err).__name__)
             found = {}
         for entity_id, sensor in sensors.items():
-            sensor.set_price_24h_ago(found.get(entity_id))
+            value = found.get(entity_id)
+            sensor.set_price_24h_ago(value)
+            # A sensor that left during the lookup keeps nothing here.
+            if self._sensors.get(entity_id) is sensor:
+                self.last[self._keys[entity_id]] = value
 
 
 async def async_wallet_prices_24h_ago(

@@ -342,7 +342,7 @@ async def _a_day_later(hass, freezer) -> None:
 async def test_a_wallet_shows_its_24h_figures_a_day_later(hass, freezer, portfolio, ticker):
     ticker["price"] = "0.10000000"
     portfolio[VSN["id"]] = ("1000.00000000", "100.00")
-    await _set_up(hass, freezer, _DAY_BEFORE - timedelta(seconds=10))
+    entry = await _set_up(hass, freezer, _DAY_BEFORE - timedelta(seconds=10))
     await _compiled(hass, _DAY_BEFORE)
     assert hass.states.get(_VSN).attributes["price"] == pytest.approx(0.1)
     assert "price_24h_ago" not in hass.states.get(_VSN).attributes
@@ -356,6 +356,8 @@ async def test_a_wallet_shows_its_24h_figures_a_day_later(hass, freezer, portfol
     assert attributes["price_24h_ago"] == pytest.approx(0.1)
     assert attributes["change_24h_pct"] == 10.0
     assert attributes["return_24h"] == pytest.approx(10.0)
+    # Kept for the actions, by the wallet's asset.
+    assert entry.runtime_data.day_ago.last == {VSN["id"]: pytest.approx(0.1)}
 
 
 async def test_the_24h_figures_compare_the_ticker_prices_of_now_and_a_day_ago(
@@ -393,6 +395,8 @@ async def test_a_disabled_balance_total_is_not_asked_for(hass, freezer, portfoli
         await _set_up(hass, freezer, _DAY_BEFORE, entry)
     assert query.call_count == 1
     assert set(query.call_args.args[3]) == {_BTC}
+    # Nothing kept for the actions: they read null.
+    assert set(entry.runtime_data.day_ago.last) == {BTC["id"]}
 
 
 async def test_a_failed_lookup_leaves_no_stale_figures(hass, freezer, portfolio, ticker):

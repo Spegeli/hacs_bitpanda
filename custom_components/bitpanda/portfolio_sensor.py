@@ -695,7 +695,8 @@ class WalletTotalSensor(_WalletPart):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         if self._day_ago is not None:
-            self.async_on_remove(self._day_ago.join(self))
+            # Kept by asset for the actions too (services.py).
+            self.async_on_remove(self._day_ago.join(self, self._asset_id))
 
     def set_price_24h_ago(self, value: float | None) -> None:
         """The price of 24 hours ago (DayAgoPrices); None: none known."""
@@ -1128,7 +1129,7 @@ async def async_setup_portfolio_entities(
     entry.async_on_unload(announcer.async_listen_for_wallet_devices())
     # The 24-hour references of every wallet's Balance (total), one lookup
     # for all of them.
-    day_ago = DayAgoPrices(hass, async_wallet_prices_24h_ago)
+    day_ago = runtime.day_ago = DayAgoPrices(hass, async_wallet_prices_24h_ago)
     manager = PortfolioEntityManager(
         hass, entry, runtime, currency, add_entities, announcer, day_ago
     )

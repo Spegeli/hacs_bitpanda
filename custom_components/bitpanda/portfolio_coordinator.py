@@ -48,6 +48,7 @@ from .const import (
     PORTFOLIO_UPDATE_INTERVAL,
     REWARDS_UPDATE_INTERVAL,
 )
+from .day_ago import DayAgoPrices
 from .portfolio_store import KnownWallets, OperationsHistory, RewardMarks
 from .price_coordinator import EcbCoordinator, convert_price
 from .portfolio_model import (
@@ -874,6 +875,9 @@ class PortfolioRuntime:
     # announcements wait for it, so that none reaches the bus before the
     # event entities exist (announcements.py).
     ready: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
+    # The 24-hour references of every wallet's Balance (total), kept by
+    # asset (day_ago.DayAgoPrices.last); set by the sensor platform.
+    day_ago: DayAgoPrices | None = field(default=None, repr=False)
 
 
 # A Portfolio config entry, its runtime data typed.

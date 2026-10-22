@@ -14,6 +14,7 @@ from custom_components.bitpanda.portfolio_model import (
 from custom_components.bitpanda.portfolio_sensor import (
     PortfolioCashPlusSensor,
     PortfolioCashSensor,
+    PortfolioClassSensor,
     PortfolioInvestedSensor,
     PortfolioReturnSensor,
     PortfolioTotalReturnPercentSensor,
@@ -402,6 +403,134 @@ def test_the_portfolio_return_figures_show_two_decimals():
         assert cls(coordinator, "eid", "EUR").suggested_display_precision == 2, cls
 
 
+# --- The value of each wallet group ------------------------------------------------------
+
+_GOLD = {"id": "b86c88d4-efe3-11eb-b56f-0691764446a7", "symbol": "XAU", "name": "Gold",
+         "type": "commodity", "group": "metal"}
+_CRYPTO = [VSN["id"], _OTHER["id"]]
+_SOLD = "0b6a3e5e-1c2d-4e5f-8a9b-0c1d2e3f4a5b"
+
+
+def _classes(**overrides) -> PortfolioData:
+    """VSN (200 worth, 150 invested) and BTC (100 worth, 50 invested) in the
+    crypto group, gold (60 worth, 40 invested) in the metal group, 50 Cash
+    Plus and 10 cash: Total value 420."""
+    data = _two_positions(**overrides)
+    data.holdings[_GOLD["id"]] = Holding(
+        asset_id=_GOLD["id"], balance=1.0, available=1.0, value=60.0, invested=40.0
+    )
+    data.assets[_GOLD["id"]] = _GOLD
+    return data
+
+
+def _class(data, members=_CRYPTO, category="crypto", **outcome) -> PortfolioClassSensor:
+    return PortfolioClassSensor(
+        _Coordinator(data, **outcome), "eid", "EUR", category, lambda: members
+    )
+
+
+def test_a_class_sums_its_held_wallets():
+    """The wallets of its group, never Cash, Cash Plus or another group's;
+    a wallet that waits out its misses -- tracked, no longer held -- is
+    left out."""
+    crypto = _class(_classes())
+    assert crypto.native_value == 300.0
+    assert (crypto.entity_id, crypto.unique_id, crypto.translation_key) == (
+        "sensor.bitpanda_portfolio_value_crypto", "eid_portfolio_value_crypto", "value_crypto"
+    )
+    assert crypto.native_unit_of_measurement == "EUR"
+    assert _class(_classes(), [_GOLD["id"]], "metal").native_value == 60.0
+    waiting_out = _class(_classes(), [*_CRYPTO, _SOLD])
+    assert waiting_out.native_value == 300.0
+    assert waiting_out.extra_state_attributes["wallets"] == 2
+
+
+def test_a_class_is_unknown_in_doubt():
+    """An entry that cannot be read, or a holding not classified yet, might
+    belong to any group; a wallet without a value leaves its group's sum
+    open. Unknown, never a sum that leaves something out."""
+    unparsed = _classes()
+    unparsed.unparsed_assets = {"unreadable"}
+    unclassified = _classes()
+    del unclassified.assets[_GOLD["id"]]
+    for data in (unparsed, unclassified, _classes(value=None)):
+        sensor = _class(data)
+        assert sensor.native_value is None
+        assert sensor.available is True
+        assert sensor.extra_state_attributes == {}
+
+
+def test_a_class_waits_while_all_its_wallets_wait_out_their_misses():
+    """No false 0 while the group's wallets wait out their misses -- tracked
+    but none held, or none tracked at all while the group still holds a
+    wallet from before a restart; the sensor goes with its group."""
+    assert _class(_classes(), [_SOLD]).available is False
+    assert _class(_classes(), None).available is False
+    assert _class(_classes(), [_SOLD, VSN["id"]]).available is True
+
+
+def test_a_class_waits_with_total_value():
+    data = _classes()
+    data.waiting = frozenset({"total"})
+    assert _class(data).available is False
+    assert "share_percent" not in _class(data).extra_state_attributes
+
+
+def test_a_class_follows_the_portfolios_failures():
+    assert _class(_classes(), last_update_success=False, data_available=True).available is True
+    assert _class(_classes(), last_update_success=False, data_available=False).available is False
+    assert _class(None).available is False
+
+
+def test_a_class_shows_its_share_of_the_total_value():
+    """Of Total value, Cash and Cash Plus included; absent while Total value
+    is unknown or not above 0."""
+    assert _class(_classes()).extra_state_attributes["share_percent"] == round(300 / 420 * 100, 2)
+    unknown_total = _classes()
+    unknown_total.cash = None
+    nothing_in_total = _classes()
+    nothing_in_total.cash = -410.0
+    for data in (unknown_total, nothing_in_total):
+        attributes = _class(data).extra_state_attributes
+        assert "share_percent" not in attributes
+        assert attributes["wallets"] == 2
+
+
+def test_a_class_reports_invested_and_total_return():
+    assert _class(_classes()).extra_state_attributes == {
+        "share_percent": 71.43, "invested_amount": 200.0, "total_return": 100.0,
+        "total_return_percent": 50.0, "wallets": 2,
+    }
+    assert _class(_classes(invested=None)).extra_state_attributes == {
+        "share_percent": 71.43, "wallets": 2,
+    }
+    nothing_invested = _classes(invested=0.0)
+    nothing_invested.holdings[VSN["id"]] = _vsn(invested=0.0)
+    assert _class(nothing_invested).extra_state_attributes == {
+        "share_percent": 71.43, "invested_amount": 0.0, "total_return": 300.0, "wallets": 2,
+    }
+
+
+def test_a_class_shows_two_decimals():
+    assert _class(_classes()).suggested_display_precision == 2
+
+
+def test_a_wallet_shows_its_share_of_the_portfolio():
+    """Its value over Total value, Cash and Cash Plus included: 200 of 210."""
+    sensor = WalletTotalSensor(_portfolio(**{VSN["id"]: _vsn()}), "eid", "EUR", VSN)
+    assert sensor.extra_state_attributes["portfolio_share_percent"] == 95.24
+    unknown_total = _data(**{VSN["id"]: _vsn()})
+    unknown_total.cash = None
+    waiting = _data(**{VSN["id"]: _vsn()})
+    waiting.waiting = frozenset({"total"})
+    nothing_in_total = _data(**{VSN["id"]: _vsn()})
+    nothing_in_total.cash = -200.0
+    without_value = _data(**{VSN["id"]: _vsn(value=None)})
+    for data in (unknown_total, waiting, nothing_in_total, without_value):
+        sensor = WalletTotalSensor(_Coordinator(data), "eid", "EUR", VSN)
+        assert "portfolio_share_percent" not in sensor.extra_state_attributes
+
+
 def test_return_sensors_read_their_timeframe():
     history = _Coordinator(PortfolioReturns(values={"DAY": 1.25, "SIX_MONTH": -3.5}))
     six_months = PortfolioReturnSensor(history, "eid", "SIX_MONTH")
@@ -461,6 +590,7 @@ def test_every_money_value_keeps_long_term_statistics_as_a_total():
         PortfolioCashPlusSensor(portfolio, "eid", "EUR"),
         PortfolioInvestedSensor(portfolio, "eid", "EUR"),
         PortfolioTotalReturnSensor(portfolio, "eid", "EUR"),
+        PortfolioClassSensor(portfolio, "eid", "EUR", "crypto", lambda: [VSN["id"]]),
         WalletSensor(portfolio, "eid", "EUR", VSN),
         StakingSensor(portfolio, earn, _Coordinator(None), "eid", "EUR", VSN),
         WalletTotalSensor(portfolio, "eid", "EUR", VSN),
@@ -652,7 +782,7 @@ def test_a_performance_figure_bitpanda_did_not_send_is_left_out():
     sensor = WalletTotalSensor(_portfolio(**{VSN["id"]: holding}), "eid", "EUR", VSN)
     assert sensor.extra_state_attributes == {
         "asset": "VSN", "asset_name": "Vision", "asset_category": "other", "units": 100.0,
-        "average_buy_price": 1.5, "total_return": 50.0,
+        "average_buy_price": 1.5, "total_return": 50.0, "portfolio_share_percent": 95.24,
     }
 
 
@@ -778,5 +908,5 @@ def test_total_is_the_whole_position_with_its_performance():
     assert sensor.extra_state_attributes == {
         "asset": "VSN", "asset_name": "Vision", "asset_category": "other", "units": 100.0,
         "average_buy_price": 1.5, "invested_amount": 150.0,
-        "total_return": 50.0, "total_return_percent": 33.33,
+        "total_return": 50.0, "total_return_percent": 33.33, "portfolio_share_percent": 95.24,
     }

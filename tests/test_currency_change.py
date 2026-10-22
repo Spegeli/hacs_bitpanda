@@ -133,8 +133,9 @@ async def test_a_currency_change_clears_the_statistics_of_every_portfolio_sensor
     assert await hass.config_entries.async_setup(entry.entry_id)
     await async_wait_recording_done(hass)
     sensors = _entity_ids(hass, entry)
-    # Eleven figures, and the staked VSN's Wallet, Staking and Total.
-    assert len(sensors) == 14
+    # Eleven figures, the crypto group's value, and the staked VSN's Wallet,
+    # Staking and Total.
+    assert len(sensors) == 15
     do_adhoc_statistics(hass, start=get_start_time(dt_util.utcnow()))
     await async_wait_recording_done(hass)
     assert await statistics_units(hass, sensors) == {

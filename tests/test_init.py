@@ -44,7 +44,7 @@ from custom_components.bitpanda.api import (
     BitpandaAuthError,
     BitpandaRateLimitError,
 )
-from custom_components.bitpanda.assets import slim_asset
+from custom_components.bitpanda.assets import ASSET_CATEGORIES, slim_asset
 from custom_components.bitpanda.const import (
     API_KEY_URL,
     DOMAIN,
@@ -61,6 +61,7 @@ from custom_components.bitpanda.groups import async_add_asset_to_group
 from custom_components.bitpanda.portfolio_store import async_get_portfolio_store
 from custom_components.bitpanda.naming import (
     PORTFOLIO_KEYS,
+    class_key,
     portfolio_device_identifier,
     portfolio_unique_id,
 )
@@ -369,8 +370,9 @@ async def test_every_sensor_keeps_long_term_statistics(hass, portfolio_api, pric
         )
         for state in hass.states.async_all("sensor")
     }
-    # Eleven Portfolio figures, the staked VSN's three sensors, BTC in EUR and USD.
-    assert len(classes) == 16
+    # Eleven Portfolio figures, the crypto group's value, the staked VSN's
+    # three sensors, BTC in EUR and USD.
+    assert len(classes) == 17
     for entity_id, (device_class, state_class, unit) in classes.items():
         if device_class == SensorDeviceClass.MONETARY:
             assert state_class == SensorStateClass.TOTAL, entity_id
@@ -385,7 +387,8 @@ async def test_every_sensor_keeps_long_term_statistics(hass, portfolio_api, pric
 async def test_every_portfolio_figure_is_one_the_currency_purge_knows(hass, portfolio_api):
     """The currency purge (purge.py) tells the Portfolio device's sensors
     apart by naming.PORTFOLIO_KEYS: a figure added without its key there
-    would keep its old-currency history through a currency change."""
+    would keep its old-currency history through a currency change. The keys
+    left over are the values of the groups that do not exist."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
     device = find_entry_device(dr.async_get(hass), entry.entry_id, f"{entry.entry_id}_portfolio")
@@ -395,7 +398,15 @@ async def test_every_portfolio_figure_is_one_the_currency_purge_knows(hass, port
             er.async_get(hass), device.id, include_disabled_entities=True
         )
     }
-    assert figures == {portfolio_unique_id(entry.entry_id, key) for key in PORTFOLIO_KEYS}
+    known = {portfolio_unique_id(entry.entry_id, key) for key in PORTFOLIO_KEYS}
+    assert figures <= known
+    groups = {sub.unique_id for sub in entry.subentries.values()}
+    assert known - figures == {
+        portfolio_unique_id(entry.entry_id, class_key(category))
+        for category in ASSET_CATEGORIES
+        if category not in groups
+    }
+    assert groups == {"crypto"}
 
 
 _RUNTIME_SECRET = "totally-secret-runtime-key"
@@ -628,6 +639,31 @@ async def test_an_empty_portfolio_waits_ten_minutes_then_shows_0_and_removes_the
     assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
     assert _value(hass, "sensor.bitpanda_portfolio_cash") == 0.0
     assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is None
+
+
+async def test_a_groups_value_counts_a_wallet_bought_since_with_the_same_refresh(
+    hass, portfolio_api
+):
+    """A new wallet in a group that exists already counts in the group's
+    value with the refresh that brings it -- never one refresh later, the
+    sum leaving it out meanwhile."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    crypto = "sensor.bitpanda_portfolio_value_crypto"
+    assert _value(hass, crypto) == 200.0
+    portfolio_api.return_value = [
+        *portfolio_api.return_value,
+        {
+            "asset_id": BTC["id"],
+            "balance": {"value": "0.01000000"},
+            "available_balance": {"value": "0.01000000"},
+            "currency_balance": {"value": "500.00"},
+        },
+    ]
+    await entry.runtime_data.portfolio.async_refresh()
+    await hass.async_block_till_done()
+    assert _value(hass, crypto) == 700.0
+    assert hass.states.get(crypto).attributes["wallets"] == 2
 
 
 async def test_a_returns_amount_follows_a_new_total_value(hass, portfolio_api):

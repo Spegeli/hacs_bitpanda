@@ -384,6 +384,146 @@
           }
         }
       },
+      "value_crypto": {
+        "name": "Valor: criptomonedas",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupo: participación %"
+          },
+          "invested_amount": {
+            "name": "Grupo: importe invertido"
+          },
+          "total_return": {
+            "name": "Grupo: rentabilidad total"
+          },
+          "total_return_percent": {
+            "name": "Grupo: rentabilidad total %"
+          },
+          "wallets": {
+            "name": "Grupo: wallets"
+          }
+        }
+      },
+      "value_stock": {
+        "name": "Valor: acciones",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupo: participación %"
+          },
+          "invested_amount": {
+            "name": "Grupo: importe invertido"
+          },
+          "total_return": {
+            "name": "Grupo: rentabilidad total"
+          },
+          "total_return_percent": {
+            "name": "Grupo: rentabilidad total %"
+          },
+          "wallets": {
+            "name": "Grupo: wallets"
+          }
+        }
+      },
+      "value_etf": {
+        "name": "Valor: ETF",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupo: participación %"
+          },
+          "invested_amount": {
+            "name": "Grupo: importe invertido"
+          },
+          "total_return": {
+            "name": "Grupo: rentabilidad total"
+          },
+          "total_return_percent": {
+            "name": "Grupo: rentabilidad total %"
+          },
+          "wallets": {
+            "name": "Grupo: wallets"
+          }
+        }
+      },
+      "value_etc": {
+        "name": "Valor: ETC",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupo: participación %"
+          },
+          "invested_amount": {
+            "name": "Grupo: importe invertido"
+          },
+          "total_return": {
+            "name": "Grupo: rentabilidad total"
+          },
+          "total_return_percent": {
+            "name": "Grupo: rentabilidad total %"
+          },
+          "wallets": {
+            "name": "Grupo: wallets"
+          }
+        }
+      },
+      "value_index": {
+        "name": "Valor: índices cripto",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupo: participación %"
+          },
+          "invested_amount": {
+            "name": "Grupo: importe invertido"
+          },
+          "total_return": {
+            "name": "Grupo: rentabilidad total"
+          },
+          "total_return_percent": {
+            "name": "Grupo: rentabilidad total %"
+          },
+          "wallets": {
+            "name": "Grupo: wallets"
+          }
+        }
+      },
+      "value_metal": {
+        "name": "Valor: metales preciosos",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupo: participación %"
+          },
+          "invested_amount": {
+            "name": "Grupo: importe invertido"
+          },
+          "total_return": {
+            "name": "Grupo: rentabilidad total"
+          },
+          "total_return_percent": {
+            "name": "Grupo: rentabilidad total %"
+          },
+          "wallets": {
+            "name": "Grupo: wallets"
+          }
+        }
+      },
+      "value_other": {
+        "name": "Valor: otros",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupo: participación %"
+          },
+          "invested_amount": {
+            "name": "Grupo: importe invertido"
+          },
+          "total_return": {
+            "name": "Grupo: rentabilidad total"
+          },
+          "total_return_percent": {
+            "name": "Grupo: rentabilidad total %"
+          },
+          "wallets": {
+            "name": "Grupo: wallets"
+          }
+        }
+      },
       "wallet": {
         "name": "Saldo (disponible)",
         "state_attributes": {
@@ -477,6 +617,9 @@
           },
           "total_return_percent": {
             "name": "Posición: rentabilidad total %"
+          },
+          "portfolio_share_percent": {
+            "name": "Posición: participación en el portfolio %"
           },
           "price_24h_ago": {
             "name": "24 h: precio anterior"

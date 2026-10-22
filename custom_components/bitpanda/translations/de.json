@@ -384,6 +384,146 @@
           }
         }
       },
+      "value_crypto": {
+        "name": "Wert: Kryptowährungen",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Gruppe: Anteil %"
+          },
+          "invested_amount": {
+            "name": "Gruppe: investiert"
+          },
+          "total_return": {
+            "name": "Gruppe: Gesamtrendite"
+          },
+          "total_return_percent": {
+            "name": "Gruppe: Gesamtrendite %"
+          },
+          "wallets": {
+            "name": "Gruppe: Wallets"
+          }
+        }
+      },
+      "value_stock": {
+        "name": "Wert: Aktien",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Gruppe: Anteil %"
+          },
+          "invested_amount": {
+            "name": "Gruppe: investiert"
+          },
+          "total_return": {
+            "name": "Gruppe: Gesamtrendite"
+          },
+          "total_return_percent": {
+            "name": "Gruppe: Gesamtrendite %"
+          },
+          "wallets": {
+            "name": "Gruppe: Wallets"
+          }
+        }
+      },
+      "value_etf": {
+        "name": "Wert: ETFs",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Gruppe: Anteil %"
+          },
+          "invested_amount": {
+            "name": "Gruppe: investiert"
+          },
+          "total_return": {
+            "name": "Gruppe: Gesamtrendite"
+          },
+          "total_return_percent": {
+            "name": "Gruppe: Gesamtrendite %"
+          },
+          "wallets": {
+            "name": "Gruppe: Wallets"
+          }
+        }
+      },
+      "value_etc": {
+        "name": "Wert: ETCs",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Gruppe: Anteil %"
+          },
+          "invested_amount": {
+            "name": "Gruppe: investiert"
+          },
+          "total_return": {
+            "name": "Gruppe: Gesamtrendite"
+          },
+          "total_return_percent": {
+            "name": "Gruppe: Gesamtrendite %"
+          },
+          "wallets": {
+            "name": "Gruppe: Wallets"
+          }
+        }
+      },
+      "value_index": {
+        "name": "Wert: Krypto-Indizes",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Gruppe: Anteil %"
+          },
+          "invested_amount": {
+            "name": "Gruppe: investiert"
+          },
+          "total_return": {
+            "name": "Gruppe: Gesamtrendite"
+          },
+          "total_return_percent": {
+            "name": "Gruppe: Gesamtrendite %"
+          },
+          "wallets": {
+            "name": "Gruppe: Wallets"
+          }
+        }
+      },
+      "value_metal": {
+        "name": "Wert: Edelmetalle",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Gruppe: Anteil %"
+          },
+          "invested_amount": {
+            "name": "Gruppe: investiert"
+          },
+          "total_return": {
+            "name": "Gruppe: Gesamtrendite"
+          },
+          "total_return_percent": {
+            "name": "Gruppe: Gesamtrendite %"
+          },
+          "wallets": {
+            "name": "Gruppe: Wallets"
+          }
+        }
+      },
+      "value_other": {
+        "name": "Wert: Sonstige",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Gruppe: Anteil %"
+          },
+          "invested_amount": {
+            "name": "Gruppe: investiert"
+          },
+          "total_return": {
+            "name": "Gruppe: Gesamtrendite"
+          },
+          "total_return_percent": {
+            "name": "Gruppe: Gesamtrendite %"
+          },
+          "wallets": {
+            "name": "Gruppe: Wallets"
+          }
+        }
+      },
       "wallet": {
         "name": "Guthaben (verfügbar)",
         "state_attributes": {
@@ -477,6 +617,9 @@
           },
           "total_return_percent": {
             "name": "Bilanz: Gesamtrendite %"
+          },
+          "portfolio_share_percent": {
+            "name": "Bilanz: Anteil am Portfolio %"
           },
           "price_24h_ago": {
             "name": "24 h: Preis davor"

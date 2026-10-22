@@ -34,6 +34,27 @@
       "total_return_percent": {
         "default": "mdi:percent-outline"
       },
+      "value_crypto": {
+        "default": "mdi:chart-donut"
+      },
+      "value_stock": {
+        "default": "mdi:chart-donut"
+      },
+      "value_etf": {
+        "default": "mdi:chart-donut"
+      },
+      "value_etc": {
+        "default": "mdi:chart-donut"
+      },
+      "value_index": {
+        "default": "mdi:chart-donut"
+      },
+      "value_metal": {
+        "default": "mdi:chart-donut"
+      },
+      "value_other": {
+        "default": "mdi:chart-donut"
+      },
       "wallet": {
         "default": "mdi:wallet"
       },

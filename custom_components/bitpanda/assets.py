@@ -50,6 +50,10 @@ ASSET_CATEGORY_FILTERS: dict[str, list[tuple[str, str | None]]] = {
 # The category of an asset no filter above lists, such as Cash Plus.
 CATEGORY_OTHER = "other"
 
+# Every category an asset can fall in, in the order of the groups: one wallet
+# group each, and one value sensor of the Portfolio each (naming.class_key).
+ASSET_CATEGORIES: tuple[str, ...] = (*ASSET_CATEGORY_FILTERS, CATEGORY_OTHER)
+
 # The categories whose assets show their ISIN (asset_isin), and so the ones
 # "Add price tracker" lets search by ISIN (asset_flow). The catalogue gives
 # one to every stock, ETF and ETC -- and to Cash Plus, which keeps its plain

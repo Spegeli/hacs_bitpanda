@@ -7,7 +7,11 @@ import string
 
 from custom_components.bitpanda import migration
 from custom_components.bitpanda.api import BitpandaApiError
-from custom_components.bitpanda.assets import ASSET_CATEGORY_FILTERS, CATEGORY_OTHER
+from custom_components.bitpanda.assets import (
+    ASSET_CATEGORIES,
+    ASSET_CATEGORY_FILTERS,
+    CATEGORY_OTHER,
+)
 from custom_components.bitpanda.const import API_ERROR_KINDS, REQUIRED_SCOPES
 from custom_components.bitpanda.ecb import EcbError, EcbRates
 from custom_components.bitpanda.portfolio_coordinator import _update_failed
@@ -20,6 +24,7 @@ from custom_components.bitpanda.portfolio_model import (
 )
 from custom_components.bitpanda.portfolio_sensor import (
     PortfolioCashPlusSensor,
+    PortfolioClassSensor,
     PortfolioInvestedSensor,
     PortfolioReturnSensor,
     PortfolioTotalReturnPercentSensor,
@@ -1590,7 +1595,9 @@ def test_every_currency_and_entity_name_is_translated():
     assert set(strings["entity"]["sensor"]) == {
         "total_value", "cash", "cash_plus", "return_day", "return_week",
         "return_month", "return_six_month", "return_year", "invested", "total_return",
-        "total_return_percent", "staking", "wallet_total", "wallet", "price",
+        "total_return_percent", "value_crypto", "value_stock", "value_etf", "value_etc",
+        "value_index", "value_metal", "value_other", "staking", "wallet_total", "wallet",
+        "price",
     }
 
 
@@ -1877,6 +1884,12 @@ def _attribute_scenarios() -> list[tuple[str, dict]]:
                 PortfolioTotalReturnPercentSensor,
             )
         ),
+        *(
+            (f"value_{category}", PortfolioClassSensor(
+                wallet_coordinator, "eid", "EUR", category, lambda: [_VSN["id"], _ETF["id"]],
+            ).extra_state_attributes)
+            for category in ASSET_CATEGORIES
+        ),
     ]
 
 
@@ -2080,6 +2093,89 @@ def test_a_wallets_price_and_24_hours_are_named_like_the_price_trackers():
     assert (german["price_24h_ago"]["name"], german["change_24h_pct"]["name"]) == (
         "24 h: Preis davor", "24 h: Änderung %",
     )
+
+
+# The value of each wallet group, by language: the word for "value", then
+# the group's title as setup names the groups, in the case the language
+# writes it mid-sentence -- French with a no-break space before the colon.
+_CLASS_NAMES = {
+    "de": ("Wert: Kryptowährungen", "Wert: Aktien", "Wert: ETFs", "Wert: ETCs",
+           "Wert: Krypto-Indizes", "Wert: Edelmetalle", "Wert: Sonstige"),
+    "en": ("Value: cryptocurrencies", "Value: stocks", "Value: ETFs", "Value: ETCs",
+           "Value: crypto indices", "Value: precious metals", "Value: other"),
+    "es": ("Valor: criptomonedas", "Valor: acciones", "Valor: ETF", "Valor: ETC",
+           "Valor: índices cripto", "Valor: metales preciosos", "Valor: otros"),
+    "fr": ("Valeur\u00a0: cryptomonnaies", "Valeur\u00a0: actions", "Valeur\u00a0: ETF",
+           "Valeur\u00a0: ETC", "Valeur\u00a0: indices crypto", "Valeur\u00a0: métaux précieux",
+           "Valeur\u00a0: autres"),
+    "it": ("Valore: criptovalute", "Valore: azioni", "Valore: ETF", "Valore: ETC",
+           "Valore: indici cripto", "Valore: metalli preziosi", "Valore: altro"),
+    "nl": ("Waarde: cryptovaluta", "Waarde: aandelen", "Waarde: ETF's", "Waarde: ETC's",
+           "Waarde: crypto-indices", "Waarde: edelmetalen", "Waarde: overige"),
+    "pl": ("Wartość: kryptowaluty", "Wartość: akcje", "Wartość: ETF", "Wartość: ETC",
+           "Wartość: indeksy kryptowalut", "Wartość: metale szlachetne", "Wartość: inne"),
+}
+
+
+def test_each_groups_value_is_named_after_its_group():
+    assert sorted(_CLASS_NAMES) == _LANGUAGES
+    for language, names in _CLASS_NAMES.items():
+        strings = _load(f"translations/{language}.json")
+        sensors = strings["entity"]["sensor"]
+        titles = strings["selector"]["asset_group"]["options"]
+        assert tuple(sensors[f"value_{category}"]["name"] for category in ASSET_CATEGORIES) == (
+            names
+        ), language
+        for category, name in zip(ASSET_CATEGORIES, names):
+            group = name.split(":", 1)[1].strip()
+            assert group.casefold() == titles[category].casefold(), (language, category)
+
+
+# A group's figures, by language, under a prefix of their own; the money
+# figures named as a wallet's position figures are.
+_GROUP_KEYS = ("share_percent", "invested_amount", "total_return", "total_return_percent", "wallets")
+_GROUP_LABELS = {
+    "de": ("Gruppe: Anteil %", "Gruppe: investiert", "Gruppe: Gesamtrendite",
+           "Gruppe: Gesamtrendite %", "Gruppe: Wallets"),
+    "en": ("Group: share %", "Group: invested", "Group: total return", "Group: total return %",
+           "Group: wallets"),
+    "es": ("Grupo: participación %", "Grupo: importe invertido", "Grupo: rentabilidad total",
+           "Grupo: rentabilidad total %", "Grupo: wallets"),
+    "fr": ("Groupe\u00a0: part en\u00a0%", "Groupe\u00a0: montant investi", "Groupe\u00a0: rendement total",
+           "Groupe\u00a0: rendement total en\u00a0%", "Groupe\u00a0: wallets"),
+    "it": ("Gruppo: quota %", "Gruppo: importo investito", "Gruppo: rendimento totale",
+           "Gruppo: rendimento totale %", "Gruppo: wallet"),
+    "nl": ("Groep: aandeel %", "Groep: geïnvesteerd bedrag", "Groep: totaalrendement",
+           "Groep: totaalrendement %", "Groep: wallets"),
+    "pl": ("Grupa: udział %", "Grupa: zainwestowana kwota", "Grupa: całkowity zwrot",
+           "Grupa: całkowity zwrot %", "Grupa: portfele"),
+}
+
+# A wallet's share of the portfolio, under its position figures' prefix.
+_SHARE_LABELS = {
+    "de": "Bilanz: Anteil am Portfolio %",
+    "en": "Position: share of portfolio %",
+    "es": "Posición: participación en el portfolio %",
+    "fr": "Position\u00a0: part du portfolio en\u00a0%",
+    "it": "Posizione: quota del portfolio %",
+    "nl": "Positie: aandeel in portfolio %",
+    "pl": "Pozycja: udział w portfolio %",
+}
+
+
+def test_a_groups_figures_are_named_like_a_positions():
+    assert sorted(_GROUP_LABELS) == sorted(_SHARE_LABELS) == _LANGUAGES
+    for language, labels in _GROUP_LABELS.items():
+        sensors = _load(f"translations/{language}.json")["entity"]["sensor"]
+        position = sensors["wallet_total"]["state_attributes"]
+        for category in ASSET_CATEGORIES:
+            attributes = sensors[f"value_{category}"]["state_attributes"]
+            assert tuple(attributes[key]["name"] for key in _GROUP_KEYS) == labels, language
+        for key, label in zip(_GROUP_KEYS[1:4], labels[1:4]):
+            assert label.split(":", 1)[1] == position[key]["name"].split(":", 1)[1], (language, key)
+        share = position["portfolio_share_percent"]["name"]
+        assert share == _SHARE_LABELS[language], language
+        assert share.split(":", 1)[0] == position["invested_amount"]["name"].split(":", 1)[0]
 
 
 def test_the_conversion_status_has_a_translated_name_and_state():

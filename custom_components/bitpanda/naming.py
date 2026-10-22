@@ -13,7 +13,7 @@ from typing import Any
 
 from homeassistant.util import slugify
 
-from .assets import asset_isin
+from .assets import ASSET_CATEGORIES, asset_isin
 
 _ENTITY_ID_PREFIX = "sensor.bitpanda_"
 
@@ -70,10 +70,16 @@ def return_key(timeframe: str) -> str:
     return f"return_{timeframe.lower()}"
 
 
+def class_key(category: str) -> str:
+    """The Portfolio sensor key of the value of one wallet group."""
+    return f"value_{category}"
+
+
 # The figures of the Portfolio device, by the key each of its sensors passes
 # to portfolio_unique_id and portfolio_entity_id: three values, one return
-# per /portfolio-history timeframe, then the positions' invested amount and
-# total return.
+# per /portfolio-history timeframe, the positions' invested amount and total
+# return, then the value of each wallet group -- a sensor that exists only
+# while its group does.
 PORTFOLIO_KEYS: tuple[str, ...] = (
     "total",
     "cash",
@@ -82,6 +88,7 @@ PORTFOLIO_KEYS: tuple[str, ...] = (
     "invested",
     "total_return",
     "total_return_percent",
+    *(class_key(category) for category in ASSET_CATEGORIES),
 )
 
 

@@ -20,7 +20,12 @@ from pytest_homeassistant_custom_component.common import (
 from custom_components.bitpanda.announcements import WalletAnnouncer
 from custom_components.bitpanda.const import DOMAIN, PORTFOLIO_UPDATE_INTERVAL
 from custom_components.bitpanda.groups import async_get_or_create_wallet_group
-from custom_components.bitpanda.naming import wallet_device_name, wallet_entity_id
+from custom_components.bitpanda.naming import (
+    PORTFOLIO_DEVICE_NAME,
+    portfolio_unique_id,
+    wallet_device_name,
+    wallet_entity_id,
+)
 from custom_components.bitpanda.portfolio_coordinator import RewardsCoordinator
 from custom_components.bitpanda.portfolio_model import (
     EarnData,
@@ -67,6 +72,8 @@ BTC_ENTITIES = {
     "sensor.bitpanda_bitcoin_btc_wallet_available",
     "sensor.bitpanda_bitcoin_btc_wallet_total",
 }
+CRYPTO_CLASS = "sensor.bitpanda_portfolio_value_crypto"
+METAL_CLASS = "sensor.bitpanda_portfolio_value_metal"
 
 
 def _holding(asset, staked=0.0) -> Holding:
@@ -132,11 +139,17 @@ class _Harness:
         self.runtime.earn.data = EarnData(apr={}, offered=frozenset())
         # When the last answer was asked for (PortfolioData.requested_at).
         self.clock = dt_util.utcnow()
-        self.manager = PortfolioEntityManager(
-            hass, self.entry, self.runtime, "EUR",
-            lambda entities, **kwargs: hass.async_create_task(
+        # The entity IDs of every entity the manager handed over, in order.
+        self.added: list[str] = []
+
+        def add(entities, **kwargs):
+            self.added.extend(entity.entity_id for entity in entities)
+            return hass.async_create_task(
                 self.platform.async_add_entities(entities, **kwargs), eager_start=eager_add
-            ),
+            )
+
+        self.manager = PortfolioEntityManager(
+            hass, self.entry, self.runtime, "EUR", add,
             WalletAnnouncer(hass, self.entry, self.runtime.known_wallets, _TITLES),
         )
 
@@ -152,15 +165,32 @@ class _Harness:
         await self.hass.async_block_till_done()
 
     def entity_ids(self) -> set[str]:
+        """The registered entities of the wallets -- the managed ones, and a
+        legacy one the migration could not resolve: everything but the
+        Portfolio's own sensors (`class_sensors`)."""
+        eid = self.entry.entry_id
         return {
             e.entity_id
-            for e in er.async_entries_for_config_entry(er.async_get(self.hass), self.entry.entry_id)
+            for e in er.async_entries_for_config_entry(er.async_get(self.hass), eid)
+            if not e.unique_id.startswith(portfolio_unique_id(eid, ""))
+        }
+
+    def class_sensors(self) -> set[str]:
+        """The registered sensors of the wallet groups' values."""
+        eid = self.entry.entry_id
+        return {
+            e.entity_id
+            for e in er.async_entries_for_config_entry(er.async_get(self.hass), eid)
+            if e.unique_id.startswith(portfolio_unique_id(eid, "value_"))
         }
 
     def devices(self) -> set[str]:
+        """The names of the wallet devices -- every device but the
+        Portfolio's, which the groups' value sensors create."""
         return {
             d.name
             for d in dr.async_entries_for_config_entry(dr.async_get(self.hass), self.entry.entry_id)
+            if d.name != PORTFOLIO_DEVICE_NAME
         }
 
     def groups(self) -> dict[str, str]:
@@ -531,6 +561,113 @@ async def test_a_failed_refresh_neither_brings_back_nor_removes_a_group(hass):
     await harness.refresh(_data(_holding(VSN), _holding(GOLD)))
     assert set(harness.groups()) == {"crypto", "metal"}
     assert harness.entity_ids() == VSN_UNSTAKED | GOLD_ENTITIES
+
+
+# --- The value of each wallet group ------------------------------------------------------
+
+
+def _gold(value=60.0) -> Holding:
+    return Holding(asset_id=GOLD["id"], balance=1.0, available=1.0, value=value)
+
+
+async def test_a_class_sensor_comes_with_its_group_and_goes_with_it(hass):
+    """Each group's sensor sums its own wallets: VSN and BTC 200, gold 60.
+    It waits while its last wallet waits out its misses, and goes with the
+    group."""
+    harness = _Harness(hass)
+    await harness.refresh(_data(_holding(VSN), _holding(BTC)))
+    assert harness.class_sensors() == {CRYPTO_CLASS}
+    await harness.refresh(_data(_holding(VSN), _holding(BTC), _gold()))
+    assert harness.class_sensors() == {CRYPTO_CLASS, METAL_CLASS}
+    assert (hass.states.get(CRYPTO_CLASS).state, hass.states.get(METAL_CLASS).state) == (
+        "200.0", "60.0"
+    )
+    for _ in range(2):
+        await harness.refresh(_data(_holding(VSN), _holding(BTC)))
+        assert hass.states.get(METAL_CLASS).state == "unavailable"
+    await harness.refresh(_data(_holding(VSN), _holding(BTC)))
+    assert set(harness.groups()) == {"crypto"}
+    assert harness.class_sensors() == {CRYPTO_CLASS}
+    assert hass.states.get(METAL_CLASS) is None
+
+
+async def test_the_class_sensor_is_outside_every_group(hass):
+    """On the Portfolio device, like the other figures: deleting a group
+    never takes it along."""
+    harness = _Harness(hass)
+    await harness.refresh(_data(_holding(VSN)))
+    assert harness.subentry_of(CRYPTO_CLASS) is None
+
+
+async def test_a_class_sensor_stays_through_a_restart_with_an_unnamed_asset(hass):
+    """The group's wallet is registered from before the restart, its asset
+    unnamed at the first refresh: the group stays, and so does its sensor --
+    the same registry entry, never removed and added again."""
+    harness = _Harness(hass)
+    harness.register_wallet(VSN, "crypto")
+    ent_reg = er.async_get(hass)
+    before = ent_reg.async_get_or_create(
+        "sensor", DOMAIN, portfolio_unique_id(harness.entry.entry_id, "value_crypto"),
+        config_entry=harness.entry, suggested_object_id="bitpanda_portfolio_value_crypto",
+    )
+    changes = async_capture_events(hass, er.EVENT_ENTITY_REGISTRY_UPDATED)
+    await harness.refresh(_data(_holding(VSN), unnamed={VSN["id"]}))
+    assert harness.class_sensors() == {CRYPTO_CLASS}
+    assert ent_reg.async_get(CRYPTO_CLASS).id == before.id
+    assert hass.states.get(CRYPTO_CLASS) is not None
+    await harness.refresh(_data(_holding(VSN)))
+    assert hass.states.get(CRYPTO_CLASS).state == "100.0"
+    assert ent_reg.async_get(CRYPTO_CLASS).id == before.id
+    assert not [change for change in changes if change.data["action"] == "remove"]
+
+
+async def test_a_class_sensor_waits_after_a_restart_while_a_sold_wallet_waits_out_its_misses(
+    hass,
+):
+    """Gold sold before the restart: its wallet, still registered, keeps
+    the metal group, and the group's sensor is unavailable -- never 0 --
+    until the wallet goes after its misses, the group and the sensor with
+    it."""
+    harness = _Harness(hass)
+    harness.register_wallet(GOLD, "metal")
+    await harness.refresh(_data(_holding(VSN)))
+    assert harness.class_sensors() == {CRYPTO_CLASS, METAL_CLASS}
+    assert hass.states.get(METAL_CLASS).state == "unavailable"
+    for _ in range(2):
+        await harness.refresh(_data(_holding(VSN)))
+    assert set(harness.groups()) == {"crypto"}
+    assert harness.class_sensors() == {CRYPTO_CLASS}
+
+
+async def test_a_deleted_group_keeps_its_class_sensor(hass):
+    """The group comes back with the next refresh, its sensor never left."""
+    harness = _Harness(hass)
+    await harness.refresh(_data(_holding(VSN)))
+    before = er.async_get(hass).async_get(CRYPTO_CLASS).id
+    hass.config_entries.async_remove_subentry(harness.entry, harness.group("crypto").subentry_id)
+    await hass.async_block_till_done()
+    assert harness.class_sensors() == {CRYPTO_CLASS}
+    await harness.refresh(_data(_holding(VSN)))
+    assert set(harness.groups()) == {"crypto"}
+    assert er.async_get(hass).async_get(CRYPTO_CLASS).id == before
+    assert hass.states.get(CRYPTO_CLASS).state == "100.0"
+
+
+async def test_a_disabled_class_sensor_is_not_added_again(hass):
+    """Added once per group: a sensor the user disabled stays disabled, and
+    no refresh hands it to Home Assistant again."""
+    harness = _Harness(hass)
+    await harness.refresh(_data(_holding(VSN)))
+    er.async_get(hass).async_update_entity(
+        CRYPTO_CLASS, disabled_by=er.RegistryEntryDisabler.USER
+    )
+    await hass.async_block_till_done()
+    harness.added.clear()
+    for _ in range(2):
+        await harness.refresh(_data(_holding(VSN)))
+    assert CRYPTO_CLASS not in harness.added
+    assert harness.class_sensors() == {CRYPTO_CLASS}
+    assert er.async_get(hass).async_get(CRYPTO_CLASS).disabled_by is not None
 
 
 async def test_staking_registered_before_a_restart_is_recreated_while_earn_is_unknown(hass):

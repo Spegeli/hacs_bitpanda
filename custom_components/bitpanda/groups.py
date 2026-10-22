@@ -30,7 +30,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.translation import async_get_translations
 
-from .assets import ASSET_CATEGORY_FILTERS, CATEGORY_OTHER, asset_category, slim_asset
+from .assets import ASSET_CATEGORIES, asset_category, slim_asset
 from .const import (
     CONF_ASSETS,
     CONF_CATEGORY,
@@ -53,7 +53,7 @@ async def async_group_titles(hass: HomeAssistant, language: str) -> dict[str, st
     translations = await async_get_translations(hass, language, "selector", {DOMAIN})
     return {
         category: translations.get(f"{_TITLE_KEY}{category}", category)
-        for category in (*ASSET_CATEGORY_FILTERS, CATEGORY_OTHER)
+        for category in ASSET_CATEGORIES
     }
 
 
@@ -64,7 +64,7 @@ async def async_known_group_titles(hass: HomeAssistant) -> dict[str, set[str]]:
     """
     languages = await async_shipped_languages(hass)
     known: dict[str, set[str]] = {
-        category: set() for category in (*ASSET_CATEGORY_FILTERS, CATEGORY_OTHER)
+        category: set() for category in ASSET_CATEGORIES
     }
     for language in languages:
         translations = await async_get_translations(hass, language, "selector", {DOMAIN})

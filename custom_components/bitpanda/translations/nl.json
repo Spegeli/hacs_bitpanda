@@ -384,6 +384,146 @@
           }
         }
       },
+      "value_crypto": {
+        "name": "Waarde: cryptovaluta",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Groep: aandeel %"
+          },
+          "invested_amount": {
+            "name": "Groep: geïnvesteerd bedrag"
+          },
+          "total_return": {
+            "name": "Groep: totaalrendement"
+          },
+          "total_return_percent": {
+            "name": "Groep: totaalrendement %"
+          },
+          "wallets": {
+            "name": "Groep: wallets"
+          }
+        }
+      },
+      "value_stock": {
+        "name": "Waarde: aandelen",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Groep: aandeel %"
+          },
+          "invested_amount": {
+            "name": "Groep: geïnvesteerd bedrag"
+          },
+          "total_return": {
+            "name": "Groep: totaalrendement"
+          },
+          "total_return_percent": {
+            "name": "Groep: totaalrendement %"
+          },
+          "wallets": {
+            "name": "Groep: wallets"
+          }
+        }
+      },
+      "value_etf": {
+        "name": "Waarde: ETF's",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Groep: aandeel %"
+          },
+          "invested_amount": {
+            "name": "Groep: geïnvesteerd bedrag"
+          },
+          "total_return": {
+            "name": "Groep: totaalrendement"
+          },
+          "total_return_percent": {
+            "name": "Groep: totaalrendement %"
+          },
+          "wallets": {
+            "name": "Groep: wallets"
+          }
+        }
+      },
+      "value_etc": {
+        "name": "Waarde: ETC's",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Groep: aandeel %"
+          },
+          "invested_amount": {
+            "name": "Groep: geïnvesteerd bedrag"
+          },
+          "total_return": {
+            "name": "Groep: totaalrendement"
+          },
+          "total_return_percent": {
+            "name": "Groep: totaalrendement %"
+          },
+          "wallets": {
+            "name": "Groep: wallets"
+          }
+        }
+      },
+      "value_index": {
+        "name": "Waarde: crypto-indices",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Groep: aandeel %"
+          },
+          "invested_amount": {
+            "name": "Groep: geïnvesteerd bedrag"
+          },
+          "total_return": {
+            "name": "Groep: totaalrendement"
+          },
+          "total_return_percent": {
+            "name": "Groep: totaalrendement %"
+          },
+          "wallets": {
+            "name": "Groep: wallets"
+          }
+        }
+      },
+      "value_metal": {
+        "name": "Waarde: edelmetalen",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Groep: aandeel %"
+          },
+          "invested_amount": {
+            "name": "Groep: geïnvesteerd bedrag"
+          },
+          "total_return": {
+            "name": "Groep: totaalrendement"
+          },
+          "total_return_percent": {
+            "name": "Groep: totaalrendement %"
+          },
+          "wallets": {
+            "name": "Groep: wallets"
+          }
+        }
+      },
+      "value_other": {
+        "name": "Waarde: overige",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Groep: aandeel %"
+          },
+          "invested_amount": {
+            "name": "Groep: geïnvesteerd bedrag"
+          },
+          "total_return": {
+            "name": "Groep: totaalrendement"
+          },
+          "total_return_percent": {
+            "name": "Groep: totaalrendement %"
+          },
+          "wallets": {
+            "name": "Groep: wallets"
+          }
+        }
+      },
       "wallet": {
         "name": "Saldo (beschikbaar)",
         "state_attributes": {
@@ -477,6 +617,9 @@
           },
           "total_return_percent": {
             "name": "Positie: totaalrendement %"
+          },
+          "portfolio_share_percent": {
+            "name": "Positie: aandeel in portfolio %"
           },
           "price_24h_ago": {
             "name": "24 uur: vorige prijs"

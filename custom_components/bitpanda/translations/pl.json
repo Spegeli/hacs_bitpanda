@@ -384,6 +384,146 @@
           }
         }
       },
+      "value_crypto": {
+        "name": "Wartość: kryptowaluty",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupa: udział %"
+          },
+          "invested_amount": {
+            "name": "Grupa: zainwestowana kwota"
+          },
+          "total_return": {
+            "name": "Grupa: całkowity zwrot"
+          },
+          "total_return_percent": {
+            "name": "Grupa: całkowity zwrot %"
+          },
+          "wallets": {
+            "name": "Grupa: portfele"
+          }
+        }
+      },
+      "value_stock": {
+        "name": "Wartość: akcje",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupa: udział %"
+          },
+          "invested_amount": {
+            "name": "Grupa: zainwestowana kwota"
+          },
+          "total_return": {
+            "name": "Grupa: całkowity zwrot"
+          },
+          "total_return_percent": {
+            "name": "Grupa: całkowity zwrot %"
+          },
+          "wallets": {
+            "name": "Grupa: portfele"
+          }
+        }
+      },
+      "value_etf": {
+        "name": "Wartość: ETF",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupa: udział %"
+          },
+          "invested_amount": {
+            "name": "Grupa: zainwestowana kwota"
+          },
+          "total_return": {
+            "name": "Grupa: całkowity zwrot"
+          },
+          "total_return_percent": {
+            "name": "Grupa: całkowity zwrot %"
+          },
+          "wallets": {
+            "name": "Grupa: portfele"
+          }
+        }
+      },
+      "value_etc": {
+        "name": "Wartość: ETC",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupa: udział %"
+          },
+          "invested_amount": {
+            "name": "Grupa: zainwestowana kwota"
+          },
+          "total_return": {
+            "name": "Grupa: całkowity zwrot"
+          },
+          "total_return_percent": {
+            "name": "Grupa: całkowity zwrot %"
+          },
+          "wallets": {
+            "name": "Grupa: portfele"
+          }
+        }
+      },
+      "value_index": {
+        "name": "Wartość: indeksy kryptowalut",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupa: udział %"
+          },
+          "invested_amount": {
+            "name": "Grupa: zainwestowana kwota"
+          },
+          "total_return": {
+            "name": "Grupa: całkowity zwrot"
+          },
+          "total_return_percent": {
+            "name": "Grupa: całkowity zwrot %"
+          },
+          "wallets": {
+            "name": "Grupa: portfele"
+          }
+        }
+      },
+      "value_metal": {
+        "name": "Wartość: metale szlachetne",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupa: udział %"
+          },
+          "invested_amount": {
+            "name": "Grupa: zainwestowana kwota"
+          },
+          "total_return": {
+            "name": "Grupa: całkowity zwrot"
+          },
+          "total_return_percent": {
+            "name": "Grupa: całkowity zwrot %"
+          },
+          "wallets": {
+            "name": "Grupa: portfele"
+          }
+        }
+      },
+      "value_other": {
+        "name": "Wartość: inne",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupa: udział %"
+          },
+          "invested_amount": {
+            "name": "Grupa: zainwestowana kwota"
+          },
+          "total_return": {
+            "name": "Grupa: całkowity zwrot"
+          },
+          "total_return_percent": {
+            "name": "Grupa: całkowity zwrot %"
+          },
+          "wallets": {
+            "name": "Grupa: portfele"
+          }
+        }
+      },
       "wallet": {
         "name": "Saldo (dostępne)",
         "state_attributes": {
@@ -477,6 +617,9 @@
           },
           "total_return_percent": {
             "name": "Pozycja: całkowity zwrot %"
+          },
+          "portfolio_share_percent": {
+            "name": "Pozycja: udział w portfolio %"
           },
           "price_24h_ago": {
             "name": "24 h: poprzednia cena"

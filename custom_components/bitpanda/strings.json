@@ -335,6 +335,30 @@
       "return_year": {
         "name": "Return year"
       },
+      "invested": {
+        "name": "Invested",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: wallets"
+          }
+        }
+      },
+      "total_return": {
+        "name": "Total return",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: wallets"
+          }
+        }
+      },
+      "total_return_percent": {
+        "name": "Total return %",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: wallets"
+          }
+        }
+      },
       "wallet": {
         "name": "Balance (available)",
         "state_attributes": {

@@ -81,6 +81,7 @@ def portfolio_api():
             "balance": {"value": "100.00000000"},
             "available_balance": {"value": "25.00000000"},
             "currency_balance": {"value": "200.00"},
+            "invested_amount": {"value": "150.00"},
         },
         {"currency_id": _EUR_ID, "balance": {"value": "10.00"}},
     ]
@@ -132,8 +133,8 @@ async def test_a_currency_change_clears_the_statistics_of_every_portfolio_sensor
     assert await hass.config_entries.async_setup(entry.entry_id)
     await async_wait_recording_done(hass)
     sensors = _entity_ids(hass, entry)
-    # Eight figures, and the staked VSN's Wallet, Staking and Total.
-    assert len(sensors) == 11
+    # Eleven figures, and the staked VSN's Wallet, Staking and Total.
+    assert len(sensors) == 14
     do_adhoc_statistics(hass, start=get_start_time(dt_util.utcnow()))
     await async_wait_recording_done(hass)
     assert await statistics_units(hass, sensors) == {

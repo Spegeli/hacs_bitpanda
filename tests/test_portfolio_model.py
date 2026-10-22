@@ -13,6 +13,7 @@ from custom_components.bitpanda.portfolio_model import (
     Holding,
     PortfolioData,
     PortfolioReturns,
+    PositionTotals,
     RewardPayout,
     _is_later,
     add_rewards,
@@ -22,6 +23,7 @@ from custom_components.bitpanda.portfolio_model import (
     parse_earn_configs,
     parse_portfolio,
     payouts_after,
+    position_totals,
     staking_applies,
     sum_rewards,
     tolerate_failed_timeframes,
@@ -334,23 +336,30 @@ def test_a_cash_plus_holding_without_a_value_makes_cash_plus_unknown():
 
 def test_the_figures_follow_what_the_answer_lists():
     """Each figure depends on its own entry: Total value on any entry at all,
-    Cash on a fiat entry, Cash Plus on a holding of the group `fiat_earn`."""
-    nothing = {"total": False, "cash": False, "cash_plus": False}
+    Cash on a fiat entry, Cash Plus on a holding of the group `fiat_earn`,
+    the positions' figures on a holding that is not Cash Plus."""
+    nothing = {"total": False, "cash": False, "cash_plus": False, "positions": False}
     empty = parse_portfolio([])
     assert empty.figures_listed() == nothing
     # Keyed as the figures are: the coordinator looks each one up by its key.
     assert set(empty.figures_listed()) == set(PORTFOLIO_FIGURES)
 
     fiat = parse_portfolio([_fiat_entry("5.00")])
-    assert fiat.figures_listed() == {"total": True, "cash": True, "cash_plus": False}
+    assert fiat.figures_listed() == {
+        "total": True, "cash": True, "cash_plus": False, "positions": False
+    }
 
     token = parse_portfolio([_asset_entry(VSN, "1.0", "1.0", "5.00")])
     token.assets = {VSN: {"id": VSN, "group": "token"}}
-    assert token.figures_listed() == {"total": True, "cash": False, "cash_plus": False}
+    assert token.figures_listed() == {
+        "total": True, "cash": False, "cash_plus": False, "positions": True
+    }
 
     cash_plus = parse_portfolio([_asset_entry(BCPEUR, "1.0", "1.0", "1.00")])
     cash_plus.assets = {BCPEUR: _cash_plus_asset(BCPEUR, "BCPEUR")}
-    assert cash_plus.figures_listed() == {"total": True, "cash": False, "cash_plus": True}
+    assert cash_plus.figures_listed() == {
+        "total": True, "cash": False, "cash_plus": True, "positions": False
+    }
 
     # An entry of no shape this endpoint documents is no entry at all.
     assert parse_portfolio([{"something": "else"}]).figures_listed() == nothing
@@ -360,27 +369,116 @@ def test_data_built_by_hand_lists_nothing_and_waits_for_nothing():
     """What the sensors read of data built by hand, before the coordinator
     tells which figures wait."""
     data = PortfolioData()
-    assert data.figures_listed() == {"total": False, "cash": False, "cash_plus": False}
+    assert data.figures_listed() == {
+        "total": False, "cash": False, "cash_plus": False, "positions": False
+    }
     assert data.waiting == frozenset()
 
 
-def test_only_cash_plus_can_be_in_doubt():
+def test_cash_plus_and_the_positions_can_be_in_doubt():
     """An entry that is listed but cannot be read is there for Total value,
     and a fiat one for Cash: an unreadable entry is no sign of a sale. Cash
-    Plus alone can be in doubt (None): a holding that cannot be read, or
-    that no record classifies yet, might or might not be one. Only a holding
-    the catalogue does not list is sure to be no Cash Plus."""
+    Plus and the positions can be in doubt (None): a holding that cannot be
+    read, or that no record classifies yet, might or might not be one. Only
+    a holding the catalogue does not list is sure to be no Cash Plus -- and
+    so a position."""
     fiat = parse_portfolio([{"currency_id": EUR_ID, "balance": {"value": "x"}}])
     assert fiat.cash is None
     assert fiat.listed_fiat is True
 
     unreadable = parse_portfolio([{"asset_id": BCPEUR, "balance": {"value": "x"}}])
-    assert unreadable.figures_listed() == {"total": True, "cash": False, "cash_plus": None}
+    assert unreadable.figures_listed() == {
+        "total": True, "cash": False, "cash_plus": None, "positions": None
+    }
 
     unclassified = parse_portfolio([_asset_entry(VSN, "1.0", "1.0", "5.00")])
     assert unclassified.listed_cash_plus is None
+    assert unclassified.listed_positions is None
     unclassified.unlisted = {VSN}
     assert unclassified.listed_cash_plus is False
+    assert unclassified.listed_positions is True
+
+
+# --- PortfolioData: the positions -----------------------------------------------
+
+
+def test_positions_are_the_holdings_that_are_not_cash_plus():
+    """A wallet is a position, and so is a held asset the catalogue does
+    not list -- never Cash Plus, which the catalogue lists."""
+    data = parse_portfolio(
+        [
+            _asset_entry(VSN, "1.0", "1.0", "5.00"),
+            _asset_entry("unlisted-asset", "2.0", "2.0", "7.00"),
+            _asset_entry(BCPEUR, "1.0", "1.0", "1.00"),
+            _fiat_entry("3.00"),
+        ]
+    )
+    data.assets = {VSN: {"id": VSN, "group": "token"}, BCPEUR: _cash_plus_asset(BCPEUR, "BCPEUR")}
+    data.unlisted = {"unlisted-asset"}
+    assert data.positions is not None
+    assert set(data.positions) == {VSN, "unlisted-asset"}
+    assert data.in_doubt is False
+
+
+def test_positions_are_unknown_while_an_entry_is_unparsed():
+    data = parse_portfolio(
+        [_asset_entry(VSN, "1.0", "1.0", "5.00"), {"asset_id": "x", "balance": {"value": "?"}}]
+    )
+    data.assets = {VSN: {"id": VSN, "group": "token"}}
+    assert data.unparsed_assets == {"x"}
+    assert data.positions is None
+    assert data.listed_positions is None
+    assert data.in_doubt is True
+
+
+def test_positions_are_unknown_while_a_holding_is_unclassified():
+    data = parse_portfolio([_asset_entry(VSN, "1.0", "1.0", "5.00")])
+    assert data.positions is None
+    assert data.in_doubt is True
+
+
+def test_position_totals_sum_value_and_invested():
+    totals = position_totals(
+        [
+            Holding(asset_id="a", balance=1.0, available=1.0, value=200.0, invested=150.0),
+            Holding(asset_id="b", balance=1.0, available=1.0, value=100.0, invested=50.0),
+        ]
+    )
+    assert totals == PositionTotals(value=300.0, invested=200.0, count=2)
+    assert totals.total_return == 100.0
+    assert totals.total_return_percent == 50.0
+
+
+def test_position_totals_round_to_the_apis_decimals():
+    totals = position_totals(
+        [
+            Holding(asset_id="a", balance=1.0, available=1.0, value=0.1, invested=0.2),
+            Holding(asset_id="b", balance=1.0, available=1.0, value=0.2, invested=0.1),
+        ]
+    )
+    assert totals is not None
+    assert totals.value == 0.3
+    assert totals.invested == 0.3
+    assert totals.total_return == 0.0
+
+
+@pytest.mark.parametrize("missing", ["value", "invested"])
+def test_position_totals_are_unknown_when_a_value_or_invested_is_missing(missing):
+    holding = Holding(asset_id="a", balance=1.0, available=1.0, value=10.0, invested=5.0)
+    setattr(holding, missing, None)
+    assert position_totals([holding]) is None
+
+
+@pytest.mark.parametrize("invested", [0.0, -5.0])
+def test_total_return_percent_needs_something_invested(invested):
+    totals = PositionTotals(value=10.0, invested=invested, count=1)
+    assert totals.total_return_percent is None
+
+
+def test_no_positions_sum_to_zero():
+    totals = position_totals([])
+    assert totals == PositionTotals(value=0.0, invested=0.0, count=0)
+    assert totals.total_return_percent is None
 
 
 # --- Returns: a timeframe whose own request fails ----------------------------------

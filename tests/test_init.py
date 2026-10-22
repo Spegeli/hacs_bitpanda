@@ -369,8 +369,8 @@ async def test_every_sensor_keeps_long_term_statistics(hass, portfolio_api, pric
         )
         for state in hass.states.async_all("sensor")
     }
-    # Eight Portfolio figures, the staked VSN's three sensors, BTC in EUR and USD.
-    assert len(classes) == 13
+    # Eleven Portfolio figures, the staked VSN's three sensors, BTC in EUR and USD.
+    assert len(classes) == 16
     for entity_id, (device_class, state_class, unit) in classes.items():
         if device_class == SensorDeviceClass.MONETARY:
             assert state_class == SensorStateClass.TOTAL, entity_id
@@ -628,6 +628,39 @@ async def test_an_empty_portfolio_waits_ten_minutes_then_shows_0_and_removes_the
     assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
     assert _value(hass, "sensor.bitpanda_portfolio_cash") == 0.0
     assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is None
+
+
+async def test_selling_every_position_makes_invested_wait_then_show_0(
+    hass, portfolio_api, freezer
+):
+    """Every position sold, the money kept -- or a glitch at Bitpanda: through
+    two answers with cash alone, Invested and the total return are
+    unavailable, a gap in their history, never a false 0. The third answer,
+    ten minutes and more after the first, shows 0 invested and 0 return; a
+    percentage over nothing stays unknown."""
+    entry = _portfolio_entry(hass)
+    portfolio_api.return_value = [
+        {**portfolio_api.return_value[0], "invested_amount": {"value": "150.00"}},
+        *portfolio_api.return_value[1:],
+    ]
+    await _setup(hass, entry)
+    assert _value(hass, "sensor.bitpanda_portfolio_invested") == 150.0
+    portfolio_api.return_value = [{"currency_id": _EUR_ID, "balance": {"value": "10.00"}}]
+    figures = (
+        "sensor.bitpanda_portfolio_invested",
+        "sensor.bitpanda_portfolio_total_return",
+        "sensor.bitpanda_portfolio_total_return_percent",
+    )
+    for _ in range(2):
+        await _next_refresh(hass, freezer)
+        for entity_id in figures:
+            assert hass.states.get(entity_id).state == "unavailable", entity_id
+        assert _value(hass, "sensor.bitpanda_portfolio_total") == 10.0
+
+    await _next_refresh(hass, freezer)
+    assert _value(hass, "sensor.bitpanda_portfolio_invested") == 0.0
+    assert _value(hass, "sensor.bitpanda_portfolio_total_return") == 0.0
+    assert hass.states.get("sensor.bitpanda_portfolio_total_return_percent").state == "unknown"
 
 
 async def test_holdings_back_after_an_empty_answer_keep_their_wallets_unannounced(

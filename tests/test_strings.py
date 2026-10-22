@@ -19,6 +19,9 @@ from custom_components.bitpanda.portfolio_model import (
 )
 from custom_components.bitpanda.portfolio_sensor import (
     PortfolioCashPlusSensor,
+    PortfolioInvestedSensor,
+    PortfolioTotalReturnPercentSensor,
+    PortfolioTotalReturnSensor,
     StakingSensor,
     WalletSensor,
     WalletTotalSensor,
@@ -1584,8 +1587,8 @@ def test_every_currency_and_entity_name_is_translated():
     }
     assert set(strings["entity"]["sensor"]) == {
         "total_value", "cash", "cash_plus", "return_day", "return_week",
-        "return_month", "return_six_month", "return_year", "staking", "wallet_total",
-        "wallet", "price",
+        "return_month", "return_six_month", "return_year", "invested", "total_return",
+        "total_return_percent", "staking", "wallet_total", "wallet", "price",
     }
 
 
@@ -1856,6 +1859,15 @@ def _attribute_scenarios() -> list[tuple[str, dict]]:
         ("cash_plus", PortfolioCashPlusSensor(
             _Coordinator(_cash_plus_portfolio_data()), "eid", "EUR"
         ).extra_state_attributes),
+        *(
+            (sensor_class._key, sensor_class(
+                wallet_coordinator, "eid", "EUR"
+            ).extra_state_attributes)
+            for sensor_class in (
+                PortfolioInvestedSensor, PortfolioTotalReturnSensor,
+                PortfolioTotalReturnPercentSensor,
+            )
+        ),
     ]
 
 

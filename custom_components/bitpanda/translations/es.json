@@ -335,6 +335,30 @@
       "return_year": {
         "name": "Rentabilidad 1 año"
       },
+      "invested": {
+        "name": "Importe invertido",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: wallets"
+          }
+        }
+      },
+      "total_return": {
+        "name": "Rentabilidad total",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: wallets"
+          }
+        }
+      },
+      "total_return_percent": {
+        "name": "Rentabilidad total %",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: wallets"
+          }
+        }
+      },
       "wallet": {
         "name": "Saldo (disponible)",
         "state_attributes": {

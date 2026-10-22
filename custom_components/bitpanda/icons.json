@@ -25,6 +25,15 @@
       "return_year": {
         "default": "mdi:chart-line"
       },
+      "invested": {
+        "default": "mdi:cash-check"
+      },
+      "total_return": {
+        "default": "mdi:chart-line-variant"
+      },
+      "total_return_percent": {
+        "default": "mdi:percent-outline"
+      },
       "wallet": {
         "default": "mdi:wallet"
       },

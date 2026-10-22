@@ -71,13 +71,17 @@ def return_key(timeframe: str) -> str:
 
 
 # The figures of the Portfolio device, by the key each of its sensors passes
-# to portfolio_unique_id and portfolio_entity_id: three values, then one
-# return per /portfolio-history timeframe.
+# to portfolio_unique_id and portfolio_entity_id: three values, one return
+# per /portfolio-history timeframe, then the positions' invested amount and
+# total return.
 PORTFOLIO_KEYS: tuple[str, ...] = (
     "total",
     "cash",
     "cash_plus",
     *(return_key(timeframe) for timeframe in RETURN_SUFFIXES),
+    "invested",
+    "total_return",
+    "total_return_percent",
 )
 
 
@@ -150,7 +154,7 @@ _WALLET_ENTITY_ID = re.compile(
 
 def is_portfolio_entity_id(entity_id: str) -> bool:
     """Whether `entity_id` is a default ID of a Portfolio sensor: one of the
-    eight figures, or a wallet's Balance, Staking or Total sensor.
+    figures (PORTFOLIO_KEYS), or a wallet's Balance, Staking or Total sensor.
 
     A new Portfolio setup meets exactly these IDs again. The entity registry
     restores a deleted entity by (domain, platform, unique_id), and the

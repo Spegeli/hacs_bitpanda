@@ -34,9 +34,10 @@ def confirmed(count: int, since: datetime, now: datetime) -> bool:
 
 
 # The Portfolio figures that wait before they show 0 once what they show has
-# vanished from the answer, by the `_key` of the sensor that shows each: Total
-# value, Cash and Cash Plus.
-PORTFOLIO_FIGURES: tuple[str, ...] = ("total", "cash", "cash_plus")
+# vanished from the answer, by the key their sensors wait on (`_watch`): Total
+# value, Cash, Cash Plus -- and the positions, on which Invested and the total
+# return of the whole portfolio depend.
+PORTFOLIO_FIGURES: tuple[str, ...] = ("total", "cash", "cash_plus", "positions")
 
 
 @dataclass
@@ -57,9 +58,9 @@ class FigureWatch:
     it stays 0, with nothing more counted, while the entry stays missing: it
     waits again only after the entry came back and vanished anew.
 
-    An answer may also leave the entry in doubt -- Cash Plus beside a
-    holding that cannot be read or is not classified yet, which might or
-    might not be Cash Plus. Doubt is neither there nor missing: it clears a
+    An answer may also leave the entry in doubt -- Cash Plus or the
+    positions beside a holding that cannot be read or is not classified yet,
+    which might or might not be one. Doubt is neither there nor missing: it clears a
     running count, so nothing waits, but never makes the figure there. Had
     it, a figure that never was there would wait once the holding is read
     or classified.
@@ -184,16 +185,17 @@ class PortfolioData:
 
     Each figure depends on one kind of entry, which the answer lists or does
     not (`figures_listed`): Total value on any entry at all, Cash on a fiat
-    entry, Cash Plus on a holding of the group `fiat_earn`. An entry that
+    entry, Cash Plus on a holding of the group `fiat_earn`, the positions'
+    figures on a holding that is not Cash Plus (`positions`). An entry that
     cannot be read is listed all the same -- there for Total value, and a
-    fiat one for Cash: it is no sign of a sale. Cash Plus alone can be in
-    doubt: a holding that cannot be read, or is not classified yet, might or
-    might not be Cash Plus. Doubt is neither there nor missing (FigureWatch):
-    it clears a running count but never makes Cash Plus there. Either way
-    the figure shows `unknown`, neither 0 nor a wait. Only a holding the
-    catalogue does not list is sure to be no Cash Plus. `waiting` names the
-    figures whose entry vanished and whose vanishing is not confirmed yet
-    (FigureWatch).
+    fiat one for Cash: it is no sign of a sale. Cash Plus and the positions
+    can be in doubt: a holding that cannot be read, or is not classified
+    yet, might or might not be one of them. Doubt is neither there nor
+    missing (FigureWatch): it clears a running count but never makes the
+    figure there. Either way the figure shows `unknown`, neither 0 nor a
+    wait. Only a holding the catalogue does not list is sure to be no Cash
+    Plus -- and so a position. `waiting` names the figures whose entry
+    vanished and whose vanishing is not confirmed yet (FigureWatch).
     """
 
     holdings: dict[str, Holding] = field(default_factory=dict)
@@ -301,14 +303,45 @@ class PortfolioData:
         holdings = self._cash_plus_holdings()
         return None if holdings is None else bool(holdings)
 
+    @property
+    def in_doubt(self) -> bool:
+        """Whether a held entry might be anything: one that could not be read
+        at all (`unparsed_assets`), or a holding not classified yet -- but
+        one the catalogue does not list, which is no Cash Plus."""
+        return bool(self.unparsed_assets) or any(
+            self.is_cash_plus(asset_id) is None and asset_id not in self.unlisted
+            for asset_id in self.holdings
+        )
+
+    @property
+    def positions(self) -> dict[str, Holding] | None:
+        """The holdings that are not Cash Plus, by asset id: the wallets, and
+        a held asset the catalogue does not list. None while that cannot be
+        told (`in_doubt`): never a sum that quietly leaves one out."""
+        if self.in_doubt:
+            return None
+        return {
+            asset_id: holding
+            for asset_id, holding in self.holdings.items()
+            if not self.is_cash_plus(asset_id)
+        }
+
+    @property
+    def listed_positions(self) -> bool | None:
+        """Whether the answer lists a position; None while that is in doubt."""
+        positions = self.positions
+        return None if positions is None else bool(positions)
+
     def figures_listed(self) -> dict[str, bool | None]:
         """Whether the answer lists the entry of each figure, by the figure's
-        key (PORTFOLIO_FIGURES) -- None for Cash Plus in doubt: what the
-        coordinator tells each FigureWatch after every successful answer."""
+        key (PORTFOLIO_FIGURES) -- None for Cash Plus or the positions in
+        doubt: what the coordinator tells each FigureWatch after every
+        successful answer."""
         return {
             "total": self.listed_any,
             "cash": self.listed_fiat,
             "cash_plus": self.listed_cash_plus,
+            "positions": self.listed_positions,
         }
 
     @property
@@ -321,6 +354,42 @@ class PortfolioData:
         """Every asset /portfolio listed, its balances readable or not: an
         unreadable entry is no sign of a sale."""
         return set(self.holdings) | self.unparsed_assets
+
+
+@dataclass(frozen=True)
+class PositionTotals:
+    """What some positions are worth together and what went into them, in
+    the Portfolio currency, and how many they are."""
+
+    value: float
+    invested: float
+    count: int
+
+    @property
+    def total_return(self) -> float:
+        return round(self.value - self.invested, DECIMALS)
+
+    @property
+    def total_return_percent(self) -> float | None:
+        """The return over what was invested, as the Portfolio card's groups
+        compute it; None unless something was invested."""
+        if self.invested <= 0:
+            return None
+        return round(self.total_return / self.invested * 100, 2)
+
+
+def position_totals(holdings: Iterable[Holding]) -> PositionTotals | None:
+    """The sums of `holdings`; None when one lacks its value or its invested
+    amount -- never a sum that leaves it out."""
+    value = invested = 0.0
+    count = 0
+    for holding in holdings:
+        if holding.value is None or holding.invested is None:
+            return None
+        value += holding.value
+        invested += holding.invested
+        count += 1
+    return PositionTotals(round(value, DECIMALS), round(invested, DECIMALS), count)
 
 
 @dataclass(frozen=True)

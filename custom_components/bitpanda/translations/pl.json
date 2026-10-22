@@ -335,6 +335,30 @@
       "return_year": {
         "name": "Stopa zwrotu (1 rok)"
       },
+      "invested": {
+        "name": "Zainwestowana kwota",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: portfele"
+          }
+        }
+      },
+      "total_return": {
+        "name": "Całkowity zwrot",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: portfele"
+          }
+        }
+      },
+      "total_return_percent": {
+        "name": "Całkowity zwrot %",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: portfele"
+          }
+        }
+      },
       "wallet": {
         "name": "Saldo (dostępne)",
         "state_attributes": {

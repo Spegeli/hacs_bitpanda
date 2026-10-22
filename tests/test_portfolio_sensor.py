@@ -14,7 +14,10 @@ from custom_components.bitpanda.portfolio_model import (
 from custom_components.bitpanda.portfolio_sensor import (
     PortfolioCashPlusSensor,
     PortfolioCashSensor,
+    PortfolioInvestedSensor,
     PortfolioReturnSensor,
+    PortfolioTotalReturnPercentSensor,
+    PortfolioTotalReturnSensor,
     PortfolioTotalSensor,
     StakingSensor,
     WalletSensor,
@@ -262,12 +265,104 @@ def test_a_waiting_figure_is_unavailable_and_the_others_are_not():
 
 def test_the_figure_keys_are_the_sensors_keys():
     """The coordinator names the waiting figures by these keys
-    (PORTFOLIO_FIGURES): a figure whose sensor had another key would never
-    wait."""
+    (PORTFOLIO_FIGURES), and each figure's sensors wait on one of them
+    (`_watch`, else `_key`): a figure no sensor waits on would never show
+    its wait."""
     assert {
-        sensor_class._key
-        for sensor_class in (PortfolioTotalSensor, PortfolioCashSensor, PortfolioCashPlusSensor)
+        sensor_class._watch or sensor_class._key
+        for sensor_class in (
+            PortfolioTotalSensor, PortfolioCashSensor, PortfolioCashPlusSensor,
+            PortfolioInvestedSensor, PortfolioTotalReturnSensor,
+            PortfolioTotalReturnPercentSensor,
+        )
     } == set(PORTFOLIO_FIGURES)
+
+
+# --- Invested and the total return of the whole portfolio -------------------------------
+
+_OTHER = {"id": "b86c034b-efe3-11eb-b56f-0691764446a7", "symbol": "BTC", "name": "Bitcoin",
+          "group": "coin"}
+_A1 = (PortfolioInvestedSensor, PortfolioTotalReturnSensor, PortfolioTotalReturnPercentSensor)
+
+
+def _two_positions(**overrides) -> PortfolioData:
+    """VSN (200 worth, 150 invested), BTC (100 worth, 50 invested), Cash Plus
+    and 10 cash: the positions are VSN and BTC."""
+    other = {"balance": 1.0, "available": 1.0, "value": 100.0, "invested": 50.0, **overrides}
+    data = _data(**{
+        VSN["id"]: _vsn(),
+        _OTHER["id"]: Holding(asset_id=_OTHER["id"], **other),
+        BCPEUR["id"]: Holding(asset_id=BCPEUR["id"], balance=50.0, available=50.0, value=50.0),
+    })
+    data.assets[_OTHER["id"]] = _OTHER
+    return data
+
+
+def test_invested_and_total_return_sum_the_positions():
+    """Over the wallets, never Cash or Cash Plus: Σ value − Σ invested, and
+    that over Σ invested -- as the Portfolio card's groups compute it."""
+    coordinator = _Coordinator(_two_positions())
+    invested, total_return, percent = (cls(coordinator, "eid", "EUR") for cls in _A1)
+    assert invested.native_value == 200.0
+    assert total_return.native_value == 100.0
+    assert percent.native_value == 50.0
+    assert (invested.entity_id, total_return.entity_id, percent.entity_id) == (
+        "sensor.bitpanda_portfolio_invested",
+        "sensor.bitpanda_portfolio_total_return",
+        "sensor.bitpanda_portfolio_total_return_percent",
+    )
+    assert (invested.unique_id, percent.translation_key) == (
+        "eid_portfolio_invested", "total_return_percent"
+    )
+    assert (invested.native_unit_of_measurement, percent.native_unit_of_measurement) == ("EUR", "%")
+
+
+def test_the_portfolio_return_figures_are_unknown_in_doubt():
+    unparsed = _two_positions()
+    unparsed.unparsed_assets = {"unreadable"}
+    unclassified = _two_positions()
+    del unclassified.assets[_OTHER["id"]]
+    for data in (unparsed, unclassified, _two_positions(invested=None), _two_positions(value=None)):
+        coordinator = _Coordinator(data)
+        assert [cls(coordinator, "eid", "EUR").native_value for cls in _A1] == [None] * 3
+
+
+def test_total_return_percent_is_unknown_without_anything_invested():
+    data = _data(**{VSN["id"]: _vsn(invested=0.0)})
+    percent = PortfolioTotalReturnPercentSensor(_Coordinator(data), "eid", "EUR")
+    assert percent.native_value is None
+    assert percent.extra_state_attributes == {}
+
+
+def test_without_positions_nothing_is_invested():
+    """Everything sold, once that is confirmed: 0 invested, 0 return, and no
+    percentage over nothing."""
+    coordinator = _Coordinator(_data())
+    assert [cls(coordinator, "eid", "EUR").native_value for cls in _A1] == [0.0, 0.0, None]
+
+
+def test_the_portfolio_return_figures_wait_with_the_positions():
+    data = _two_positions()
+    data.waiting = frozenset({"positions"})
+    coordinator = _Coordinator(data)
+    for cls in _A1:
+        assert cls(coordinator, "eid", "EUR").available is False, cls
+    assert PortfolioTotalSensor(coordinator, "eid", "EUR").available is True
+
+
+def test_the_wallets_attribute_counts_the_positions_summed():
+    coordinator = _Coordinator(_two_positions())
+    for cls in _A1:
+        assert cls(coordinator, "eid", "EUR").extra_state_attributes == {"wallets": 2}, cls
+    unknown = _Coordinator(_two_positions(invested=None))
+    for cls in _A1:
+        assert cls(unknown, "eid", "EUR").extra_state_attributes == {}, cls
+
+
+def test_the_portfolio_return_figures_show_two_decimals():
+    coordinator = _Coordinator(_two_positions())
+    for cls in _A1:
+        assert cls(coordinator, "eid", "EUR").suggested_display_precision == 2, cls
 
 
 def test_return_sensors_read_their_timeframe():
@@ -327,6 +422,8 @@ def test_every_money_value_keeps_long_term_statistics_as_a_total():
         PortfolioTotalSensor(portfolio, "eid", "EUR"),
         PortfolioCashSensor(portfolio, "eid", "EUR"),
         PortfolioCashPlusSensor(portfolio, "eid", "EUR"),
+        PortfolioInvestedSensor(portfolio, "eid", "EUR"),
+        PortfolioTotalReturnSensor(portfolio, "eid", "EUR"),
         WalletSensor(portfolio, "eid", "EUR", VSN),
         StakingSensor(portfolio, earn, _Coordinator(None), "eid", "EUR", VSN),
         WalletTotalSensor(portfolio, "eid", "EUR", VSN),
@@ -341,6 +438,8 @@ def test_every_return_keeps_long_term_statistics_as_a_measurement():
     for timeframe in ("DAY", "WEEK", "MONTH", "SIX_MONTH", "YEAR"):
         sensor = PortfolioReturnSensor(_Coordinator(PortfolioReturns(values={})), "eid", timeframe)
         assert (sensor.device_class, sensor.state_class) == (None, SensorStateClass.MEASUREMENT)
+    percent = PortfolioTotalReturnPercentSensor(_portfolio(), "eid", "EUR")
+    assert (percent.device_class, percent.state_class) == (None, SensorStateClass.MEASUREMENT)
 
 
 # --- Wallet device ------------------------------------------------------------------

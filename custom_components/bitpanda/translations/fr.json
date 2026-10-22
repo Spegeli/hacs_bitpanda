@@ -335,6 +335,30 @@
       "return_year": {
         "name": "Rendement 1 an"
       },
+      "invested": {
+        "name": "Montant investi",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio : wallets"
+          }
+        }
+      },
+      "total_return": {
+        "name": "Rendement total",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio : wallets"
+          }
+        }
+      },
+      "total_return_percent": {
+        "name": "Rendement total en %",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio : wallets"
+          }
+        }
+      },
       "wallet": {
         "name": "Solde (disponible)",
         "state_attributes": {

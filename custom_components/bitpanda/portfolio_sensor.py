@@ -75,7 +75,9 @@ from .portfolio_model import (
     Holding,
     PortfolioData,
     PortfolioReturns,
+    PositionTotals,
     confirmed,
+    position_totals,
     staking_applies,
 )
 from .tolerance import TolerantEntity
@@ -117,7 +119,7 @@ class _PortfolioFigure(TolerantEntity[PortfolioCoordinator], SensorEntity):
 
     Unavailable once a failure is confirmed (tolerance.py), not at the first
     failed update, and before the first answer. Unavailable too while the
-    figure waits (PortfolioData.waiting names it by `_key`): the answers no
+    figure waits (PortfolioData.waiting names it by `_watch`, else `_key`): the answers no
     longer list the entry it depends on, and too few of them confirm that
     yet (PortfolioCoordinator) -- a glitch at Bitpanda then leaves a gap in
     its history, never a false 0. When the answer arrived but the figure
@@ -128,10 +130,13 @@ class _PortfolioFigure(TolerantEntity[PortfolioCoordinator], SensorEntity):
     """
 
     _attr_has_entity_name = True
-    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_device_class: SensorDeviceClass | None = SensorDeviceClass.MONETARY
     _attr_state_class = SensorStateClass.TOTAL
     _attr_suggested_display_precision = 2
     _key: str
+    # The figure (PORTFOLIO_FIGURES) whose wait this sensor shows, when it is
+    # not its own key.
+    _watch: str | None = None
     _attr_translation_key: str
 
     def __init__(
@@ -154,7 +159,8 @@ class _PortfolioFigure(TolerantEntity[PortfolioCoordinator], SensorEntity):
     @property
     def available(self) -> bool:
         data: PortfolioData | None = self.coordinator.data
-        return super().available and data is not None and self._key not in data.waiting
+        watch = self._watch or self._key
+        return super().available and data is not None and watch not in data.waiting
 
 
 class PortfolioTotalSensor(_PortfolioFigure):
@@ -199,6 +205,76 @@ class PortfolioCashPlusSensor(_PortfolioFigure):
         if data is None:
             return {}
         return data.cash_plus_amounts or {}
+
+
+class _PortfolioPositionsFigure(_PortfolioFigure):
+    """A figure of all positions together -- every holding but Cash Plus:
+    the wallets, and a held asset the catalogue does not list
+    (PortfolioData.positions). It waits on the positions: an answer that no
+    longer lists one makes it unavailable, not 0, until that is confirmed.
+    Unknown while a position cannot be told, or lacks its value or its
+    invested amount. Its attribute `wallets` counts the positions summed."""
+
+    _watch = "positions"
+
+    def _totals(self, data: PortfolioData) -> PositionTotals | None:
+        positions = data.positions
+        return None if positions is None else position_totals(positions.values())
+
+    def _of(self, totals: PositionTotals) -> float | None:
+        raise NotImplementedError
+
+    def _figure(self, data: PortfolioData) -> float | None:
+        totals = self._totals(data)
+        return None if totals is None else self._of(totals)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self.coordinator.data
+        totals = None if data is None else self._totals(data)
+        if totals is None or self._of(totals) is None:
+            return {}
+        return {"wallets": totals.count}
+
+
+class PortfolioInvestedSensor(_PortfolioPositionsFigure):
+    """What went into the positions, as Bitpanda reports each one's."""
+
+    _key = "invested"
+    _attr_translation_key = "invested"
+
+    def _of(self, totals: PositionTotals) -> float | None:
+        return totals.invested
+
+
+class PortfolioTotalReturnSensor(_PortfolioPositionsFigure):
+    """What the positions are worth beyond what went into them: open
+    positions only -- /portfolio lists nothing sold."""
+
+    _key = "total_return"
+    _attr_translation_key = "total_return"
+
+    def _of(self, totals: PositionTotals) -> float | None:
+        return totals.total_return
+
+
+class PortfolioTotalReturnPercentSensor(_PortfolioPositionsFigure):
+    """The total return over what was invested, in percent; unknown unless
+    something was invested."""
+
+    _key = "total_return_percent"
+    _attr_translation_key = "total_return_percent"
+    _attr_device_class = None
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self, coordinator: PortfolioCoordinator, entry_id: str, currency: str
+    ) -> None:
+        super().__init__(coordinator, entry_id, currency)
+        self._attr_native_unit_of_measurement = PERCENTAGE
+
+    def _of(self, totals: PositionTotals) -> float | None:
+        return totals.total_return_percent
 
 
 class PortfolioReturnSensor(TolerantEntity[HistoryCoordinator], SensorEntity):
@@ -818,6 +894,9 @@ async def async_setup_portfolio_entities(
             PortfolioTotalSensor(runtime.portfolio, entry.entry_id, currency),
             PortfolioCashSensor(runtime.portfolio, entry.entry_id, currency),
             PortfolioCashPlusSensor(runtime.portfolio, entry.entry_id, currency),
+            PortfolioInvestedSensor(runtime.portfolio, entry.entry_id, currency),
+            PortfolioTotalReturnSensor(runtime.portfolio, entry.entry_id, currency),
+            PortfolioTotalReturnPercentSensor(runtime.portfolio, entry.entry_id, currency),
             *(
                 PortfolioReturnSensor(runtime.history, entry.entry_id, timeframe)
                 for timeframe in PORTFOLIO_TIMEFRAMES

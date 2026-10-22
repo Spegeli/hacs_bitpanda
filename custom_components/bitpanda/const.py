@@ -168,8 +168,9 @@ ECB_UPDATE_INTERVAL = timedelta(hours=6)
 # refreshes without it, spread over WALLET_REMOVAL_TIME at the least: the
 # time they take at the regular pace, which refreshes by hand
 # (bitpanda.refresh) can therefore never shorten. A Portfolio figure whose
-# entry vanished from the answer -- Total value, Cash, Cash Plus -- shows 0
-# only after the same (portfolio_model.FigureWatch).
+# entry vanished from the answer -- Total value, Cash, Cash Plus, the
+# positions' invested amount and return -- shows 0 only after the same
+# (portfolio_model.FigureWatch).
 WALLET_REMOVAL_MISSES = 3
 WALLET_REMOVAL_TIME = (WALLET_REMOVAL_MISSES - 1) * PORTFOLIO_UPDATE_INTERVAL
 

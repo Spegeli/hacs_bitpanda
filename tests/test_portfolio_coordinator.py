@@ -430,16 +430,16 @@ async def test_an_empty_first_answer_of_a_new_account_is_the_truth(hass):
 
 
 async def test_an_empty_answer_is_the_truth_at_once(hass, freezer):
-    """No failed update: the answer is taken as it is, and Total value and
-    Cash, whose entries it no longer lists, wait. Cash Plus was never
-    there."""
+    """No failed update: the answer is taken as it is, and Total value,
+    Cash and the positions' figures, whose entries it no longer lists,
+    wait. Cash Plus was never there."""
     client, coordinator = _portfolio(hass)
     await coordinator._async_update_data()
     client.entries = []
     freezer.tick(_REGULAR)
     data = await coordinator._async_update_data()
     assert data.total == 0.0
-    assert data.waiting == {"total", "cash"}
+    assert data.waiting == {"total", "cash", "positions"}
 
 
 async def test_vanished_fiat_makes_cash_wait_three_answers(hass, freezer):
@@ -581,13 +581,45 @@ async def test_misses_by_hand_never_end_the_wait_sooner(hass, freezer):
 
 async def test_only_a_fiat_entry_is_not_an_empty_answer(hass):
     """Everything sold, the money kept: Total value -- whose entry is any
-    entry at all -- is the cash at once, and nothing waits."""
+    entry at all -- is the cash at once; the positions' figures wait, as
+    Cash Plus does once its holdings vanish."""
     client, coordinator = _portfolio(hass)
     await coordinator._async_update_data()
     client.entries = [{"currency_id": EUR_ID, "balance": {"value": "5.00"}}]
     data = await coordinator._async_update_data()
     assert data.total == 5.0
-    assert data.waiting == frozenset()
+    assert data.waiting == {"positions"}
+
+
+async def test_vanished_positions_wait_three_answers(hass, freezer):
+    """Every position sold: the positions' figures wait through two answers
+    and show 0 with the third, ten minutes after the first."""
+    client, coordinator = _portfolio(hass)
+    await coordinator._async_update_data()
+    client.entries = [_ENTRIES[1]]
+    for _ in range(2):
+        freezer.tick(_REGULAR)
+        assert (await coordinator._async_update_data()).waiting == {"positions"}
+    freezer.tick(_REGULAR)
+    assert (await coordinator._async_update_data()).waiting == frozenset()
+
+
+async def test_positions_missing_since_the_start_do_not_wait(hass):
+    """Cash alone from the first answer: no position was there to vanish."""
+    _, coordinator = _portfolio(hass, [_ENTRIES[1]])
+    assert (await coordinator._async_update_data()).waiting == frozenset()
+
+
+async def test_doubt_about_the_positions_while_they_wait_clears_the_count(hass, freezer):
+    """A holding no record classifies yet might be a position: no miss."""
+    client, coordinator = _portfolio(hass)
+    await coordinator._async_update_data()
+    client.entries = [_ENTRIES[1]]
+    freezer.tick(_REGULAR)
+    assert (await coordinator._async_update_data()).waiting == {"positions"}
+    client.entries = [_ENTRIES[1], _UNCLASSIFIED]
+    freezer.tick(_REGULAR)
+    assert (await coordinator._async_update_data()).waiting == frozenset()
 
 
 async def test_only_entries_of_no_known_shape_are_an_empty_answer(hass):
@@ -597,7 +629,7 @@ async def test_only_entries_of_no_known_shape_are_an_empty_answer(hass):
     client, coordinator = _portfolio(hass)
     await coordinator._async_update_data()
     client.entries = [{"something": "else"}]
-    assert (await coordinator._async_update_data()).waiting == {"total", "cash"}
+    assert (await coordinator._async_update_data()).waiting == {"total", "cash", "positions"}
 
 
 async def test_earn_update_returns_the_catalogue():

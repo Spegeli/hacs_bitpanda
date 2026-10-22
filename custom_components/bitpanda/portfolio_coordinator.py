@@ -315,8 +315,8 @@ class PortfolioCoordinator(TolerantCoordinator[PortfolioData]):
     answer no longer lists may be a glitch at Bitpanda rather than a sale,
     so a figure whose entry vanished waits before it shows 0: Total value
     once the answer lists no entry at all, Cash once it lists no fiat entry,
-    Cash Plus once it lists no Cash Plus holding (PortfolioData.
-    figures_listed). One FigureWatch per figure (PORTFOLIO_FIGURES) counts
+    Cash Plus once it lists no Cash Plus holding, the positions' figures once
+    it lists no other holding (PortfolioData.figures_listed). One FigureWatch per figure (PORTFOLIO_FIGURES) counts
     the answers without its entry. While they are too few to confirm it --
     WALLET_REMOVAL_MISSES in a row, the last WALLET_REMOVAL_TIME after the
     first was asked for (portfolio_model.confirmed) -- the figure waits:
@@ -324,8 +324,8 @@ class PortfolioCoordinator(TolerantCoordinator[PortfolioData]):
     the pace at which the wallet manager removes a sold asset's wallet;
     refreshes by hand count, but never make it sooner. An answer that lists
     the entry again shows its value and clears the count; one that leaves
-    Cash Plus in doubt clears it too, without making Cash Plus there
-    (FigureWatch).
+    Cash Plus or the positions in doubt clears it too, without making them
+    there (FigureWatch).
 
     The watches live on this coordinator, so every start -- of Home
     Assistant, or a setup or reload of the entry, a currency change's

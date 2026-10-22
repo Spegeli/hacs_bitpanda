@@ -335,6 +335,30 @@
       "return_year": {
         "name": "Rendite Jahr"
       },
+      "invested": {
+        "name": "Investiert",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: Wallets"
+          }
+        }
+      },
+      "total_return": {
+        "name": "Gesamtrendite",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: Wallets"
+          }
+        }
+      },
+      "total_return_percent": {
+        "name": "Gesamtrendite %",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: Wallets"
+          }
+        }
+      },
       "wallet": {
         "name": "Guthaben (verfügbar)",
         "state_attributes": {

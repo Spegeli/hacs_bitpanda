@@ -378,6 +378,37 @@ class PositionTotals:
         return round(self.total_return / self.invested * 100, 2)
 
 
+def significant(value: float) -> float:
+    """`value` to 10 significant digits: a price of a token worth a fraction
+    of a cent keeps its digits, which DECIMALS would cut."""
+    return float(f"{value:.10g}")
+
+
+def performance(holding: Holding) -> dict[str, float]:
+    """The position performance Bitpanda computes for the whole position,
+    by attribute key; a figure it did not send is left out."""
+    out: dict[str, float] = {}
+    for key, value in (
+        ("average_buy_price", holding.avg_buy_price),
+        ("invested_amount", holding.invested),
+        ("total_return", holding.total_return),
+        ("total_return_percent", holding.total_return_pct),
+    ):
+        if value is not None:
+            out[key] = round(value, DECIMALS)
+    return out
+
+
+def change_24h(
+    price: float | None, then: float | None, units: float
+) -> tuple[float, float] | None:
+    """The price's change over 24 hours, in percent, and what it made of
+    today's `units`; None without both prices."""
+    if price is None or not then:
+        return None
+    return round((price - then) / then * 100, 2), round(units * (price - then), DECIMALS)
+
+
 def return_amount(total: float | None, percent: float | None) -> float | None:
     """What a return of `percent` means in money on today's total value
     `total`: Bitpanda's percentage leaves deposits and withdrawals out, so

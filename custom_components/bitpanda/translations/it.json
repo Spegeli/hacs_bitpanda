@@ -296,6 +296,15 @@
         "nl": "Nederlands",
         "pl": "Polski"
       }
+    },
+    "history_timeframe": {
+      "options": {
+        "day": "1 giorno",
+        "week": "1 settimana",
+        "month": "1 mese",
+        "six_month": "6 mesi",
+        "year": "1 anno"
+      }
     }
   },
   "entity": {
@@ -923,6 +932,15 @@
     },
     "staking_reward_value": {
       "message": "Valore attuale: circa {value} {currency}."
+    },
+    "no_portfolio": {
+      "message": "Nessun Bitpanda Portfolio è configurato e caricato."
+    },
+    "portfolio_unavailable": {
+      "message": "I valori del Bitpanda Portfolio non sono disponibili al momento."
+    },
+    "rewards_start_after_end": {
+      "message": "L'inizio è successivo alla fine."
     }
   },
   "issues": {
@@ -963,6 +981,34 @@
     "refresh": {
       "name": "Aggiorna",
       "description": "Recupera subito il portafoglio e i prezzi da Bitpanda e attende che entrambi siano completati. Ignorata durante il tempo di attesa dopo l'ultima chiamata; non riesce se un aggiornamento non riesce."
+    },
+    "get_portfolio": {
+      "name": "Ottieni il portafoglio",
+      "description": "Restituisce i valori del Portfolio e ogni wallet come li mostrano i sensori, senza interrogare Bitpanda."
+    },
+    "get_portfolio_history": {
+      "name": "Ottieni la cronologia del portafoglio",
+      "description": "Restituisce il valore del Portfolio in un periodo, come lo disegna la scheda Portfolio.",
+      "fields": {
+        "timeframe": {
+          "name": "Periodo",
+          "description": "Il periodo della cronologia."
+        }
+      }
+    },
+    "get_staking_rewards": {
+      "name": "Ottieni le ricompense di staking",
+      "description": "Restituisce ogni accredito di staking letto dal Portfolio, dal più vecchio, facoltativamente tra due istanti.",
+      "fields": {
+        "start": {
+          "name": "Inizio",
+          "description": "Gli accrediti da questo istante, nel fuso orario di Home Assistant."
+        },
+        "end": {
+          "name": "Fine",
+          "description": "Gli accrediti prima di questo istante, nel fuso orario di Home Assistant."
+        }
+      }
     }
   }
 }

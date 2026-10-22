@@ -296,6 +296,15 @@
         "nl": "Nederlands",
         "pl": "Polski"
       }
+    },
+    "history_timeframe": {
+      "options": {
+        "day": "1 dag",
+        "week": "1 week",
+        "month": "1 maand",
+        "six_month": "6 maanden",
+        "year": "1 jaar"
+      }
     }
   },
   "entity": {
@@ -923,6 +932,15 @@
     },
     "staking_reward_value": {
       "message": "Vandaag ongeveer {value} {currency} waard."
+    },
+    "no_portfolio": {
+      "message": "Er is geen Bitpanda Portfolio ingesteld en geladen."
+    },
+    "portfolio_unavailable": {
+      "message": "De cijfers van het Bitpanda Portfolio zijn op dit moment niet beschikbaar."
+    },
+    "rewards_start_after_end": {
+      "message": "Het begin ligt na het einde."
     }
   },
   "issues": {
@@ -963,6 +981,34 @@
     "refresh": {
       "name": "Vernieuwen",
       "description": "Haalt je portfolio en de prijzen nu op bij Bitpanda en wacht tot beide klaar zijn. Genegeerd binnen de wachttijd na de vorige aanroep; mislukt als een vernieuwing mislukt."
+    },
+    "get_portfolio": {
+      "name": "Portfolio ophalen",
+      "description": "Geeft de cijfers van het Portfolio en elke wallet zoals de sensoren ze tonen, zonder Bitpanda te vragen."
+    },
+    "get_portfolio_history": {
+      "name": "Portfoliogeschiedenis ophalen",
+      "description": "Geeft de waarde van het Portfolio over een periode, zoals de Portfolio-kaart die tekent.",
+      "fields": {
+        "timeframe": {
+          "name": "Periode",
+          "description": "De periode van de geschiedenis."
+        }
+      }
+    },
+    "get_staking_rewards": {
+      "name": "Stakingbeloningen ophalen",
+      "description": "Geeft elke stakinguitbetaling die het Portfolio heeft gelezen, de oudste eerst, eventueel tussen twee tijdstippen.",
+      "fields": {
+        "start": {
+          "name": "Begin",
+          "description": "Uitbetalingen vanaf dit tijdstip, in de tijdzone van Home Assistant."
+        },
+        "end": {
+          "name": "Einde",
+          "description": "Uitbetalingen vóór dit tijdstip, in de tijdzone van Home Assistant."
+        }
+      }
     }
   }
 }

@@ -2364,6 +2364,47 @@ def test_the_earn_attributes_and_their_values_are_named():
             assert attributes[key].get("state") == states, (language, key)
 
 
+# The Portfolio's actions with response data, in English and German.
+_ACTION_NAMES = {
+    "en": {
+        "get_portfolio": "Get portfolio",
+        "get_portfolio_history": "Get portfolio history",
+        "get_staking_rewards": "Get staking rewards",
+    },
+    "de": {
+        "get_portfolio": "Portfolio abrufen",
+        "get_portfolio_history": "Portfolio-Verlauf abrufen",
+        "get_staking_rewards": "Staking-Belohnungen abrufen",
+    },
+}
+
+
+def test_every_action_and_field_is_named_and_described():
+    """Each action services.yaml declares, and each of its fields, has a
+    name and a description in every language; the timeframes are named."""
+    import yaml
+
+    declared = yaml.safe_load((_DIR / "services.yaml").read_text(encoding="utf-8"))
+    timeframes = declared["get_portfolio_history"]["fields"]["timeframe"]["selector"]["select"]
+    for language in _LANGUAGES:
+        texts = _load(f"translations/{language}.json")
+        assert set(texts["services"]) == set(declared), language
+        for name, service in declared.items():
+            assert texts["services"][name]["name"] and texts["services"][name]["description"]
+            fields = (service or {}).get("fields", {})
+            assert set(texts["services"][name].get("fields", {})) == set(fields), (language, name)
+            for field in texts["services"][name].get("fields", {}).values():
+                assert field["name"] and field["description"], (language, name)
+        assert set(texts["selector"][timeframes["translation_key"]]["options"]) == set(
+            timeframes["options"]
+        ), language
+        for key in ("no_portfolio", "portfolio_unavailable", "rewards_start_after_end"):
+            assert texts["exceptions"][key]["message"], (language, key)
+    for language, names in _ACTION_NAMES.items():
+        services = _load(f"translations/{language}.json")["services"]
+        assert {name: services[name]["name"] for name in names} == names, language
+
+
 def test_the_conversion_status_has_a_translated_name_and_state():
     """`conversion` is a status key, not a raw sentence: its own name plus a
     `state` translation for `no_rate` -- the only value it ever takes."""

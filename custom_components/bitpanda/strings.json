@@ -296,6 +296,15 @@
         "nl": "Nederlands",
         "pl": "Polski"
       }
+    },
+    "history_timeframe": {
+      "options": {
+        "day": "Day",
+        "week": "Week",
+        "month": "Month",
+        "six_month": "6 months",
+        "year": "Year"
+      }
     }
   },
   "entity": {
@@ -923,6 +932,15 @@
     },
     "staking_reward_value": {
       "message": "Worth about {value} {currency} today."
+    },
+    "no_portfolio": {
+      "message": "No Bitpanda Portfolio is set up and loaded."
+    },
+    "portfolio_unavailable": {
+      "message": "The Bitpanda Portfolio's figures are unavailable right now."
+    },
+    "rewards_start_after_end": {
+      "message": "The start lies after the end."
     }
   },
   "issues": {
@@ -963,6 +981,34 @@
     "refresh": {
       "name": "Refresh",
       "description": "Fetches the portfolio and the prices from Bitpanda now and waits until both are done. Ignored within the cooldown of the last call; fails when a refresh fails."
+    },
+    "get_portfolio": {
+      "name": "Get portfolio",
+      "description": "Returns the Portfolio's figures and every wallet as the sensors show them, without asking Bitpanda."
+    },
+    "get_portfolio_history": {
+      "name": "Get portfolio history",
+      "description": "Returns the Portfolio's value over a timeframe, as the Portfolio card draws it.",
+      "fields": {
+        "timeframe": {
+          "name": "Timeframe",
+          "description": "The timeframe of the value history."
+        }
+      }
+    },
+    "get_staking_rewards": {
+      "name": "Get staking rewards",
+      "description": "Returns every staking payout the Portfolio has read, oldest first, optionally between two times.",
+      "fields": {
+        "start": {
+          "name": "Start",
+          "description": "Payouts from this time on, in Home Assistant's time zone."
+        },
+        "end": {
+          "name": "End",
+          "description": "Payouts before this time, in Home Assistant's time zone."
+        }
+      }
     }
   }
 }

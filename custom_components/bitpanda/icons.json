@@ -83,6 +83,15 @@
   "services": {
     "refresh": {
       "service": "mdi:refresh"
+    },
+    "get_portfolio": {
+      "service": "mdi:briefcase-search"
+    },
+    "get_portfolio_history": {
+      "service": "mdi:chart-timeline-variant"
+    },
+    "get_staking_rewards": {
+      "service": "mdi:gift-outline"
     }
   }
 }

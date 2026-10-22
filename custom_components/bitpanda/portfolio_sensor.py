@@ -79,12 +79,15 @@ from .portfolio_model import (
     PortfolioData,
     PortfolioReturns,
     PositionTotals,
+    change_24h,
     confirmed,
     last_payout_net,
     position_totals,
+    performance,
     return_amount,
     rewards_since,
     share_percent,
+    significant,
     staking_applies,
 )
 from .tolerance import TolerantEntity
@@ -449,26 +452,6 @@ class PortfolioReturnSensor(TolerantEntity[HistoryCoordinator], SensorEntity):
 # --- Wallet devices -----------------------------------------------------------------
 
 
-def _significant(value: float) -> float:
-    """`value` to 10 significant digits: a price of a token worth a fraction
-    of a cent keeps its digits, which DECIMALS would cut."""
-    return float(f"{value:.10g}")
-
-
-def _performance(holding: Holding) -> dict[str, float]:
-    """The position performance Bitpanda computes for the whole position."""
-    out: dict[str, float] = {}
-    for key, value in (
-        ("average_buy_price", holding.avg_buy_price),
-        ("invested_amount", holding.invested),
-        ("total_return", holding.total_return),
-        ("total_return_percent", holding.total_return_pct),
-    ):
-        if value is not None:
-            out[key] = round(value, DECIMALS)
-    return out
-
-
 class _WalletPart(TolerantEntity[PortfolioCoordinator], SensorEntity):
     """One value of one holding.
 
@@ -716,19 +699,19 @@ class WalletTotalSensor(_WalletPart):
             return attrs
         price = self._price()
         if price is not None:
-            attrs["price"] = _significant(price)
-        attrs.update(_performance(holding))
+            attrs["price"] = significant(price)
+        attrs.update(performance(holding))
         data: PortfolioData = self.coordinator.data
         if "total" not in data.waiting:
             share = share_percent(holding.value, data.total)
             if share is not None:
                 attrs["portfolio_share_percent"] = share
         then = self._price_24h_ago
-        if price is not None and then:
+        day = change_24h(price, then, holding.balance)
+        if day is not None:
             # What the price's change made of today's units.
-            attrs["price_24h_ago"] = _significant(then)
-            attrs["change_24h_pct"] = round((price - then) / then * 100, 2)
-            attrs["return_24h"] = round(holding.balance * (price - then), DECIMALS)
+            attrs["price_24h_ago"] = significant(cast(float, then))
+            attrs["change_24h_pct"], attrs["return_24h"] = day
         return attrs
 
 

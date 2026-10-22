@@ -296,6 +296,7 @@ async def test_without_a_section_the_whole_history_is_read_and_kept(hass, freeze
     }
     assert history.kinds == ["staking"]
     assert history.full_read_at == _NOW
+    assert history.read_at == _NOW
 
 
 def _read_before(history, *, read_at=_NOW - timedelta(days=1), kinds=("staking",)):
@@ -307,6 +308,7 @@ def _read_before(history, *, read_at=_NOW - timedelta(days=1), kinds=("staking",
         recent_ids={earlier["operation_id"]: "2026-10-13T16:48:00.512Z"},
         kinds=kinds,
         full_read_at=read_at,
+        read_at=read_at,
     )
     return earlier
 
@@ -332,6 +334,21 @@ async def test_then_only_what_is_new_is_read_and_counted_once(hass, freezer):
         newer["operation_id"]: "2026-10-14T09:00:00Z",
     }
     assert history.full_read_at == _NOW - timedelta(days=1)
+    assert history.read_at == _NOW
+
+
+async def test_a_read_with_nothing_new_still_notes_when_it_was_read(hass, freezer):
+    """The time of the last read outlives a restart: the payouts' action
+    names it while the first read after the restart fails."""
+    freezer.move_to(_NOW)
+    history = await _history(hass)
+    earlier = _read_before(history)
+    client = _FakeClient(operations=[earlier])
+    await RewardsCoordinator(hass, None, client, history)._async_update_data()
+    assert client.requests == ["2026-10-12T16:48:00Z"]
+    assert history.staking == sum_rewards([earlier])
+    assert history.full_read_at == _NOW - timedelta(days=1)
+    assert history.read_at == _NOW
 
 
 async def test_an_anchor_that_is_no_time_has_the_whole_history_read(hass, freezer):
@@ -448,6 +465,7 @@ async def test_a_failed_read_leaves_what_was_read(hass, freezer, error):
     assert history.anchor == "2026-10-13T16:48:00.512Z"
     assert history.recent_ids == {earlier["operation_id"]: "2026-10-13T16:48:00.512Z"}
     assert history.full_read_at == _NOW - timedelta(days=1)
+    assert history.read_at == _NOW - timedelta(days=1)
     client._error = None
     client._operations = [earlier]
     assert await coordinator._async_update_data() == sum_rewards([earlier])

@@ -296,6 +296,15 @@
         "nl": "Nederlands",
         "pl": "Polski"
       }
+    },
+    "history_timeframe": {
+      "options": {
+        "day": "1 dzień",
+        "week": "1 tydzień",
+        "month": "1 miesiąc",
+        "six_month": "6 miesięcy",
+        "year": "1 rok"
+      }
     }
   },
   "entity": {
@@ -923,6 +932,15 @@
     },
     "staking_reward_value": {
       "message": "Obecna wartość: około {value} {currency}."
+    },
+    "no_portfolio": {
+      "message": "Nie skonfigurowano ani nie załadowano usługi Bitpanda Portfolio."
+    },
+    "portfolio_unavailable": {
+      "message": "Wartości Bitpanda Portfolio są w tej chwili niedostępne."
+    },
+    "rewards_start_after_end": {
+      "message": "Początek przypada po końcu."
     }
   },
   "issues": {
@@ -963,6 +981,34 @@
     "refresh": {
       "name": "Odśwież",
       "description": "Pobiera teraz portfolio i ceny z platformy Bitpanda i czeka na zakończenie obu operacji. Ignorowana w czasie blokady po ostatnim wywołaniu; kończy się błędem, gdy odświeżenie się nie powiedzie."
+    },
+    "get_portfolio": {
+      "name": "Pobierz portfolio",
+      "description": "Zwraca wartości Portfolio i każdy portfel tak, jak pokazują je czujniki, bez pytania Bitpanda."
+    },
+    "get_portfolio_history": {
+      "name": "Pobierz historię portfolio",
+      "description": "Zwraca wartość Portfolio w danym okresie, tak jak rysuje ją karta Portfolio.",
+      "fields": {
+        "timeframe": {
+          "name": "Okres",
+          "description": "Okres historii."
+        }
+      }
+    },
+    "get_staking_rewards": {
+      "name": "Pobierz nagrody za staking",
+      "description": "Zwraca każde naliczenie za staking odczytane przez Portfolio, od najstarszego, opcjonalnie między dwoma momentami.",
+      "fields": {
+        "start": {
+          "name": "Od",
+          "description": "Naliczenia od tego momentu, w strefie czasowej Home Assistant."
+        },
+        "end": {
+          "name": "Do",
+          "description": "Naliczenia przed tym momentem, w strefie czasowej Home Assistant."
+        }
+      }
     }
   }
 }

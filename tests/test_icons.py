@@ -77,8 +77,13 @@ def test_every_sensor_translation_key_has_an_icon():
     assert set(_icons()["entity"]["sensor"]) == set(strings["entity"]["sensor"])
 
 
-def test_the_refresh_action_has_an_icon():
-    assert _icons()["services"] == {"refresh": {"service": "mdi:refresh"}}
+def test_every_action_has_an_icon():
+    assert _icons()["services"] == {
+        "refresh": {"service": "mdi:refresh"},
+        "get_portfolio": {"service": "mdi:briefcase-search"},
+        "get_portfolio_history": {"service": "mdi:chart-timeline-variant"},
+        "get_staking_rewards": {"service": "mdi:gift-outline"},
+    }
 
 
 def _sensor_classes() -> list[type]:
@@ -113,4 +118,9 @@ async def test_home_assistant_reads_the_icons(hass):
         key: icons["default"] for key, icons in entity[DOMAIN]["event"].items()
     } == _EVENT_ICONS
     services = await async_get_icons(hass, "services", {DOMAIN})
-    assert services[DOMAIN] == {"refresh": {"service": "mdi:refresh"}}
+    assert services[DOMAIN] == {
+        "refresh": {"service": "mdi:refresh"},
+        "get_portfolio": {"service": "mdi:briefcase-search"},
+        "get_portfolio_history": {"service": "mdi:chart-timeline-variant"},
+        "get_staking_rewards": {"service": "mdi:gift-outline"},
+    }

@@ -296,6 +296,15 @@
         "nl": "Nederlands",
         "pl": "Polski"
       }
+    },
+    "history_timeframe": {
+      "options": {
+        "day": "1 día",
+        "week": "1 semana",
+        "month": "1 mes",
+        "six_month": "6 meses",
+        "year": "1 año"
+      }
     }
   },
   "entity": {
@@ -923,6 +932,15 @@
     },
     "staking_reward_value": {
       "message": "Valor actual: unos {value} {currency}."
+    },
+    "no_portfolio": {
+      "message": "No hay ningún Bitpanda Portfolio configurado y cargado."
+    },
+    "portfolio_unavailable": {
+      "message": "Las cifras del Bitpanda Portfolio no están disponibles en este momento."
+    },
+    "rewards_start_after_end": {
+      "message": "El inicio es posterior al fin."
     }
   },
   "issues": {
@@ -963,6 +981,34 @@
     "refresh": {
       "name": "Actualizar",
       "description": "Obtiene ahora la cartera y los precios de Bitpanda y espera a que ambos terminen. Se ignora durante el tiempo de espera tras la última llamada; falla si falla una actualización."
+    },
+    "get_portfolio": {
+      "name": "Obtener la cartera",
+      "description": "Devuelve las cifras del Portfolio y cada wallet tal como las muestran los sensores, sin consultar a Bitpanda."
+    },
+    "get_portfolio_history": {
+      "name": "Obtener el historial de la cartera",
+      "description": "Devuelve el valor del Portfolio en un periodo, tal como lo dibuja la tarjeta Portfolio.",
+      "fields": {
+        "timeframe": {
+          "name": "Periodo",
+          "description": "El periodo del historial."
+        }
+      }
+    },
+    "get_staking_rewards": {
+      "name": "Obtener las recompensas de staking",
+      "description": "Devuelve cada pago de staking que ha leído el Portfolio, el más antiguo primero, opcionalmente entre dos momentos.",
+      "fields": {
+        "start": {
+          "name": "Inicio",
+          "description": "Los pagos desde este momento, en la zona horaria de Home Assistant."
+        },
+        "end": {
+          "name": "Fin",
+          "description": "Los pagos antes de este momento, en la zona horaria de Home Assistant."
+        }
+      }
     }
   }
 }

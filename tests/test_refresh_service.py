@@ -417,4 +417,9 @@ async def test_the_refresh_service_is_named_and_described_in_every_language(hass
         assert (translations[name_key], translations[description_key]) == (
             raw["name"], raw["description"]
         )
-    assert yaml.safe_load(_SERVICES_YAML.read_text(encoding="utf-8")) == {"refresh": None}
+    declared = yaml.safe_load(_SERVICES_YAML.read_text(encoding="utf-8"))
+    assert declared["refresh"] is None
+    # Beside it, the Portfolio's actions with response data (services.py).
+    assert set(declared) == {
+        "refresh", "get_portfolio", "get_portfolio_history", "get_staking_rewards",
+    }

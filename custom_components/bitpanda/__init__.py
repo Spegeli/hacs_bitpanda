@@ -50,6 +50,7 @@ from .groups import (
     tracked_assets,
 )
 from .portfolio_store import async_get_portfolio_store, async_remove_portfolio_store
+from .services import async_register_portfolio_actions
 from .language import entry_language
 from .naming import (
     asset_display_label,
@@ -93,8 +94,8 @@ _ASSET_DIRECTORY_KEY: HassKey[dict[str, dict[str, Any]]] = HassKey(f"{DOMAIN}_as
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register `bitpanda.refresh` and the dashboard cards, once, for both
-    services.
+    """Register `bitpanda.refresh`, the Portfolio's actions with response
+    data (services.py) and the dashboard cards, once, for both services.
 
     Registered with the integration rather than with an entry, the action
     exists while no entry is loaded -- setup failed or is being retried --
@@ -103,6 +104,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     per run, however many entries are set up or reloaded.
     """
     _async_register_refresh_service(hass)
+    async_register_portfolio_actions(hass)
     await async_register_cards(hass)
     return True
 

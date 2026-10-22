@@ -182,6 +182,9 @@ def _is_operations_section(raw: object) -> bool:
         and isinstance(raw.get("kinds"), list)
         and all(isinstance(kind, str) for kind in raw["kinds"])
         and _read_time(raw.get("full_read_at")) is not None
+        # A section written before the time of the last read was stored has
+        # none.
+        and (raw.get("read_at") is None or _read_time(raw.get("read_at")) is not None)
         and (raw.get("anchor") is None or isinstance(raw.get("anchor"), str))
         and _is_mark_map(raw.get("recent_ids"))
         and totals_from_section(raw.get("staking")) is not None
@@ -295,11 +298,12 @@ class OperationsHistory:
     staking: dict[str, RewardTotals] | None
     # The newest time seen, of any operation; operation id -> its time, for
     # the last day before it; the kinds evaluated over the whole history;
-    # when it was last read whole.
+    # when it was last read whole, and last read at all.
     anchor: str | None
     recent_ids: dict[str, str]
     kinds: list[str]
     full_read_at: datetime | None
+    read_at: datetime | None
 
     def __init__(self, store: PortfolioStore, raw: object, read_error: str | None) -> None:
         self._store = store
@@ -317,6 +321,7 @@ class OperationsHistory:
             self.recent_ids = dict(section["recent_ids"])
             self.kinds = list(section["kinds"])
             self.full_read_at = _read_time(section["full_read_at"])
+            self.read_at = _read_time(section.get("read_at"))
 
     def _set_empty(self) -> None:
         self.staking = None
@@ -324,6 +329,7 @@ class OperationsHistory:
         self.recent_ids = {}
         self.kinds = []
         self.full_read_at = None
+        self.read_at = None
 
     def replace(
         self,
@@ -333,6 +339,7 @@ class OperationsHistory:
         recent_ids: Mapping[str, str],
         kinds: Iterable[str],
         full_read_at: datetime,
+        read_at: datetime,
     ) -> None:
         """Keep what was read now, and ask for the delayed save."""
         self.staking = dict(staking)
@@ -340,11 +347,13 @@ class OperationsHistory:
         self.recent_ids = dict(recent_ids)
         self.kinds = list(kinds)
         self.full_read_at = full_read_at
+        self.read_at = read_at
         self._store.write_section(
             _OPERATIONS,
             {
                 "kinds": self.kinds,
                 "full_read_at": full_read_at.isoformat(),
+                "read_at": read_at.isoformat(),
                 "anchor": anchor,
                 "recent_ids": dict(sorted(self.recent_ids.items())),
                 "staking": totals_to_section(self.staking),

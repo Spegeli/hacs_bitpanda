@@ -296,6 +296,15 @@
         "nl": "Nederlands",
         "pl": "Polski"
       }
+    },
+    "history_timeframe": {
+      "options": {
+        "day": "Tag",
+        "week": "Woche",
+        "month": "Monat",
+        "six_month": "6 Monate",
+        "year": "Jahr"
+      }
     }
   },
   "entity": {
@@ -923,6 +932,15 @@
     },
     "staking_reward_value": {
       "message": "Heute etwa {value} {currency} wert."
+    },
+    "no_portfolio": {
+      "message": "Kein Bitpanda-Portfolio ist eingerichtet und geladen."
+    },
+    "portfolio_unavailable": {
+      "message": "Die Werte des Bitpanda-Portfolios sind gerade nicht verfügbar."
+    },
+    "rewards_start_after_end": {
+      "message": "Der Beginn liegt nach dem Ende."
     }
   },
   "issues": {
@@ -963,6 +981,34 @@
     "refresh": {
       "name": "Aktualisieren",
       "description": "Holt Portfolio und Preise sofort und wartet, bis beides fertig ist. Innerhalb der Sperrzeit ignoriert; schlägt fehl, wenn eine Aktualisierung fehlschlägt."
+    },
+    "get_portfolio": {
+      "name": "Portfolio abrufen",
+      "description": "Liefert die Werte des Portfolios und jedes Wallet, wie die Sensoren sie zeigen, ohne Bitpanda zu fragen."
+    },
+    "get_portfolio_history": {
+      "name": "Portfolio-Verlauf abrufen",
+      "description": "Liefert den Wert des Portfolios über einen Zeitraum, wie die Portfolio-Karte ihn zeichnet.",
+      "fields": {
+        "timeframe": {
+          "name": "Zeitraum",
+          "description": "Der Zeitraum des Verlaufs."
+        }
+      }
+    },
+    "get_staking_rewards": {
+      "name": "Staking-Belohnungen abrufen",
+      "description": "Liefert jede Staking-Gutschrift, die das Portfolio gelesen hat, die älteste zuerst, wahlweise zwischen zwei Zeitpunkten.",
+      "fields": {
+        "start": {
+          "name": "Von",
+          "description": "Gutschriften ab diesem Zeitpunkt, in der Zeitzone von Home Assistant."
+        },
+        "end": {
+          "name": "Bis",
+          "description": "Gutschriften vor diesem Zeitpunkt, in der Zeitzone von Home Assistant."
+        }
+      }
     }
   }
 }

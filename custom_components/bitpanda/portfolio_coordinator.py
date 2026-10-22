@@ -621,6 +621,7 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]
             recent_ids=_recent_ids(operations, {}, anchor),
             kinds=_OPERATION_KINDS,
             full_read_at=read_at,
+            read_at=read_at,
         )
         return totals
 
@@ -631,6 +632,7 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]
         newest = _parse_time(history.anchor)
         assert newest is not None
         since = _window_start(newest)
+        read_at = dt_util.utcnow()
         operations = await self._client.async_get_operations(
             from_ts=since.strftime("%Y-%m-%dT%H:%M:%SZ")
         )
@@ -652,18 +654,19 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]
         ]
         totals = add_rewards(history.staking, new) if new else history.staking
         anchor = newest_credited_at(operations, history.anchor)
-        recent = _recent_ids(new, history.recent_ids, anchor)
-        if new or anchor != history.anchor or recent != history.recent_ids:
-            assert history.full_read_at is not None
-            history.replace(
-                staking=totals,
-                anchor=anchor,
-                recent_ids=recent,
-                # A later release's kind loses its totals here: never list
-                # it, so that release reads the whole history for it.
-                kinds=_OPERATION_KINDS,
-                full_read_at=history.full_read_at,
-            )
+        # Saved after every read, nothing new included: the time of the last
+        # read outlives a restart (bitpanda.get_staking_rewards).
+        assert history.full_read_at is not None
+        history.replace(
+            staking=totals,
+            anchor=anchor,
+            recent_ids=_recent_ids(new, history.recent_ids, anchor),
+            # A later release's kind loses its totals here: never list it, so
+            # that release reads the whole history for it.
+            kinds=_OPERATION_KINDS,
+            full_read_at=history.full_read_at,
+            read_at=read_at,
+        )
         return totals
 
     @callback

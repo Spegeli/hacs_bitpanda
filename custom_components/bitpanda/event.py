@@ -12,8 +12,10 @@ once; the bus events are fired at once all the same.
 
 Home Assistant restores an event entity's last event at a start, firing no
 trigger; at a reload the entity is unavailable for a moment and then shows
-its last event again, which a plain state trigger takes for a new one (the
-README says to add `not_from: [unavailable, unknown]`).
+its last event again, which a plain state trigger takes for a new one; after
+a currency change, or once enabled, it comes back with its last event and no
+state before (the README's trigger: `not_from` and `not_to` unavailable, and
+a state before).
 """
 from __future__ import annotations
 

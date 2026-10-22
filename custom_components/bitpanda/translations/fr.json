@@ -296,6 +296,15 @@
         "nl": "Nederlands",
         "pl": "Polski"
       }
+    },
+    "history_timeframe": {
+      "options": {
+        "day": "1 jour",
+        "week": "1 semaine",
+        "month": "1 mois",
+        "six_month": "6 mois",
+        "year": "1 an"
+      }
     }
   },
   "entity": {
@@ -923,6 +932,15 @@
     },
     "staking_reward_value": {
       "message": "Valeur actuelle : environ {value} {currency}."
+    },
+    "no_portfolio": {
+      "message": "Aucun Bitpanda Portfolio n'est configuré et chargé."
+    },
+    "portfolio_unavailable": {
+      "message": "Les chiffres du Bitpanda Portfolio sont indisponibles pour le moment."
+    },
+    "rewards_start_after_end": {
+      "message": "Le début se situe après la fin."
     }
   },
   "issues": {
@@ -963,6 +981,34 @@
     "refresh": {
       "name": "Actualiser",
       "description": "Récupère maintenant le portefeuille et les prix auprès de Bitpanda et attend que les deux soient terminés. Ignorée pendant le délai d'attente après le dernier appel ; échoue si une actualisation échoue."
+    },
+    "get_portfolio": {
+      "name": "Obtenir le portefeuille",
+      "description": "Renvoie les chiffres du Portfolio et chaque wallet tels que les capteurs les affichent, sans interroger Bitpanda."
+    },
+    "get_portfolio_history": {
+      "name": "Obtenir l'historique du portefeuille",
+      "description": "Renvoie la valeur du Portfolio sur une période, telle que la carte Portfolio la trace.",
+      "fields": {
+        "timeframe": {
+          "name": "Période",
+          "description": "La période de l'historique."
+        }
+      }
+    },
+    "get_staking_rewards": {
+      "name": "Obtenir les récompenses de staking",
+      "description": "Renvoie chaque versement de staking lu par le Portfolio, le plus ancien en premier, éventuellement entre deux instants.",
+      "fields": {
+        "start": {
+          "name": "Début",
+          "description": "Les versements à partir de cet instant, dans le fuseau horaire de Home Assistant."
+        },
+        "end": {
+          "name": "Fin",
+          "description": "Les versements avant cet instant, dans le fuseau horaire de Home Assistant."
+        }
+      }
     }
   }
 }

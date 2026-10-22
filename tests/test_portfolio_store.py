@@ -339,6 +339,7 @@ _STAKING = {
     )
 }
 _READ_AT = datetime(2026, 10, 14, 12, 0, tzinfo=UTC)
+_LAST_READ_AT = datetime(2026, 10, 14, 13, 0, tzinfo=UTC)
 
 
 def _replace(history) -> None:
@@ -348,15 +349,16 @@ def _replace(history) -> None:
         recent_ids={"op-1": "2026-10-13T16:48:00Z"},
         kinds=["staking"],
         full_read_at=_READ_AT,
+        read_at=_LAST_READ_AT,
     )
 
 
 async def test_without_a_file_nothing_was_read_yet_quietly(hass, hass_storage, caplog):
     history = (await _loaded(hass)).operations
     assert history.staking is None
-    assert (history.anchor, history.recent_ids, history.kinds, history.full_read_at) == (
-        None, {}, [], None,
-    )
+    assert (
+        history.anchor, history.recent_ids, history.kinds, history.full_read_at, history.read_at
+    ) == (None, {}, [], None, None)
     assert _warnings(caplog) == []
 
 
@@ -369,6 +371,21 @@ async def test_what_was_read_is_stored_and_read_again(hass, hass_storage, freeze
     assert again.recent_ids == {"op-1": "2026-10-13T16:48:00Z"}
     assert again.kinds == ["staking"]
     assert again.full_read_at == _READ_AT
+    assert again.read_at == _LAST_READ_AT
+
+
+async def test_a_section_without_the_last_read_time_keeps_what_was_read(hass, hass_storage, caplog):
+    """Written by a release that did not store the time of the last read:
+    only that time is unknown."""
+    hass_storage[_KEY] = _file(operations={
+        "kinds": ["staking"], "full_read_at": "2026-10-14T12:00:00+00:00",
+        "anchor": "2026-10-13T16:48:00Z", "recent_ids": {}, "staking": {},
+    })
+    history = (await _loaded(hass)).operations
+    assert history.staking == {}
+    assert history.full_read_at == _READ_AT
+    assert history.read_at is None
+    assert _warnings(caplog) == []
 
 
 @pytest.mark.parametrize(
@@ -382,8 +399,9 @@ async def test_what_was_read_is_stored_and_read_again(hass, hass_storage, freeze
         {"kinds": ["staking"], "full_read_at": "2026-10-14T12:00:00+00:00", "anchor": 5, "recent_ids": {}, "staking": {}},
         {"kinds": ["staking"], "full_read_at": "2026-10-14T12:00:00+00:00", "anchor": None, "recent_ids": [], "staking": {}},
         {"kinds": ["staking"], "full_read_at": "2026-10-14T12:00:00+00:00", "anchor": None, "recent_ids": {}, "staking": {"vsn": 1}},
+        {"kinds": ["staking"], "full_read_at": "2026-10-14T12:00:00+00:00", "read_at": "noon", "anchor": None, "recent_ids": {}, "staking": {}},
     ],
-    ids=["list", "kinds", "time", "time_number", "time_without_offset", "anchor", "ids", "staking"],
+    ids=["list", "kinds", "time", "time_number", "time_without_offset", "anchor", "ids", "staking", "last_read"],
 )
 async def test_a_malformed_operations_section_warns_and_leaves_the_others(
     hass, hass_storage, caplog, value

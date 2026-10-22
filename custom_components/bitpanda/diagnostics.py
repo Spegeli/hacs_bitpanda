@@ -126,6 +126,21 @@ def _portfolio(
             # Of those, the ones the catalogue does not list: no Cash Plus,
             # unlike a lookup that failed, which leaves Cash Plus unknown.
             "unlisted_holdings": len(data.unlisted) if data else 0,
+            # Why Total value or Invested is unknown: the holdings Bitpanda
+            # sent no value for, and those that are or may be a position --
+            # anything but Cash Plus -- without an invested amount. Counts,
+            # never an amount.
+            "holdings_without_value": (
+                sum(holding.value is None for holding in data.holdings.values()) if data else 0
+            ),
+            "holdings_without_invested": (
+                sum(
+                    holding.invested is None and data.is_cash_plus(asset_id) is not True
+                    for asset_id, holding in data.holdings.items()
+                )
+                if data
+                else 0
+            ),
             # Figures whose entry vanished, unavailable until confirmed
             # (portfolio_model.FigureWatch): keys only, never an amount.
             "waiting_figures": sorted(data.waiting) if data else [],

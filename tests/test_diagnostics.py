@@ -116,13 +116,16 @@ def _portfolio_entry(hass, *, loaded: bool) -> MockConfigEntry:
     if loaded:
         data = PortfolioData(
             holdings={
-                "a": Holding("a", 1.0, 1.0, 5.0),
-                "b": Holding("b", 1.0, 1.0, 5.0),
+                "a": Holding("a", 1.0, 1.0, 5.0, 4.0),
+                "b": Holding("b", 1.0, 1.0, None),
                 "c": Holding("c", 1.0, 1.0, 5.0),
+                "d": Holding("d", 1.0, 1.0, 5.0),
             }
         )
-        data.assets = {"a": {"id": "a", "group": "coin"}}
-        # "b" the catalogue does not list; the lookup of "c" failed.
+        data.assets = {"a": {"id": "a", "group": "coin"}, "d": {"id": "d", "group": "fiat_earn"}}
+        # "b" the catalogue does not list, and Bitpanda sent no value for it;
+        # the lookup of "c" failed; "d" is Cash Plus, which has no invested
+        # amount to miss.
         data.unlisted = {"b"}
         # Total value and Cash wait (FigureWatch): reported sorted.
         data.waiting = frozenset({"total", "cash"})
@@ -156,8 +159,12 @@ async def test_portfolio_diagnostics_report_health_and_never_the_key(hass, freez
         "notify_new_wallets": True, "notify_staking_rewards": False, "language": "en",
     }
     assert result["coordinators"] == {
-        "portfolio": {"last_update_success": True, "holdings": 3, "wallets": 1,
+        "portfolio": {"last_update_success": True, "holdings": 4, "wallets": 1,
                       "unnamed_holdings": 2, "unlisted_holdings": 1,
+                      # Counts only, never an amount: why Total value or
+                      # Invested is unknown. A holding that may be a position
+                      # counts among those without an invested amount.
+                      "holdings_without_value": 1, "holdings_without_invested": 2,
                       "waiting_figures": ["cash", "total"]},
         "history": {"last_update_success": True, "timeframes": 1, "failed_timeframes": 1},
         "earn": {"last_update_success": True, "offered_assets": 1},

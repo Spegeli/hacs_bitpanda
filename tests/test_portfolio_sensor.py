@@ -9,6 +9,7 @@ from custom_components.bitpanda.portfolio_model import (
     Holding,
     PortfolioData,
     PortfolioReturns,
+    RewardPayout,
     RewardTotals,
 )
 from custom_components.bitpanda.portfolio_sensor import (
@@ -713,6 +714,7 @@ def test_staking_is_the_staked_value_with_earn_attributes():
         "rewards_gross": 12.0, "rewards_fee": 2.4, "rewards_net": 9.6,
         "rewards_net_value": 19.2,
         "rewards_count": 3, "rewards_last_at": "2026-09-22T17:16:35Z",
+        "rewards_net_30d": 0.0, "rewards_net_value_30d": 0.0,
     }
 
 
@@ -745,6 +747,75 @@ def test_the_net_rewards_have_no_value_while_the_price_is_unknown():
         attributes = sensor.extra_state_attributes
         assert "rewards_net_value" not in attributes
         assert attributes["rewards_net"] == 9.6
+
+
+def _recent_rewards() -> _Coordinator:
+    """Three payouts of VSN: on 1 September, 13 and 20 October 2026."""
+    return _Coordinator({VSN["id"]: RewardTotals(
+        gross=17.5, fee=3.5, net=14.0, count=3, last_at="2026-10-20T08:00:00Z",
+        payouts=(
+            RewardPayout("2026-09-01T08:00:00Z", 10.0, 2.0, 8.0),
+            RewardPayout("2026-10-13T08:00:00Z", 5.0, 1.0, 4.0),
+            RewardPayout("2026-10-20T08:00:00Z", 2.5, 0.5, 2.0),
+        ),
+    )})
+
+
+def _staking(rewards, prices=None) -> StakingSensor:
+    return StakingSensor(
+        _portfolio(**{VSN["id"]: _vsn()}), _Coordinator(None), rewards, "eid", "EUR", VSN,
+        prices if prices is not None else _Prices({VSN["id"]: 0.0385}),
+    )
+
+
+_RECENT = ("rewards_net_30d", "rewards_net_value_30d", "rewards_last_net", "rewards_last_value")
+
+
+def test_the_rewards_of_the_last_30_days_and_the_last_payout(freezer):
+    """In units and at today's price, to the cent: on 22 October the
+    payouts of 13 and 20 October, 6 VSN; the last one, 2 VSN."""
+    freezer.move_to("2026-10-22T12:00:00Z")
+    attributes = _staking(_recent_rewards()).extra_state_attributes
+    assert {key: attributes.get(key) for key in _RECENT} == {
+        "rewards_net_30d": 6.0, "rewards_net_value_30d": 0.23,
+        "rewards_last_net": 2.0, "rewards_last_value": 0.08,
+    }
+
+
+def test_the_last_30_days_move_with_the_clock(freezer):
+    """No timer: every state write reckons the window afresh. On 12 November
+    the payout of 13 October is out; on 20 November, the last one too."""
+    sensor = _staking(_recent_rewards())
+    freezer.move_to("2026-11-12T12:00:00Z")
+    assert sensor.extra_state_attributes["rewards_net_30d"] == 2.0
+    freezer.move_to("2026-11-20T12:00:00Z")
+    attributes = sensor.extra_state_attributes
+    assert (attributes["rewards_net_30d"], attributes["rewards_net_value_30d"]) == (0.0, 0.0)
+    assert attributes["rewards_last_net"] == 2.0
+
+
+def test_the_values_of_the_recent_rewards_need_a_price(freezer):
+    """Without the wallet's price, the units alone -- never a value of 0."""
+    freezer.move_to("2026-10-22T12:00:00Z")
+    attributes = _staking(_recent_rewards(), _Prices()).extra_state_attributes
+    assert (attributes["rewards_net_30d"], attributes["rewards_last_net"]) == (6.0, 2.0)
+    assert "rewards_net_value_30d" not in attributes
+    assert "rewards_last_value" not in attributes
+
+
+def test_without_a_timed_payout_there_is_no_last_payout(freezer):
+    freezer.move_to("2026-10-22T12:00:00Z")
+    rewards = _Coordinator({VSN["id"]: RewardTotals(gross=12.0, fee=2.4, net=9.6, count=3)})
+    attributes = _staking(rewards).extra_state_attributes
+    assert attributes["rewards_net_30d"] == 0.0
+    assert "rewards_last_net" not in attributes
+    assert "rewards_last_value" not in attributes
+
+
+def test_without_rewards_there_are_no_recent_rewards():
+    for rewards in (_Coordinator(None), _Coordinator({VSN["id"]: RewardTotals()})):
+        attributes = _staking(rewards).extra_state_attributes
+        assert not set(_RECENT) & set(attributes)
 
 
 def test_apr_percent_keeps_every_decimal_the_api_sends():

@@ -582,6 +582,18 @@
           },
           "rewards_last_at": {
             "name": "Recompensas: último pago"
+          },
+          "rewards_net_30d": {
+            "name": "Recompensas: neto, últimos 30 días (cantidad)"
+          },
+          "rewards_net_value_30d": {
+            "name": "Recompensas: valor neto, últimos 30 días (actual)"
+          },
+          "rewards_last_net": {
+            "name": "Recompensas: último pago, neto (cantidad)"
+          },
+          "rewards_last_value": {
+            "name": "Recompensas: último pago, valor (actual)"
           }
         }
       },

@@ -582,6 +582,18 @@
           },
           "rewards_last_at": {
             "name": "Ricompense: ultimo accredito"
+          },
+          "rewards_net_30d": {
+            "name": "Ricompense: netto, ultimi 30 giorni (quantità)"
+          },
+          "rewards_net_value_30d": {
+            "name": "Ricompense: valore netto, ultimi 30 giorni (attuale)"
+          },
+          "rewards_last_net": {
+            "name": "Ricompense: ultimo accredito, netto (quantità)"
+          },
+          "rewards_last_value": {
+            "name": "Ricompense: ultimo accredito, valore (attuale)"
           }
         }
       },

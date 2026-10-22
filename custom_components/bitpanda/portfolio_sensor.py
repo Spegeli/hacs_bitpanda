@@ -11,7 +11,7 @@ currency change clears them with the sensors' history (purge.py).
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from typing import Any, cast
 
@@ -80,12 +80,17 @@ from .portfolio_model import (
     PortfolioReturns,
     PositionTotals,
     confirmed,
+    last_payout_net,
     position_totals,
     return_amount,
+    rewards_since,
     share_percent,
     staking_applies,
 )
 from .tolerance import TolerantEntity
+
+# The window of a Staking sensor's recent rewards, up to now.
+RECENT_REWARDS = timedelta(days=30)
 
 
 def portfolio_device_info(entry_id: str) -> DeviceInfo:
@@ -631,6 +636,17 @@ class StakingSensor(_WalletPart):
                 attrs["rewards_net_value"] = round(rewards.net * price, 2)
             attrs["rewards_count"] = rewards.count
             attrs["rewards_last_at"] = rewards.last_at
+            # The window moves with every state write -- each portfolio
+            # refresh and each price: no timer.
+            recent = rewards_since(rewards.payouts, dt_util.utcnow() - RECENT_REWARDS)
+            attrs["rewards_net_30d"] = recent
+            if price is not None:
+                attrs["rewards_net_value_30d"] = round(recent * price, 2)
+            last = last_payout_net(rewards)
+            if last is not None:
+                attrs["rewards_last_net"] = last
+                if price is not None:
+                    attrs["rewards_last_value"] = round(last * price, 2)
         return attrs
 
 

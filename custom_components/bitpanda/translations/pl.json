@@ -582,6 +582,18 @@
           },
           "rewards_last_at": {
             "name": "Nagrody: ostatnie naliczenie"
+          },
+          "rewards_net_30d": {
+            "name": "Nagrody: netto, ostatnie 30 dni (ilość)"
+          },
+          "rewards_net_value_30d": {
+            "name": "Nagrody: wartość netto, ostatnie 30 dni (bieżąca)"
+          },
+          "rewards_last_net": {
+            "name": "Nagrody: ostatnie naliczenie, netto (ilość)"
+          },
+          "rewards_last_value": {
+            "name": "Nagrody: ostatnie naliczenie, wartość (bieżąca)"
           }
         }
       },

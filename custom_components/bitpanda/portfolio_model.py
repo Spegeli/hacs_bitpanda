@@ -625,6 +625,27 @@ def time_key(timestamp: str) -> tuple[int, datetime | str]:
     return (0, parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC))
 
 
+def rewards_since(payouts: Iterable[RewardPayout], since: datetime) -> float:
+    """The net of the payouts credited after `since`, DECIMALS; 0 without
+    one. A payout whose time does not parse is in no window."""
+    net = 0.0
+    for payout in payouts:
+        rank, credited = time_key(payout.credited_at)
+        if rank == 0 and cast(datetime, credited) > since:
+            net += payout.net
+    return round(net, DECIMALS)
+
+
+def last_payout_net(totals: RewardTotals) -> float | None:
+    """The net of the last payout: of every payout credited at `last_at` --
+    the same moment however its fraction is written. None without one."""
+    if totals.last_at is None:
+        return None
+    last = time_key(totals.last_at)
+    nets = [payout.net for payout in totals.payouts if time_key(payout.credited_at) == last]
+    return round(sum(nets), DECIMALS) if nets else None
+
+
 def payouts_after(payouts: Sequence[RewardPayout], mark: str | None) -> list[RewardPayout]:
     """The payouts credited after `mark` -- all of them without one."""
     return [payout for payout in payouts if _is_later(payout.credited_at, mark)]

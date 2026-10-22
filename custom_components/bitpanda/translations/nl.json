@@ -582,6 +582,18 @@
           },
           "rewards_last_at": {
             "name": "Beloningen: laatste uitbetaling"
+          },
+          "rewards_net_30d": {
+            "name": "Beloningen: netto, laatste 30 dagen (hoeveelheid)"
+          },
+          "rewards_net_value_30d": {
+            "name": "Beloningen: nettowaarde, laatste 30 dagen (actueel)"
+          },
+          "rewards_last_net": {
+            "name": "Beloningen: laatste uitbetaling, netto (hoeveelheid)"
+          },
+          "rewards_last_value": {
+            "name": "Beloningen: laatste uitbetaling, waarde (actueel)"
           }
         }
       },

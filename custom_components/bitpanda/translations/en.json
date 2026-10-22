@@ -582,6 +582,18 @@
           },
           "rewards_last_at": {
             "name": "Rewards: last"
+          },
+          "rewards_net_30d": {
+            "name": "Rewards: net, last 30 days (quantity)"
+          },
+          "rewards_net_value_30d": {
+            "name": "Rewards: net value, last 30 days (current)"
+          },
+          "rewards_last_net": {
+            "name": "Rewards: last payout, net (quantity)"
+          },
+          "rewards_last_value": {
+            "name": "Rewards: last payout, value (current)"
           }
         }
       },

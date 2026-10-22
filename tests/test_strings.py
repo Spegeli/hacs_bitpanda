@@ -1,9 +1,12 @@
 """The string files: structurally identical, BOM-free, and every translation
 true to its English original in what it must carry over unchanged."""
+from datetime import timedelta
 import json
 from pathlib import Path
 import re
 import string
+
+from homeassistant.util import dt as dt_util
 
 from custom_components.bitpanda import migration
 from custom_components.bitpanda.api import BitpandaApiError
@@ -20,6 +23,7 @@ from custom_components.bitpanda.portfolio_model import (
     Holding,
     PortfolioData,
     PortfolioReturns,
+    RewardPayout,
     RewardTotals,
 )
 from custom_components.bitpanda.portfolio_sensor import (
@@ -1825,8 +1829,12 @@ def _attribute_scenarios() -> list[tuple[str, dict]]:
     test unions every scenario sharing a key before comparing it to that
     key's labels, so this still proves each one has a label."""
     wallet_coordinator = _Coordinator(_wallet_portfolio_data())
+    # The last payout a day ago: within the last 30 days.
+    last_at = (dt_util.utcnow() - timedelta(days=1)).isoformat()
     rewards = _Coordinator({_VSN["id"]: RewardTotals(
-        gross=12.0, fee=2.4, net=9.6, count=3, last_at="2026-09-22T17:16:35Z")})
+        gross=12.0, fee=2.4, net=9.6, count=3, last_at=last_at,
+        payouts=(RewardPayout(last_at, 4.0, 0.8, 3.2),),
+    )})
     earn = _Coordinator(EarnData(apr={_VSN["id"]: 0.0544}, offered=frozenset({_VSN["id"]})))
 
     price_with_rate = PriceSensor(
@@ -2009,6 +2017,71 @@ def test_the_reward_attributes_say_what_they_count():
         quantity = attributes["units"]["name"].split(":", 1)[1].strip()
         for key in ("rewards_gross", "rewards_fee", "rewards_net"):
             assert labels[key].endswith(f" ({quantity})"), (language, key)
+
+
+# The rewards of the last 30 days and of the last payout on the Staking
+# sensor, by language: quantities and today's values named as the lifetime
+# ones are, French with a no-break space before the colon and after the 30.
+_RECENT_REWARD_LABELS = {
+    "de": {
+        "rewards_net_30d": "Belohnungen: netto, letzte 30 Tage (Menge)",
+        "rewards_net_value_30d": "Belohnungen: Wert netto, letzte 30 Tage (aktuell)",
+        "rewards_last_net": "Belohnungen: letzte Gutschrift, netto (Menge)",
+        "rewards_last_value": "Belohnungen: letzte Gutschrift, Wert (aktuell)",
+    },
+    "en": {
+        "rewards_net_30d": "Rewards: net, last 30 days (quantity)",
+        "rewards_net_value_30d": "Rewards: net value, last 30 days (current)",
+        "rewards_last_net": "Rewards: last payout, net (quantity)",
+        "rewards_last_value": "Rewards: last payout, value (current)",
+    },
+    "es": {
+        "rewards_net_30d": "Recompensas: neto, últimos 30 días (cantidad)",
+        "rewards_net_value_30d": "Recompensas: valor neto, últimos 30 días (actual)",
+        "rewards_last_net": "Recompensas: último pago, neto (cantidad)",
+        "rewards_last_value": "Recompensas: último pago, valor (actual)",
+    },
+    "fr": {
+        "rewards_net_30d": "Récompenses\u00a0: net, 30\u00a0derniers jours (quantité)",
+        "rewards_net_value_30d": "Récompenses\u00a0: valeur nette, 30\u00a0derniers jours (actuelle)",
+        "rewards_last_net": "Récompenses\u00a0: dernier versement, net (quantité)",
+        "rewards_last_value": "Récompenses\u00a0: dernier versement, valeur (actuelle)",
+    },
+    "it": {
+        "rewards_net_30d": "Ricompense: netto, ultimi 30 giorni (quantità)",
+        "rewards_net_value_30d": "Ricompense: valore netto, ultimi 30 giorni (attuale)",
+        "rewards_last_net": "Ricompense: ultimo accredito, netto (quantità)",
+        "rewards_last_value": "Ricompense: ultimo accredito, valore (attuale)",
+    },
+    "nl": {
+        "rewards_net_30d": "Beloningen: netto, laatste 30 dagen (hoeveelheid)",
+        "rewards_net_value_30d": "Beloningen: nettowaarde, laatste 30 dagen (actueel)",
+        "rewards_last_net": "Beloningen: laatste uitbetaling, netto (hoeveelheid)",
+        "rewards_last_value": "Beloningen: laatste uitbetaling, waarde (actueel)",
+    },
+    "pl": {
+        "rewards_net_30d": "Nagrody: netto, ostatnie 30 dni (ilość)",
+        "rewards_net_value_30d": "Nagrody: wartość netto, ostatnie 30 dni (bieżąca)",
+        "rewards_last_net": "Nagrody: ostatnie naliczenie, netto (ilość)",
+        "rewards_last_value": "Nagrody: ostatnie naliczenie, wartość (bieżąca)",
+    },
+}
+
+
+def test_the_recent_rewards_are_named_like_the_lifetime_ones():
+    assert sorted(_RECENT_REWARD_LABELS) == _LANGUAGES
+    for language, labels in _RECENT_REWARD_LABELS.items():
+        attributes = _load(f"translations/{language}.json")["entity"]["sensor"]["staking"][
+            "state_attributes"
+        ]
+        assert {key: attributes[key]["name"] for key in labels} == labels, language
+        prefix = attributes["rewards_net"]["name"].split(":", 1)[0]
+        quantity = attributes["rewards_net"]["name"].rsplit("(", 1)[1]
+        current = attributes["rewards_net_value"]["name"].rsplit("(", 1)[1]
+        for key, label in labels.items():
+            assert label.split(":", 1)[0] == prefix, (language, key)
+            suffix = current if "value" in key else quantity
+            assert label.endswith(f"({suffix}"), (language, key)
 
 
 # The position performance on a wallet's Total sensor, by language, in the

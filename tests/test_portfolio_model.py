@@ -15,8 +15,10 @@ from custom_components.bitpanda.portfolio_model import (
     PortfolioReturns,
     PositionTotals,
     RewardPayout,
+    RewardTotals,
     _is_later,
     add_rewards,
+    last_payout_net,
     lists_nothing,
     newest_credited_at,
     operation_credited_at,
@@ -24,6 +26,7 @@ from custom_components.bitpanda.portfolio_model import (
     parse_portfolio,
     payouts_after,
     position_totals,
+    rewards_since,
     staking_applies,
     sum_rewards,
     tolerate_failed_timeframes,
@@ -769,6 +772,63 @@ def test_payouts_after_compares_times_not_text():
     payouts = (early, later, latest)
     assert payouts_after(payouts, "2026-09-22T17:16:35Z") == [later, latest]
     assert payouts_after(payouts, None) == [early, later, latest]
+
+
+_THIRTY_DAYS_AGO = datetime(2026, 9, 22, 12, 0, tzinfo=UTC)
+
+
+def test_the_rewards_of_the_last_30_days_are_summed():
+    """The net of the payouts credited after the moment 30 days ago: not
+    one exactly then, nor before; a time without an offset counts as UTC,
+    one with an offset by its offset."""
+    payouts = [
+        RewardPayout("2026-09-21T12:00:00Z", 1.0, 0.2, 0.8),
+        RewardPayout("2026-09-22T12:00:00Z", 1.0, 0.2, 0.8),
+        RewardPayout("2026-09-22T13:00:00+02:00", 1.0, 0.2, 0.8),
+        RewardPayout("2026-09-22T12:00:00.001Z", 2.0, 0.4, 1.6),
+        RewardPayout("2026-09-23T12:00:00", 3.0, 0.6, 2.4),
+        RewardPayout("2026-10-21T12:00:00+02:00", 1.0, 0.2, 0.8),
+    ]
+    assert rewards_since(payouts, _THIRTY_DAYS_AGO) == 4.8
+
+
+def test_no_reward_in_the_last_30_days_reads_0():
+    assert rewards_since([RewardPayout("2026-08-01T00:00:00Z", 1.0, 0.0, 1.0)], _THIRTY_DAYS_AGO) == 0.0
+    assert rewards_since([], _THIRTY_DAYS_AGO) == 0.0
+
+
+def test_a_payout_whose_time_does_not_parse_is_not_in_the_window():
+    payouts = [
+        RewardPayout("yesterday", 1.0, 0.0, 1.0),
+        RewardPayout("2026-10-20T00:00:00Z", 1.0, 0.0, 1.0),
+    ]
+    assert rewards_since(payouts, _THIRTY_DAYS_AGO) == 1.0
+
+
+def test_the_rewards_of_the_last_30_days_round_to_eight_decimals():
+    payouts = [RewardPayout("2026-10-20T00:00:00Z", 0.1, 0.0, 0.1)] * 3
+    assert rewards_since(payouts, _THIRTY_DAYS_AGO) == 0.3
+
+
+def test_the_last_payout_sums_the_payouts_of_the_newest_time():
+    """Several payouts credited at the same moment are one payout -- the
+    same moment whether written with or without its fraction."""
+    totals = RewardTotals(
+        gross=45.0, fee=9.0, net=36.0, count=3, last_at="2026-09-22T17:16:35Z",
+        payouts=(
+            RewardPayout("2026-09-15T16:20:00Z", 30.0, 6.0, 24.0),
+            RewardPayout("2026-09-22T17:16:35Z", 10.0, 2.0, 8.0),
+            RewardPayout("2026-09-22T17:16:35.000Z", 5.0, 1.0, 4.0),
+        ),
+    )
+    assert last_payout_net(totals) == 12.0
+
+
+def test_the_last_payout_is_absent_without_a_timed_payout():
+    assert last_payout_net(RewardTotals(gross=3.0, net=3.0, count=2)) is None
+    assert last_payout_net(
+        RewardTotals(gross=1.0, net=1.0, count=1, last_at="2026-09-22T17:16:35Z")
+    ) is None
 
 
 def test_sum_rewards_totals_gross_fee_and_net():

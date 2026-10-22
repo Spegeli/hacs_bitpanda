@@ -582,6 +582,18 @@
           },
           "rewards_last_at": {
             "name": "Belohnungen: zuletzt"
+          },
+          "rewards_net_30d": {
+            "name": "Belohnungen: netto, letzte 30 Tage (Menge)"
+          },
+          "rewards_net_value_30d": {
+            "name": "Belohnungen: Wert netto, letzte 30 Tage (aktuell)"
+          },
+          "rewards_last_net": {
+            "name": "Belohnungen: letzte Gutschrift, netto (Menge)"
+          },
+          "rewards_last_value": {
+            "name": "Belohnungen: letzte Gutschrift, Wert (aktuell)"
           }
         }
       },

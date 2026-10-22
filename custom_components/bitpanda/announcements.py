@@ -1,5 +1,5 @@
-"""The Portfolio's announcements: a wallet new to the Portfolio, and new
-staking payouts.
+"""The Portfolio's announcements: a wallet new to the Portfolio, new
+staking payouts, and Earn changes of held assets.
 
 Each is an event, whether its notification is switched on or not -- an
 interface for the users' automations -- fired on the bus and, with the same
@@ -46,11 +46,19 @@ otherwise its mark stays, and its payouts wait. One pass at a time announces
 them, reading the newest data as it runs; once it has fired its first event
 it awaits nothing, so an unload cancels a pass before it announced anything
 or not at all, and each payout is announced once.
+
+Earn changes of held assets (EarnAnnouncer): after every successful read of
+the Earn catalogue, an event per change -- no notification, no option. What
+it compares with is kept in memory, for held assets only: the first
+catalogue after a setup, a wallet new since and an asset bought back set it
+silently, so a change while Home Assistant was off or during a reload is no
+news.
 """
 from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from dataclasses import dataclass
 import logging
 import re
 from typing import Any
@@ -66,6 +74,8 @@ from homeassistant.helpers.translation import async_get_translations
 from .const import (
     CONF_CURRENCY,
     DOMAIN,
+    EARN_APR_THRESHOLD,
+    EVENT_EARN_CHANGED,
     EVENT_STAKING_REWARD_RECEIVED,
     EVENT_WALLET_ADDED,
     notifies_new_wallets,
@@ -85,7 +95,14 @@ from .portfolio_coordinator import (
     RewardsCoordinator,
     WalletPrices,
 )
-from .portfolio_model import DECIMALS, PortfolioData, RewardPayout, payouts_after, time_key
+from .portfolio_model import (
+    DECIMALS,
+    EarnData,
+    PortfolioData,
+    RewardPayout,
+    payouts_after,
+    time_key,
+)
 from .portfolio_store import KnownWallets, RewardMarks
 
 # What a wallet's name or an asset's symbol may not carry as it is into a
@@ -749,4 +766,138 @@ class RewardAnnouncer:
             title,
             # One per asset: the next announcement replaces one not yet dismissed.
             notification_id=f"{DOMAIN}_staking_reward_{asset_id}",
+        )
+
+
+def _percent(apr: float | None) -> float | None:
+    """An APR, a fraction, in percent as Balance (staking) shows it."""
+    return None if apr is None else round(apr * 100, DECIMALS)
+
+
+@dataclass(frozen=True)
+class _EarnState:
+    """What an asset's Earn changes are compared with: whether it has an
+    enabled product, whether that is sold out, the APR an APR move is
+    measured from -- the first seen, then the last announced -- and the APR
+    seen last, which a withdrawal names; None without an enabled product."""
+
+    enabled: bool
+    sold_out: bool
+    reference: float | None
+    last_seen: float | None
+
+
+class EarnAnnouncer:
+    """Announces the Earn changes of one Portfolio entry's held assets.
+
+    One event per change (`change`), its APRs in percent before and after:
+    `offered` -- an enabled product appears, sold out or not; `withdrawn`
+    -- none is enabled any more; `sold_out` and `available_again` -- the
+    enabled product's flag turns; `apr` -- the enabled product's APR moved
+    EARN_APR_THRESHOLD percentage points or more from the reference.
+    `offered` and `withdrawn` come without an `apr` event. A failed read,
+    one that lists no product at all, and a portfolio answer that lists
+    nothing change nothing. No Staking sensor is needed."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: PortfolioConfigEntry,
+        earn: EarnCoordinator,
+        portfolio: PortfolioCoordinator,
+        ready: asyncio.Event,
+    ) -> None:
+        self._hass = hass
+        self._entry = entry
+        self._earn = earn
+        self._portfolio = portfolio
+        self._ready = ready
+        # Asset id -> what its next changes are compared with.
+        self._state: dict[str, _EarnState] = {}
+
+    @callback
+    def async_earn_refreshed(self) -> None:
+        """After every successful read (EarnCoordinator.on_refreshed): a
+        background task of the entry, which its unload cancels, compares
+        once the listeners -- the Staking sensors -- have written."""
+        self._entry.async_create_background_task(
+            self._hass, self._async_compare(), f"{DOMAIN} Earn change announcement"
+        )
+
+    async def _async_compare(self) -> None:
+        # The listeners are told after the hook that started this task.
+        await asyncio.sleep(0)
+        # A setup's first read comes before the event entities exist.
+        await self._ready.wait()
+        self._compare()
+
+    @callback
+    def _compare(self) -> None:
+        earn: EarnData | None = self._earn.data
+        portfolio = self._portfolio.data
+        if earn is None or not earn.products or portfolio is None or not portfolio.listed_any:
+            return
+        for asset_id in set(self._state) - portfolio.held:
+            # Sold: buying it back is no news. An entry that cannot be read,
+            # or an asset not looked up yet, is no sale: it keeps its state
+            # and is compared once it has a wallet again.
+            del self._state[asset_id]
+        for asset_id in portfolio.wallet_ids:
+            product = earn.products.get(asset_id)
+            enabled = product is not None and product.enabled
+            sold_out = enabled and product is not None and product.sold_out
+            apr = product.apr if enabled and product is not None else None
+            known = self._state.get(asset_id)
+            if known is None:
+                # The first catalogue after setup, or a wallet new since.
+                self._state[asset_id] = _EarnState(enabled, sold_out, apr, apr)
+                continue
+            reference = known.reference
+            changes: list[tuple[str, float | None, float | None]] = []
+            if enabled and not known.enabled:
+                changes.append(("offered", None, apr))
+                reference = apr
+            elif known.enabled and not enabled:
+                changes.append(("withdrawn", known.last_seen, None))
+                reference = None
+            elif enabled:
+                if sold_out != known.sold_out:
+                    changes.append(("sold_out" if sold_out else "available_again", apr, apr))
+                if reference is None:
+                    reference = apr
+                elif apr is not None and round(abs(apr - reference) * 100, 8) >= EARN_APR_THRESHOLD:
+                    changes.append(("apr", reference, apr))
+                    reference = apr
+            self._state[asset_id] = _EarnState(enabled, sold_out, reference, apr)
+            for change, before, after in changes:
+                self._announce(asset_id, portfolio, change, before, after)
+
+    def _announce(
+        self,
+        asset_id: str,
+        portfolio: PortfolioData,
+        change: str,
+        before: float | None,
+        after: float | None,
+    ) -> None:
+        asset = portfolio.assets[asset_id]
+        device = find_wallet_device(dr.async_get(self._hass), self._entry.entry_id, asset_id)
+        # An interface for the users' automations: later versions may add
+        # fields or kinds of change, never rename or drop one.
+        async_announce(
+            self._hass,
+            self._entry.entry_id,
+            bus_event=EVENT_EARN_CHANGED,
+            entity_key="earn_change",
+            event_type=change,
+            data={
+                "device_id": None if device is None else device.id,
+                "asset_id": asset_id,
+                "symbol": asset["symbol"],
+                "name": asset.get("name"),
+                "wallet": wallet_device_name(asset),
+                "change": change,
+                "apr_before": _percent(before),
+                "apr_after": _percent(after),
+            },
         )

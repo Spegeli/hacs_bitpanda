@@ -406,6 +406,37 @@
               "available_again": "Ponownie dostępny",
               "apr": "Zmiana oprocentowania (APR)"
             }
+          },
+          "device_id": {
+            "name": "Portfel: ID urządzenia"
+          },
+          "asset_id": {
+            "name": "Aktywo: ID"
+          },
+          "symbol": {
+            "name": "Aktywo: symbol"
+          },
+          "name": {
+            "name": "Aktywo: nazwa"
+          },
+          "wallet": {
+            "name": "Portfel: nazwa"
+          },
+          "change": {
+            "name": "Earn: zmiana",
+            "state": {
+              "offered": "Oferowany",
+              "withdrawn": "Wycofany",
+              "sold_out": "Wyprzedany",
+              "available_again": "Ponownie dostępny",
+              "apr": "Zmiana oprocentowania (APR)"
+            }
+          },
+          "apr_before": {
+            "name": "Earn: oprocentowanie przedtem (APR %)"
+          },
+          "apr_after": {
+            "name": "Earn: oprocentowanie potem (APR %)"
           }
         }
       }

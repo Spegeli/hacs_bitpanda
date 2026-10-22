@@ -23,7 +23,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util.hass_dict import HassKey
 
 from . import migration
-from .announcements import RewardAnnouncer
+from .announcements import EarnAnnouncer, RewardAnnouncer
 from .api import BitpandaApiClient
 from .assets import AssetDirectory
 from .cards import async_register_cards
@@ -227,6 +227,10 @@ async def _async_start_portfolio(
         runtime.ready, prices,
     )
     runtime.rewards.on_refreshed = announcer.async_rewards_refreshed
+    # Earn changes of held assets, after every successful read of the
+    # catalogue -- the first one below sets what they are compared with.
+    earn_changes = EarnAnnouncer(hass, entry, runtime.earn, runtime.portfolio, runtime.ready)
+    runtime.earn.on_refreshed = earn_changes.async_earn_refreshed
     # Earn, rewards and history are additive: a failure there must not block
     # setup, so they refresh with async_refresh(), which never raises
     # ConfigEntryNotReady. A 401 from any of them still reaches the reauth

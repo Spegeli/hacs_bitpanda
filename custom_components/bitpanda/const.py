@@ -138,6 +138,12 @@ CONF_NOTIFY_STAKING_REWARDS = "notify_staking_rewards"
 DEFAULT_NOTIFY_STAKING_REWARDS = False
 EVENT_STAKING_REWARD_RECEIVED = f"{DOMAIN}_staking_reward_received"
 
+# An Earn change of a held asset (announcements.EarnAnnouncer): an event, never
+# a notification. An APR move is news from this many percentage points on,
+# measured from the APR last announced -- or first seen.
+EVENT_EARN_CHANGED = f"{DOMAIN}_earn_changed"
+EARN_APR_THRESHOLD = 0.25
+
 # The Price Tracker keeps its assets in groups by asset type (groups.py): one
 # config subentry per category, keyed by the category, whose data holds the
 # category and the slim records of its assets by asset id.

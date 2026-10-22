@@ -412,6 +412,10 @@ class EarnCoordinator(DataUpdateCoordinator[EarnData]):
     A failed fetch leaves `data` at the last catalogue. While no catalogue
     was ever loaded, no Staking sensor shows its APR, so a failure then is
     retried after FIRST_LOAD_RETRY_INTERVAL instead of an hour.
+
+    After every successful refresh it calls `on_refreshed`, the
+    announcement of Earn changes (announcements.EarnAnnouncer) -- never
+    after the entry's unload has shut it down.
     """
 
     config_entry: PortfolioConfigEntry
@@ -427,6 +431,22 @@ class EarnCoordinator(DataUpdateCoordinator[EarnData]):
             config_entry=entry,
         )
         self._client = client
+        # Set by the announcer of Earn changes; None where nothing announces.
+        self.on_refreshed: Callable[[], None] | None = None
+        self._shut_down = False
+
+    async def async_shutdown(self) -> None:
+        self._shut_down = True
+        await super().async_shutdown()
+
+    @callback
+    def _async_refresh_finished(self) -> None:
+        """Home Assistant's hook after every refresh, before the listeners
+        are told: the announcer runs after a successful one only, and
+        announces once they are."""
+        super()._async_refresh_finished()
+        if self.last_update_success and self.on_refreshed is not None and not self._shut_down:
+            self.on_refreshed()
 
     async def _async_update_data(self) -> EarnData:
         try:

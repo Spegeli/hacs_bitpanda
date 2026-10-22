@@ -406,6 +406,37 @@
               "available_again": "Wieder verfügbar",
               "apr": "Zinssatz (APR) geändert"
             }
+          },
+          "device_id": {
+            "name": "Wallet: Geräte-ID"
+          },
+          "asset_id": {
+            "name": "Asset: ID"
+          },
+          "symbol": {
+            "name": "Asset: Symbol"
+          },
+          "name": {
+            "name": "Asset: Name"
+          },
+          "wallet": {
+            "name": "Wallet: Name"
+          },
+          "change": {
+            "name": "Earn: Änderung",
+            "state": {
+              "offered": "Angeboten",
+              "withdrawn": "Nicht mehr angeboten",
+              "sold_out": "Ausverkauft",
+              "available_again": "Wieder verfügbar",
+              "apr": "Zinssatz (APR) geändert"
+            }
+          },
+          "apr_before": {
+            "name": "Earn: Zinssatz vorher (APR %)"
+          },
+          "apr_after": {
+            "name": "Earn: Zinssatz danach (APR %)"
           }
         }
       }

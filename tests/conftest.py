@@ -193,7 +193,9 @@ ANNOUNCEMENT_FIELDS = {
         "device_id", "asset_id", "symbol", "name", "wallet", "count", "gross", "fee", "net",
         "value", "currency", "credited_at", "apr_percent", "rewards_net", "message",
     }),
-    "earn_change": frozenset(),
+    "earn_change": frozenset({
+        "device_id", "asset_id", "symbol", "name", "wallet", "change", "apr_before", "apr_after",
+    }),
 }
 
 _INTEGRATION = Path(__file__).parent.parent / "custom_components" / "bitpanda"

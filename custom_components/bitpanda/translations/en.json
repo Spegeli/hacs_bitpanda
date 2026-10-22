@@ -406,6 +406,37 @@
               "available_again": "Available again",
               "apr": "APR changed"
             }
+          },
+          "device_id": {
+            "name": "Wallet: device ID"
+          },
+          "asset_id": {
+            "name": "Asset: ID"
+          },
+          "symbol": {
+            "name": "Asset: symbol"
+          },
+          "name": {
+            "name": "Asset: name"
+          },
+          "wallet": {
+            "name": "Wallet: name"
+          },
+          "change": {
+            "name": "Earn: change",
+            "state": {
+              "offered": "Offered",
+              "withdrawn": "Withdrawn",
+              "sold_out": "Sold out",
+              "available_again": "Available again",
+              "apr": "APR changed"
+            }
+          },
+          "apr_before": {
+            "name": "Earn: APR before %"
+          },
+          "apr_after": {
+            "name": "Earn: APR after %"
           }
         }
       }

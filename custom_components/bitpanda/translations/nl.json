@@ -406,6 +406,37 @@
               "available_again": "Weer beschikbaar",
               "apr": "Jaarlijks rendement (APR) gewijzigd"
             }
+          },
+          "device_id": {
+            "name": "Wallet: apparaat-ID"
+          },
+          "asset_id": {
+            "name": "Asset: ID"
+          },
+          "symbol": {
+            "name": "Asset: symbool"
+          },
+          "name": {
+            "name": "Asset: naam"
+          },
+          "wallet": {
+            "name": "Wallet: naam"
+          },
+          "change": {
+            "name": "Earn: wijziging",
+            "state": {
+              "offered": "Aangeboden",
+              "withdrawn": "Niet meer aangeboden",
+              "sold_out": "Uitverkocht",
+              "available_again": "Weer beschikbaar",
+              "apr": "Jaarlijks rendement (APR) gewijzigd"
+            }
+          },
+          "apr_before": {
+            "name": "Earn: jaarlijks rendement voorheen (APR %)"
+          },
+          "apr_after": {
+            "name": "Earn: jaarlijks rendement daarna (APR %)"
           }
         }
       }

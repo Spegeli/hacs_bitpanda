@@ -406,6 +406,37 @@
               "available_again": "De nouveau disponible",
               "apr": "Taux annuel (APR) modifié"
             }
+          },
+          "device_id": {
+            "name": "Wallet : ID de l'appareil"
+          },
+          "asset_id": {
+            "name": "Actif : ID"
+          },
+          "symbol": {
+            "name": "Actif : symbole"
+          },
+          "name": {
+            "name": "Actif : nom"
+          },
+          "wallet": {
+            "name": "Wallet : nom"
+          },
+          "change": {
+            "name": "Earn : changement",
+            "state": {
+              "offered": "Proposé",
+              "withdrawn": "Retiré",
+              "sold_out": "Épuisé",
+              "available_again": "De nouveau disponible",
+              "apr": "Taux annuel (APR) modifié"
+            }
+          },
+          "apr_before": {
+            "name": "Earn : taux annuel avant (APR %)"
+          },
+          "apr_after": {
+            "name": "Earn : taux annuel après (APR %)"
           }
         }
       }

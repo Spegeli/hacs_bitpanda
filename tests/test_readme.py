@@ -218,6 +218,29 @@ async def test_the_morning_report_comes_even_when_the_refresh_fails(hass):
     await _turn_off(hass)
 
 
+async def test_the_morning_report_names_the_amount_of_todays_return(hass):
+    """With the amount the return means today (`return_amount`), signed and
+    in the Portfolio currency; without it, the report as before."""
+    hass.services.async_register("bitpanda", "refresh", lambda call: None)
+    await _set(hass, _TOTAL, "12345.67", unit_of_measurement="EUR")
+    await _set(hass, _DAY, "1.25", unit_of_measurement="%", return_amount=152.42)
+    notifications = await _set_up(hass, _examples()[2])
+    await hass.services.async_call(
+        "automation", "trigger", {"entity_id": "automation.bitpanda_morning_report"}, blocking=True
+    )
+    await hass.async_block_till_done()
+    await _set(hass, _DAY, "-0.5", unit_of_measurement="%", return_amount=-62.04)
+    await hass.services.async_call(
+        "automation", "trigger", {"entity_id": "automation.bitpanda_morning_report"}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert _messages(notifications) == [
+        "Portfolio: 12345.67 EUR, 1.25 % (+152.42 EUR) in 24 hours",
+        "Portfolio: 12345.67 EUR, -0.5 % (-62.04 EUR) in 24 hours",
+    ]
+    await _turn_off(hass)
+
+
 async def test_the_staking_reward_example_sends_the_net_amount_and_the_count(hass):
     """One push message per announcement, with what it adds up: one payout,
     or several after a pause -- a small one written out, never as 4.8e-05."""

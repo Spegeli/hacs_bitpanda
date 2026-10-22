@@ -299,6 +299,96 @@
     }
   },
   "entity": {
+    "event": {
+      "new_wallet": {
+        "name": "Nieuwe wallet",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "wallet_added": "Wallet toegevoegd"
+            }
+          },
+          "device_id": {
+            "name": "Wallet: apparaat-ID"
+          },
+          "asset_id": {
+            "name": "Asset: ID"
+          },
+          "symbol": {
+            "name": "Asset: symbool"
+          },
+          "name": {
+            "name": "Asset: naam"
+          },
+          "wallet": {
+            "name": "Wallet: naam"
+          },
+          "category": {
+            "name": "Asset: categorie"
+          }
+        }
+      },
+      "staking_reward": {
+        "name": "Stakingbeloning",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "staking_reward_received": "Stakingbeloning ontvangen"
+            }
+          },
+          "device_id": {
+            "name": "Wallet: apparaat-ID"
+          },
+          "asset_id": {
+            "name": "Asset: ID"
+          },
+          "symbol": {
+            "name": "Asset: symbool"
+          },
+          "name": {
+            "name": "Asset: naam"
+          },
+          "wallet": {
+            "name": "Wallet: naam"
+          },
+          "count": {
+            "name": "Uitbetalingen: aantal"
+          },
+          "gross": {
+            "name": "Uitbetalingen: bruto (hoeveelheid)"
+          },
+          "fee": {
+            "name": "Uitbetalingen: kosten (hoeveelheid)"
+          },
+          "net": {
+            "name": "Uitbetalingen: netto (hoeveelheid)"
+          },
+          "value": {
+            "name": "Uitbetalingen: nettowaarde (actueel)"
+          },
+          "currency": {
+            "name": "Uitbetalingen: valuta"
+          },
+          "credited_at": {
+            "name": "Uitbetalingen: laatste"
+          }
+        }
+      },
+      "earn_change": {
+        "name": "Earn-wijziging",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "offered": "Aangeboden",
+              "withdrawn": "Niet meer aangeboden",
+              "sold_out": "Uitverkocht",
+              "available_again": "Weer beschikbaar",
+              "apr": "Jaarlijks rendement (APR) gewijzigd"
+            }
+          }
+        }
+      }
+    },
     "sensor": {
       "total_value": {
         "name": "Totale waarde"

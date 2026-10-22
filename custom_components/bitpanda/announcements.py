@@ -2,7 +2,9 @@
 staking payouts.
 
 Each is an event, whether its notification is switched on or not -- an
-interface for the users' automations -- and a persistent notification while
+interface for the users' automations -- fired on the bus and, with the same
+data, by one of the Portfolio's event entities (event.py, async_announce),
+and a persistent notification while
 the entry's option for it is on (on by default for new wallets, off for
 staking rewards), in the entry's language, linking to the wallet's device.
 During a start, both wait until Home Assistant has started: it arms the
@@ -54,6 +56,7 @@ from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CoreState, Event, HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.translation import async_get_translations
 
@@ -89,6 +92,38 @@ _MARKDOWN_CHARACTERS = frozenset("\\`*_[]")
 _LOGGER = logging.getLogger(__name__)
 
 _TEXTS = f"component.{DOMAIN}.exceptions"
+
+# The Portfolio's event entities (event.py), by key, with their event types.
+PORTFOLIO_EVENT_TYPES: dict[str, tuple[str, ...]] = {
+    "new_wallet": ("wallet_added",),
+    "staking_reward": ("staking_reward_received",),
+    "earn_change": ("offered", "withdrawn", "sold_out", "available_again", "apr"),
+}
+
+
+def portfolio_event_signal(entry_id: str) -> str:
+    """The signal that brings an announcement of the entry `entry_id` to its
+    event entities."""
+    return f"{DOMAIN}_portfolio_event_{entry_id}"
+
+
+@callback
+def async_announce(
+    hass: HomeAssistant,
+    entry_id: str,
+    *,
+    bus_event: str,
+    entity_key: str,
+    event_type: str,
+    data: dict[str, Any],
+) -> None:
+    """Fire the bus event `bus_event` with `data`, and the event `event_type`
+    of the entry's event entity `entity_key` with the same data: one call, so
+    that the entity never misses an announcement the bus fired, nor shows one
+    it never did. A disabled entity misses it; the bus event fires all the
+    same."""
+    hass.bus.async_fire(bus_event, data)
+    async_dispatcher_send(hass, portfolio_event_signal(entry_id), entity_key, event_type, dict(data))
 
 
 def escape_markdown(text: str) -> str:
@@ -271,9 +306,13 @@ class WalletAnnouncer:
             wallet = wallet_device_name(asset)
             # An interface for the users' automations: later versions may add
             # fields, never rename or drop one.
-            self._hass.bus.async_fire(
-                EVENT_WALLET_ADDED,
-                {
+            async_announce(
+                self._hass,
+                self._entry.entry_id,
+                bus_event=EVENT_WALLET_ADDED,
+                entity_key="new_wallet",
+                event_type="wallet_added",
+                data={
                     "device_id": device_id,
                     "asset_id": asset_id,
                     "symbol": asset["symbol"],
@@ -517,9 +556,13 @@ class RewardAnnouncer:
         value = None if price is None else round(net * price, 2)
         # An interface for the users' automations: later versions may add
         # fields, never rename or drop one.
-        self._hass.bus.async_fire(
-            EVENT_STAKING_REWARD_RECEIVED,
-            {
+        async_announce(
+            self._hass,
+            self._entry.entry_id,
+            bus_event=EVENT_STAKING_REWARD_RECEIVED,
+            entity_key="staking_reward",
+            event_type="staking_reward_received",
+            data={
                 "device_id": device_id,
                 "asset_id": asset_id,
                 "symbol": asset["symbol"],

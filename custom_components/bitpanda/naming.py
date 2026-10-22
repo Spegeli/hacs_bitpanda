@@ -106,6 +106,13 @@ def portfolio_unique_id(entry_id: str, key: str) -> str:
     return f"{entry_id}_portfolio_{key}"
 
 
+def portfolio_event_entity_id(key: str) -> str:
+    """The entity ID of the Portfolio's event entity `key` (event.py): the
+    Portfolio's scheme in the `event` domain. No Portfolio figure: the keys
+    are not in PORTFOLIO_KEYS, so the currency purge leaves their history."""
+    return f"event.{_entity_id(PORTFOLIO_DEVICE_NAME, key).split('.', 1)[1]}"
+
+
 def portfolio_entity_id(key: str) -> str:
     for timeframe, suffix in RETURN_SUFFIXES.items():
         if key == return_key(timeframe):

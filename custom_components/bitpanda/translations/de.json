@@ -299,6 +299,96 @@
     }
   },
   "entity": {
+    "event": {
+      "new_wallet": {
+        "name": "Neues Wallet",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "wallet_added": "Wallet angelegt"
+            }
+          },
+          "device_id": {
+            "name": "Wallet: Geräte-ID"
+          },
+          "asset_id": {
+            "name": "Asset: ID"
+          },
+          "symbol": {
+            "name": "Asset: Symbol"
+          },
+          "name": {
+            "name": "Asset: Name"
+          },
+          "wallet": {
+            "name": "Wallet: Name"
+          },
+          "category": {
+            "name": "Asset: Kategorie"
+          }
+        }
+      },
+      "staking_reward": {
+        "name": "Staking-Belohnung",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "staking_reward_received": "Staking-Belohnung erhalten"
+            }
+          },
+          "device_id": {
+            "name": "Wallet: Geräte-ID"
+          },
+          "asset_id": {
+            "name": "Asset: ID"
+          },
+          "symbol": {
+            "name": "Asset: Symbol"
+          },
+          "name": {
+            "name": "Asset: Name"
+          },
+          "wallet": {
+            "name": "Wallet: Name"
+          },
+          "count": {
+            "name": "Gutschriften: Anzahl"
+          },
+          "gross": {
+            "name": "Gutschriften: brutto (Menge)"
+          },
+          "fee": {
+            "name": "Gutschriften: Gebühr (Menge)"
+          },
+          "net": {
+            "name": "Gutschriften: netto (Menge)"
+          },
+          "value": {
+            "name": "Gutschriften: Wert netto (aktuell)"
+          },
+          "currency": {
+            "name": "Gutschriften: Währung"
+          },
+          "credited_at": {
+            "name": "Gutschriften: zuletzt"
+          }
+        }
+      },
+      "earn_change": {
+        "name": "Earn-Änderung",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "offered": "Angeboten",
+              "withdrawn": "Nicht mehr angeboten",
+              "sold_out": "Ausverkauft",
+              "available_again": "Wieder verfügbar",
+              "apr": "Zinssatz (APR) geändert"
+            }
+          }
+        }
+      }
+    },
     "sensor": {
       "total_value": {
         "name": "Gesamtwert"

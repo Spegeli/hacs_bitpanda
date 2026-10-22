@@ -299,6 +299,96 @@
     }
   },
   "entity": {
+    "event": {
+      "new_wallet": {
+        "name": "Nuevo wallet",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "wallet_added": "Wallet añadido"
+            }
+          },
+          "device_id": {
+            "name": "Wallet: ID del dispositivo"
+          },
+          "asset_id": {
+            "name": "Activo: ID"
+          },
+          "symbol": {
+            "name": "Activo: símbolo"
+          },
+          "name": {
+            "name": "Activo: nombre"
+          },
+          "wallet": {
+            "name": "Wallet: nombre"
+          },
+          "category": {
+            "name": "Activo: categoría"
+          }
+        }
+      },
+      "staking_reward": {
+        "name": "Recompensa de staking",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "staking_reward_received": "Recompensa de staking recibida"
+            }
+          },
+          "device_id": {
+            "name": "Wallet: ID del dispositivo"
+          },
+          "asset_id": {
+            "name": "Activo: ID"
+          },
+          "symbol": {
+            "name": "Activo: símbolo"
+          },
+          "name": {
+            "name": "Activo: nombre"
+          },
+          "wallet": {
+            "name": "Wallet: nombre"
+          },
+          "count": {
+            "name": "Pagos: número"
+          },
+          "gross": {
+            "name": "Pagos: bruto (cantidad)"
+          },
+          "fee": {
+            "name": "Pagos: comisión (cantidad)"
+          },
+          "net": {
+            "name": "Pagos: neto (cantidad)"
+          },
+          "value": {
+            "name": "Pagos: valor neto (actual)"
+          },
+          "currency": {
+            "name": "Pagos: moneda"
+          },
+          "credited_at": {
+            "name": "Pagos: último"
+          }
+        }
+      },
+      "earn_change": {
+        "name": "Cambio de Earn",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "offered": "Ofrecido",
+              "withdrawn": "Retirado",
+              "sold_out": "Agotado",
+              "available_again": "Disponible de nuevo",
+              "apr": "Tasa anual (APR) modificada"
+            }
+          }
+        }
+      }
+    },
     "sensor": {
       "total_value": {
         "name": "Valor total"

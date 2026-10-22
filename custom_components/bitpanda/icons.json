@@ -1,5 +1,16 @@
 {
   "entity": {
+    "event": {
+      "new_wallet": {
+        "default": "mdi:wallet-plus"
+      },
+      "staking_reward": {
+        "default": "mdi:gift"
+      },
+      "earn_change": {
+        "default": "mdi:percent-circle"
+      }
+    },
     "sensor": {
       "total_value": {
         "default": "mdi:chart-pie"

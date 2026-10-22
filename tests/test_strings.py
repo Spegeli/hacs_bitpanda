@@ -16,6 +16,7 @@ from custom_components.bitpanda.assets import (
     CATEGORY_OTHER,
 )
 from custom_components.bitpanda.const import API_ERROR_KINDS, REQUIRED_SCOPES
+from custom_components.bitpanda.announcements import PORTFOLIO_EVENT_TYPES
 from custom_components.bitpanda.ecb import EcbError, EcbRates
 from custom_components.bitpanda.portfolio_coordinator import _update_failed
 from custom_components.bitpanda.portfolio_model import (
@@ -39,6 +40,8 @@ from custom_components.bitpanda.portfolio_sensor import (
 )
 from custom_components.bitpanda.price_coordinator import _ecb_failed
 from custom_components.bitpanda.price_sensor import PriceSensor
+
+from tests.conftest import ANNOUNCEMENT_FIELDS
 
 _DIR = Path(__file__).parent.parent / "custom_components" / "bitpanda"
 # Every language file under translations/, found the way the integration
@@ -2249,6 +2252,78 @@ def test_a_groups_figures_are_named_like_a_positions():
         share = position["portfolio_share_percent"]["name"]
         assert share == _SHARE_LABELS[language], language
         assert share.split(":", 1)[0] == position["invested_amount"]["name"].split(":", 1)[0]
+
+
+# The Portfolio's event entities: their names, and the names of their event
+# types, in English and German.
+_EVENT_NAMES = {
+    "en": {
+        "new_wallet": ("New wallet", {"wallet_added": "Wallet added"}),
+        "staking_reward": ("Staking reward", {"staking_reward_received": "Staking reward received"}),
+        "earn_change": ("Earn change", {
+            "offered": "Offered", "withdrawn": "Withdrawn", "sold_out": "Sold out",
+            "available_again": "Available again", "apr": "APR changed",
+        }),
+    },
+    "de": {
+        "new_wallet": ("Neues Wallet", {"wallet_added": "Wallet angelegt"}),
+        "staking_reward": ("Staking-Belohnung", {"staking_reward_received": "Staking-Belohnung erhalten"}),
+        "earn_change": ("Earn-Änderung", {
+            "offered": "Angeboten", "withdrawn": "Nicht mehr angeboten", "sold_out": "Ausverkauft",
+            "available_again": "Wieder verfügbar", "apr": "Zinssatz (APR) geändert",
+        }),
+    },
+}
+
+
+def test_each_event_entity_and_event_type_has_a_name():
+    """Every language names the three entities and every event type of
+    theirs; English and German as approved."""
+    for language in _LANGUAGES:
+        events = _load(f"translations/{language}.json")["entity"]["event"]
+        assert set(events) == set(PORTFOLIO_EVENT_TYPES), language
+        for key, types in PORTFOLIO_EVENT_TYPES.items():
+            assert events[key]["name"], (language, key)
+            assert set(events[key]["state_attributes"]["event_type"]["state"]) == set(types), (
+                language, key,
+            )
+    for language, names in _EVENT_NAMES.items():
+        events = _load(f"translations/{language}.json")["entity"]["event"]
+        for key, (name, types) in names.items():
+            assert events[key]["name"] == name, (language, key)
+            assert events[key]["state_attributes"]["event_type"]["state"] == types, (language, key)
+
+
+def test_every_field_an_event_entity_shows_has_a_label():
+    """Each announcement's fields are the entity's attributes: every one is
+    labelled, in every language, and nothing else is."""
+    strings = _load("strings.json")["entity"]["event"]
+    for key, fields in ANNOUNCEMENT_FIELDS.items():
+        labels = set(strings[key]["state_attributes"]) - {"event_type"}
+        assert labels == fields, key
+    for language in _LANGUAGES:
+        events = _load(f"translations/{language}.json")["entity"]["event"]
+        for key in PORTFOLIO_EVENT_TYPES:
+            assert set(events[key]["state_attributes"]) == set(strings[key]["state_attributes"]), (
+                language, key,
+            )
+            for attribute, label in events[key]["state_attributes"].items():
+                if attribute != "event_type":
+                    assert label["name"], (language, key, attribute)
+
+
+def test_an_event_entitys_asset_fields_are_labelled_like_a_wallets():
+    """Symbol, name and category as on Balance (total), in every language."""
+    for language in _LANGUAGES:
+        sensors = _load(f"translations/{language}.json")["entity"]
+        total = sensors["sensor"]["wallet_total"]["state_attributes"]
+        for key in ("new_wallet", "staking_reward"):
+            attributes = sensors["event"][key]["state_attributes"]
+            for field, attribute in (("symbol", "asset"), ("name", "asset_name")):
+                assert attributes[field]["name"] == total[attribute]["name"], (language, key)
+        assert sensors["event"]["new_wallet"]["state_attributes"]["category"]["name"] == (
+            total["asset_category"]["name"]
+        ), language
 
 
 def test_the_conversion_status_has_a_translated_name_and_state():

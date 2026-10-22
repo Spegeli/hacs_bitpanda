@@ -178,6 +178,18 @@ def wallet_group(category: str, title: str | None = None) -> ConfigSubentryData:
     )
 
 
+# The data of each of the Portfolio's announcements, by event entity key
+# (announcements.PORTFOLIO_EVENT_TYPES): the bus event's fields, which the
+# entity shows as its attributes.
+ANNOUNCEMENT_FIELDS = {
+    "new_wallet": frozenset({"device_id", "asset_id", "symbol", "name", "wallet", "category"}),
+    "staking_reward": frozenset({
+        "device_id", "asset_id", "symbol", "name", "wallet", "count", "gross", "fee", "net",
+        "value", "currency", "credited_at",
+    }),
+    "earn_change": frozenset(),
+}
+
 _INTEGRATION = Path(__file__).parent.parent / "custom_components" / "bitpanda"
 
 

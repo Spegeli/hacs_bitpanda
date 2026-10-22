@@ -299,6 +299,96 @@
     }
   },
   "entity": {
+    "event": {
+      "new_wallet": {
+        "name": "New wallet",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "wallet_added": "Wallet added"
+            }
+          },
+          "device_id": {
+            "name": "Wallet: device ID"
+          },
+          "asset_id": {
+            "name": "Asset: ID"
+          },
+          "symbol": {
+            "name": "Asset: symbol"
+          },
+          "name": {
+            "name": "Asset: name"
+          },
+          "wallet": {
+            "name": "Wallet: name"
+          },
+          "category": {
+            "name": "Asset: category"
+          }
+        }
+      },
+      "staking_reward": {
+        "name": "Staking reward",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "staking_reward_received": "Staking reward received"
+            }
+          },
+          "device_id": {
+            "name": "Wallet: device ID"
+          },
+          "asset_id": {
+            "name": "Asset: ID"
+          },
+          "symbol": {
+            "name": "Asset: symbol"
+          },
+          "name": {
+            "name": "Asset: name"
+          },
+          "wallet": {
+            "name": "Wallet: name"
+          },
+          "count": {
+            "name": "Payouts: number"
+          },
+          "gross": {
+            "name": "Payouts: gross (quantity)"
+          },
+          "fee": {
+            "name": "Payouts: fee (quantity)"
+          },
+          "net": {
+            "name": "Payouts: net (quantity)"
+          },
+          "value": {
+            "name": "Payouts: net value (current)"
+          },
+          "currency": {
+            "name": "Payouts: currency"
+          },
+          "credited_at": {
+            "name": "Payouts: last"
+          }
+        }
+      },
+      "earn_change": {
+        "name": "Earn change",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "offered": "Offered",
+              "withdrawn": "Withdrawn",
+              "sold_out": "Sold out",
+              "available_again": "Available again",
+              "apr": "APR changed"
+            }
+          }
+        }
+      }
+    },
     "sensor": {
       "total_value": {
         "name": "Total value"

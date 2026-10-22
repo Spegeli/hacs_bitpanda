@@ -299,6 +299,96 @@
     }
   },
   "entity": {
+    "event": {
+      "new_wallet": {
+        "name": "Nouveau wallet",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "wallet_added": "Wallet ajouté"
+            }
+          },
+          "device_id": {
+            "name": "Wallet : ID de l'appareil"
+          },
+          "asset_id": {
+            "name": "Actif : ID"
+          },
+          "symbol": {
+            "name": "Actif : symbole"
+          },
+          "name": {
+            "name": "Actif : nom"
+          },
+          "wallet": {
+            "name": "Wallet : nom"
+          },
+          "category": {
+            "name": "Actif : catégorie"
+          }
+        }
+      },
+      "staking_reward": {
+        "name": "Récompense de staking",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "staking_reward_received": "Récompense de staking reçue"
+            }
+          },
+          "device_id": {
+            "name": "Wallet : ID de l'appareil"
+          },
+          "asset_id": {
+            "name": "Actif : ID"
+          },
+          "symbol": {
+            "name": "Actif : symbole"
+          },
+          "name": {
+            "name": "Actif : nom"
+          },
+          "wallet": {
+            "name": "Wallet : nom"
+          },
+          "count": {
+            "name": "Versements : nombre"
+          },
+          "gross": {
+            "name": "Versements : brut (quantité)"
+          },
+          "fee": {
+            "name": "Versements : frais (quantité)"
+          },
+          "net": {
+            "name": "Versements : net (quantité)"
+          },
+          "value": {
+            "name": "Versements : valeur nette (actuelle)"
+          },
+          "currency": {
+            "name": "Versements : devise"
+          },
+          "credited_at": {
+            "name": "Versements : dernier"
+          }
+        }
+      },
+      "earn_change": {
+        "name": "Changement Earn",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "offered": "Proposé",
+              "withdrawn": "Retiré",
+              "sold_out": "Épuisé",
+              "available_again": "De nouveau disponible",
+              "apr": "Taux annuel (APR) modifié"
+            }
+          }
+        }
+      }
+    },
     "sensor": {
       "total_value": {
         "name": "Valeur totale"

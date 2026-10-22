@@ -299,6 +299,96 @@
     }
   },
   "entity": {
+    "event": {
+      "new_wallet": {
+        "name": "Nuovo wallet",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "wallet_added": "Wallet aggiunto"
+            }
+          },
+          "device_id": {
+            "name": "Wallet: ID dispositivo"
+          },
+          "asset_id": {
+            "name": "Asset: ID"
+          },
+          "symbol": {
+            "name": "Asset: simbolo"
+          },
+          "name": {
+            "name": "Asset: nome"
+          },
+          "wallet": {
+            "name": "Wallet: nome"
+          },
+          "category": {
+            "name": "Asset: categoria"
+          }
+        }
+      },
+      "staking_reward": {
+        "name": "Ricompensa di staking",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "staking_reward_received": "Ricompensa di staking ricevuta"
+            }
+          },
+          "device_id": {
+            "name": "Wallet: ID dispositivo"
+          },
+          "asset_id": {
+            "name": "Asset: ID"
+          },
+          "symbol": {
+            "name": "Asset: simbolo"
+          },
+          "name": {
+            "name": "Asset: nome"
+          },
+          "wallet": {
+            "name": "Wallet: nome"
+          },
+          "count": {
+            "name": "Accrediti: numero"
+          },
+          "gross": {
+            "name": "Accrediti: lordo (quantità)"
+          },
+          "fee": {
+            "name": "Accrediti: commissione (quantità)"
+          },
+          "net": {
+            "name": "Accrediti: netto (quantità)"
+          },
+          "value": {
+            "name": "Accrediti: valore netto (attuale)"
+          },
+          "currency": {
+            "name": "Accrediti: valuta"
+          },
+          "credited_at": {
+            "name": "Accrediti: ultimo"
+          }
+        }
+      },
+      "earn_change": {
+        "name": "Modifica Earn",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "offered": "Offerto",
+              "withdrawn": "Ritirato",
+              "sold_out": "Esaurito",
+              "available_again": "Di nuovo disponibile",
+              "apr": "Tasso annuo (APR) modificato"
+            }
+          }
+        }
+      }
+    },
     "sensor": {
       "total_value": {
         "name": "Valore totale"

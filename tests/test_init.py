@@ -397,6 +397,8 @@ async def test_every_portfolio_figure_is_one_the_currency_purge_knows(hass, port
         for reg_entry in er.async_entries_for_device(
             er.async_get(hass), device.id, include_disabled_entities=True
         )
+        # The event entities keep their history (tests/test_event.py).
+        if reg_entry.domain == "sensor"
     }
     known = {portfolio_unique_id(entry.entry_id, key) for key in PORTFOLIO_KEYS}
     assert figures <= known

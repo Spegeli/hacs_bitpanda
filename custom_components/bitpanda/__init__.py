@@ -81,7 +81,8 @@ _LOGGER = logging.getLogger(__name__)
 # PriceTrackerConfigEntry).
 type BitpandaConfigEntry = ConfigEntry[PortfolioRuntime | PriceTrackerRuntime]
 
-PLATFORMS: list[Platform] = [Platform.SENSOR]
+# The Price Tracker sets up no event entity (event.py).
+PLATFORMS: list[Platform] = [Platform.EVENT, Platform.SENSOR]
 
 # Set up through the UI only: a `bitpanda:` block in configuration.yaml is
 # reported, never read. Required beside async_setup (hassfest).

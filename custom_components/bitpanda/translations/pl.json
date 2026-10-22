@@ -299,6 +299,96 @@
     }
   },
   "entity": {
+    "event": {
+      "new_wallet": {
+        "name": "Nowy portfel",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "wallet_added": "Portfel dodany"
+            }
+          },
+          "device_id": {
+            "name": "Portfel: ID urządzenia"
+          },
+          "asset_id": {
+            "name": "Aktywo: ID"
+          },
+          "symbol": {
+            "name": "Aktywo: symbol"
+          },
+          "name": {
+            "name": "Aktywo: nazwa"
+          },
+          "wallet": {
+            "name": "Portfel: nazwa"
+          },
+          "category": {
+            "name": "Aktywo: kategoria"
+          }
+        }
+      },
+      "staking_reward": {
+        "name": "Nagroda za staking",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "staking_reward_received": "Nagroda za staking otrzymana"
+            }
+          },
+          "device_id": {
+            "name": "Portfel: ID urządzenia"
+          },
+          "asset_id": {
+            "name": "Aktywo: ID"
+          },
+          "symbol": {
+            "name": "Aktywo: symbol"
+          },
+          "name": {
+            "name": "Aktywo: nazwa"
+          },
+          "wallet": {
+            "name": "Portfel: nazwa"
+          },
+          "count": {
+            "name": "Naliczenia: liczba"
+          },
+          "gross": {
+            "name": "Naliczenia: brutto (ilość)"
+          },
+          "fee": {
+            "name": "Naliczenia: opłata (ilość)"
+          },
+          "net": {
+            "name": "Naliczenia: netto (ilość)"
+          },
+          "value": {
+            "name": "Naliczenia: wartość netto (bieżąca)"
+          },
+          "currency": {
+            "name": "Naliczenia: waluta"
+          },
+          "credited_at": {
+            "name": "Naliczenia: ostatnie"
+          }
+        }
+      },
+      "earn_change": {
+        "name": "Zmiana Earn",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "offered": "Oferowany",
+              "withdrawn": "Wycofany",
+              "sold_out": "Wyprzedany",
+              "available_again": "Ponownie dostępny",
+              "apr": "Zmiana oprocentowania (APR)"
+            }
+          }
+        }
+      }
+    },
     "sensor": {
       "total_value": {
         "name": "Wartość całkowita"

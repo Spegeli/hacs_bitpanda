@@ -43,6 +43,13 @@ _SENSOR_ICONS = {
 }
 
 
+_EVENT_ICONS = {
+    "new_wallet": "mdi:wallet-plus",
+    "staking_reward": "mdi:gift",
+    "earn_change": "mdi:percent-circle",
+}
+
+
 def _icons() -> dict:
     return json.loads((_DIR / "icons.json").read_text(encoding="utf-8"))
 
@@ -55,6 +62,12 @@ def test_every_sensor_keeps_its_icon():
     assert {
         key: icons["default"] for key, icons in _icons()["entity"]["sensor"].items()
     } == _SENSOR_ICONS
+
+
+def test_every_event_entity_keeps_its_icon():
+    assert {
+        key: icons["default"] for key, icons in _icons()["entity"]["event"].items()
+    } == _EVENT_ICONS
 
 
 def test_every_sensor_translation_key_has_an_icon():
@@ -96,5 +109,8 @@ async def test_home_assistant_reads_the_icons(hass):
     assert {
         key: icons["default"] for key, icons in entity[DOMAIN]["sensor"].items()
     } == _SENSOR_ICONS
+    assert {
+        key: icons["default"] for key, icons in entity[DOMAIN]["event"].items()
+    } == _EVENT_ICONS
     services = await async_get_icons(hass, "services", {DOMAIN})
     assert services[DOMAIN] == {"refresh": {"service": "mdi:refresh"}}

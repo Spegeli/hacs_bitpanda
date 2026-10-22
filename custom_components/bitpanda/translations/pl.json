@@ -321,19 +321,44 @@
         }
       },
       "return_day": {
-        "name": "Stopa zwrotu (1 dzień)"
+        "name": "Stopa zwrotu (1 dzień)",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Zwrot: kwota"
+          }
+        }
       },
       "return_week": {
-        "name": "Stopa zwrotu (1 tydzień)"
+        "name": "Stopa zwrotu (1 tydzień)",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Zwrot: kwota"
+          }
+        }
       },
       "return_month": {
-        "name": "Stopa zwrotu (1 miesiąc)"
+        "name": "Stopa zwrotu (1 miesiąc)",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Zwrot: kwota"
+          }
+        }
       },
       "return_six_month": {
-        "name": "Stopa zwrotu (6 miesięcy)"
+        "name": "Stopa zwrotu (6 miesięcy)",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Zwrot: kwota"
+          }
+        }
       },
       "return_year": {
-        "name": "Stopa zwrotu (1 rok)"
+        "name": "Stopa zwrotu (1 rok)",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Zwrot: kwota"
+          }
+        }
       },
       "invested": {
         "name": "Zainwestowana kwota",

@@ -378,6 +378,24 @@ class PositionTotals:
         return round(self.total_return / self.invested * 100, 2)
 
 
+def return_amount(total: float | None, percent: float | None) -> float | None:
+    """What a return of `percent` means in money on today's total value
+    `total`: Bitpanda's percentage leaves deposits and withdrawals out, so
+    the amount is taken from it, not from the value's history -- as the
+    Portfolio card computes it. None without both, or at -100 % or below."""
+    if total is None or percent is None or percent <= -100:
+        return None
+    return round(total * percent / (100 + percent), 2)
+
+
+def share_percent(part: float | None, total: float | None) -> float | None:
+    """`part` as a share of `total`, in percent; None without both or while
+    `total` is not above 0."""
+    if part is None or total is None or total <= 0:
+        return None
+    return round(part / total * 100, 2)
+
+
 def position_totals(holdings: Iterable[Holding]) -> PositionTotals | None:
     """The sums of `holdings`; None when one lacks its value or its invested
     amount -- never a sum that leaves it out."""

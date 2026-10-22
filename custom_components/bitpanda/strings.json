@@ -321,19 +321,44 @@
         }
       },
       "return_day": {
-        "name": "Return day"
+        "name": "Return day",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Return: amount"
+          }
+        }
       },
       "return_week": {
-        "name": "Return week"
+        "name": "Return week",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Return: amount"
+          }
+        }
       },
       "return_month": {
-        "name": "Return month"
+        "name": "Return month",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Return: amount"
+          }
+        }
       },
       "return_six_month": {
-        "name": "Return 6 months"
+        "name": "Return 6 months",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Return: amount"
+          }
+        }
       },
       "return_year": {
-        "name": "Return year"
+        "name": "Return year",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Return: amount"
+          }
+        }
       },
       "invested": {
         "name": "Invested",

@@ -278,6 +278,43 @@ def test_the_figure_keys_are_the_sensors_keys():
     } == set(PORTFOLIO_FIGURES)
 
 
+# --- A return's amount -------------------------------------------------------------------
+
+
+def _return_sensor(percent, data=None, **outcome) -> PortfolioReturnSensor:
+    history = _Coordinator(PortfolioReturns(values={"DAY": percent}))
+    portfolio = _Coordinator(data if data is not None else _data(**{VSN["id"]: _vsn()}), **outcome)
+    return PortfolioReturnSensor(history, "eid", "DAY", portfolio)
+
+
+def test_the_return_amount_is_what_the_percentage_means_on_todays_total():
+    """Bitpanda gives the return in percent; on today's total value of 210
+    a return of 1.24 % means 210 × 1.24 ÷ 101.24 -- the Portfolio card's
+    formula."""
+    sensor = _return_sensor(1.24)
+    assert sensor.native_value == 1.24
+    assert sensor.extra_state_attributes == {"return_amount": round(210 * 1.24 / 101.24, 2)}
+    assert _return_sensor(-3.5).extra_state_attributes == {
+        "return_amount": round(210 * -3.5 / 96.5, 2)
+    }
+
+
+def test_the_return_amount_is_absent_without_a_total_or_a_return():
+    waiting = _data(**{VSN["id"]: _vsn()})
+    waiting.waiting = frozenset({"total"})
+    unknown_total = _data(**{VSN["id"]: _vsn(value=None)})
+    for sensor in (
+        _return_sensor(None),
+        _return_sensor(-100.0),
+        _return_sensor(-150.0),
+        _return_sensor(1.24, waiting),
+        _return_sensor(1.24, unknown_total),
+        _return_sensor(1.24, last_update_success=False, data_available=False),
+        PortfolioReturnSensor(_Coordinator(PortfolioReturns(values={"DAY": 1.0})), "eid", "DAY"),
+    ):
+        assert sensor.extra_state_attributes == {}
+
+
 # --- Invested and the total return of the whole portfolio -------------------------------
 
 _OTHER = {"id": "b86c034b-efe3-11eb-b56f-0691764446a7", "symbol": "BTC", "name": "Bitcoin",

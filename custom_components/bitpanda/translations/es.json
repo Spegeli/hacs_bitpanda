@@ -321,19 +321,44 @@
         }
       },
       "return_day": {
-        "name": "Rentabilidad 1 día"
+        "name": "Rentabilidad 1 día",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rentabilidad: importe"
+          }
+        }
       },
       "return_week": {
-        "name": "Rentabilidad 1 semana"
+        "name": "Rentabilidad 1 semana",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rentabilidad: importe"
+          }
+        }
       },
       "return_month": {
-        "name": "Rentabilidad 1 mes"
+        "name": "Rentabilidad 1 mes",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rentabilidad: importe"
+          }
+        }
       },
       "return_six_month": {
-        "name": "Rentabilidad 6 meses"
+        "name": "Rentabilidad 6 meses",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rentabilidad: importe"
+          }
+        }
       },
       "return_year": {
-        "name": "Rentabilidad 1 año"
+        "name": "Rentabilidad 1 año",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rentabilidad: importe"
+          }
+        }
       },
       "invested": {
         "name": "Importe invertido",

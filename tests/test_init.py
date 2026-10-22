@@ -630,6 +630,22 @@ async def test_an_empty_portfolio_waits_ten_minutes_then_shows_0_and_removes_the
     assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is None
 
 
+async def test_a_returns_amount_follows_a_new_total_value(hass, portfolio_api):
+    """The amount a return means is reckoned on today's total value: a new
+    portfolio answer moves it without waiting for the next history read."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    day = "sensor.bitpanda_portfolio_return_day"
+    assert hass.states.get(day).attributes["return_amount"] == round(210 * 1.5 / 101.5, 2)
+    portfolio_api.return_value = [
+        {**portfolio_api.return_value[0], "currency_balance": {"value": "400.00"}},
+        *portfolio_api.return_value[1:],
+    ]
+    await entry.runtime_data.portfolio.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get(day).attributes["return_amount"] == round(410 * 1.5 / 101.5, 2)
+
+
 async def test_selling_every_position_makes_invested_wait_then_show_0(
     hass, portfolio_api, freezer
 ):

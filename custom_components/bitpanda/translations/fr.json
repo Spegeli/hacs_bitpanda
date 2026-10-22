@@ -321,19 +321,44 @@
         }
       },
       "return_day": {
-        "name": "Rendement 1 jour"
+        "name": "Rendement 1 jour",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendement : montant"
+          }
+        }
       },
       "return_week": {
-        "name": "Rendement 1 semaine"
+        "name": "Rendement 1 semaine",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendement : montant"
+          }
+        }
       },
       "return_month": {
-        "name": "Rendement 1 mois"
+        "name": "Rendement 1 mois",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendement : montant"
+          }
+        }
       },
       "return_six_month": {
-        "name": "Rendement 6 mois"
+        "name": "Rendement 6 mois",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendement : montant"
+          }
+        }
       },
       "return_year": {
-        "name": "Rendement 1 an"
+        "name": "Rendement 1 an",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendement : montant"
+          }
+        }
       },
       "invested": {
         "name": "Montant investi",

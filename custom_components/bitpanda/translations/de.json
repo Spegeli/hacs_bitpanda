@@ -321,19 +321,44 @@
         }
       },
       "return_day": {
-        "name": "Rendite Tag"
+        "name": "Rendite Tag",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendite: Betrag"
+          }
+        }
       },
       "return_week": {
-        "name": "Rendite Woche"
+        "name": "Rendite Woche",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendite: Betrag"
+          }
+        }
       },
       "return_month": {
-        "name": "Rendite Monat"
+        "name": "Rendite Monat",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendite: Betrag"
+          }
+        }
       },
       "return_six_month": {
-        "name": "Rendite 6 Monate"
+        "name": "Rendite 6 Monate",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendite: Betrag"
+          }
+        }
       },
       "return_year": {
-        "name": "Rendite Jahr"
+        "name": "Rendite Jahr",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendite: Betrag"
+          }
+        }
       },
       "invested": {
         "name": "Investiert",

@@ -321,19 +321,44 @@
         }
       },
       "return_day": {
-        "name": "Rendement 1 dag"
+        "name": "Rendement 1 dag",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendement: bedrag"
+          }
+        }
       },
       "return_week": {
-        "name": "Rendement 1 week"
+        "name": "Rendement 1 week",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendement: bedrag"
+          }
+        }
       },
       "return_month": {
-        "name": "Rendement 1 maand"
+        "name": "Rendement 1 maand",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendement: bedrag"
+          }
+        }
       },
       "return_six_month": {
-        "name": "Rendement 6 maanden"
+        "name": "Rendement 6 maanden",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendement: bedrag"
+          }
+        }
       },
       "return_year": {
-        "name": "Rendement 1 jaar"
+        "name": "Rendement 1 jaar",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendement: bedrag"
+          }
+        }
       },
       "invested": {
         "name": "Geïnvesteerd bedrag",

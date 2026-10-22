@@ -15,11 +15,13 @@ from custom_components.bitpanda.portfolio_model import (
     EarnData,
     Holding,
     PortfolioData,
+    PortfolioReturns,
     RewardTotals,
 )
 from custom_components.bitpanda.portfolio_sensor import (
     PortfolioCashPlusSensor,
     PortfolioInvestedSensor,
+    PortfolioReturnSensor,
     PortfolioTotalReturnPercentSensor,
     PortfolioTotalReturnSensor,
     StakingSensor,
@@ -1859,6 +1861,13 @@ def _attribute_scenarios() -> list[tuple[str, dict]]:
         ("cash_plus", PortfolioCashPlusSensor(
             _Coordinator(_cash_plus_portfolio_data()), "eid", "EUR"
         ).extra_state_attributes),
+        *(
+            (f"return_{timeframe.lower()}", PortfolioReturnSensor(
+                _Coordinator(PortfolioReturns(values={timeframe: 1.25})), "eid", timeframe,
+                wallet_coordinator,
+            ).extra_state_attributes)
+            for timeframe in ("DAY", "WEEK", "MONTH", "SIX_MONTH", "YEAR")
+        ),
         *(
             (sensor_class._key, sensor_class(
                 wallet_coordinator, "eid", "EUR"

@@ -78,6 +78,7 @@ from .portfolio_model import (
     PositionTotals,
     confirmed,
     position_totals,
+    return_amount,
     staking_applies,
 )
 from .tolerance import TolerantEntity
@@ -284,6 +285,11 @@ class PortfolioReturnSensor(TolerantEntity[HistoryCoordinator], SensorEntity):
     request: the history update's (tolerance.py) or this timeframe's own
     (PortfolioReturns.failed) -- at once when there is no last return to
     show. Unknown when Bitpanda answered for it without a usable figure.
+
+    Its attribute `return_amount` is what the percentage means in money on
+    today's total value (portfolio_model.return_amount), absent while the
+    total value is not known; it listens to the portfolio too, so the amount
+    follows a new total value.
     """
 
     _attr_has_entity_name = True
@@ -292,15 +298,27 @@ class PortfolioReturnSensor(TolerantEntity[HistoryCoordinator], SensorEntity):
     _attr_suggested_display_precision = 2
 
     def __init__(
-        self, coordinator: HistoryCoordinator, entry_id: str, timeframe: str
+        self,
+        coordinator: HistoryCoordinator,
+        entry_id: str,
+        timeframe: str,
+        portfolio: PortfolioCoordinator | None = None,
     ) -> None:
         super().__init__(coordinator)
         key = return_key(timeframe)
         self._timeframe = timeframe
+        self._portfolio = portfolio
         self._attr_translation_key = key
         self._attr_unique_id = portfolio_unique_id(entry_id, key)
         self.entity_id = portfolio_entity_id(key)
         self._attr_device_info = portfolio_device_info(entry_id)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self._portfolio is not None:
+            self.async_on_remove(
+                self._portfolio.async_add_listener(self._handle_coordinator_update, None)
+            )
 
     @property
     def native_value(self) -> float | None:
@@ -311,6 +329,17 @@ class PortfolioReturnSensor(TolerantEntity[HistoryCoordinator], SensorEntity):
     def available(self) -> bool:
         data: PortfolioReturns | None = self.coordinator.data
         return super().available and data is not None and self._timeframe not in data.failed
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        portfolio = self._portfolio
+        data: PortfolioData | None = None if portfolio is None else portfolio.data
+        if portfolio is None or data is None or not portfolio.data_available:
+            return {}
+        if "total" in data.waiting:
+            return {}
+        amount = return_amount(data.total, self.native_value)
+        return {} if amount is None else {"return_amount": amount}
 
 
 # --- Wallet devices -----------------------------------------------------------------
@@ -898,7 +927,9 @@ async def async_setup_portfolio_entities(
             PortfolioTotalReturnSensor(runtime.portfolio, entry.entry_id, currency),
             PortfolioTotalReturnPercentSensor(runtime.portfolio, entry.entry_id, currency),
             *(
-                PortfolioReturnSensor(runtime.history, entry.entry_id, timeframe)
+                PortfolioReturnSensor(
+                    runtime.history, entry.entry_id, timeframe, runtime.portfolio
+                )
                 for timeframe in PORTFOLIO_TIMEFRAMES
             ),
         ]

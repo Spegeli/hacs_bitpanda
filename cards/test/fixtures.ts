@@ -128,6 +128,10 @@ export function portfolioDevice(values: {
   cashPlus?: string;
   returns?: Partial<Record<"day" | "week" | "month" | "six_month" | "year", string>>;
   currency?: string;
+  /** The positions' figures (package 1's sensors); null leaves one out. */
+  invested?: string | null;
+  totalReturn?: string | null;
+  totalReturnPercent?: string | null;
 } = {}): FakeDevice {
   const unit = values.currency ?? "EUR";
   const money = (entityId: string, key: string, state: string): FakeSensor => ({
@@ -137,20 +141,44 @@ export function portfolioDevice(values: {
     attributes: { unit_of_measurement: unit, device_class: "monetary" },
   });
   const returns = values.returns ?? { day: "-0.42", week: "2.31", month: "5.87", six_month: "11.2", year: "18.65" };
+  const total = values.total ?? "12760.20";
+  // What a return means in money on today's total value, as the integration
+  // gives it (return_amount); none without both figures.
+  const amountOf = (state: string): Record<string, number> => {
+    const [value, percent] = [Number(total), Number(state)];
+    return Number.isFinite(value) && Number.isFinite(percent) && percent > -100
+      ? { return_amount: Math.round(((value * percent) / (100 + percent)) * 100) / 100 }
+      : {};
+  };
+  const positions: FakeSensor[] = [];
+  const invested = values.invested === undefined ? "26400.00" : values.invested;
+  const totalReturn = values.totalReturn === undefined ? "3700.00" : values.totalReturn;
+  const totalReturnPercent = values.totalReturnPercent === undefined ? "14.1" : values.totalReturnPercent;
+  if (invested !== null) positions.push(money("sensor.bitpanda_portfolio_invested", "invested", invested));
+  if (totalReturn !== null) positions.push(money("sensor.bitpanda_portfolio_total_return", "total_return", totalReturn));
+  if (totalReturnPercent !== null) {
+    positions.push({
+      entityId: "sensor.bitpanda_portfolio_total_return_percent",
+      translationKey: "total_return_percent",
+      state: totalReturnPercent,
+      attributes: { unit_of_measurement: "%" },
+    });
+  }
   return {
     id: "dev-portfolio",
     model: "Portfolio",
     name: "Bitpanda Portfolio",
     sensors: [
-      money("sensor.bitpanda_portfolio_total_value", "total_value", values.total ?? "12760.20"),
+      money("sensor.bitpanda_portfolio_total_value", "total_value", total),
       money("sensor.bitpanda_portfolio_cash", "cash", values.cash ?? "812.40"),
       money("sensor.bitpanda_portfolio_cash_plus", "cash_plus", values.cashPlus ?? "2000.00"),
       ...Object.entries(returns).map(([timeframe, state]) => ({
         entityId: `sensor.bitpanda_portfolio_return_${timeframe}`,
         translationKey: `return_${timeframe}`,
         state,
-        attributes: { unit_of_measurement: "%" },
+        attributes: { unit_of_measurement: "%", ...amountOf(state) },
       })),
+      ...positions,
     ],
   };
 }
@@ -163,7 +191,12 @@ export interface FakeWallet {
   units: number;
   total: string;
   available?: string;
-  staked?: { units: number; value: string; apr?: number; rewards?: { net: number; netValue: number; count: number; lastAt: string } };
+  staked?: {
+    units: number;
+    value: string;
+    apr?: number;
+    rewards?: { net: number; netValue?: number; count: number; lastAt: string; net30d?: number; netValue30d?: number };
+  };
   returnPercent?: number;
   averageBuyPrice?: number;
   invested?: number;
@@ -225,9 +258,11 @@ export function walletDevice(wallet: FakeWallet): FakeDevice {
         ...(rewards
           ? {
               rewards_net: rewards.net,
-              rewards_net_value: rewards.netValue,
+              ...(rewards.netValue !== undefined ? { rewards_net_value: rewards.netValue } : {}),
               rewards_count: rewards.count,
               rewards_last_at: rewards.lastAt,
+              ...(rewards.net30d !== undefined ? { rewards_net_30d: rewards.net30d } : {}),
+              ...(rewards.netValue30d !== undefined ? { rewards_net_value_30d: rewards.netValue30d } : {}),
             }
           : {}),
       },
@@ -286,7 +321,10 @@ export const BTC: FakeWallet = {
 };
 export const ETH: FakeWallet = {
   symbol: "ETH", name: "Ethereum", category: "crypto", units: 0.55, total: "1269.91", available: "762.00",
-  staked: { units: 0.22, value: "507.91", apr: 2.9, rewards: { net: 0.0041, netValue: 9.47, count: 12, lastAt: "2026-10-06T16:12:00Z" } },
+  staked: {
+    units: 0.22, value: "507.91", apr: 2.9,
+    rewards: { net: 0.0041, netValue: 9.47, count: 12, lastAt: "2026-10-06T16:12:00Z", net30d: 0.00061234, netValue30d: 1.41 },
+  },
   returnPercent: -3.1, averageBuyPrice: 2377, invested: 1307.35, totalReturn: -37.44,
 };
 export const EUNL: FakeWallet = {

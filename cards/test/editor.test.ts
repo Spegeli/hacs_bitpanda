@@ -328,3 +328,127 @@ describe("the editors' stale device IDs", () => {
     expect(seen.at(-1)?.["assets"]).toEqual(["id-btc"]);
   });
 });
+
+describe("the Price Tracker editor's order as chosen", () => {
+  const prices = () =>
+    makeHass({
+      devices: [
+        priceDevice({ symbol: "SOL", name: "Solana", category: "crypto", prices: { EUR: { state: "150" } } }),
+        priceDevice({ symbol: "BTC", name: "Bitcoin", category: "crypto", prices: { EUR: { state: "70000" } } }),
+        walletDevice(ETH),
+      ],
+    });
+  const ORDERED = { asset_selection: "only", sort: "selection" };
+  type Field = { name: string; schema?: Field[]; selector?: Record<string, { multiple?: boolean; reorder?: boolean; mode?: string; options?: { value: string; label: string }[] }> };
+  const flat = (fields: Field[]): Field[] => fields.flatMap((field) => (field.schema ? flat(field.schema) : [field]));
+  const assetField = (form: { schema: unknown[] }): Field | undefined => flat(form.schema as Field[]).find((field) => field.name === "assets");
+  const changes = (editor: HTMLElement): Record<string, unknown>[] => {
+    const seen: Record<string, unknown>[] = [];
+    editor.addEventListener("config-changed", (ev) => seen.push((ev as CustomEvent<{ config: Record<string, unknown> }>).detail.config));
+    return seen;
+  };
+  const pick = (form: HTMLElement & { data: Record<string, unknown> }, value: Record<string, unknown>): void => {
+    form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { ...form.data, ...value } } }));
+  };
+
+  it("uses a reorderable select for “Order as chosen” with “Only the ones chosen”", async () => {
+    const { form } = await openEditor(TAGS[1], { ...ORDERED, assets: [] }, prices());
+    expect(assetField(form)?.selector?.["select"]).toMatchObject({ multiple: true, reorder: true, mode: "dropdown" });
+    expect(assetField(form)?.selector?.["device"]).toBeUndefined();
+  });
+
+  it("keeps the device picker otherwise", async () => {
+    for (const config of [
+      { asset_selection: "only", sort: "name" },
+      { asset_selection: "all_except", sort: "selection" },
+    ]) {
+      const { form } = await openEditor(TAGS[1], { ...config, assets: [] }, prices());
+      expect(assetField(form)?.selector?.["device"], JSON.stringify(config)).toBeDefined();
+    }
+  });
+
+  it("lists the tracked assets by label, a device with all sensors disabled included", async () => {
+    const hass = prices();
+    hass.devices["dev-price-btc"] = { ...hass.devices["dev-price-btc"]!, name_by_user: "My Bitcoin" };
+    for (const [entityId, entry] of Object.entries(hass.entities)) if (entry?.device_id === "dev-price-sol") delete hass.entities[entityId];
+    const { form } = await openEditor(TAGS[1], { ...ORDERED, assets: [] }, hass);
+    expect(assetField(form)?.selector?.["select"]?.options).toEqual([
+      { value: "id-btc", label: "My Bitcoin" },
+      { value: "id-sol", label: "Solana (SOL)" },
+    ]);
+  });
+
+  it("shows the chosen assets in the saved order, and saves the order of the chips", async () => {
+    const { editor, form } = await openEditor(TAGS[1], { ...ORDERED, assets: ["id-sol", "id-btc"] }, prices());
+    expect(form.data["assets"]).toEqual(["id-sol", "id-btc"]);
+    const seen = changes(editor);
+    pick(form, { assets: ["id-btc", "id-sol"] });
+    expect(seen.at(-1)?.["assets"]).toEqual(["id-btc", "id-sol"]);
+  });
+
+  it("keeps a missing asset at its place in the saved order", async () => {
+    const { editor, form } = await openEditor(TAGS[1], { ...ORDERED, assets: ["id-btc", "id-gone", "id-sol"] }, prices());
+    expect(form.data["assets"]).toEqual(["id-btc", "id-sol"]);
+    const seen = changes(editor);
+    pick(form, { assets: ["id-sol", "id-btc"] });
+    expect(seen.at(-1)?.["assets"]).toEqual(["id-sol", "id-gone", "id-btc"]);
+    // The chip before it taken out: it moves up.
+    const second = await openEditor(TAGS[1], { ...ORDERED, assets: ["id-btc", "id-gone", "id-sol"] }, prices());
+    const after = changes(second.editor);
+    pick(second.form, { assets: ["id-sol"] });
+    expect(after.at(-1)?.["assets"]).toEqual(["id-gone", "id-sol"]);
+  });
+
+  it("maps device IDs of an older configuration to their asset IDs", async () => {
+    const { editor, form } = await openEditor(TAGS[1], { ...ORDERED, assets: ["dev-price-sol", "id-btc"] }, prices());
+    expect(form.data["assets"]).toEqual(["id-sol", "id-btc"]);
+    const seen = changes(editor);
+    pick(form, { timeframe: "week" });
+    expect(seen.at(-1)?.["assets"]).toEqual(["id-sol", "id-btc"]);
+  });
+
+  it("keeps the choice when the order is switched away and back", async () => {
+    const { editor, form } = await openEditor(TAGS[1], { ...ORDERED, assets: ["id-sol", "id-gone", "id-btc"] }, prices());
+    const seen = changes(editor);
+    pick(form, { sort: "name" });
+    expect(seen.at(-1)?.["assets"]).toEqual(["id-sol", "id-gone", "id-btc"]);
+    await editor.updateComplete;
+    expect(assetField(form)?.selector?.["device"]).toBeDefined();
+    expect(form.data["assets"]).toEqual(["dev-price-sol", "dev-price-btc"]);
+    pick(form, { sort: "selection" });
+    await editor.updateComplete;
+    expect(assetField(form)?.selector?.["select"]).toBeDefined();
+    expect(form.data["assets"]).toEqual(["id-sol", "id-btc"]);
+    expect(seen.at(-1)?.["assets"]).toEqual(["id-sol", "id-btc", "id-gone"]);
+  });
+
+  it("starts a choice from none", async () => {
+    const { editor, form } = await openEditor(TAGS[1], ORDERED, prices());
+    const seen = changes(editor);
+    pick(form, { assets: ["id-btc"] });
+    expect(seen.at(-1)?.["assets"]).toEqual(["id-btc"]);
+  });
+
+  it("keeps a missing asset named twice once, at its first place", async () => {
+    const { editor, form } = await openEditor(TAGS[1], { ...ORDERED, assets: ["id-gone", "id-btc", "id-gone"] }, prices());
+    const seen = changes(editor);
+    pick(form, { timeframe: "week" });
+    expect(seen.at(-1)?.["assets"]).toEqual(["id-gone", "id-btc"]);
+  });
+
+  it("offers and keeps a device without an asset ID by its device ID", async () => {
+    const hass = prices();
+    hass.devices["dev-price-sol"] = { ...hass.devices["dev-price-sol"]!, serial_number: null };
+    const { editor, form } = await openEditor(TAGS[1], { ...ORDERED, assets: ["dev-price-sol"] }, hass);
+    expect(assetField(form)?.selector?.["select"]?.options).toContainEqual({ value: "dev-price-sol", label: "Solana (SOL)" });
+    expect(form.data["assets"]).toEqual(["dev-price-sol"]);
+    const seen = changes(editor);
+    pick(form, { assets: ["id-btc", "dev-price-sol"] });
+    expect(seen.at(-1)?.["assets"]).toEqual(["id-btc", "dev-price-sol"]);
+  });
+
+  it("leaves the Portfolio editor's device picker as it is", async () => {
+    const { form } = await openEditor(TAGS[0], { asset_selection: "only", assets: [] }, makeHass({ devices: [walletDevice(BTC)] }));
+    expect(assetField(form)?.selector?.["device"]).toBeDefined();
+  });
+});

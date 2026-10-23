@@ -35,11 +35,12 @@ export function moreInfo(element: HTMLElement, entityId: string): void {
   element.dispatchEvent(new CustomEvent("hass-more-info", { bubbles: true, composed: true, detail: { entityId } }));
 }
 
-/** A tap's action: the entity's more-info dialog, or nothing without one. */
-export function opener(element: HTMLElement, entityId: string | undefined): () => void {
-  return () => {
-    if (entityId) moreInfo(element, entityId);
-  };
+/** A tap's action: the entity's more-info dialog -- none without one, so
+ * that a part whose sensor is not found is no button. */
+export function opener(element: HTMLElement, entityId: string): () => void;
+export function opener(element: HTMLElement, entityId: string | undefined): (() => void) | undefined;
+export function opener(element: HTMLElement, entityId: string | undefined): (() => void) | undefined {
+  return entityId ? () => moreInfo(element, entityId) : undefined;
 }
 
 /** Whether every cell with a second part has room for both side by side,
@@ -50,8 +51,30 @@ export function allFit(cells: readonly { room: number; first: number; second?: n
   return paired.length > 0 && paired.every((cell) => cell.first + gap + (cell.second as number) <= cell.room);
 }
 
-export function amount(text: string | undefined, hidden: boolean): TemplateResult {
-  return html`<span class="amount ${hidden ? "blur" : ""}">${text ?? "—"}</span>`;
+/** What the eye shows in place of an amount or a unit count: always as
+ * long, so nothing of the real text is left in the card. */
+export const MASK = "••••••";
+
+/** An amount, or while the eye is closed its mask, read out as "Amount
+ * hidden". */
+export function amount(hass: Hass, text: string | undefined, hidden: boolean): TemplateResult {
+  return hidden
+    ? html`<span class="amount blur" role="img" aria-label=${t(hass, "amount_hidden")}>${MASK}</span>`
+    : html`<span class="amount">${text ?? "—"}</span>`;
+}
+
+/** A tappable piece's role, tab stop and listeners: a button while it has
+ * something to open, none of them while it has nothing -- as while the eye
+ * hides what its dialog would show. */
+export function tapTarget(onTap: (() => void) | undefined): {
+  role: string | typeof nothing;
+  tabindex: string | typeof nothing;
+  click: (() => void) | typeof nothing;
+  keydown: ((event: KeyboardEvent) => void) | typeof nothing;
+} {
+  return onTap
+    ? { role: "button", tabindex: "0", click: onTap, keydown: onActivate(onTap) }
+    : { role: nothing, tabindex: nothing, click: nothing, keydown: nothing };
 }
 
 /** A text whose {`name`} placeholder holds `value` that never breaks inside
@@ -70,39 +93,44 @@ export interface Eye {
   toggle: () => void;
 }
 
+/** The eye: shows or hides the card's amounts. */
+export function eyeButton(hass: Hass, eye: Eye): TemplateResult {
+  return html`<button
+    class="icon-btn eye"
+    aria-label=${t(hass, eye.hidden ? "eye_show" : "eye_hide")}
+    title=${t(hass, eye.hidden ? "eye_show" : "eye_hide")}
+    @click=${eye.toggle}
+  >
+    ${icon(eye.hidden ? EYE_OFF : EYE)}
+  </button>`;
+}
+
 export function header(hass: Hass, title: string, eye?: Eye): TemplateResult {
   return html`<div class="head">
     <div class="title">${title}</div>
-    ${eye
-      ? html`<button
-          class="icon-btn eye"
-          aria-label=${t(hass, eye.hidden ? "eye_show" : "eye_hide")}
-          title=${t(hass, eye.hidden ? "eye_show" : "eye_hide")}
-          @click=${eye.toggle}
-        >
-          ${icon(eye.hidden ? EYE_OFF : EYE)}
-        </button>`
-      : nothing}
+    ${eye ? eyeButton(hass, eye) : nothing}
   </div>`;
 }
 
 /** The return of `timeframe` in a chip, with its amount beside it in the
- * chip's colour when one is given (blurred by the eye, like every amount). */
+ * chip's colour when one is given (masked by the eye, like every amount);
+ * a tap opens what `onTap` opens, no button without it. */
 export function returnChip(
   hass: Hass,
   value: number | undefined,
   timeframe: Timeframe,
-  onTap: () => void,
+  onTap: (() => void) | undefined,
   money?: { text: string | undefined; hidden: boolean },
 ): TemplateResult {
   const { text, direction } = formatPercent(hass, value);
   const mark = arrow(direction);
+  const tap = tapTarget(onTap);
   return html`<div class="hero-line">
-    <span class="chip ${trendClass(direction)}" role="button" tabindex="0" @click=${onTap} @keydown=${onActivate(onTap)}
+    <span class="chip ${trendClass(direction)}" role=${tap.role} tabindex=${tap.tabindex} @click=${tap.click} @keydown=${tap.keydown}
       >${mark ? `${mark} ` : ""}${text}</span
     >
     ${direction !== "none" && money?.text
-      ? html`<span class="chip-amount ${trendClass(direction)}">${amount(money.text, money.hidden)}</span>`
+      ? html`<span class="chip-amount ${trendClass(direction)}">${amount(hass, money.text, money.hidden)}</span>`
       : nothing}
     <span class="chip-label">${t(hass, `return_${timeframe}` as TextKey)}</span>
   </div>`;
@@ -202,7 +230,7 @@ export interface WalletRowOptions {
   hass: Hass;
   wallet: WalletRefs;
   hidden: boolean;
-  onTap: () => void;
+  onTap: (() => void) | undefined;
   chevron?: { open: boolean; toggle: () => void };
 }
 
@@ -230,21 +258,23 @@ export function walletRow(options: WalletRowOptions): TemplateResult {
     chevron?.toggle();
   };
   // The row's tap target and the chevron are two buttons side by side, not
-  // one inside the other.
+  // one inside the other; while the eye is closed the row opens nothing,
+  // since its dialog shows the value.
+  const tap = tapTarget(hidden ? undefined : onTap);
   return html`<div class="wallet">
-    <div class="tap" role="button" tabindex="0" @click=${onTap} @keydown=${onActivate(onTap)}>
+    <div class="tap" role=${tap.role} tabindex=${tap.tabindex} @click=${tap.click} @keydown=${tap.keydown}>
       <div class="main">
         <div class="n" title=${wallet.shortName}>${wallet.shortName}</div>
         <div class="sub ${share === undefined ? "" : "staked"}">
           <div class="s">
             <span class="units"
-              >${amount(units === undefined ? undefined : formatUnits(hass, units, wallet.category, wallet.symbol, true), hidden)}</span
+              >${amount(hass, units === undefined ? undefined : formatUnits(hass, units, wallet.category, wallet.symbol, true), hidden)}</span
             >${wallet.isin ? html` · <span class="isin">${wallet.isin}</span>` : nothing}
           </div>
           ${stake}
         </div>
       </div>
-      <div class="right">${chip}<span class="val">${amount(formatState(hass, wallet.total), hidden)}</span></div>
+      <div class="right">${chip}<span class="val">${amount(hass, formatState(hass, wallet.total), hidden)}</span></div>
     </div>
     ${chevron
       ? html`<span

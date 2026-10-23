@@ -22,7 +22,7 @@ describe("every card", () => {
     const entry = (tag: string) =>
       (window as unknown as { customCards: { type: string; description: string }[] }).customCards.find((item) => item.type === tag);
     expect(entry("bitpanda-portfolio-card")?.description).toBe(
-      "Total value and return with a value line, Cash and Cash Plus, allocation and your wallets; each part can be left out.",
+      "Total value and return with a value line, return since purchase, Cash and Cash Plus, staking, allocation and your wallets; each part can be left out.",
     );
     expect(entry("bitpanda-price-tracker-card")?.description).toBe("Prices and changes of the assets you track, each with a line, as a list or tiles.");
     // The picker reads the description when it opens: in the language of
@@ -31,6 +31,9 @@ describe("every card", () => {
     root.hass = makeHass({ language: "de" });
     document.body.append(root);
     expect(entry("bitpanda-price-tracker-card")?.description).toBe("Preise und Änderungen deiner verfolgten Assets, je mit Verlauf, als Liste oder Kacheln.");
+    expect(entry("bitpanda-portfolio-card")?.description).toBe(
+      "Gesamtwert und Rendite mit Verlauf, Rendite seit Kauf, Bargeld und Cash Plus, Staking, Verteilung und deine Wallets; jeder Teil lässt sich ausblenden.",
+    );
   });
 
   it("renders nothing before hass arrives, then its card", async () => {
@@ -66,16 +69,28 @@ describe("every card", () => {
     expect(await defaults("bitpanda-portfolio-card")).toEqual({
       title: "Bitpanda Portfolio",
       show_total: true,
+      show_since_purchase: true,
       show_graph: true,
       show_cash: true,
+      show_staking: true,
       show_allocation: true,
       show_wallets: true,
       group_wallets: true,
       show_search: false,
       limit: 5,
+      show_header: true,
+      show_timeframes: true,
       hide_amounts: false,
     });
-    expect(await defaults("bitpanda-price-tracker-card")).toEqual({ title: "Bitpanda Price Tracker", limit: 0 });
+    expect(await defaults("bitpanda-price-tracker-card")).toEqual({
+      title: "Bitpanda Price Tracker",
+      limit: 0,
+      show_header: true,
+      show_timeframes: true,
+      show_currencies: true,
+      show_lines: true,
+      show_amounts: true,
+    });
   });
 
   it("a card added from the picker starts with its choices written out", () => {
@@ -109,8 +124,9 @@ describe("every card", () => {
   it("every choice in the editors is a dropdown, one line each", async () => {
     type Field = { name: string; schema?: Field[]; selector?: { select?: { mode?: string } } };
     const flat = (fields: Field[]): Field[] => fields.flatMap((field) => (field.schema ? flat(field.schema) : [field]));
-    for (const tag of TAGS) {
-      const { form } = await openEditor(tag);
+    // The Price Tracker's assets to order as chosen are a select too.
+    for (const [tag, config] of [...TAGS.map((tag) => [tag, {}] as const), ["bitpanda-price-tracker-card", { asset_selection: "only", sort: "selection" }] as const]) {
+      const { form } = await openEditor(tag, config);
       const choices = flat(form.schema as Field[]).filter((field) => field.selector?.select);
       expect(choices.length, tag).toBeGreaterThan(3);
       for (const field of choices) expect(field.selector?.select?.mode, `${tag} ${field.name}`).toBe("dropdown");

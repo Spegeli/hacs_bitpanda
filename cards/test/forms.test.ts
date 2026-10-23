@@ -154,6 +154,15 @@ describe("editor fields", () => {
     });
   });
 
+  it("the asset field with options is a reorderable select of them", () => {
+    const options = [{ value: "id-btc", label: "Bitcoin (BTC)" }];
+    expect(assetFields("Price Tracker", "only", options)[1]).toEqual({
+      name: "assets",
+      selector: { select: { multiple: true, reorder: true, mode: "dropdown", options } },
+    });
+    expect(assetFields("Price Tracker", "all", options)).toHaveLength(1);
+  });
+
   it("the asset group fields offer every group, named as the integration names them", () => {
     rememberLocale(makeHass());
     const [selection, groups] = groupFields({ crypto: "Cryptocurrencies", etf: "ETFs" }, "only");
@@ -215,7 +224,7 @@ describe("editor fields", () => {
   it("labels and helpers come from the card texts", () => {
     rememberLocale(makeHass());
     expect(computeLabel({ name: "hide_amounts" })).toBe("Hide amounts initially");
-    expect(computeHelper({ name: "hide_amounts" })).toBe("Percentages stay visible; the eye at the top of the card shows the amounts only temporarily");
+    expect(computeHelper({ name: "hide_amounts" })).toBe("Percentages stay visible; the eye on the card shows the amounts only temporarily");
     // A section's toggle explains itself; only the allocation says what it is.
     for (const name of ["show_graph", "show_cash", "show_wallets"]) expect(computeHelper({ name }), name).toBeUndefined();
     expect(computeHelper({ name: "show_allocation" })).toBe("The coloured bar showing the share of each asset group and of cash");

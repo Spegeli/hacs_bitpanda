@@ -4,12 +4,12 @@
 // Assistant hands a card a new hass on every state change in the house.
 import { LitElement, type CSSResultGroup, type PropertyValues } from "lit";
 
-import { oneOf, text, type Validator } from "./forms";
+import { bool, oneOf, text, type Validator } from "./forms";
 import { languageOf, loadCategoryNames, rememberLocale } from "./i18n";
 import { cardStyles } from "./styles";
 import type { BaseConfig, Hass, Timeframe } from "./types";
 
-export const COMMON_OPTIONS: Record<string, Validator> = { title: text };
+export const COMMON_OPTIONS: Record<string, Validator> = { title: text, show_header: bool, show_timeframes: bool };
 
 export abstract class BitpandaCard<C extends BaseConfig> extends LitElement {
   static override properties = {

@@ -33,6 +33,29 @@ export const cardStyles = css`
   .content {
     padding: 8px 16px 16px;
   }
+  /* Without the header the content starts where the header would. */
+  .content.headless {
+    padding-top: 16px;
+  }
+  /* Without the header: the eye beside the total value, the value wrapping
+     or shrinking, the eye never; without the total too, in a row of its own. */
+  .hero-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .hero-row .hero {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .hero-row .eye {
+    flex: none;
+  }
+  .eye-row {
+    display: flex;
+    justify-content: flex-end;
+  }
   .icon-btn {
     width: 32px;
     height: 32px;
@@ -53,11 +76,16 @@ export const cardStyles = css`
   }
   [role="button"],
   [role="radio"],
+  [role="slider"],
   .icon-btn {
     outline: none;
   }
+  [role="button"] {
+    cursor: pointer;
+  }
   [role="button"]:focus-visible,
   [role="radio"]:focus-visible,
+  .plot[role="slider"]:focus-visible,
   .icon-btn:focus-visible {
     box-shadow: 0 0 0 2px var(--bp-accent);
     border-radius: 6px;
@@ -66,7 +94,6 @@ export const cardStyles = css`
     font-size: 32px;
     line-height: 40px;
     letter-spacing: -0.5px;
-    cursor: pointer;
   }
   .hero-line {
     display: flex;
@@ -84,7 +111,6 @@ export const cardStyles = css`
     font-size: 13px;
     font-weight: 500;
     background: var(--bp-chip);
-    cursor: pointer;
     white-space: nowrap;
   }
   .chip-amount {
@@ -96,6 +122,62 @@ export const cardStyles = css`
     color: var(--bp-muted);
     font-size: 13px;
     white-space: nowrap;
+  }
+  /* The staking line under Cash, and its wallets. */
+  .staking {
+    margin-top: 10px;
+    font-size: 13px;
+  }
+  .staking svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+    vertical-align: -3px;
+    margin-right: 2px;
+    color: var(--bp-muted);
+  }
+  .staking .part {
+    white-space: nowrap;
+  }
+  .staking-list {
+    margin: 4px 0 0 18px;
+  }
+  .staking-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 13px;
+  }
+  .staking-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .staking-value {
+    white-space: nowrap;
+    color: var(--bp-muted);
+  }
+  /* The return since purchase: one line, broken only at its middle dot. */
+  .since {
+    margin-top: 6px;
+    font-size: 13px;
+    color: var(--bp-muted);
+  }
+  .since .part {
+    white-space: nowrap;
+  }
+  .since-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--bp-chip);
+  }
+  .since-amount {
+    font-weight: 500;
   }
   .up {
     color: var(--bp-up);
@@ -321,7 +403,6 @@ export const cardStyles = css`
     align-items: center;
     gap: 6px;
     padding: 8px 0;
-    cursor: pointer;
   }
   .wallet .main {
     flex: 1;
@@ -450,7 +531,6 @@ export const cardStyles = css`
   .pair > div {
     display: flex;
     flex-direction: column;
-    cursor: pointer;
   }
   .pair .end {
     text-align: right;

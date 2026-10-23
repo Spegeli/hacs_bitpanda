@@ -86,6 +86,105 @@ describe("the Bitpanda Portfolio card", () => {
     expect(textOf(one(card, ".caption"))).toMatch(/^Total value, .+ – today$/);
   });
 
+  it("re-renders when the invested amount or the total return changes", async () => {
+    const card = await mount();
+    const watched = (card as unknown as { watchedEntities(): string[] }).watchedEntities();
+    expect(watched).toEqual(
+      expect.arrayContaining([
+        "sensor.bitpanda_portfolio_invested",
+        "sensor.bitpanda_portfolio_total_return",
+        "sensor.bitpanda_portfolio_total_return_percent",
+      ]),
+    );
+  });
+
+  it("shows the return sensor's return_amount beside the chip", async () => {
+    // Not what the card would reckon from the total: the sensor's own figure.
+    const hass = portfolioHass();
+    const day = "sensor.bitpanda_portfolio_return_day";
+    const card = await mount({}, hass.withState(day, "-0.42", { unit_of_measurement: "%", return_amount: -61.5 }));
+    expect(textOf(one(card, ".chip-amount"))).toBe("-€61.50");
+  });
+
+  it("shows no amount without the return sensor's return_amount", async () => {
+    const day = "sensor.bitpanda_portfolio_return_day";
+    const card = await mount({}, portfolioHass().withState(day, "-0.42", { unit_of_measurement: "%" }));
+    expect(one(card, ".chip-amount")).toBeNull();
+    expect(textOf(one(card, ".chip"))).toBe("▼ -0.42%");
+  });
+
+  it("takes the amount's currency from invested or a wallet when Total value is not found", async () => {
+    const withoutTotal = (devices: ReturnType<typeof portfolioDevice>[]) => {
+      const [portfolio, ...rest] = devices as [ReturnType<typeof portfolioDevice>, ...ReturnType<typeof portfolioDevice>[]];
+      portfolio.sensors = portfolio.sensors.filter((sensor) => sensor.translationKey !== "total_value");
+      return makeHass({ devices: [portfolio, ...rest] });
+    };
+    const fromInvested = await mount({}, withoutTotal([portfolioDevice({ currency: "USD" })]));
+    expect(textOf(one(fromInvested, ".chip-amount"))).toBe("-$53.82");
+    const fromWallet = await mount({}, withoutTotal([portfolioDevice({ invested: null }), walletDevice({ ...BTC, currency: "CHF" })]));
+    expect(textOf(one(fromWallet, ".chip-amount"))).toMatch(/^-CHF\s?53\.82$/);
+    const none = await mount({}, withoutTotal([portfolioDevice({ invested: null })]));
+    expect(one(none, ".chip-amount")).toBeNull();
+  });
+
+  it("shows the return since purchase under the return row, without the invested amount", async () => {
+    const card = await mount();
+    const since = one(card, ".since");
+    expect(textOf(since)).toBe("Since purchase ▲ +14.10% +€3,700.00");
+    expect(one(card, ".since-invested")).toBeNull();
+    expect(one(card, ".since-chip")?.classList.contains("up")).toBe(true);
+    expect(one(card, ".since-amount")?.classList.contains("up")).toBe(true);
+    // Under the return row: after it in the card.
+    const order = all(card, ".hero-line, .since").map((element) => element.className.split(" ")[0]);
+    expect(order).toEqual(["hero-line", "since"]);
+  });
+
+  it("colours a loss since purchase as a loss", async () => {
+    const card = await mount({}, makeHass({ devices: [portfolioDevice({ totalReturn: "-500.00", totalReturnPercent: "-1.86" })] }));
+    expect(textOf(one(card, ".since"))).toBe("Since purchase ▼ -1.86% -€500.00");
+    expect(one(card, ".since-amount")?.classList.contains("down")).toBe(true);
+  });
+
+  it("shows a dash for a part of the since-purchase line whose sensor is missing or has no value", async () => {
+    const noPercent = await mount({}, makeHass({ devices: [portfolioDevice({ totalReturnPercent: null })] }));
+    expect(textOf(one(noPercent, ".since"))).toBe("Since purchase — +€3,700.00");
+    expect(one(noPercent, ".since-chip")?.classList.contains("none")).toBe(true);
+    const unknown = makeHass({ devices: [portfolioDevice({ invested: null })] }).withState("sensor.bitpanda_portfolio_total_return", "unknown", {});
+    const noAmounts = await mount({}, unknown);
+    expect(textOf(one(noAmounts, ".since"))).toBe("Since purchase ▲ +14.10% —");
+  });
+
+  it("leaves the since-purchase line out without both its sensors, Invested found or not", async () => {
+    const card = await mount({}, makeHass({ devices: [portfolioDevice({ totalReturn: null, totalReturnPercent: null })] }));
+    expect(one(card, ".since")).toBeNull();
+  });
+
+  it("leaves the since-purchase line out when switched off, or without the total value", async () => {
+    expect(one(await mount({ show_since_purchase: false }), ".since")).toBeNull();
+    expect(one(await mount({ show_total: false }), ".since")).toBeNull();
+  });
+
+  it("breaks the since-purchase line after its label, never inside a figure", async () => {
+    // Label, chip and amount in one piece are wider than a 240 px card.
+    const card = await mount();
+    expect(all(card, ".since > .part").map((part) => textOf(part))).toEqual(["Since purchase", "▲ +14.10% +€3,700.00"]);
+    const css = (await import("../src/styles")).cardStyles.cssText;
+    expect(css).toMatch(/\.since \.part\s*\{[^}]*white-space:\s*nowrap/);
+  });
+
+  it("the since-purchase chip opens Total return %, its amount Total return", async () => {
+    const card = await mount();
+    const opened: string[] = [];
+    card.addEventListener("hass-more-info", (event) => opened.push((event as CustomEvent).detail.entityId));
+    for (const selector of [".since-chip", ".since-amount"]) one(card, selector)?.click();
+    one(card, ".since-chip")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(opened).toEqual([
+      "sensor.bitpanda_portfolio_total_return_percent",
+      "sensor.bitpanda_portfolio_total_return",
+      "sensor.bitpanda_portfolio_total_return_percent",
+    ]);
+  });
+
   it("fetches the line again once the return of the timeframe arrives, as after a restart", async () => {
     // Starting up, Total value can arrive before the returns, whose refresh
     // brings Bitpanda's value history: the first answer has no points.
@@ -336,8 +435,8 @@ describe("the Bitpanda Portfolio card", () => {
     expect(rows.slice(5, 9)).toEqual([
       "Staked 0.22 ETH · 507.91 EUR",
       "Staking APR 2.9%",
-      "Earned (net) 0.0041 ETH",
-      "Value today €9.47",
+      "Earned (30 days) 0.00061234 ETH · €1.41",
+      "Earned (total) 0.0041 ETH · €9.47",
     ]);
     expect(rows[9]).toMatch(/^Payouts 12 · last .+/);
     expect(rows).toHaveLength(10);
@@ -347,6 +446,7 @@ describe("the Bitpanda Portfolio card", () => {
     expect(staked.textContent).toContain(" · ");
     const parts = (index: number): string[] => [...valueCells(card)[index]!.querySelectorAll(".part")].map((part) => textOf(part));
     expect(parts(5)).toEqual(["0.22 ETH", "507.91 EUR"]);
+    expect(parts(8)).toEqual(["0.0041 ETH", "€9.47"]);
     expect(parts(9)[0]).toBe("12");
     expect(parts(9)[1]).toMatch(/^last .+/);
     expect(parts(3)).toEqual(["-€12.50", "(-1.62%)"]);
@@ -358,8 +458,49 @@ describe("the Bitpanda Portfolio card", () => {
     const card = await openWallet({ ...ETH, staked: { ...ETH.staked!, units: 0, value: "0" } });
     const rows = stakingRows(card);
     expect(rows[0]).toMatch(/^Staked 0 ETH · /);
-    expect(rows.slice(1, 4)).toEqual(["Staking APR 2.9%", "Earned (net) 0.0041 ETH", "Value today €9.47"]);
+    expect(rows.slice(1, 4)).toEqual(["Staking APR 2.9%", "Earned (30 days) 0.00061234 ETH · €1.41", "Earned (total) 0.0041 ETH · €9.47"]);
     expect(rows[4]).toMatch(/^Payouts 12 · last .+/);
+  });
+
+  /** ETH without one of its rewards' attributes. */
+  const ethWithout = (key: "net30d" | "netValue30d" | "netValue"): FakeWallet => {
+    const rewards = { ...ETH.staked!.rewards! };
+    delete rewards[key];
+    return { ...ETH, staked: { ...ETH.staked!, rewards } };
+  };
+  /** The value cell of the staking block's row `index`. */
+  const stakingCell = (card: PortfolioCard, index: number): HTMLElement =>
+    all(card, ".detail .grid")[1]!.querySelectorAll(":scope > span")[index * 2 + 1] as HTMLElement;
+
+  it("shows what was earned in the last 30 days before what was earned in all", async () => {
+    const card = await openWallet(ETH);
+    expect(stakingRows(card).slice(1, 4)).toEqual(["Staking APR 2.9%", "Earned (30 days) 0.00061234 ETH · €1.41", "Earned (total) 0.0041 ETH · €9.47"]);
+    // It breaks only at its middle dot.
+    expect([...stakingCell(card, 2).querySelectorAll(".part")].map((part) => textOf(part as HTMLElement))).toEqual(["0.00061234 ETH", "€1.41"]);
+  });
+
+  it("shows a dash for the value of the last 30 days without it", async () => {
+    const card = await openWallet(ethWithout("netValue30d"));
+    expect(stakingRows(card)[2]).toBe("Earned (30 days) 0.00061234 ETH · —");
+  });
+
+  it("leaves the row of the last 30 days out without their rewards", async () => {
+    const card = await openWallet(ethWithout("net30d"));
+    expect(stakingRows(card).some((row) => row.startsWith("Earned (30 days)"))).toBe(false);
+    expect(stakingRows(card)[2]).toBe("Earned (total) 0.0041 ETH · €9.47");
+  });
+
+  it("shows a dash for the value of what was earned in all without it", async () => {
+    const card = await openWallet(ethWithout("netValue"));
+    expect(stakingRows(card)[3]).toBe("Earned (total) 0.0041 ETH · —");
+  });
+
+  it("hides the units and the values earned behind the eye", async () => {
+    const card = await openWallet(ETH, { hide_amounts: true });
+    for (const index of [2, 3]) {
+      expect(stakingCell(card, index).querySelectorAll(".amount.blur")).toHaveLength(2);
+      expect(textOf(stakingCell(card, index))).toContain(" · ");
+    }
   });
 
   it("a wallet never staked shows staked and the APR only", async () => {
@@ -389,8 +530,8 @@ describe("the Bitpanda Portfolio card", () => {
     expect(cells[3]?.querySelector(".amount")?.classList.contains("blur")).toBe(true);
     expect(textOf(cells[3])).toContain("(-1.62%)");
     expect(cells[6]?.querySelector(".blur")).toBeNull();
-    expect(cells[7]?.querySelector(".amount")?.classList.contains("blur")).toBe(true);
-    expect(cells[8]?.querySelector(".amount")?.classList.contains("blur")).toBe(true);
+    expect(cells[7]?.querySelectorAll(".amount.blur")).toHaveLength(2);
+    expect(cells[8]?.querySelectorAll(".amount.blur")).toHaveLength(2);
   });
 
   it("names the detail rows in German", async () => {
@@ -398,7 +539,7 @@ describe("the Bitpanda Portfolio card", () => {
     const labels = all(card, ".detail .grid > span:nth-child(odd)").map((cell) => textOf(cell));
     expect(labels).toEqual([
       "Aktueller Preis", "Ø Kaufpreis", "Investiert", "Rendite (24 h)", "Gesamtrendite",
-      "Im Staking", "Staking-APR", "Verdient (netto)", "Heutiger Wert", "Gutschriften",
+      "Im Staking", "Staking-APR", "Verdient (30 Tage)", "Verdient (gesamt)", "Gutschriften",
     ]);
     expect(textOf(one(card, ".detail h4"))).toBe("Staking");
   });
@@ -432,11 +573,6 @@ describe("the Bitpanda Portfolio card", () => {
     expect(textOf(one(card, ".detail"))).not.toContain("Available");
   });
 
-  it("names the allocation bar for screen readers", async () => {
-    const card = await mount();
-    expect(one(card, ".bar")?.getAttribute("aria-label")).toBe("Allocation bar");
-  });
-
   it("an option left empty in YAML shows the default, not an error", async () => {
     const card = await mount({ title: null, timeframe: null, sort: null });
     expect(textOf(one(card, ".title"))).toBe("Bitpanda Portfolio");
@@ -467,8 +603,20 @@ describe("the Bitpanda Portfolio card", () => {
     await card.updateComplete;
     const rows = detailRows(card);
     expect(rows.slice(1, 4)).toEqual(["Average buy price €0.36012", "Invested €4.32", "Total return -€0.12 (-2.86%)"]);
-    expect(rows).toContain("Earned (net) 0.05 ADA");
-    expect(rows).toContain("Value today €0.02");
+    expect(rows).toContain("Earned (total) 0.05 ADA · €0.02");
+  });
+
+  it("makes no button of a part whose sensor is not found", async () => {
+    const portfolio = portfolioDevice({ totalReturnPercent: null });
+    portfolio.sensors = portfolio.sensors.filter((sensor) => !["total_value", "cash_plus"].includes(sensor.translationKey));
+    const card = await mount({}, makeHass({ devices: [portfolio] }));
+    for (const selector of [".hero", ".pair > .end", ".since-chip"]) {
+      expect(one(card, selector)?.getAttribute("role"), selector).toBeNull();
+      expect(one(card, selector)?.getAttribute("tabindex"), selector).toBeNull();
+    }
+    // Its neighbours, found, stay buttons.
+    expect(one(card, ".pair > div:not(.end)")?.getAttribute("role")).toBe("button");
+    expect(one(card, ".since-amount")?.getAttribute("role")).toBe("button");
   });
 
   it("tapping total value, chip, cash, cash plus and a row opens more-info", async () => {
@@ -542,14 +690,22 @@ describe("the Bitpanda Portfolio card", () => {
     // Every field: the groups and assets to choose show while some are chosen.
     const { form } = await openEditor("bitpanda-portfolio-card", { group_selection: "only", asset_selection: "only" });
     expect(names(form.schema).sort()).toEqual(
-      ["asset_selection", "assets", "group_selection", "group_wallets", "groups", "hide_amounts", "limit", "show_allocation", "show_cash", "show_graph", "show_search", "show_total", "show_wallets", "sort", "timeframe", "title"].sort(),
+      ["asset_selection", "assets", "group_selection", "group_wallets", "groups", "hide_amounts", "limit", "show_allocation", "show_cash", "show_graph", "show_header", "show_search", "show_since_purchase", "show_staking", "show_timeframes", "show_total", "show_wallets", "sort", "timeframe", "title"].sort(),
     );
     expect(form.computeLabel({ name: "show_cash" })).toBe("Cash and Cash Plus");
-    // The total and its return: the first toggle under Content.
+    // The title on top, then Content, Wallets and Appearance.
+    expect(form.schema.map((field) => (field as { name?: string; title?: string }).title ?? (field as { name: string }).name)).toEqual([
+      "title", "Content", "Wallets", "Appearance",
+    ]);
+    // Content: what the card shows, the total and its return first.
     const content = form.schema.find((field) => (field as { title?: string }).title === "Content") as unknown as { schema: { name: string }[] };
-    expect(content.schema.map((field) => field.name)).toEqual(["timeframe", "show_total", "show_graph", "show_cash", "show_allocation", "show_wallets"]);
+    expect(content.schema.map((field) => field.name)).toEqual(["show_total", "show_since_purchase", "show_graph", "show_cash", "show_staking", "show_allocation", "show_wallets"]);
+    // The line since purchase: right under the total, on unless chosen.
+    expect((content.schema as { name: string; default?: unknown }[]).find((field) => field.name === "show_since_purchase")?.default).toBe(true);
+    expect(form.computeLabel({ name: "show_since_purchase" })).toBe("Return since purchase");
+    expect(form.computeHelper({ name: "show_since_purchase" })).toBe("Only with the total value and its return");
     expect(form.computeLabel({ name: "show_total" })).toBe("Total value and return");
-    expect(form.computeHelper({ name: "show_total" })).toBe("The timeframe buttons stay while the line is shown");
+    expect(form.computeHelper({ name: "show_total" })).toBe("The timeframe buttons stay while the line is shown, unless “Appearance” hides them");
     // The search field: under Wallets, off unless chosen.
     const wallets = form.schema.find((field) => (field as { title?: string }).title === "Wallets") as unknown as { schema: { name: string; type?: string; default?: unknown }[] };
     expect(wallets.schema.find((field) => field.name === "show_search")?.default).toBe(false);
@@ -893,6 +1049,304 @@ describe("a wallet row below its name", () => {
     expect(below).toMatch(new RegExp(`margin-right:\\s*-${chevron + gap}px`));
   });
 });
+describe("the compact options", () => {
+  it("show_header: false leaves the header out, title and all", async () => {
+    const card = await mount({ show_header: false });
+    expect(one(card, ".head")).toBeNull();
+    expect(one(card, ".content")?.classList.contains("headless")).toBe(true);
+    expect(one(await mount(), ".content")?.classList.contains("headless")).toBe(false);
+    const empty = await mount({ show_header: false }, makeHass({ devices: [] }));
+    expect(one(empty, ".head")).toBeNull();
+    expect(one(empty, ".empty")).not.toBeNull();
+  });
+
+  it("without the header the eye sits beside the total value, not inside it", async () => {
+    const card = await mount({ show_header: false });
+    const row = one(card, ".hero-row") as HTMLElement;
+    expect([...row.children].map((child) => child.className.split(" ")[0])).toEqual(["hero", "icon-btn"]);
+    expect(row.children[1]?.classList.contains("eye")).toBe(true);
+    expect(one(card, ".hero .eye")).toBeNull();
+    (one(card, ".hero-row .eye") as HTMLElement).click();
+    await card.updateComplete;
+    expect(textOf(one(card, ".hero .amount"))).toBe("••••••");
+    // With the header the eye stays in it.
+    const headed = await mount();
+    expect(one(headed, ".hero-row")).toBeNull();
+    expect(one(headed, ".head .eye")).not.toBeNull();
+  });
+
+  it("without header and total the eye has a row of its own at the top", async () => {
+    const card = await mount({ show_header: false, show_total: false });
+    expect(one(card, ".content")?.firstElementChild?.classList.contains("eye-row")).toBe(true);
+    expect(one(card, ".eye-row .eye")).not.toBeNull();
+    expect(all(card, ".eye")).toHaveLength(1);
+    const css = (await import("../src/styles")).cardStyles.cssText;
+    expect(css).toMatch(/\.eye-row\s*\{[^}]*justify-content:\s*flex-end/);
+    // With the header, the header's eye alone.
+    expect(one(await mount({ show_total: false }), ".eye-row")).toBeNull();
+  });
+
+  it("the eye keeps its size beside the total, at every width", async () => {
+    const css = (await import("../src/styles")).cardStyles.cssText;
+    expect(css).toMatch(/\.hero-row\s*\{[^}]*display:\s*flex/);
+    expect(css).toMatch(/\.hero-row \.hero\s*\{[^}]*min-width:\s*0/);
+    expect(css).toMatch(/\.hero-row \.eye\s*\{[^}]*flex:\s*none/);
+    // No narrow card shrinks it.
+    const narrow = (css.match(/@container[^{]*\{[\s\S]*?\n  \}/g) ?? []).join("\n");
+    expect(narrow).toContain(".hero");
+    expect(narrow).not.toMatch(/\.eye|\.icon-btn/);
+  });
+
+  it("show_timeframes: false leaves the timeframe buttons out; return and line keep the timeframe", async () => {
+    const card = await mount({ show_timeframes: false, timeframe: "week" });
+    expect(one(card, ".seg")).toBeNull();
+    expect(textOf(one(card, ".chip-label"))).toBe("return over 1 week");
+    await settled(card);
+    expect(textOf(one(card, ".caption"))).toMatch(/^Total value, .+ – today$/);
+    expect(one(await mount(), ".seg")).not.toBeNull();
+  });
+
+  it("counts one row less without the header", async () => {
+    expect((await mount({ show_header: false })).getCardSize()).toBe(7);
+  });
+
+  it("puts header, default timeframe, timeframe buttons and the eye's start under Appearance", async () => {
+    const { form } = await openEditor("bitpanda-portfolio-card");
+    const appearance = form.schema.find((field) => (field as { title?: string }).title === "Appearance") as unknown as {
+      schema: { name: string; default?: unknown }[];
+    };
+    expect(appearance.schema.map((field) => field.name)).toEqual(["show_header", "timeframe", "show_timeframes", "hide_amounts"]);
+    // The switches on unless chosen; the timeframe shows the card's own default.
+    expect(appearance.schema.map((field) => field.default)).toEqual([true, undefined, true, false]);
+    expect(form.computeLabel({ name: "timeframe" })).toBe("Default timeframe");
+    expect(form.computeLabel({ name: "show_header" })).toBe("Header");
+    expect(form.computeHelper({ name: "show_header" })).toBe("Title and eye; without it the eye stands beside the total value, or in a row of its own without that");
+    expect(form.computeLabel({ name: "show_timeframes" })).toBe("Timeframe buttons");
+    expect(form.computeHelper({ name: "show_timeframes" })).toBe("Only while the total value or the line is shown; without them the card keeps the timeframe chosen above");
+    expect(form.computeHelper({ name: "hide_amounts" })).toBe("Percentages stay visible; the eye on the card shows the amounts only temporarily");
+  });
+});
+
+describe("the eye", () => {
+  /** A card with every part present and opened: the since-purchase line,
+   * the staking list and every wallet's detail. */
+  async function opened(hidden: boolean): Promise<PortfolioCard> {
+    const card = await mount({ group_wallets: false, hide_amounts: hidden });
+    one(card, ".staking")?.click();
+    await card.updateComplete;
+    all(card, ".wallet .chevron").forEach((chevron) => chevron.click());
+    await card.updateComplete;
+    return card;
+  }
+  /** Every text and every attribute value in the card. */
+  const everything = (card: PortfolioCard): string =>
+    [...root(card).querySelectorAll("*")].flatMap((element) => [...element.attributes].map((attribute) => attribute.value)).join("\n") +
+    (root(card).textContent ?? "");
+  /** What a tap on the card's parts opens. */
+  const dialogs = (card: PortfolioCard): string[] => {
+    const seen: string[] = [];
+    card.addEventListener("hass-more-info", (event) => seen.push((event as CustomEvent).detail.entityId));
+    return seen;
+  };
+  const HIDDEN_TAPS = [".hero", ".chip", ".pair > div", ".wallet .tap", ".staking-row", ".since-amount"];
+
+  it("hides amounts behind a fixed mask with no real text in the DOM", async () => {
+    const shown = await opened(false);
+    const amounts = [...new Set(all(shown, ".amount").map((element) => textOf(element)))].filter((text) => /\d/.test(text));
+    // Every part is there: the since-purchase line, the staking list, the details.
+    expect(amounts).toEqual(expect.arrayContaining(["+€3,700.00", "€507.91", "0.00061234 ETH", "€1.41", "€9.47", "€2,377.00"]));
+    const hidden = await opened(true);
+    const text = everything(hidden);
+    for (const value of amounts) expect(text, value).not.toContain(value);
+    const masks = all(hidden, ".amount");
+    expect(masks.length).toBe(all(shown, ".amount").length);
+    expect(new Set(masks.map((mask) => textOf(mask)))).toEqual(new Set(["••••••"]));
+  });
+
+  it("reads the mask as \"Amount hidden\"", async () => {
+    const masks = all(await opened(true), ".amount");
+    for (const mask of masks) expect([mask.getAttribute("role"), mask.getAttribute("aria-label")]).toEqual(["img", "Amount hidden"]);
+    const german = await mount({ hide_amounts: true }, portfolioHass({ language: "de" }));
+    expect(one(german, ".hero .amount")?.getAttribute("aria-label")).toBe("Betrag verborgen");
+  });
+
+  it("a hidden total value, cash, cash plus, wallet row, staking row, since-purchase amount and return chip open nothing", async () => {
+    const card = await opened(true);
+    const seen = dialogs(card);
+    for (const selector of HIDDEN_TAPS) {
+      const targets = all(card, selector);
+      expect(targets.length, selector).toBeGreaterThan(0);
+      for (const target of targets) {
+        target.click();
+        target.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      }
+    }
+    expect(seen).toEqual([]);
+  });
+
+  it("they are no buttons while hidden, and buttons again once the eye opens", async () => {
+    const card = await opened(true);
+    const button = (element: HTMLElement): (string | null)[] => [element.getAttribute("role"), element.getAttribute("tabindex")];
+    for (const selector of HIDDEN_TAPS) for (const element of all(card, selector)) expect(button(element), selector).toEqual([null, null]);
+    one(card, ".eye")?.click();
+    await card.updateComplete;
+    for (const selector of HIDDEN_TAPS) for (const element of all(card, selector)) expect(button(element), selector).toEqual(["button", "0"]);
+  });
+
+  it("the since-purchase chip still opens while hidden", async () => {
+    const card = await opened(true);
+    const seen = dialogs(card);
+    const chip = one(card, ".since-chip") as HTMLElement;
+    expect(chip.getAttribute("role")).toBe("button");
+    chip.click();
+    chip.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(seen).toEqual(["sensor.bitpanda_portfolio_total_return_percent", "sensor.bitpanda_portfolio_total_return_percent"]);
+  });
+
+  it("group headers, the staking line and the chevrons still open and close while hidden", async () => {
+    const card = await mount({ hide_amounts: true });
+    const group = one(card, ".group") as HTMLElement;
+    const before = group.getAttribute("aria-expanded");
+    group.click();
+    await card.updateComplete;
+    expect(group.getAttribute("aria-expanded")).not.toBe(before);
+    if (!one(card, ".wallet .chevron")) {
+      group.click();
+      await card.updateComplete;
+    }
+    one(card, ".wallet .chevron")?.click();
+    await card.updateComplete;
+    expect(one(card, ".detail")).not.toBeNull();
+    const staking = one(card, ".staking") as HTMLElement;
+    staking.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    await card.updateComplete;
+    expect(staking.getAttribute("aria-expanded")).toBe("true");
+    expect(one(card, ".staking-row")).not.toBeNull();
+  });
+
+  it("the allocation bar names its parts and shares; the legend is hidden from screen readers", async () => {
+    const card = await mount();
+    const legend = all(card, ".legend > span").map((item) => textOf(item));
+    expect(legend.length).toBeGreaterThan(1);
+    const bar = one(card, ".bar") as HTMLElement;
+    expect(bar.getAttribute("role")).toBe("img");
+    expect(bar.getAttribute("aria-label")).toBe(`Allocation: ${legend.join(", ")}`);
+    expect(one(card, ".legend")?.getAttribute("aria-hidden")).toBe("true");
+    const german = await mount({}, portfolioHass({ language: "de" }));
+    expect(one(german, ".bar")?.getAttribute("aria-label")).toMatch(/^Verteilung: /);
+  });
+});
+
+describe("the staking line", () => {
+  const VSN: FakeWallet = {
+    symbol: "VSN", name: "Vision", category: "crypto", units: 12000, total: "410.33",
+    staked: { units: 12000, value: "410.33", apr: 7.5 }, returnPercent: -24.6,
+  };
+  const staked = (...wallets: FakeWallet[]): FakeHass => makeHass({ devices: [portfolioDevice(), ...wallets.map(walletDevice)] });
+  const line = (card: PortfolioCard): string => textOf(one(card, ".staking"));
+
+  it("sums the staked value of the whole portfolio, not the card's selection", async () => {
+    const card = await mount({ asset_selection: "only", assets: ["id-btc"] }, staked(BTC, ETH, VSN));
+    expect(line(card)).toBe("Staking · €918.24 in 2 wallets");
+  });
+
+  it("names no rewards, which the wallets' details show", async () => {
+    const card = await mount({}, staked(ETH, VSN));
+    expect(line(card)).toBe("Staking · €918.24 in 2 wallets");
+    expect(all(card, ".staking > .part").map((part) => textOf(part))).toEqual(["Staking", "€918.24 in 2 wallets"]);
+  });
+
+  it("counts one wallet as one", async () => {
+    expect(line(await mount({}, staked(BTC, VSN)))).toBe("Staking · €410.33 in 1 wallet");
+  });
+
+  it("shows a dash for value and count while a staking sensor has no value", async () => {
+    const hass = staked(ETH, VSN).withState("sensor.bitpanda_vsn_staking", "unavailable", {});
+    expect(line(await mount({}, hass))).toBe("Staking · — in — wallets");
+  });
+
+  it("has no line while nothing is staked or no staking sensor is found", async () => {
+    expect(one(await mount({}, staked(BTC)), ".staking")).toBeNull();
+    const zero = staked(BTC, { ...VSN, staked: { units: 0, value: "0.0", apr: 7.5 } });
+    expect(one(await mount({}, zero), ".staking")).toBeNull();
+    const gone = staked(VSN).withState("sensor.bitpanda_vsn_staking", "unavailable", {});
+    expect(one(await mount({}, gone), ".staking")).toBeNull();
+    expect(one(await mount({ show_staking: false }, staked(ETH)), ".staking")).toBeNull();
+  });
+
+  it("opens the staking wallets inline, largest first, with their APR", async () => {
+    const card = await mount({}, staked(BTC, VSN, ETH));
+    const toggle = one(card, ".staking") as HTMLElement;
+    expect([toggle.getAttribute("role"), toggle.getAttribute("aria-expanded")]).toEqual(["button", "false"]);
+    expect(one(card, ".staking-row")).toBeNull();
+    toggle.click();
+    await card.updateComplete;
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(all(card, ".staking-row").map((row) => textOf(row))).toEqual([
+      "Ethereum 507.91 EUR · APR 2.9%",
+      "Vision 410.33 EUR · APR 7.5%",
+    ]);
+    toggle.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    await card.updateComplete;
+    expect(one(card, ".staking-row")).toBeNull();
+  });
+
+  it("leaves a staking row's APR out without one", async () => {
+    const card = await mount({}, staked({ ...VSN, staked: { units: 12000, value: "410.33" } }));
+    one(card, ".staking")?.click();
+    await card.updateComplete;
+    expect(textOf(one(card, ".staking-row"))).toBe("Vision 410.33 EUR");
+  });
+
+  it("a staking row opens its Balance (staking) dialog", async () => {
+    const card = await mount({}, staked(ETH, VSN));
+    const opened: string[] = [];
+    card.addEventListener("hass-more-info", (event) => opened.push((event as CustomEvent).detail.entityId));
+    one(card, ".staking")?.click();
+    await card.updateComplete;
+    all(card, ".staking-row")[1]?.click();
+    expect(opened).toEqual(["sensor.bitpanda_vsn_staking"]);
+  });
+
+  it("starts closed in every new card, and lays out with its list open", async () => {
+    const first = await mount({}, staked(ETH));
+    one(first, ".staking")?.click();
+    await first.updateComplete;
+    const layout = (first as unknown as { groupsLayout: string }).groupsLayout;
+    expect(() => (first as unknown as { fitLayout(): void }).fitLayout()).not.toThrow();
+    expect((first as unknown as { groupsLayout: string }).groupsLayout).toBe(layout);
+    const second = await mount({}, staked(ETH));
+    expect(one(second, ".staking")?.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("blurs its amount behind the eye", async () => {
+    const card = await mount({ hide_amounts: true }, staked(ETH));
+    expect(all(card, ".staking .amount.blur")).toHaveLength(1);
+  });
+
+  it("shows a dash for the sum while no currency is known", async () => {
+    let hass = staked(ETH);
+    for (const [entityId, state] of Object.entries(hass.states)) {
+      if (!state) continue;
+      const attributes = { ...state.attributes };
+      delete attributes["unit_of_measurement"];
+      hass = hass.withState(entityId, state.state, attributes);
+    }
+    expect(line(await mount({}, hass))).toBe("Staking · — in 1 wallet");
+  });
+
+  it("sits right after Cash in the editor, on unless chosen", async () => {
+    const { form } = await openEditor("bitpanda-portfolio-card");
+    const content = form.schema.find((field) => (field as { title?: string }).title === "Content") as unknown as {
+      schema: { name: string; default?: unknown }[];
+    };
+    const names = content.schema.map((field) => field.name);
+    expect(names.indexOf("show_staking")).toBe(names.indexOf("show_cash") + 1);
+    expect(content.schema.find((field) => field.name === "show_staking")?.default).toBe(true);
+    expect(form.computeLabel({ name: "show_staking" })).toBe("Staking");
+  });
+});
+
 describe("the dividers", () => {
   // What follows each divider: a part's first element.
   const after = (card: PortfolioCard): string[] =>
@@ -901,11 +1355,20 @@ describe("the dividers", () => {
   it("stand once before each shown part after the total: cash and allocation as one, then the wallets", async () => {
     expect(after(await mount())).toEqual(["pair", "wallets"]);
     expect(after(await mount({ group_wallets: false }))).toEqual(["pair", "wallets"]);
-    expect(after(await mount({ show_cash: false }))).toEqual(["bar", "wallets"]);
-    expect(after(await mount({ show_graph: false, show_cash: false }))).toEqual(["bar", "wallets"]);
-    expect(after(await mount({ show_graph: false, show_cash: false, show_allocation: false }))).toEqual(["wallets"]);
+    const off = { show_staking: false };
+    expect(after(await mount({ ...off, show_cash: false }))).toEqual(["bar", "wallets"]);
+    expect(after(await mount({ ...off, show_graph: false, show_cash: false }))).toEqual(["bar", "wallets"]);
+    expect(after(await mount({ ...off, show_graph: false, show_cash: false, show_allocation: false }))).toEqual(["wallets"]);
     expect(after(await mount({ show_wallets: false }))).toEqual(["pair"]);
-    expect(after(await mount({ show_cash: false, show_allocation: false, show_wallets: false }))).toEqual([]);
+    expect(after(await mount({ ...off, show_cash: false, show_allocation: false, show_wallets: false }))).toEqual([]);
+  });
+
+  it("count the staking line as part of the cash section, while it is drawn", async () => {
+    expect(after(await mount({ show_cash: false }))).toEqual(["staking", "wallets"]);
+    expect(after(await mount({ show_cash: false, show_allocation: false, show_wallets: false }))).toEqual(["staking"]);
+    // Nothing staked: no line, and no divider for it.
+    const unstaked = makeHass({ devices: [portfolioDevice(), walletDevice(BTC)] });
+    expect(after(await mount({ show_cash: false, show_allocation: false }, unstaked))).toEqual(["wallets"]);
   });
 
   it("leave no line at the top when neither the total nor its line is shown", async () => {
@@ -914,8 +1377,8 @@ describe("the dividers", () => {
     expect(first(await mount(top))).toBe("pair");
     expect(after(await mount(top))).toEqual(["wallets"]);
     // Only the wallets with their search field: the field comes first.
-    expect(first(await mount({ ...top, show_cash: false, show_allocation: false, show_search: true }))).toBe("search");
-    expect(after(await mount({ ...top, show_cash: false, show_allocation: false, show_search: true }))).toEqual([]);
+    expect(first(await mount({ ...top, show_cash: false, show_staking: false, show_allocation: false, show_search: true }))).toBe("search");
+    expect(after(await mount({ ...top, show_cash: false, show_staking: false, show_allocation: false, show_search: true }))).toEqual([]);
   });
 
   it("stand before the hint when there are no wallets", async () => {
@@ -1147,6 +1610,152 @@ describe("the line's middle and cursor", () => {
     } finally {
       rect.mockRestore();
     }
+  });
+
+  /** Presses `key` on the line; whether the press was taken from the page. */
+  const press = async (card: PortfolioCard, key: string): Promise<boolean> => {
+    const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    one(card, ".plot")?.dispatchEvent(event);
+    await card.updateComplete;
+    return event.defaultPrevented;
+  };
+  const now = (card: PortfolioCard): string | null | undefined => one(card, ".plot")?.getAttribute("aria-valuenow");
+
+  it("the line is a slider named by its caption", async () => {
+    const card = await mount({ timeframe: "day" });
+    await settled(card);
+    const plot = one(card, ".plot") as HTMLElement;
+    expect([plot.getAttribute("role"), plot.getAttribute("tabindex")]).toEqual(["slider", "0"]);
+    expect(plot.getAttribute("aria-label")).toBe("Total value, last 24 hours");
+    expect(plot.getAttribute("aria-label")).toBe(textOf(one(card, ".caption")));
+    expect([plot.getAttribute("aria-valuemin"), plot.getAttribute("aria-valuemax"), now(card)]).toEqual(["0", "2", "2"]);
+    expect(plot.hasAttribute("aria-live")).toBe(false);
+    const css = (await import("../src/styles")).cardStyles.cssText;
+    expect(css).toMatch(/\.plot\[role="slider"\]:focus-visible[^{]*\{[^}]*box-shadow:/);
+  });
+
+  it("arrow keys move the cursor point by point, Home and End to the ends", async () => {
+    const card = await mount({ timeframe: "day" });
+    await settled(card);
+    // The first left arrow from no cursor goes one point back from the
+    // newest, which the slider reports already.
+    expect(await press(card, "ArrowLeft")).toBe(true);
+    expect([now(card), shown(card).tip]).toEqual(["1", expect.stringMatching(/ · €12,400\.00$/)]);
+    expect(shown(card).tags).toEqual(["€12,760.20", "€12,380.10", "€12,000.00"]);
+    await press(card, "ArrowLeft");
+    expect([now(card), shown(card).tip]).toEqual(["0", expect.stringMatching(/ · €12,000\.00$/)]);
+    await press(card, "ArrowLeft");
+    expect(now(card)).toBe("0");
+    expect(await press(card, "End")).toBe(true);
+    expect([now(card), shown(card).tip]).toEqual(["2", expect.stringMatching(/ · €12,760\.20$/)]);
+    expect(await press(card, "Home")).toBe(true);
+    expect(now(card)).toBe("0");
+    expect(await press(card, "ArrowRight")).toBe(true);
+    expect(now(card)).toBe("1");
+    expect(await press(card, "End")).toBe(true);
+    await press(card, "ArrowRight");
+    expect(now(card)).toBe("2");
+    // Other keys are left to the page.
+    expect(await press(card, "a")).toBe(false);
+  });
+
+  it("the first right arrow from no cursor goes to the newest point too", async () => {
+    const card = await mount({ timeframe: "day" });
+    await settled(card);
+    await press(card, "ArrowRight");
+    expect(now(card)).toBe("2");
+    expect(shown(card).cursor).toBe(true);
+  });
+
+  it("Escape and blur clear the cursor", async () => {
+    const card = await mount({ timeframe: "day" });
+    await settled(card);
+    await press(card, "Home");
+    await press(card, "Escape");
+    expect(shown(card).cursor).toBe(false);
+    expect(now(card)).toBe("2");
+    await press(card, "Home");
+    one(card, ".plot")?.dispatchEvent(new FocusEvent("blur"));
+    await card.updateComplete;
+    expect(shown(card).cursor).toBe(false);
+  });
+
+  it("focus alone sets no cursor", async () => {
+    const card = await mount({ timeframe: "day" });
+    await settled(card);
+    one(card, ".plot")?.dispatchEvent(new FocusEvent("focus"));
+    await card.updateComplete;
+    expect(shown(card).cursor).toBe(false);
+  });
+
+  it("a pointer takes over and clears a cursor a key set", async () => {
+    const rect = box();
+    try {
+      const card = await mount({ timeframe: "day" });
+      await settled(card);
+      await press(card, "End");
+      await point(card, "pointermove", 0.02);
+      expect(shown(card).tip).toMatch(/ · €12,000\.00$/);
+      await point(card, "pointerleave", 0.02);
+      expect(shown(card).cursor).toBe(false);
+    } finally {
+      rect.mockRestore();
+    }
+  });
+
+  it("the value text gives value and time, only the time while hidden", async () => {
+    const card = await mount({ timeframe: "day" });
+    await settled(card);
+    const text = (): string | null | undefined => one(card, ".plot")?.getAttribute("aria-valuetext");
+    // Without a cursor: the newest point.
+    expect(text()).toMatch(/^€12,760\.20, .*\d:\d\d/);
+    await press(card, "Home");
+    expect(text()).toMatch(/^€12,000\.00, .*\d:\d\d/);
+    expect(text()).toBe(`€12,000.00, ${shown(card).tip.split(" · ")[0]}`);
+    const hidden = await mount({ timeframe: "day", hide_amounts: true });
+    await settled(hidden);
+    await press(hidden, "Home");
+    const time = one(hidden, ".plot")?.getAttribute("aria-valuetext");
+    expect(time).not.toContain("€");
+    expect(time).toBe(shown(hidden).tip);
+    const german = await mount({ timeframe: "day" }, portfolioHass({ language: "de" }));
+    await settled(german);
+    expect(one(german, ".plot")?.getAttribute("aria-label")).toBe("Gesamtwert, letzte 24 Stunden");
+  });
+
+  it("the line is not focusable while it is not interactive", async () => {
+    const recent = Date.now() - 2 * HOUR;
+    const hass = makeHass({ devices: [portfolioDevice()], callWS: async () => ({ points: [[recent, 1], [recent + HOUR, 2]] }) });
+    const card = await mount({ timeframe: "week" }, hass);
+    await vi.waitFor(() => expect(one(card, ".plot svg.spark")).not.toBeNull());
+    const plot = one(card, ".plot") as HTMLElement;
+    expect([plot.getAttribute("role"), plot.getAttribute("tabindex")]).toEqual([null, null]);
+  });
+
+  it("keeps rendering when a shorter line arrives under a keyed cursor", async () => {
+    // A refetch can bring fewer points: Bitpanda's history leaves out a
+    // point without a value.
+    let points = [[Date.now() - 20 * HOUR, 1], [Date.now() - 10 * HOUR, 2], [Date.now() - HOUR, 3]];
+    const hass = makeHass({ devices: [portfolioDevice()], callWS: async () => ({ points }) });
+    const card = await mount({ timeframe: "day" }, hass);
+    await settled(card);
+    await press(card, "End");
+    expect(now(card)).toBe("2");
+    points = points.slice(0, 2);
+    card.hass = hass.withState("sensor.bitpanda_portfolio_return_day", "-0.50", { unit_of_measurement: "%" });
+    await vi.waitFor(() => expect(one(card, ".plot")?.getAttribute("aria-valuemax")).toBe("1"));
+    expect(now(card)).toBe("1");
+    expect(one(card, ".plot")?.getAttribute("aria-valuetext")).toMatch(/^€2\.00, /);
+  });
+
+  it("a key press does not remeasure the layout", async () => {
+    const card = await mount({ timeframe: "day" });
+    await settled(card);
+    const fit = vi.spyOn(card as unknown as { fitLayout(): void }, "fitLayout");
+    await press(card, "End");
+    await press(card, "ArrowLeft");
+    await press(card, "Escape");
+    expect(fit).not.toHaveBeenCalled();
   });
 
   it("starts afresh with another timeframe", async () => {

@@ -40,6 +40,24 @@ describe("findPortfolio", () => {
     });
   });
 
+  it("finds the invested, total return and total return % sensors by translation key", () => {
+    const refs = findPortfolio(makeHass({ devices: [portfolioDevice()] }));
+    expect(refs?.invested).toBe("sensor.bitpanda_portfolio_invested");
+    expect(refs?.totalReturn).toBe("sensor.bitpanda_portfolio_total_return");
+    expect(refs?.totalReturnPercent).toBe("sensor.bitpanda_portfolio_total_return_percent");
+    const without = findPortfolio(makeHass({ devices: [portfolioDevice({ invested: null, totalReturn: null, totalReturnPercent: null })] }));
+    expect([without?.invested, without?.totalReturn, without?.totalReturnPercent]).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("ignores the asset groups' value sensors", () => {
+    const device = portfolioDevice();
+    device.sensors.push({ entityId: "sensor.bitpanda_portfolio_value_crypto", translationKey: "value_crypto", state: "10700" });
+    const refs = findPortfolio(makeHass({ devices: [device] }));
+    expect(Object.values(refs ?? {}).flatMap((value) => (typeof value === "string" ? [value] : Object.values(value as object)))).not.toContain(
+      "sensor.bitpanda_portfolio_value_crypto",
+    );
+  });
+
   it("finds every wallet with its three sensors", () => {
     const hass = makeHass({ devices: [portfolioDevice(), walletDevice(BTC), walletDevice(ETH), walletDevice(EUNL)] });
     const wallets = findPortfolio(hass)?.wallets ?? [];

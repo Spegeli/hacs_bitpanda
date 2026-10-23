@@ -21,12 +21,13 @@ import {
   numericState,
   trendClass,
 } from "./format";
-import { categoryName, t, type TextKey } from "./i18n";
+import { categoryName, t, tCount, type TextKey } from "./i18n";
 import {
   CHEVRONS,
   allFit,
   amount,
   emptyState,
+  eyeButton,
   header,
   icon,
   matchesWallet,
@@ -34,11 +35,12 @@ import {
   onActivate,
   searchField,
   sortWallets,
+  tapTarget,
   walletRow,
 } from "./parts";
 import { defineCard } from "./register";
 import { PORTFOLIO_LINE, SeriesLoader, fetchPortfolioLine, windowFor, type StatWindow } from "./statistics";
-import { summary } from "./summary";
+import { portfolioCurrency, summary } from "./summary";
 import {
   ASSET_SELECTIONS,
   CATEGORIES,
@@ -126,6 +128,22 @@ export function sumOf(values: (number | undefined)[]): number | undefined {
  * it, and a line breaks after it. */
 const DOT = " · ";
 
+/** The wallets with something staked, largest staked value first, over the
+ * whole portfolio: the Balance (staking) sensors found (a disabled one is
+ * not) whose value is above 0. `unknown`: one of them has no value. */
+export function stakedWallets(hass: Hass, refs: PortfolioRefs): { counted: { wallet: WalletRefs; value: number }[]; unknown: boolean } {
+  const counted: { wallet: WalletRefs; value: number }[] = [];
+  let unknown = false;
+  for (const wallet of refs.wallets) {
+    if (!wallet.staking) continue;
+    const value = numericState(hass, wallet.staking);
+    if (value === undefined) unknown = true;
+    else if (value > 0) counted.push({ wallet, value });
+  }
+  counted.sort((a, b) => b.value - a.value);
+  return { counted, unknown };
+}
+
 /** Pixels between a group's name, or a row's units, and the chip and value
  * beside them. */
 const BESIDE_GAP = 12;
@@ -145,6 +163,7 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
     ...BitpandaCard.properties,
     openGroups: { state: true },
     openWallets: { state: true },
+    stakingOpen: { state: true },
     showAll: { state: true },
     query: { state: true },
     cursor: { state: true },
@@ -154,6 +173,8 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
   };
 
   private openGroups = new Set<Category>();
+  /** The staking line's list of wallets: closed at every start, never saved. */
+  private stakingOpen = false;
   private showAll = false;
   /** The wallet search as typed; kept while the page is open, not stored. */
   private query = "";
@@ -179,8 +200,10 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
       ...COMMON_OPTIONS,
       timeframe: oneOf(TIMEFRAMES),
       show_total: bool,
+      show_since_purchase: bool,
       show_graph: bool,
       show_cash: bool,
+      show_staking: bool,
       show_allocation: bool,
       show_wallets: bool,
       group_wallets: bool,
@@ -202,6 +225,9 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
       refs.totalValue,
       refs.cash,
       refs.cashPlus,
+      refs.invested,
+      refs.totalReturn,
+      refs.totalReturnPercent,
       ...Object.values(refs.returns),
       ...refs.wallets.flatMap((wallet) => [wallet.available, wallet.total, wallet.staking]),
     ].filter((entityId): entityId is string => entityId !== undefined);
@@ -218,7 +244,7 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
   }
 
   override getCardSize(): number {
-    return 8;
+    return this.config?.show_header === false ? 7 : 8;
   }
 
   /** A cursor moving along the line changes nothing fitLayout measures: its
@@ -305,15 +331,21 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
     const refs = findPortfolio(hass);
     const eye = { hidden: this.amountsHidden, toggle: () => this.toggleAmounts() };
     const title = config.title || "Bitpanda Portfolio";
+    const head = config.show_header !== false;
     // Without a Portfolio there is nothing to hide: no eye.
-    if (!refs) return html`<ha-card>${header(hass, title)}${emptyState(t(hass, "empty_portfolio"))}</ha-card>`;
+    if (!refs) return html`<ha-card>${head ? header(hass, title) : nothing}${emptyState(t(hass, "empty_portfolio"))}</ha-card>`;
     // A divider stands between two shown parts, never at the top.
     const top = config.show_total !== false || config.show_graph !== false;
-    const pair = config.show_cash !== false || config.show_allocation !== false;
+    // The staking line belongs to the cash section, while it is drawn.
+    const staking = config.show_staking !== false && stakedWallets(hass, refs).counted.length > 0;
+    const pair = config.show_cash !== false || staking || config.show_allocation !== false;
     const shown = shownWallets(refs, config);
+    // Without the header the eye goes beside the total value, or, without
+    // that too, into a row of its own at the top.
     return html`<ha-card>
-      ${header(hass, title, eye)}
-      <div class="content">
+      ${head ? header(hass, title, eye) : nothing}
+      <div class="content ${head ? "" : "headless"}">
+        ${!head && config.show_total === false ? html`<div class="eye-row">${eyeButton(hass, eye)}</div>` : nothing}
         ${summary({
           host: this,
           hass,
@@ -323,7 +355,10 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
           window: this.window,
           points: this.lines.series(PORTFOLIO_LINE),
           total: config.show_total !== false,
+          since: config.show_since_purchase !== false,
           line: config.show_graph !== false,
+          timeframes: config.show_timeframes !== false,
+          eye: head ? undefined : eye,
           onTimeframe: (timeframe) => {
             this.cursor = undefined;
             this.selectTimeframe(timeframe);
@@ -336,6 +371,7 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
         ${pair
           ? html`${top ? html`<div class="divider"></div>` : nothing}
               ${config.show_cash === false ? nothing : this.renderCash(hass, refs)}
+              ${staking ? this.renderStaking(hass, refs) : nothing}
               ${config.show_allocation === false ? nothing : this.renderAllocation(hass, refs)}`
           : nothing}
         ${config.show_wallets === false
@@ -348,11 +384,51 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
   }
 
   private renderCash(hass: Hass, refs: PortfolioRefs): TemplateResult {
-    const item = (label: string, entityId: string | undefined, end: boolean) =>
-      html`<div class=${end ? "end" : ""} role="button" tabindex="0" @click=${opener(this, entityId)} @keydown=${onActivate(opener(this, entityId))}>
-        <span class="k">${label}</span><span class="v">${amount(formatState(hass, entityId), this.amountsHidden)}</span>
+    const item = (label: string, entityId: string | undefined, end: boolean) => {
+      const tap = tapTarget(this.amountsHidden ? undefined : opener(this, entityId));
+      return html`<div class=${end ? "end" : ""} role=${tap.role} tabindex=${tap.tabindex} @click=${tap.click} @keydown=${tap.keydown}>
+        <span class="k">${label}</span><span class="v">${amount(hass, formatState(hass, entityId), this.amountsHidden)}</span>
       </div>`;
+    };
     return html`<div class="pair">${item(t(hass, "cash"), refs.cash, false)}${item(t(hass, "cash_plus"), refs.cashPlus, true)}</div>`;
+  }
+
+  /** "Staking · €918.24 in 2 wallets", over the whole portfolio; a tap
+   * opens the wallets with something staked. The rewards are in the
+   * wallets' details. */
+  private renderStaking(hass: Hass, refs: PortfolioRefs): TemplateResult {
+    const hidden = this.amountsHidden;
+    const { counted, unknown } = stakedWallets(hass, refs);
+    const stateOf = (wallet: WalletRefs) => (wallet.staking ? hass.states[wallet.staking] : undefined);
+    // The staking sensors are in the Portfolio's currency; without any
+    // currency known, the sum is a dash.
+    const first = counted[0] ? stateOf(counted[0].wallet)?.attributes["unit_of_measurement"] : undefined;
+    const unit = typeof first === "string" && first ? first : portfolioCurrency(hass, refs);
+    // A staking sensor without a value leaves the sum and the count open.
+    const total = unknown ? undefined : sumOf(counted.map((item) => item.value));
+    const money = total === undefined || unit === undefined ? undefined : formatMoney(hass, total, unit);
+    const count = unknown ? t(hass, "staking_wallets_other").replace("{count}", "—") : tCount(hass, "staking_wallets", counted.length);
+    const open = this.stakingOpen;
+    const toggle = () => {
+      this.stakingOpen = !this.stakingOpen;
+    };
+    return html`<div class="staking" role="button" tabindex="0" aria-expanded=${open ? "true" : "false"} @click=${toggle} @keydown=${onActivate(toggle)}>
+        ${icon(open ? CHEVRONS.down : CHEVRONS.right)}<span class="part"><span class="k">${t(hass, "staking_line")}</span></span>${DOT}<span class="part"
+          >${amount(hass, money, hidden)} ${count}</span
+        >
+      </div>
+      ${open
+        ? html`<div class="staking-list">
+            ${counted.map(({ wallet }) => {
+              const apr = numberAttribute(stateOf(wallet), "apr_percent");
+              const tap = tapTarget(hidden ? undefined : opener(this, wallet.staking));
+              return html`<div class="staking-row" role=${tap.role} tabindex=${tap.tabindex} @click=${tap.click} @keydown=${tap.keydown}>
+                <span class="staking-name">${wallet.shortName}</span>
+                <span class="staking-value">${amount(hass, formatState(hass, wallet.staking), hidden)}${apr === undefined ? nothing : html`${DOT}${t(hass, "staking_apr", { apr: formatShare(hass, apr, 1) })}`}</span>
+              </div>`;
+            })}
+          </div>`
+        : nothing}`;
   }
 
   private renderAllocation(hass: Hass, refs: PortfolioRefs): TemplateResult {
@@ -371,10 +447,13 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
       .map((part) => ({ ...part, share: total > 0 ? ((part.value as number) / total) * 100 : 0 }))
       .filter((part) => part.share > 0)
       .sort((a, b) => b.share - a.share);
-    return html`<div class="bar" role="img" aria-label=${t(hass, "opt_show_allocation")}>
+    // The bar names its parts for a screen reader; the legend says the same
+    // to the eye only.
+    const label = t(hass, "allocation_label", { parts: shown.map((part) => `${part.label} ${allocationShare(hass, part.share)}`).join(", ") });
+    return html`<div class="bar" role="img" aria-label=${label}>
         ${shown.map((part) => html`<span style="width:${part.share}%;background:${COLORS[part.key]}"></span>`)}
       </div>
-      <div class="legend">
+      <div class="legend" aria-hidden="true">
         ${shown.map((part) => html`<span><i style="background:${COLORS[part.key]}"></i>${part.label} ${allocationShare(hass, part.share)}</span>`)}
       </div>`;
   }
@@ -424,7 +503,7 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
             >${icon(open ? CHEVRONS.down : CHEVRONS.right)}<span class="name">${categoryName(hass, category)}</span
             ><span class="count">${members.length}</span></span
           >
-          <span class="gright">${this.groupChip(hass, members)}<span class="sum">${amount(formatLike(hass, members[0]?.total, sum), this.amountsHidden)}</span></span>
+          <span class="gright">${this.groupChip(hass, members)}<span class="sum">${amount(hass, formatLike(hass, members[0]?.total, sum), this.amountsHidden)}</span></span>
         </div>
         ${open ? html`<div class="members">${sortWallets(hass, members, sort).map((wallet) => this.renderWallet(hass, refs, wallet))}</div>` : nothing}`;
     })}</div>`;
@@ -465,7 +544,7 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
     // A value breaks only between its parts, at the middle dot.
     const part = (content: unknown): TemplateResult => html`<span class="part">${content}</span>`;
     const position = (entityId: string | undefined) =>
-      html`${part(amount(units(entityId), hidden))}${DOT}${part(amount(formatState(hass, entityId), hidden))}`;
+      html`${part(amount(hass, units(entityId), hidden))}${DOT}${part(amount(hass, formatState(hass, entityId), hidden))}`;
     const profit = numberAttribute(totalState, "total_return");
     const percent = formatPercent(hass, numberAttribute(totalState, "total_return_percent"));
     // The price is a market price, not the user's amount: never blurred.
@@ -474,24 +553,28 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
     const dayChange = numberAttribute(totalState, "change_24h_pct");
     const day = formatPercent(hass, dayChange);
     const apr = numberAttribute(stakingState, "apr_percent");
-    const net = numberAttribute(stakingState, "rewards_net");
     const count = numberAttribute(stakingState, "rewards_count");
     const lastAt = stakingState?.attributes["rewards_last_at"];
     const last = typeof lastAt === "string" && Number.isFinite(Date.parse(lastAt)) ? formatDayTime(hass, Date.parse(lastAt)) : "—";
-    const worth = money(numberAttribute(stakingState, "rewards_net_value"));
+    const recent = numberAttribute(stakingState, "rewards_net_30d");
+    // What was earned, net of fees: its units and their value today.
+    const earned = (units: number | undefined, value: number | undefined) =>
+      html`${part(amount(hass, units === undefined ? undefined : formatUnits(hass, units, wallet.category, wallet.symbol), hidden))}${DOT}${part(
+        amount(hass, money(value), hidden),
+      )}`;
     // The staking block keeps its rows whether something is staked or not;
     // the rewards' rows come with the first payout.
     return html`<div class="detail">
       <div class="grid">
         <span>${t(hass, "detail_price")}</span><span>${current === undefined ? "—" : formatAssetPrice(hass, current, currency)}</span>
-        <span>${t(hass, "detail_average_buy_price")}</span><span>${amount(price(numberAttribute(totalState, "average_buy_price")), hidden)}</span>
-        <span>${t(hass, "detail_invested")}</span><span>${amount(money(numberAttribute(totalState, "invested_amount")), hidden)}</span>
+        <span>${t(hass, "detail_average_buy_price")}</span><span>${amount(hass, price(numberAttribute(totalState, "average_buy_price")), hidden)}</span>
+        <span>${t(hass, "detail_invested")}</span><span>${amount(hass, money(numberAttribute(totalState, "invested_amount")), hidden)}</span>
         ${dayReturn !== undefined && dayChange !== undefined
           ? html`<span>${t(hass, "detail_return_24h")}</span
-              ><span class=${trendClass(day.direction)}>${part(amount(money(dayReturn, true), hidden))} ${part(`(${day.text})`)}</span>`
+              ><span class=${trendClass(day.direction)}>${part(amount(hass, money(dayReturn, true), hidden))} ${part(`(${day.text})`)}</span>`
           : nothing}
         <span>${t(hass, "detail_total_return")}</span
-        ><span class=${trendClass(percent.direction)}>${part(amount(money(profit, true), hidden))} ${part(`(${percent.text})`)}</span>
+        ><span class=${trendClass(percent.direction)}>${part(amount(hass, money(profit, true), hidden))} ${part(`(${percent.text})`)}</span>
       </div>
       ${wallet.staking
         ? html`<h4>${t(hass, "detail_staking")}</h4>
@@ -499,9 +582,12 @@ export class PortfolioCard extends BitpandaCard<PortfolioConfig> {
               <span>${t(hass, "detail_staked")}</span><span>${position(wallet.staking)}</span>
               ${apr !== undefined ? html`<span>${t(hass, "detail_staking_apr")}</span><span>${formatShare(hass, apr, 1)}</span>` : nothing}
               ${count !== undefined && count > 0
-                ? html`<span>${t(hass, "detail_rewards_net")}</span
-                    ><span>${amount(net === undefined ? undefined : formatUnits(hass, net, wallet.category, wallet.symbol), hidden)}</span>
-                    <span>${t(hass, "detail_rewards_value")}</span><span>${amount(worth, hidden)}</span>
+                ? html`${recent === undefined
+                      ? nothing
+                      : html`<span>${t(hass, "detail_earned_30d")}</span
+                          ><span>${earned(recent, numberAttribute(stakingState, "rewards_net_value_30d"))}</span>`}
+                    <span>${t(hass, "detail_earned_total")}</span
+                    ><span>${earned(numberAttribute(stakingState, "rewards_net"), numberAttribute(stakingState, "rewards_net_value"))}</span>
                     <span>${t(hass, "detail_payouts")}</span
                     ><span
                       >${t(hass, "detail_payouts_value", { count, date: last })

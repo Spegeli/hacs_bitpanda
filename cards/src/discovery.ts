@@ -1,6 +1,7 @@
 // Finds the integration's sensors through Home Assistant's registries:
 // platform "bitpanda", the device's model, the sensor's translation key.
 // Never by entity ID, which users can rename.
+import type { DeviceModel } from "./forms";
 import {
   CATEGORIES,
   type AssetInfo,
@@ -77,6 +78,23 @@ const lastKnown = new Map<string, Known>();
 // The integration's device names end in " Wallet" or " Price Tracker".
 const DEVICE_SUFFIX = / (Wallet|Price Tracker)$/;
 
+/** The Bitpanda devices of `model`: those the integration identifies --
+ * a device whose sensors are all disabled included, which the device
+ * picker offers as well. */
+export function bitpandaDevices(hass: Hass | undefined, model: DeviceModel): HassDevice[] {
+  if (!hass) return [];
+  return Object.values(hass.devices).filter(
+    (device): device is HassDevice =>
+      device !== undefined && device.model === model && (device.identifiers ?? []).some(([domain]) => domain === "bitpanda"),
+  );
+}
+
+/** A device's name as the user sees it, without the integration's suffix:
+ * "Bitcoin (BTC)". */
+export function deviceLabel(device: HassDevice): string {
+  return (text(device.name_by_user) ?? text(device.name) ?? "").replace(DEVICE_SUFFIX, "");
+}
+
 /** What the device's sensors say about their asset, else what they said
  * before, else the device's name. */
 function assetInfo(hass: Hass, device: HassDevice, entries: HassEntityRegistryEntry[]): AssetInfo {
@@ -118,6 +136,9 @@ export function findPortfolio(hass: Hass): PortfolioRefs | undefined {
     if (key === "total_value") refs.totalValue = entry.entity_id;
     else if (key === "cash") refs.cash = entry.entity_id;
     else if (key === "cash_plus") refs.cashPlus = entry.entity_id;
+    else if (key === "invested") refs.invested = entry.entity_id;
+    else if (key === "total_return") refs.totalReturn = entry.entity_id;
+    else if (key === "total_return_percent") refs.totalReturnPercent = entry.entity_id;
     else if (key in RETURN_KEYS) refs.returns[RETURN_KEYS[key] as Timeframe] = entry.entity_id;
   }
   for (const [wallet, walletEntries] of devicesOf(hass, "Wallet")) {

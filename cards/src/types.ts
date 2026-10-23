@@ -100,6 +100,10 @@ export interface PortfolioRefs {
   totalValue?: string;
   cash?: string;
   cashPlus?: string;
+  /** What went into the positions, their total return and its percentage. */
+  invested?: string;
+  totalReturn?: string;
+  totalReturnPercent?: string;
   returns: Partial<Record<Timeframe, string>>;
   wallets: WalletRefs[];
 }
@@ -138,14 +142,22 @@ export const LAYOUTS: readonly Layout[] = ["list", "tiles"];
 export interface BaseConfig {
   type: string;
   title?: string;
+  /** The header row: the title, on the Portfolio card the eye. */
+  show_header?: boolean;
+  /** The timeframe buttons; without them the card keeps `timeframe`. */
+  show_timeframes?: boolean;
 }
 
 export interface PortfolioConfig extends BaseConfig {
   timeframe?: Timeframe;
   /** The total value and its return. */
   show_total?: boolean;
+  /** The return since purchase and the invested amount, under the return. */
+  show_since_purchase?: boolean;
   show_graph?: boolean;
   show_cash?: boolean;
+  /** The staking line under Cash: the whole portfolio's staked value. */
+  show_staking?: boolean;
   show_allocation?: boolean;
   show_wallets?: boolean;
   group_wallets?: boolean;
@@ -171,4 +183,11 @@ export interface PriceTrackerConfig extends BaseConfig {
   asset_selection?: AssetSelection;
   assets?: string[];
   limit?: number;
+  /** The currency buttons; without them the card keeps `currency`. */
+  show_currencies?: boolean;
+  /** A line in every row and tile; the changes come from the statistics
+   * either way. */
+  show_lines?: boolean;
+  /** The change in the price's currency beside its percentage. */
+  show_amounts?: boolean;
 }

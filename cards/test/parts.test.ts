@@ -61,6 +61,13 @@ describe("returnChip", () => {
     expect(textOf(host.querySelector(".chip"))).toBe("—");
   });
 
+  it("is no button without something to open", () => {
+    const chip = mount(returnChip(makeHass(), -0.42, "day", undefined)).querySelector(".chip") as HTMLElement;
+    expect([chip.getAttribute("role"), chip.getAttribute("tabindex")]).toEqual([null, null]);
+    const tappable = mount(returnChip(makeHass(), -0.42, "day", () => undefined)).querySelector(".chip") as HTMLElement;
+    expect([tappable.getAttribute("role"), tappable.getAttribute("tabindex")]).toEqual(["button", "0"]);
+  });
+
   it("shows the amount beside the chip in the chip's colour, which the eye blurs", () => {
     const shown = mount(returnChip(makeHass(), -0.42, "day", () => undefined, { text: "-€53.82", hidden: false }));
     expect(textOf(shown.querySelector(".chip"))).toBe("▼ -0.42%");
@@ -185,11 +192,23 @@ describe("walletRow", () => {
     expect(unstaked.querySelector(".sub")?.classList.contains("staked")).toBe(false);
   });
 
-  it("counts metals in grams and blurs amounts and units when hidden", () => {
+  it("counts metals in grams and masks amounts and units when hidden", () => {
+    expect(textOf(mount(walletRow({ hass, wallet: wallet("XAU"), hidden: false, onTap: () => undefined })).querySelector(".s"))).toBe("0.56 g");
     const host = mount(walletRow({ hass, wallet: wallet("XAU"), hidden: true, onTap: () => undefined }));
-    expect(textOf(host.querySelector(".s"))).toBe("0.56 g");
+    expect(textOf(host.querySelector(".s"))).toBe("••••••");
     expect(host.querySelectorAll(".amount.blur")).toHaveLength(2);
     expect(textOf(host.querySelector(".wchip"))).toBe("▲ +4.20%");
+  });
+
+  it("is no button while hidden, its chevron still is", () => {
+    const tapped: string[] = [];
+    const host = mount(walletRow({ hass, wallet: wallet("BTC"), hidden: true, onTap: () => tapped.push("row"), chevron: { open: false, toggle: () => tapped.push("chevron") } }));
+    const tap = host.querySelector(".tap") as HTMLElement;
+    expect([tap.getAttribute("role"), tap.getAttribute("tabindex")]).toEqual([null, null]);
+    tap.click();
+    tap.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    (host.querySelector(".chevron") as HTMLElement).click();
+    expect(tapped).toEqual(["chevron"]);
   });
 
   it("has a chevron when it can open, and taps open the sensor", () => {
@@ -270,10 +289,18 @@ describe("small parts", () => {
     expect(textOf(mount(emptyState("Set it up.")).querySelector(".empty"))).toBe("Set it up.");
   });
 
-  it("amount blurs when hidden", () => {
-    expect(mount(amount("€1", true)).querySelector(".amount")?.classList.contains("blur")).toBe(true);
-    expect(mount(amount("€1", false)).querySelector(".amount")?.classList.contains("blur")).toBe(false);
-    expect(textOf(mount(amount(undefined, false)).querySelector(".amount"))).toBe("—");
+  it("amount shows a fixed, blurred mask while hidden, read out as \"Amount hidden\"", () => {
+    const hass = makeHass();
+    const hidden = mount(amount(hass, "€1,234.56", true)).querySelector(".amount") as HTMLElement;
+    expect(hidden.classList.contains("blur")).toBe(true);
+    expect(textOf(hidden)).toBe("••••••");
+    expect([hidden.getAttribute("role"), hidden.getAttribute("aria-label")]).toEqual(["img", "Amount hidden"]);
+    expect(textOf(mount(amount(hass, undefined, true)).querySelector(".amount"))).toBe("••••••");
+    const shown = mount(amount(hass, "€1", false)).querySelector(".amount") as HTMLElement;
+    expect(shown.classList.contains("blur")).toBe(false);
+    expect([shown.hasAttribute("role"), shown.hasAttribute("aria-label"), textOf(shown)]).toEqual([false, false, "€1"]);
+    expect(textOf(mount(amount(hass, undefined, false)).querySelector(".amount"))).toBe("—");
+    expect(mount(amount(makeHass({ language: "de" }), "1 €", true)).querySelector(".amount")?.getAttribute("aria-label")).toBe("Betrag verborgen");
   });
 
   it("moreInfo fires hass-more-info with the entity", () => {
@@ -424,6 +451,26 @@ describe("the shared styles", () => {
     // A half-width card in a four-column dashboard: about 170 px.
     const tiny = css.match(/@container\s*\(max-width:\s*(\d+)px\)\s*\{([\s\S]*?)\n  \}/g)?.find((rule) => /max-width:\s*240px/.test(rule)) ?? "";
     expect(tiny).toMatch(/\.seg \[role="radio"\]\s*\{[^}]*padding:\s*4px 4px/);
+  });
+});
+
+describe("the pointer", () => {
+  it("follows what is a button, not a class: a piece the eye or a missing sensor makes no button gets none", async () => {
+    const { PriceTrackerCard } = await import("../src/price-tracker-card");
+    const css = (PriceTrackerCard.styles as { cssText: string }[])
+      .map((sheet) => sheet.cssText)
+      .join("\n")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    const rules = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((match) => ({
+      selectors: (match[1] ?? "").split(",").map((selector) => selector.trim()),
+      body: match[2] ?? "",
+    }));
+    expect(rules.some((rule) => rule.selectors.includes('[role="button"]') && /cursor:\s*pointer/.test(rule.body))).toBe(true);
+    const pieces = [".hero", ".chip", ".pair > div", ".wallet .tap", ".staking", ".staking-row", ".since-chip", ".since-amount", ".price-row", ".tile"];
+    for (const selector of pieces) {
+      const pointed = rules.filter((rule) => rule.selectors.includes(selector) && /cursor/.test(rule.body));
+      expect(pointed, selector).toEqual([]);
+    }
   });
 });
 

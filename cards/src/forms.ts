@@ -155,11 +155,18 @@ export const groupFields = (names: Partial<Record<Category, string>>, selection:
     : []),
 ];
 
-/** The assets a card shows; the assets to choose only while the selection
- * asks for them. */
-export const assetFields = (model: DeviceModel, selection: unknown): FormField[] => [
+/** Which assets a card shows; while the selection chooses, the assets to
+ * choose: Home Assistant's device picker, or with `options` a select whose
+ * chips can be dragged into the order the card shows them in. */
+export const assetFields = (model: DeviceModel, selection: unknown, options?: readonly { value: string; label: string }[]): FormField[] => [
   { name: "asset_selection", selector: select(ASSET_SELECTIONS, (value) => t(undefined, `sel_${value}` as TextKey)) },
-  ...(chooses(selection) ? [{ name: "assets", selector: { device: { multiple: true, filter: [{ integration: "bitpanda", model }] } } }] : []),
+  ...(chooses(selection)
+    ? [
+        options
+          ? { name: "assets", selector: { select: { multiple: true, reorder: true, mode: "dropdown", options } } }
+          : { name: "assets", selector: { device: { multiple: true, filter: [{ integration: "bitpanda", model }] } } },
+      ]
+    : []),
 ];
 
 /** A line between fields. Home Assistant releases without one (2025.5
@@ -178,8 +185,10 @@ const LABELS: Record<string, TextKey> = {
   title: "opt_title",
   timeframe: "opt_timeframe",
   show_total: "opt_show_total",
+  show_since_purchase: "opt_show_since_purchase",
   show_graph: "opt_show_line",
   show_cash: "opt_show_cash",
+  show_staking: "opt_show_staking",
   show_allocation: "opt_show_allocation",
   show_wallets: "opt_show_wallets",
   group_wallets: "opt_group_wallets",
@@ -190,6 +199,11 @@ const LABELS: Record<string, TextKey> = {
   asset_selection: "opt_asset_selection",
   assets: "opt_assets",
   hide_amounts: "opt_hide_amounts",
+  show_header: "opt_show_header",
+  show_timeframes: "opt_show_timeframes",
+  show_currencies: "opt_show_currencies",
+  show_lines: "opt_show_lines",
+  show_amounts: "opt_show_amounts",
   limit: "opt_limit",
   layout: "opt_layout",
   currency: "opt_currency",
@@ -199,8 +213,11 @@ const HELPERS: Record<string, TextKey> = {
   title: "opt_title_help",
   timeframe: "opt_timeframe_help",
   show_total: "opt_show_total_help",
+  show_since_purchase: "opt_show_since_purchase_help",
   show_allocation: "opt_show_allocation_help",
   hide_amounts: "opt_hide_amounts_help",
+  show_timeframes: "opt_show_timeframes_help",
+  show_currencies: "opt_show_currencies_help",
   show_search: "opt_show_search_help",
   assets: "opt_assets_help",
   limit: "opt_limit_help",

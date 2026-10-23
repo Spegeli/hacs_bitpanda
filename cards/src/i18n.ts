@@ -12,7 +12,7 @@ import { pl } from "./translations/pl";
 import type { Category, Hass } from "./types";
 
 export type TextKey = keyof typeof en;
-export type CountKey = "shares" | "assets_missing";
+export type CountKey = "shares" | "assets_missing" | "staking_wallets";
 
 export const LANGUAGES = { en, de, fr, nl, it, es, pl } satisfies Record<string, Texts>;
 type Language = keyof typeof LANGUAGES;

@@ -5,10 +5,10 @@ import { css, html, nothing, type PropertyValues, type TemplateResult } from "li
 import { BitpandaCard, COMMON_OPTIONS } from "./base-card";
 import { findPriceAssets, priceCurrencies, selectAssets, selectGroups } from "./discovery";
 import { PRICE_TRACKER_EDITOR, createEditor } from "./editor";
-import { assetList, currencyCode, editorHass, groupList, nonNegativeInt, oneOf, validateConfig } from "./forms";
+import { assetList, bool, currencyCode, editorHass, groupList, nonNegativeInt, oneOf, validateConfig } from "./forms";
 import { arrow, formatDay, formatLongDate, formatPercent, formatSignedLike, formatState, numericState, trendClass } from "./format";
 import { languageOf, t, type TextKey } from "./i18n";
-import { allFit, currencySwitch, emptyState, header, onActivate, opener, timeframeSwitch, unbroken } from "./parts";
+import { allFit, currencySwitch, emptyState, header, opener, tapTarget, timeframeSwitch, unbroken } from "./parts";
 import { defineCard } from "./register";
 import { renderSparkline } from "./sparkline";
 import { SeriesLoader, changeFromSeries, lineStepMs, windowFor, type Point, type StatWindow } from "./statistics";
@@ -39,7 +39,6 @@ const priceStyles = css`
     gap: 8px;
     padding: 9px 0;
     border-top: 1px solid var(--bp-divider);
-    cursor: pointer;
   }
   .price-row .lead {
     grid-area: lead;
@@ -73,6 +72,17 @@ const priceStyles = css`
       "lead line price"
       "lead line change";
     row-gap: 2px;
+  }
+  /* Without lines: no line column. */
+  .rows.no-lines .price-row {
+    grid-template-columns: minmax(0, 1fr) var(--bp-price, auto) var(--bp-change, minmax(78px, auto));
+    grid-template-areas: "lead price change";
+  }
+  .rows.no-lines.stacked .price-row {
+    grid-template-columns: minmax(0, 1fr) var(--bp-figures, auto);
+    grid-template-areas:
+      "lead price"
+      "lead change";
   }
   .rows.stacked .price-row .p {
     align-self: end;
@@ -119,7 +129,6 @@ const priceStyles = css`
     border: 1px solid var(--bp-divider);
     border-radius: 10px;
     padding: 10px;
-    cursor: pointer;
     min-width: 0;
   }
   .tile .n {
@@ -186,6 +195,12 @@ const priceStyles = css`
     }
     .price-row .mini {
       display: none;
+    }
+    .rows.no-lines .price-row {
+      grid-template-columns: minmax(0, 1fr) auto auto;
+    }
+    .rows.no-lines.stacked .price-row {
+      grid-template-columns: minmax(0, 1fr) auto;
     }
   }
   /* Not even room for the name beside the price above its change: name and
@@ -308,6 +323,9 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
       asset_selection: oneOf(ASSET_SELECTIONS),
       assets: assetList,
       limit: nonNegativeInt,
+      show_currencies: bool,
+      show_lines: bool,
+      show_amounts: bool,
     });
   }
 
@@ -387,7 +405,7 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
     // only as wide as they are, and the line's room comes from the card's
     // width, not from the line, which the last layout hides: the same
     // widths in every layout.
-    const lineRoom = this.clientWidth > NARROW_LIST ? LINE_WIDTH + ROW_GAP : 0;
+    const lineRoom = this.config?.show_lines !== false && this.clientWidth > NARROW_LIST ? LINE_WIDTH + ROW_GAP : 0;
     const rows = [...this.renderRoot.querySelectorAll<HTMLElement>(".price-row")].map((row) => {
       const part = (selector: string): number => measure(row.querySelector(selector) as Element);
       return { room: row.clientWidth - lineRoom, price: part(".p"), change: Math.max(part(".c .pct"), width(row.querySelector(".c .a")) ?? 0) };
@@ -404,13 +422,15 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
   }
 
   override getCardSize(): number {
-    return 6;
+    return this.config?.show_header === false ? 5 : 6;
   }
 
 
   /** The row's line: on the window's axis, or from the statistics' start
-   * when they start later, the span its change covers. */
+   * when they start later, the span its change covers; none while the card
+   * shows no lines. */
   private line(row: Row, direction: string): TemplateResult | typeof nothing {
+    if (this.config?.show_lines === false) return nothing;
     const window = row.since === undefined ? this.window : { ...this.window, start: row.since };
     return row.points && row.points.length > 0
       ? renderSparkline(row.points, window, { width: 96, height: 28, fill: false, className: `mini ${direction}`, stepMs: lineStepMs(window) })
@@ -421,7 +441,7 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
     const { text, direction } = formatPercent(hass, row.change);
     const mark = arrow(direction);
     const className = trendClass(direction);
-    const amount = direction === "none" ? undefined : formatSignedLike(hass, row.entityId, row.amount);
+    const amount = direction === "none" || this.config?.show_amounts === false ? undefined : formatSignedLike(hass, row.entityId, row.amount);
     // The percentage in a chip, as the Portfolio card shows its own; the
     // amount beside or below it, never in it.
     const cell = html`<div class="pct pchip ${direction === "none" ? "none" : ""}">${direction === "none" ? "—" : `${mark ? `${mark} ` : ""}${text}`}</div>${amount
@@ -437,12 +457,14 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
   private renderList(hass: Hass, rows: Row[]): TemplateResult {
     const columns = this.columns;
     const widths = columns ? `--bp-price:${columns.price}px;--bp-change:${columns.change}px;--bp-figures:${columns.figures}px` : "";
-    return html`<div class="rows ${this.rowsLayout === "beside" ? "" : this.rowsLayout}" style=${widths}>
+    const layout = [this.rowsLayout === "beside" ? "" : this.rowsLayout, this.config?.show_lines === false ? "no-lines" : ""].filter(Boolean).join(" ");
+    return html`<div class="rows ${layout}" style=${widths}>
       ${rows.map((row) => {
         const change = this.change(hass, row);
+        const tap = tapTarget(opener(this, row.entityId));
         // As in the tiles: the name, and below it the symbol, or a
         // security's ISIN.
-        return html`<div class="price-row" role="button" tabindex="0" @click=${opener(this, row.entityId)} @keydown=${onActivate(opener(this, row.entityId))}>
+        return html`<div class="price-row" role=${tap.role} tabindex=${tap.tabindex} @click=${tap.click} @keydown=${tap.keydown}>
           <div class="lead"><div class="n" title=${row.asset.shortName}>${row.asset.shortName}</div><div class="s">${row.asset.isin ?? row.asset.symbol}</div>${this.since(hass, row)}</div>
           ${this.line(row, change.lineClass)}
           <div class="p">${formatState(hass, row.entityId) ?? "—"}</div>
@@ -456,7 +478,8 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
     return html`<div class="tiles ${this.amountsInline ? "inline" : ""}">
       ${rows.map((row) => {
         const change = this.change(hass, row);
-        return html`<div class="tile" role="button" tabindex="0" @click=${opener(this, row.entityId)} @keydown=${onActivate(opener(this, row.entityId))}>
+        const tap = tapTarget(opener(this, row.entityId));
+        return html`<div class="tile" role=${tap.role} tabindex=${tap.tabindex} @click=${tap.click} @keydown=${tap.keydown}>
           <div class="n" title=${row.asset.shortName}>${row.asset.shortName}</div>
           <div class="s">${row.asset.isin ?? row.asset.symbol}</div>
           <div class="p">${formatState(hass, row.entityId) ?? "—"}</div>
@@ -473,23 +496,30 @@ export class PriceTrackerCard extends BitpandaCard<PriceTrackerConfig> {
       .map((row) => (row.entityId ? hass.states[row.entityId]?.attributes["rate_date"] : undefined))
       .map((value) => (typeof value === "string" ? formatLongDate(hass, value) : undefined))
       .find((value): value is string => value !== undefined);
-    return date ? html`<div class="foot">${t(hass, "ecb_footer", { currency, date })}</div>` : nothing;
+    // Without amounts the footer speaks of the percentages alone.
+    const text = this.config?.show_amounts === false ? "ecb_footer_percent" : "ecb_footer";
+    return date ? html`<div class="foot">${t(hass, text, { currency, date })}</div>` : nothing;
   }
 
   protected override render(): TemplateResult | typeof nothing {
     const hass = this.hass;
     const config = this.config;
     if (!hass || !config) return nothing;
-    const head = header(hass, config.title || "Bitpanda Price Tracker");
+    const shown = config.show_header !== false;
+    const head = shown ? header(hass, config.title || "Bitpanda Price Tracker") : nothing;
     if (findPriceAssets(hass).length === 0) return html`<ha-card>${head}${emptyState(t(hass, "empty_price_tracker"))}</ha-card>`;
     const { rows, total, folds, currency, currencies } = this.visible(hass, config);
+    const timeframes = config.show_timeframes !== false;
+    const currencyButtons = config.show_currencies !== false;
     return html`<ha-card>
       ${head}
-      <div class="content">
-        <div class="switches">
-          ${timeframeSwitch(hass, this.timeframe, (timeframe) => this.selectTimeframe(timeframe))}
-          ${currencySwitch(hass, currencies, currency, (picked) => (this.currency = picked))}
-        </div>
+      <div class="content ${shown ? "" : "headless"}">
+        ${timeframes || currencyButtons
+          ? html`<div class="switches">
+              ${timeframes ? timeframeSwitch(hass, this.timeframe, (timeframe) => this.selectTimeframe(timeframe)) : nothing}
+              ${currencyButtons ? currencySwitch(hass, currencies, currency, (picked) => (this.currency = picked)) : nothing}
+            </div>`
+          : nothing}
         ${rows.length === 0
           ? emptyState(t(hass, "empty_selection_assets"))
           : config.layout === "tiles"

@@ -13,8 +13,8 @@ import { en } from "../src/translations/en";
 import { makeHass } from "./fixtures";
 
 const placeholders = (text: string): string[] => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1] ?? "").sort();
-const COUNTED = ["shares", "assets_missing"] as const;
-const PLURAL_EXTRAS = /^(shares|assets_missing)_(zero|two|few|many)$/;
+const COUNTED = ["shares", "assets_missing", "staking_wallets"] as const;
+const PLURAL_EXTRAS = /^(shares|assets_missing|staking_wallets)_(zero|two|few|many)$/;
 
 describe("the card texts", () => {
   it("come in the integration's seven languages", () => {
@@ -43,6 +43,19 @@ describe("the card texts", () => {
         const counted = COUNTED.find((name) => key.startsWith(`${name}_`));
         const original = (en as Record<string, string>)[key] ?? (counted ? (en as Record<string, string>)[`${counted}_other`] : undefined) ?? "";
         expect(placeholders(text), `${language} ${key}`).toEqual(placeholders(original));
+      }
+    }
+  });
+
+  it("French keeps ; : ! ? and » with the word before them, « with the word after it", () => {
+    // A no-break space, as French typography sets them: a narrow card never
+    // starts a line with the mark.
+    const noBreak = /[  ]/;
+    for (const [key, text] of Object.entries(LANGUAGES.fr as Record<string, string>)) {
+      for (let index = 0; index < text.length; index++) {
+        const char = text.charAt(index);
+        if (";:!?»".includes(char)) expect(noBreak.test(text.charAt(index - 1)), `${key}: ${text}`).toBe(true);
+        if (char === "«") expect(noBreak.test(text.charAt(index + 1)), `${key}: ${text}`).toBe(true);
       }
     }
   });
@@ -104,5 +117,17 @@ describe("category names", () => {
 
   it("fall back to the key", () => {
     expect(categoryName(makeHass(), "metal")).toBe("metal");
+  });
+});
+
+describe("the staking line's count", () => {
+  const as = (language: string) => makeHass({ language });
+  it("takes every plural form a language has", () => {
+    expect(tCount(as("en"), "staking_wallets", 1)).toBe("in 1 wallet");
+    expect(tCount(as("en"), "staking_wallets", 3)).toBe("in 3 wallets");
+    expect(tCount(as("pl"), "staking_wallets", 1)).toBe("w 1 portfelu");
+    expect(tCount(as("pl"), "staking_wallets", 3)).toBe("w 3 portfelach");
+    expect(tCount(as("pl"), "staking_wallets", 5)).toBe("w 5 portfelach");
+    expect(tCount(as("fr"), "staking_wallets", 1000000)).toBe("dans 1000000 wallets");
   });
 });

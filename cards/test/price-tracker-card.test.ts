@@ -684,6 +684,18 @@ describe("the Bitpanda Price Tracker card", () => {
     expect(odd).toEqual({ name: "Oddity", sub: "ODD", price: "—", change: "—" });
   });
 
+  it("an asset without a price in the selected currency is no button, as a row or a tile", async () => {
+    const devices = [...ASSETS, priceDevice({ symbol: "ODD", name: "Oddity", category: "crypto", prices: { EUR: { state: "1" } } })];
+    for (const layout of ["list", "tiles"]) {
+      const card = await mount({ currency: "USD", layout }, trackerHass({ devices }));
+      const parts = all(card, layout === "list" ? ".price-row" : ".tile");
+      const odd = parts.find((part) => textOf(part.querySelector(".n")) === "Oddity");
+      expect(odd?.getAttribute("role"), layout).toBeNull();
+      expect(odd?.getAttribute("tabindex"), layout).toBeNull();
+      expect(parts.filter((part) => part.getAttribute("role") === "button"), layout).toHaveLength(parts.length - 1);
+    }
+  });
+
   it("two dashes sort by name", async () => {
     const devices = [
       ...ASSETS,
@@ -740,7 +752,7 @@ describe("the Bitpanda Price Tracker card", () => {
     // Every field: the groups and assets to choose show while some are chosen.
     const { form } = await openEditor("bitpanda-price-tracker-card", { group_selection: "only", asset_selection: "only" });
     expect(fieldNames(form.schema).sort()).toEqual(
-      ["asset_selection", "assets", "currency", "group_selection", "groups", "layout", "limit", "sort", "timeframe", "title"].sort(),
+      ["asset_selection", "assets", "currency", "group_selection", "groups", "layout", "limit", "show_amounts", "show_currencies", "show_header", "show_lines", "show_timeframes", "sort", "timeframe", "title"].sort(),
     );
     // The asset groups: under Assets, right above the assets.
     const assets = form.schema.find((field) => (field as { title?: string }).title === "Assets") as unknown as { schema: { name: string; type?: string }[] };
@@ -749,8 +761,15 @@ describe("the Bitpanda Price Tracker card", () => {
     expect(assets.schema.map((field) => (field.type === "divider" ? "—" : field.name))).toEqual(
       ["sort", "limit", "—", "group_selection", "groups", "—", "asset_selection", "assets"],
     );
-    const content = form.schema.find((field) => (field as { title?: string }).title === "Content") as unknown as { schema: { name: string }[] };
-    expect(content.schema.map((field) => field.name)).toEqual(["layout", "timeframe", "currency"]);
+    // The title on top, then Content, Assets and Appearance, as in the
+    // Portfolio card's editor.
+    expect(form.schema.map((field) => (field as { name?: string; title?: string }).title ?? (field as { name: string }).name)).toEqual([
+      "title", "Content", "Assets", "Appearance",
+    ]);
+    // Content: what each asset shows beside its price.
+    const content = form.schema.find((field) => (field as { title?: string }).title === "Content") as unknown as { schema: { name: string; default?: unknown }[] };
+    expect(content.schema.map((field) => field.name)).toEqual(["show_lines", "show_amounts"]);
+    expect(content.schema.map((field) => field.default)).toEqual([true, true]);
     expect(form.computeLabel({ name: "assets" })).toBe("Choose assets");
     expect(form.computeHelper({ name: "assets" })).toBe("An asset from a hidden asset group stays hidden, even when chosen here");
     expect(form.computeHelper({ name: "timeframe" })).toBe("The 1D to 1Y buttons on the card change it only temporarily");
@@ -784,5 +803,150 @@ describe("the Bitpanda Price Tracker card", () => {
     const card = await mount();
     expect(card.getCardSize()).toBe(6);
     expect(card.getGridOptions()).toEqual({ columns: 12, min_columns: 6 });
+  });
+});
+
+describe("the compact options", () => {
+  const css = (): string => (PriceTrackerCard.styles as unknown as { cssText: string }[]).map((sheet) => sheet.cssText).join("\n");
+  const rule = (selector: string, within: string): string | undefined =>
+    within.match(new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`))?.[1];
+  const changes = (card: PriceTrackerCard): string[] => all(card, ".c .pct").map((chip) => textOf(chip));
+
+  it("show_header: false leaves the header out, in the empty state too, and counts one row less", async () => {
+    const card = await mount({ show_header: false });
+    expect(one(card, ".head")).toBeNull();
+    expect(one(card, ".content")?.classList.contains("headless")).toBe(true);
+    expect(card.getCardSize()).toBe(5);
+    const empty = await mount({ show_header: false }, makeHass({ devices: [portfolioDevice()] }));
+    expect(one(empty, ".head")).toBeNull();
+    expect(one(empty, ".empty")).not.toBeNull();
+  });
+
+  it("show_timeframes: false leaves the timeframe buttons out, the card keeps its timeframe", async () => {
+    const card = await mount({ show_timeframes: false, timeframe: "week" });
+    expect(one(card, '[role="radiogroup"][aria-label="Timeframe"]')).toBeNull();
+    expect(one(card, '[role="radiogroup"][aria-label="Currency"]')).not.toBeNull();
+    // A week: Sui's statistics, three days long, start within it.
+    await vi.waitFor(() => expect(all(card, ".since").length).toBe(1));
+  });
+
+  it("show_currencies: false leaves the currency buttons out, the card keeps its currency", async () => {
+    const card = await mount({ show_currencies: false, currency: "USD" });
+    expect(one(card, '[role="radiogroup"][aria-label="Currency"]')).toBeNull();
+    expect(one(card, '[role="radiogroup"][aria-label="Timeframe"]')).not.toBeNull();
+    expect(rows(card).find((row) => row.name === "Bitcoin")?.price).toBe("105312.09 USD");
+  });
+
+  it("with both switches hidden the switches row is gone", async () => {
+    expect(one(await mount({ show_timeframes: false, show_currencies: false }), ".switches")).toBeNull();
+    expect(one(await mount({ show_timeframes: false }), ".switches")).not.toBeNull();
+  });
+
+  it("without lines no row or tile draws one, and the list drops their column", async () => {
+    const card = await mount({ show_lines: false });
+    await vi.waitFor(() => expect(changes(card)).not.toContain("—"));
+    expect(all(card, ".mini")).toHaveLength(0);
+    expect(one(card, ".rows")?.classList.contains("no-lines")).toBe(true);
+    const tiles = await mount({ show_lines: false, layout: "tiles" });
+    await vi.waitFor(() => expect(changes(tiles)).not.toContain("—"));
+    expect(all(tiles, ".mini")).toHaveLength(0);
+    const lined = await mount();
+    expect(one(lined, ".rows")?.classList.contains("no-lines")).toBe(false);
+    expect(all(lined, ".mini").length).toBeGreaterThan(0);
+  });
+
+  it("without lines the Price Tracker still reads the statistics for its changes", async () => {
+    const card = await mount({ show_lines: false });
+    await vi.waitFor(() => expect(changes(card)).toHaveLength(4));
+    await vi.waitFor(() => expect(changes(card)).not.toContain("—"));
+  });
+
+  it("without lines a list row has no line column: beside, stacked and narrow", () => {
+    const sheet = css();
+    const narrow = (sheet.match(/@container\s*\(max-width:\s*(\d+)px\)\s*\{([\s\S]*?)\n  \}/g) ?? []).join("\n");
+    const beside = rule(".rows.no-lines .price-row", sheet);
+    expect(beside).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\) var\(--bp-price, auto\) var\(--bp-change, minmax\(78px, auto\)\);/);
+    expect(beside).toMatch(/grid-template-areas:\s*"lead price change"/);
+    const stacked = rule(".rows.no-lines.stacked .price-row", sheet);
+    expect(stacked).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\) var\(--bp-figures, auto\);/);
+    expect(stacked).toMatch(/grid-template-areas:\s*"lead price"\s*"lead change"/);
+    // A narrow list sizes them as it does with lines.
+    expect(rule(".rows.no-lines .price-row", narrow)).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\) auto auto;/);
+    expect(rule(".rows.no-lines.stacked .price-row", narrow)).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\) auto;/);
+  });
+
+  it("without lines a row's name keeps the line's room: beside where it stacks with lines", async () => {
+    const room = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(392);
+    const rect = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const list = this.classList;
+      const width = list.contains("p") ? 75 : list.contains("pct") ? 60 : list.contains("a") ? 65 : 0;
+      return { width, height: 0, x: 0, y: 0, top: 0, left: 0, right: width, bottom: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    const layout = (card: PriceTrackerCard) => {
+      const list = one(card, ".rows")?.classList;
+      return [list?.contains("stacked"), list?.contains("below")];
+    };
+    const resize = async (card: PriceTrackerCard, width: number) => {
+      room.mockReturnValue(width);
+      card.requestUpdate();
+      await card.updateComplete;
+    };
+    try {
+      const lined = await mount();
+      await vi.waitFor(() => expect(layout(lined)).toEqual([true, false]));
+      const bare = await mount({ show_lines: false });
+      // 120 name + 8 + 75 price + 8 + 78, the change's least: beside down to 289 px.
+      await resize(bare, 288);
+      await vi.waitFor(() => expect(layout(bare)).toEqual([true, false]));
+      await resize(bare, 392);
+      await vi.waitFor(() => expect(layout(bare)).toEqual([false, false]));
+    } finally {
+      room.mockRestore();
+      rect.mockRestore();
+    }
+  });
+
+  it("without amounts no change shows its amount, in the list and in tiles", async () => {
+    const card = await mount({ show_amounts: false });
+    await vi.waitFor(() => expect(changes(card)).not.toContain("—"));
+    expect(all(card, ".c .a")).toHaveLength(0);
+    const tiles = await mount({ show_amounts: false, layout: "tiles" });
+    await vi.waitFor(() => expect(changes(tiles)).not.toContain("—"));
+    expect(all(tiles, ".c .a")).toHaveLength(0);
+    const shown = await mount();
+    await vi.waitFor(() => expect(all(shown, ".c .a").length).toBeGreaterThan(0));
+  });
+
+  it("without amounts the footer speaks of percentages only", async () => {
+    // German first: the last card mounted sets the editors' language.
+    const german = await mount({ currency: "USD", show_amounts: false }, trackerHass({ language: "de" }));
+    expect(textOf(one(german, ".foot"))).toBe(
+      "Preise in USD: Bitpandas Euro-Preise, umgerechnet zum EZB-Referenzkurs vom 10. Oktober. Die Prozente enthalten deshalb auch die Bewegung des Wechselkurses.",
+    );
+    const card = await mount({ currency: "USD", show_amounts: false });
+    expect(textOf(one(card, ".foot"))).toBe(
+      "Prices in USD: Bitpanda's EUR prices converted at the ECB reference rate of October 10. The percentages therefore also include the exchange rate's move.",
+    );
+  });
+
+  it("puts the layout, header, timeframe and currency with their buttons under Appearance", async () => {
+    const { form } = await openEditor("bitpanda-price-tracker-card");
+    const appearance = form.schema.find((field) => (field as { title?: string }).title === "Appearance") as unknown as {
+      schema: { name: string; default?: unknown }[];
+    };
+    expect(form.schema.at(-1)).toBe(appearance as unknown);
+    expect(appearance.schema.map((field) => field.name)).toEqual(["layout", "show_header", "timeframe", "show_timeframes", "currency", "show_currencies"]);
+    // The switches on unless chosen.
+    expect(appearance.schema.filter((field) => field.name.startsWith("show_")).map((field) => field.default)).toEqual([true, true, true]);
+    expect(["show_header", "show_timeframes", "show_currencies", "show_lines", "show_amounts"].map((name) => form.computeLabel({ name }))).toEqual([
+      "Header",
+      "Timeframe buttons",
+      "Currency buttons",
+      "Price lines",
+      "Change in the price's currency",
+    ]);
+    expect(form.computeHelper({ name: "show_timeframes" })).toBe("Without them the card keeps the timeframe chosen above");
+    expect(form.computeHelper({ name: "show_currencies" })).toBe("Without them the card keeps the currency chosen above");
+    expect(form.computeHelper({ name: "show_header" })).toBeUndefined();
   });
 });

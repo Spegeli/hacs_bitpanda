@@ -28,6 +28,7 @@ _FLOW_TEXTS = {
     },
     "error": {"bad": "Bad: {why}."},
     "abort": {"done": "Done at {when}."},
+    "create_entry": {"made": "Made {thing}.", "default": "Added {item}."},
 }
 
 
@@ -41,8 +42,14 @@ def test_the_flow_text_check_accepts_complete_texts():
          "description_placeholders": {"target": "t"}},
         {"type": FlowResultType.ABORT, "reason": "done",
          "description_placeholders": {"when": "now"}},
+        {"type": FlowResultType.CREATE_ENTRY, "description": "made",
+         "description_placeholders": {"thing": "x"}},
+        # An entry created without a description shows create_entry.default.
+        {"type": FlowResultType.CREATE_ENTRY, "description": None,
+         "description_placeholders": {"item": "i"}},
+        {"type": FlowResultType.CREATE_ENTRY, "description_placeholders": {"item": "i"}},
     ]
-    assert [flow_text_problems(_FLOW_TEXTS, result) for result in shown] == [[], [], [], []]
+    assert [flow_text_problems(_FLOW_TEXTS, result) for result in shown] == [[]] * 7
 
 
 @pytest.mark.parametrize(
@@ -78,11 +85,24 @@ def test_the_flow_text_check_accepts_complete_texts():
             {"type": FlowResultType.MENU, "step_id": "button", "menu_options": ["go"]},
             [("placeholder not supplied", "button", frozenset({"target"}))],
         ),
+        (
+            {"type": FlowResultType.CREATE_ENTRY, "description": "gone"},
+            [("no create_entry text", "gone")],
+        ),
+        (
+            {"type": FlowResultType.CREATE_ENTRY, "description": "made"},
+            [("placeholder not supplied", "made", frozenset({"thing"}))],
+        ),
+        (
+            {"type": FlowResultType.CREATE_ENTRY},
+            [("placeholder not supplied", "default", frozenset({"item"}))],
+        ),
     ],
     ids=[
         "form_without_texts", "menu_without_texts", "error_without_text",
         "button_without_label", "abort_without_text", "form_placeholder",
-        "menu_placeholder", "button_placeholder",
+        "menu_placeholder", "button_placeholder", "entry_without_text",
+        "entry_placeholder", "default_entry_placeholder",
     ],
 )
 def test_the_flow_text_check_reports_what_a_shown_text_lacks(result, problems):

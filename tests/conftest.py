@@ -261,9 +261,21 @@ def flow_text_problems(texts: dict, result: Mapping[str, Any]) -> list[tuple]:
             shown.append(texts["abort"][result["reason"]])
         else:
             problems.append(("no abort text", result["reason"]))
+    elif result["type"] == FlowResultType.CREATE_ENTRY:
+        # The frontend shows create_entry.<description>, create_entry.default
+        # without one -- or its own text when there is no such key.
+        key = result.get("description") or "default"
+        if key in texts.get("create_entry", {}):
+            shown.append(texts["create_entry"][key])
+        elif result.get("description"):
+            problems.append(("no create_entry text", key))
     supplied = set(result.get("description_placeholders") or {})
     problems.extend(
-        ("placeholder not supplied", result.get("step_id") or result["reason"], missing)
+        (
+            "placeholder not supplied",
+            result.get("step_id") or result.get("reason") or result.get("description") or "default",
+            missing,
+        )
         for text in shown
         if (missing := _placeholders(text) - supplied)
     )
@@ -272,15 +284,16 @@ def flow_text_problems(texts: dict, result: Mapping[str, Any]) -> list[tuple]:
 
 @pytest.fixture(autouse=True)
 def check_flow_texts():
-    """Every form, menu and abort a Bitpanda flow shows has its texts, and
-    every placeholder of a text it shows is supplied.
+    """Every form, menu, abort and created entry a Bitpanda flow shows has
+    its texts, and every placeholder of a text it shows is supplied.
 
     Home Assistant core checks this with its check_translations fixture,
     which pytest-homeassistant-custom-component does not ship. Without the
     check, a dropped text or a renamed placeholder shows the user a raw key
     or a literal {placeholder}. Checked for the config, options and subentry
     flows: the step's title and texts, a form's errors and sections, a menu's
-    option labels, and the abort reason.
+    option labels, the abort reason, and a created entry's text
+    (`create_entry.<description>`, else `create_entry.default`).
     Read from translations/en.json, which equals strings.json (test_strings).
     """
     english = json.loads(

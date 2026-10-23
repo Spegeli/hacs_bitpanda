@@ -133,6 +133,10 @@
       "no_reconfigure": "Le Bitpanda Price Tracker n'a pour l'instant rien à reconfigurer. Modifiez ses devises supplémentaires et la langue des titres de groupe avec « Configurer » (⚙) sur la même entrée.",
       "unload_failed": "Le Portfolio n'a pas pu être arrêté : la devise n'a donc pas été changée et rien n'a été supprimé. Redémarrez Home Assistant et réessayez.",
       "setup_cancelled": "Le Portfolio n'a pas été configuré, et rien n'a été supprimé."
+    },
+    "create_entry": {
+      "portfolio": "Pour voir votre portefeuille sur un tableau de bord, ajoutez-y la carte « Bitpanda Portfolio » : ouvrez le tableau de bord, sélectionnez « Modifier le tableau de bord » (✏ en haut à droite ; sur un téléphone dans le menu ⋮), puis « Ajouter une carte » et l'onglet « Par carte », et recherchez « Bitpanda ». Si aucune carte Bitpanda n'apparaît, rechargez la page deux fois ; dans l'application Home Assistant, [réinitialisez plutôt son cache frontend]({cards_url}).\n\nLa nouvelle « Vue d’ensemble », proposée par défaut sur les nouvelles installations depuis Home Assistant 2026.2, n'accepte pas de cartes : créez d'abord un tableau de bord sous « Paramètres » → « Tableaux de bord » → « Ajouter un tableau de bord ».",
+      "price_tracker": "Ajoutez les actifs à suivre avec « Ajouter un suivi de prix » sur l'entrée « Bitpanda Price Tracker » de la page de l'intégration Bitpanda. Ajoutez ensuite la carte « Bitpanda Price Tracker » à un tableau de bord : ouvrez le tableau de bord, sélectionnez « Modifier le tableau de bord » (✏ en haut à droite ; sur un téléphone dans le menu ⋮), puis « Ajouter une carte » et l'onglet « Par carte », et recherchez « Bitpanda ». Si aucune carte Bitpanda n'apparaît, rechargez la page deux fois ; dans l'application Home Assistant, [réinitialisez plutôt son cache frontend]({cards_url}).\n\nLa nouvelle « Vue d’ensemble », proposée par défaut sur les nouvelles installations depuis Home Assistant 2026.2, n'accepte pas de cartes : créez d'abord un tableau de bord sous « Paramètres » → « Tableaux de bord » → « Ajouter un tableau de bord »."
     }
   },
   "options": {

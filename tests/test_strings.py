@@ -171,35 +171,58 @@ def test_no_language_is_an_untranslated_copy_of_english():
 # ui.common.submit). The button reads "Next" instead (config_flow.next: en
 # "Next", de "Weiter", fr "Suivant", nl "Volgende", it "Prossimo", es
 # "Siguiente", pl "Dalej") only on a step shown with last_step=False, and no
-# step of this integration is.
+# step of this integration is. And, as bundled with 2026.10, the way to a
+# dashboard card: "Edit dashboard" (ui.panel.lovelace.menu.configure_ui),
+# "Add card" (ui.panel.lovelace.editor.section.add_card, the same as
+# .editor.edit_card.add), the card dialog's "By card" tab
+# (ui.panel.lovelace.editor.cardpicker.by_card: the dialog opens on "By entity"),
+# "Add dashboard"
+# (ui.panel.config.lovelace.dashboards.picker.add_dashboard), "Settings"
+# (panel.config), "Dashboards" (ui.panel.config.dashboard.dashboards.main)
+# and the Overview's sidebar label (panel.home).
 _MENU_LABELS = {
     "de": {
         "reconfigure": "Neu konfigurieren", "configure": "Konfigurieren", "submit": "OK",
-        "delete": "Löschen",
+        "delete": "Löschen", "edit_dashboard": "Dashboard bearbeiten",
+        "add_card": "Karte hinzufügen", "by_card": "Nach Karte", "add_dashboard": "Dashboard hinzufügen",
+        "settings": "Einstellungen", "dashboards": "Dashboards", "overview": "Übersicht",
     },
     "en": {
         "reconfigure": "Reconfigure", "configure": "Configure", "submit": "Submit",
-        "delete": "Delete",
+        "delete": "Delete", "edit_dashboard": "Edit dashboard", "add_card": "Add card", "by_card": "By card",
+        "add_dashboard": "Add dashboard", "settings": "Settings", "dashboards": "Dashboards",
+        "overview": "Overview",
     },
     "es": {
         "reconfigure": "Reconfigurar", "configure": "Configurar", "submit": "Enviar",
-        "delete": "Eliminar",
+        "delete": "Eliminar", "edit_dashboard": "Editar panel de control",
+        "add_card": "Añadir tarjeta", "by_card": "Por tarjeta", "add_dashboard": "Añadir panel de control",
+        "settings": "Configuración", "dashboards": "Paneles de control",
+        "overview": "Vista general",
     },
     "fr": {
         "reconfigure": "Reconfigurer", "configure": "Configurer", "submit": "Valider",
-        "delete": "Supprimer",
+        "delete": "Supprimer", "edit_dashboard": "Modifier le tableau de bord",
+        "add_card": "Ajouter une carte", "by_card": "Par carte", "add_dashboard": "Ajouter un tableau de bord",
+        "settings": "Paramètres", "dashboards": "Tableaux de bord", "overview": "Vue d’ensemble",
     },
     "it": {
         "reconfigure": "Riconfigura", "configure": "Configura", "submit": "Invia",
-        "delete": "Elimina",
+        "delete": "Elimina", "edit_dashboard": "Modifica la plancia", "add_card": "Aggiungi scheda", "by_card": "Per scheda",
+        "add_dashboard": "Aggiungi plancia", "settings": "Impostazioni", "dashboards": "Plance",
+        "overview": "Panoramica",
     },
     "nl": {
         "reconfigure": "Herconfigureer", "configure": "Configureren", "submit": "Verzenden",
-        "delete": "Verwijderen",
+        "delete": "Verwijderen", "edit_dashboard": "Dashboard bewerken",
+        "add_card": "Kaart toevoegen", "by_card": "Per kaart", "add_dashboard": "Dashboard toevoegen",
+        "settings": "Instellingen", "dashboards": "Dashboards", "overview": "Thuis",
     },
     "pl": {
         "reconfigure": "Rekonfiguracja", "configure": "Konfiguruj", "submit": "Zatwierdź",
-        "delete": "Usuń",
+        "delete": "Usuń", "edit_dashboard": "Edytuj panel", "add_card": "Dodaj kartę", "by_card": "Według karty",
+        "add_dashboard": "Dodaj panel", "settings": "Ustawienia", "dashboards": "Panele",
+        "overview": "Przegląd",
     },
 }
 
@@ -227,6 +250,12 @@ _LABEL_REFERENCES = {
         ("config", "step", "reauth_confirm", "description"),
         ("config", "step", "reconfigure", "description"),
     ],
+    **{
+        control: [("config", "create_entry", "portfolio"), ("config", "create_entry", "price_tracker")]
+        for control in (
+            "edit_dashboard", "add_card", "by_card", "add_dashboard", "settings", "dashboards", "overview"
+        )
+    },
 }
 
 
@@ -237,9 +266,9 @@ def _quoted(label: str) -> re.Pattern:
 
 
 def test_menu_items_are_named_with_home_assistants_own_labels():
-    """Where a text sends the user to a menu item of the integration entry or
-    to a dialog's button, it names it in quotation marks exactly as the
-    frontend labels it in that language."""
+    """Where a text sends the user to a menu item of the integration entry,
+    to a dialog's button or along the way to a dashboard card, it names it
+    in quotation marks exactly as the frontend labels it in that language."""
     assert sorted(_MENU_LABELS) == _LANGUAGES
     for language, labels in _MENU_LABELS.items():
         strings = _load(f"translations/{language}.json")
@@ -289,6 +318,7 @@ _LOCATED_TEXTS = {
     ("exceptions", "portfolio_device_not_removable", "message"): "⋮",
     ("config", "step", "reauth_confirm", "description"): "⋮",
     ("config", "step", "reconfigure", "description"): "⋮",
+    ("config", "create_entry", "price_tracker"): "",
 }
 # Shown right on the Price Tracker's entry, after its ⋮ -> "Reconfigure": it
 # sends the user to "Configure" (⚙) on "the same entry".
@@ -334,6 +364,7 @@ def test_texts_name_the_add_price_tracker_button_by_its_own_label():
         for key in (
             ("config", "step", "price_tracker", "description"),
             ("issues", "price_tracker_exists", "description"),
+            ("config", "create_entry", "price_tracker"),
         ):
             text = strings
             for part in key:
@@ -2508,3 +2539,71 @@ def test_the_key_dialogs_say_a_new_key_must_be_of_the_same_account():
         first_paragraph = step["reauth_confirm"]["description"].split("\n\n")[0]
         assert first_paragraph.endswith(f" {reauth}{another}"), language
         assert step["reconfigure"]["description"].endswith(f" {reconfigure}{another}"), language
+
+
+def test_the_setups_end_with_the_way_to_the_cards():
+    """Both setups end by saying where the Bitpanda cards are and how to put
+    one on a dashboard; the Price Tracker's first how to add assets. The
+    English and German wording, word for word."""
+    way = {
+        "en": (
+            'open the dashboard, select "Edit dashboard" (✏ at the top right; on a phone in the ⋮ '
+            'menu), then "Add card" and the "By card" tab, and search for "Bitpanda". If no '
+            'Bitpanda card is listed, reload the page twice; in the Home Assistant app, '
+            '[reset its frontend cache]({cards_url}) instead.\n\nThe new "Overview", the default of '
+            'new installations since Home Assistant 2026.2, takes no cards: first create a dashboard under "Settings" → '
+            '"Dashboards" → "Add dashboard".'
+        ),
+        "de": (
+            "Öffne das Dashboard, wähle „Dashboard bearbeiten“ (✏ oben rechts, auf dem Handy im "
+            "⋮-Menü), dann „Karte hinzufügen“ und den Reiter „Nach Karte“, und suche nach "
+            "„Bitpanda“. Erscheint keine Bitpanda-Karte, lade die Seite zweimal neu; in der "
+            "Home-Assistant-App [setze stattdessen ihren Frontend-Cache zurück]({cards_url}).\n\n"
+            "Die neue „Übersicht“, seit Home Assistant 2026.2 der Standard neuer Installationen, nimmt keine Karten auf: Lege zuerst unter "
+            "„Einstellungen“ → „Dashboards“ → „Dashboard hinzufügen“ ein eigenes Dashboard an."
+        ),
+    }
+    expected = {
+        "en": {
+            "portfolio": 'To see your portfolio on a dashboard, add the "Bitpanda Portfolio" card: '
+            + way["en"],
+            "price_tracker": 'Add the assets you want to track with "Add price tracker" on the '
+            '"Bitpanda Price Tracker" entry of the Bitpanda integration page. Then add the '
+            '"Bitpanda Price Tracker" card to a dashboard: ' + way["en"],
+        },
+        "de": {
+            "portfolio": "Um dein Portfolio auf einem Dashboard zu sehen, füge ihm die Karte "
+            "„Bitpanda Portfolio“ hinzu: " + way["de"],
+            "price_tracker": "Füge die gewünschten Assets mit „Preis-Tracker hinzufügen“ beim "
+            "Eintrag „Bitpanda Price Tracker“ auf der Bitpanda-Integrationsseite hinzu. Füge "
+            "danach einem Dashboard die Karte „Bitpanda Price Tracker“ hinzu: " + way["de"],
+        },
+    }
+    for language, texts in expected.items():
+        assert _load(f"translations/{language}.json")["config"]["create_entry"] == texts, language
+    assert _load("strings.json")["config"]["create_entry"] == expected["en"]
+    # Every language: both texts, each naming its card.
+    for language in _LANGUAGES:
+        endings = _load(f"translations/{language}.json")["config"]["create_entry"]
+        assert set(endings) == {"portfolio", "price_tracker"}, language
+        assert "Bitpanda Portfolio" in endings["portfolio"], language
+        assert endings["price_tracker"].count("Bitpanda Price Tracker") == 2, language
+
+
+def test_the_closing_texts_send_the_app_to_the_readmes_card_section():
+    """Reloading does not help in the Home Assistant app: both closing texts
+    link the README's card section, which says what does, in every language."""
+    for language in _LANGUAGES:
+        endings = _load(f"translations/{language}.json")["config"]["create_entry"]
+        for key, text in endings.items():
+            assert re.search(r"\]\(\{cards_url\}\)", text), (language, key)
+            # The Overview's sentence stands in a paragraph of its own.
+            assert "\n\n" in text, (language, key)
+
+
+def test_no_text_carries_the_emoji_variation_selector():
+    """A symbol in a text stands as it is ("✏", "⚙"): never with U+FE0F, which
+    some fonts draw as a coloured emoji in the middle of a sentence."""
+    for name in _FILES:
+        path = _DIR / name
+        assert "\ufe0f" not in path.read_text(encoding="utf-8"), name

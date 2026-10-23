@@ -54,6 +54,9 @@ PRICES_URL = "https://www.bitpanda.com/en/prices"
 # The README's Troubleshooting section. A text links it through a placeholder:
 # hassfest allows no URL in a strings file.
 TROUBLESHOOTING_URL = "https://github.com/Spegeli/hacs_bitpanda#-troubleshooting"
+# The README's section on the dashboard cards, which the setups' closing texts
+# link for the Home Assistant app (where reloading does not load them).
+CARDS_URL = "https://github.com/Spegeli/hacs_bitpanda#-dashboard-cards"
 
 # The integration's version, as its manifest states it: every device shows it
 # ("Version …"). Read once, when Home Assistant imports the integration -- in

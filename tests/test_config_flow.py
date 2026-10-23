@@ -13,7 +13,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
 from custom_components.bitpanda.assets import slim_asset
-from custom_components.bitpanda.const import API_KEY_URL, DOMAIN, TROUBLESHOOTING_URL
+from custom_components.bitpanda.const import API_KEY_URL, CARDS_URL, DOMAIN, TROUBLESHOOTING_URL
 from custom_components.bitpanda.purge import OldStatistics
 
 from tests.conftest import load_fixture
@@ -355,6 +355,9 @@ async def _submit_currency(hass, found: OldStatistics):
 
 def _assert_portfolio_created(result) -> None:
     assert result["type"] == _FLOW.CREATE_ENTRY
+    # Every ending of the Portfolio's setup says where its card is.
+    assert result["description"] == "portfolio"
+    assert result["description_placeholders"] == {"cards_url": CARDS_URL}
     assert dict(result["result"].data) == {
         "entry_type": "portfolio", "api_key": "good", "currency": "USD", "currency_id": _USD_ID,
     }
@@ -484,6 +487,33 @@ async def test_price_tracker_creates_a_keyless_entry(hass):
     # The currencies in a fixed order, whatever order they were picked in;
     # both flat, as Configure stores them.
     assert dict(entry.options) == {"extra_currencies": ["CHF", "USD"], "language": "nl"}
+
+
+async def test_the_price_tracker_setup_ends_with_how_to_add_assets_and_its_card(hass):
+    result = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "price_tracker"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"currencies": {"extra_currencies": []}, **_setup_language("en")}
+    )
+    assert result["type"] == _FLOW.CREATE_ENTRY
+    assert result["description"] == "price_tracker"
+    assert result["description_placeholders"] == {"cards_url": CARDS_URL}
+    # Configure ends without it: the assets and the card are there by then.
+    await hass.async_block_till_done()
+    options = await hass.config_entries.options.async_init(result["result"].entry_id)
+    options = await hass.config_entries.options.async_configure(
+        options["flow_id"], _price_tracker_input([], "en")
+    )
+    assert options["type"] == _FLOW.CREATE_ENTRY
+    assert options.get("description") is None
+
+
+def test_the_closing_texts_link_the_readmes_card_section():
+    assert CARDS_URL == "https://github.com/Spegeli/hacs_bitpanda#-dashboard-cards"
+    readme = (Path(__file__).parent.parent / "README.md").read_text(encoding="utf-8")
+    assert "\n## 🃏 Dashboard cards\n" in readme
 
 
 async def test_a_second_price_tracker_aborts_even_from_an_open_dialog(hass):

@@ -60,6 +60,7 @@ from .const import (
     SUBENTRY_TYPE_PRICE_GROUP,
     SUPPORTED_CURRENCIES,
     TROUBLESHOOTING_URL,
+    CARDS_URL,
     entry_type,
     notifies_new_wallets,
     notifies_staking_rewards,
@@ -421,11 +422,14 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @callback
     def _async_create_portfolio(self) -> ConfigFlowResult:
-        """The Portfolio entry, from what the currency step stored."""
+        """The Portfolio entry, from what the currency step stored; its
+        closing text says where its dashboard card is."""
         return self.async_create_entry(
             title=PORTFOLIO_TITLE,
             data=self._portfolio_data,
             options=self._portfolio_options,
+            description="portfolio",
+            description_placeholders={"cards_url": CARDS_URL},
         )
 
     # --- Price Tracker ------------------------------------------------------------
@@ -436,6 +440,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(ENTRY_TYPE_PRICE_TRACKER)
         self._abort_if_unique_id_configured()
         if user_input is not None:
+            # Its closing text: how to add assets, then where the card is.
             return self.async_create_entry(
                 title=PRICE_TRACKER_TITLE,
                 data={ENTRY_TYPE: ENTRY_TYPE_PRICE_TRACKER},
@@ -445,6 +450,8 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                     CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE],
                 },
+                description="price_tracker",
+                description_placeholders={"cards_url": CARDS_URL},
             )
         return self.async_show_form(
             step_id="price_tracker",

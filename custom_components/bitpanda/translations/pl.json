@@ -133,6 +133,10 @@
       "no_reconfigure": "W usłudze Bitpanda Price Tracker nie ma obecnie nic do rekonfiguracji. Dodatkowe waluty i język tytułów grup zmienisz, klikając „Konfiguruj” (⚙) przy tym samym wpisie.",
       "unload_failed": "Nie udało się zatrzymać Portfolio, więc waluta nie została zmieniona i nic nie zostało usunięte. Uruchom ponownie Home Assistant i spróbuj jeszcze raz.",
       "setup_cancelled": "Portfolio nie zostało skonfigurowane i nic nie zostało usunięte."
+    },
+    "create_entry": {
+      "portfolio": "Aby zobaczyć swoje portfolio na panelu, dodaj kartę „Bitpanda Portfolio”: otwórz panel, wybierz „Edytuj panel” (✏ w prawym górnym rogu; na telefonie w menu ⋮), potem „Dodaj kartę” i zakładkę „Według karty”, a następnie wyszukaj „Bitpanda”. Jeśli nie ma żadnej karty Bitpanda, odśwież stronę dwukrotnie; w aplikacji Home Assistant [wyczyść zamiast tego pamięć podręczną frontendu]({cards_url}).\n\nNowy „Przegląd”, domyślny w nowych instalacjach od Home Assistant 2026.2, nie przyjmuje kart: najpierw utwórz panel: „Ustawienia” → „Panele” → „Dodaj panel”.",
+      "price_tracker": "Dodaj aktywa, które chcesz śledzić, za pomocą „Dodaj śledzenie ceny” przy wpisie „Bitpanda Price Tracker” na stronie integracji Bitpanda. Następnie dodaj kartę „Bitpanda Price Tracker” do panelu: otwórz panel, wybierz „Edytuj panel” (✏ w prawym górnym rogu; na telefonie w menu ⋮), potem „Dodaj kartę” i zakładkę „Według karty”, a następnie wyszukaj „Bitpanda”. Jeśli nie ma żadnej karty Bitpanda, odśwież stronę dwukrotnie; w aplikacji Home Assistant [wyczyść zamiast tego pamięć podręczną frontendu]({cards_url}).\n\nNowy „Przegląd”, domyślny w nowych instalacjach od Home Assistant 2026.2, nie przyjmuje kart: najpierw utwórz panel: „Ustawienia” → „Panele” → „Dodaj panel”."
     }
   },
   "options": {

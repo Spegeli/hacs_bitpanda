@@ -133,6 +133,10 @@
       "no_reconfigure": "El Bitpanda Price Tracker por ahora no tiene nada que reconfigurar. Cambia sus monedas adicionales y el idioma de los títulos de grupo con \"Configurar\" (⚙) en la misma entrada.",
       "unload_failed": "No se ha podido detener el Portfolio, así que no se ha cambiado la moneda ni se ha eliminado nada. Reinicia Home Assistant e inténtalo de nuevo.",
       "setup_cancelled": "El Portfolio no se ha configurado y no se ha eliminado nada."
+    },
+    "create_entry": {
+      "portfolio": "Para ver tu cartera en un panel, añade la tarjeta \"Bitpanda Portfolio\": abre el panel, selecciona \"Editar panel de control\" (✏ arriba a la derecha; en el móvil en el menú ⋮), luego \"Añadir tarjeta\" y la pestaña \"Por tarjeta\", y busca \"Bitpanda\". Si no aparece ninguna tarjeta de Bitpanda, recarga la página dos veces; en la app de Home Assistant, [restablece en su lugar la caché del frontend]({cards_url}).\n\nLa nueva \"Vista general\", la predeterminada en las instalaciones nuevas desde Home Assistant 2026.2, no admite tarjetas: crea primero un panel en \"Configuración\" → \"Paneles de control\" → \"Añadir panel de control\".",
+      "price_tracker": "Añade los activos que quieras seguir con \"Añadir seguimiento de precio\" en la entrada \"Bitpanda Price Tracker\" de la página de la integración Bitpanda. Después añade la tarjeta \"Bitpanda Price Tracker\" a un panel: abre el panel, selecciona \"Editar panel de control\" (✏ arriba a la derecha; en el móvil en el menú ⋮), luego \"Añadir tarjeta\" y la pestaña \"Por tarjeta\", y busca \"Bitpanda\". Si no aparece ninguna tarjeta de Bitpanda, recarga la página dos veces; en la app de Home Assistant, [restablece en su lugar la caché del frontend]({cards_url}).\n\nLa nueva \"Vista general\", la predeterminada en las instalaciones nuevas desde Home Assistant 2026.2, no admite tarjetas: crea primero un panel en \"Configuración\" → \"Paneles de control\" → \"Añadir panel de control\"."
     }
   },
   "options": {

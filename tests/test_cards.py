@@ -250,13 +250,15 @@ _README = (Path(__file__).parents[1] / "README.md").read_text(encoding="utf-8")
 # Every card's options; the title is common to both.
 _OPTIONS = {
     "bitpanda-portfolio-card": {
-        "timeframe", "show_total", "show_graph", "show_cash", "show_allocation", "show_wallets",
-        "group_wallets", "show_search", "sort", "limit", "group_selection", "groups",
-        "asset_selection", "assets", "hide_amounts",
+        "timeframe", "show_total", "show_since_purchase", "show_graph", "show_cash",
+        "show_staking", "show_allocation", "show_wallets", "group_wallets", "show_search",
+        "sort", "limit", "group_selection", "groups", "asset_selection", "assets",
+        "show_header", "show_timeframes", "hide_amounts",
     },
     "bitpanda-price-tracker-card": {
         "layout", "timeframe", "currency", "sort", "group_selection", "groups",
-        "asset_selection", "assets", "limit",
+        "asset_selection", "assets", "limit", "show_header", "show_timeframes",
+        "show_currencies", "show_lines", "show_amounts",
     },
 }
 

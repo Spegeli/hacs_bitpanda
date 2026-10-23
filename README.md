@@ -334,12 +334,12 @@ To add one, edit a dashboard, choose **Add card** and search for **Bitpanda**; e
 
 | Card | Type | Shows |
 |---|---|---|
-| **Bitpanda Portfolio** | `custom:bitpanda-portfolio-card` | Total value with your return over 1 day to 1 year and a line of the total value; Cash and Cash Plus; how your money is split across asset types, Cash and Cash Plus; your wallets, by asset type or in one list — tap a group to open it, the arrow beside a wallet for its details: the current price, average buy price, invested amount, the return over 24 hours and in total, and — while something is staked or Bitpanda offers Earn for the asset — staked units, staking APR and, from the first payout, staking rewards. Each part can be left out, down to total value and return alone |
-| **Bitpanda Price Tracker** | `custom:bitpanda-price-tracker-card` | Your tracked assets as a list or as tiles: price, change in percent and in the price's currency, and a line. With extra currencies set up in the Price Tracker, a switch shows the prices in them |
+| **Bitpanda Portfolio** | `custom:bitpanda-portfolio-card` | Total value with your return over 1 day to 1 year, your return since purchase, and a line of the total value; Cash and Cash Plus; what you stake and in how many wallets — tap it for those wallets; how your money is split across asset types, Cash and Cash Plus; your wallets, by asset type or in one list — tap a group to open it, the arrow beside a wallet for its details: the current price, average buy price, invested amount, the return over 24 hours and in total, and — while something is staked or Bitpanda offers Earn for the asset — staked units, staking APR and, from the first payout, what staking earned in the last 30 days and in all, and the payouts. Each part can be left out, down to total value and return alone |
+| **Bitpanda Price Tracker** | `custom:bitpanda-price-tracker-card` | Your tracked assets as a list or as tiles: price, change in percent and in the price's currency, and a line. With extra currencies set up in the Price Tracker, a switch shows the prices in them. The header, the switches, the lines and the change in the price's currency can each be left out |
 
 <table>
   <tr>
-    <td valign="top"><img src="https://raw.githubusercontent.com/Spegeli/hacs_bitpanda/main/.github/readme/cards/portfolio-card.png" alt="The Bitpanda Portfolio card: total value with the return over 1 day, the line of the total value, Cash and Cash Plus, the allocation, the search field and the wallets by asset type, one of them opened" width="300"></td>
+    <td valign="top"><img src="https://raw.githubusercontent.com/Spegeli/hacs_bitpanda/main/.github/readme/cards/portfolio-card.png" alt="The Bitpanda Portfolio card: total value with the return over 1 day and the return since purchase, the line of the total value, Cash and Cash Plus, the staking line, the allocation, the search field and the wallets by asset type, one of them opened" width="300"></td>
     <td valign="top">
       <img src="https://raw.githubusercontent.com/Spegeli/hacs_bitpanda/main/.github/readme/cards/portfolio-card-search.png" alt="The Bitpanda Portfolio card's wallet search: the wallets matching “sol”, one of them opened" width="300"><br><br>
       <img src="https://raw.githubusercontent.com/Spegeli/hacs_bitpanda/main/.github/readme/cards/price-tracker-card-list.png" alt="The Bitpanda Price Tracker card as a list" width="300"><br><br>
@@ -351,13 +351,16 @@ To add one, edit a dashboard, choose **Add card** and search for **Bitpanda**; e
 ### What the cards show
 
 - **The line shows the total value, not your return.** A deposit raises it; the percentage beside it is Bitpanda's return, which leaves deposits and withdrawals out, and the amount after it is what that percentage means on today's total value. The line is Bitpanda's own history of your total value, complete from the first day. Its dashed line marks the middle between the highest and the lowest value shown. Point at the line, or move a finger along it, to see the value at that moment, with the highest, middle and lowest value at the right.
+- **Since purchase** is the return on what you hold since you bought it — the Portfolio's Total return % and Total return; it does not change with the timeframe.
+- **The staking line** under Cash adds up the Balance (staking) of all your wallets — not only the ones the card shows — and counts them; it is left out while nothing is staked. A wallet whose Balance (staking) sensor is disabled does not count.
 - **A wallet's percentage** is its return since purchase, and a group's is that of all its wallets together; the timeframe switch changes neither. A wallet's total return as an amount is in its details, and so is its return over 24 hours once Home Assistant has the wallet's price of a day ago.
 - **The change in the Price Tracker** comes from Home Assistant's statistics, for 1D as for 1W to 1Y. Beside or below the percentage is the same change in the price's currency. While an asset's statistics are shorter than the timeframe, its change and its line count from their start, and the row says since when ("Change since Oct 6"). A price line breaks where Home Assistant has no statistics: while it was off or the sensor unavailable.
 - **Other currencies:** a price in another currency is Bitpanda's euro price converted at the ECB's daily reference rate, so its change includes the rate's move: on a day the euro gains 0.06 % against the dollar, a price that fell 1.12 % in euros fell 1.06 % in dollars.
 - **"—"** means that a figure is missing right now: a sensor without a value, or a change the statistics cannot give yet. A sum or a share needs all its parts: one wallet without its value shows "—" for its group and the allocation. The cards never put a figure of their own in its place.
 - **Stocks, ETFs and ETCs** count in shares, precious metals in grams. The wallet list shows up to 4 decimals, rounded down as in the Bitpanda app, and a holding below 0.0001 its first two digits, so it never reads 0; the staked units and rewards in a wallet's details show all decimals.
-- **The eye** on the Portfolio card blurs amounts and units — for a screenshot, say — and keeps the percentages and a wallet's current price; pointing at the line then shows the time only. It hides them on that card only; nothing else changes.
-- **A tap** opens Home Assistant's dialog of that figure, with its history.
+- **The eye** on the Portfolio card hides amounts and units behind a mask — for a screenshot, say — and keeps the percentages and a wallet's current price; pointing at the line then shows the time only. While it is closed, no tap opens a dialog that would show a hidden amount: neither a hidden figure nor the return beside the total value; the percentage since purchase still opens. It hides them on that card only; nothing else changes. Without the card's header, the eye stands beside the total value, or in a row of its own when that is left out too.
+- **A tap** opens Home Assistant's dialog of that figure, with its history — of a hidden figure only while the eye is open. A tap on the staking line opens its wallets; a tap on one of them opens its Balance (staking).
+- **The keyboard** works too: Tab reaches every part you can tap, Enter or Space taps it. On the line, ← and → move from point to point, Home and End go to its ends, Escape clears the point; a screen reader reads each point's value and time — the time only while the eye is closed.
 - **Language:** your profile language — English, German, French, Dutch, Italian, Spanish or Polish; English for any other. Asset group names are the integration's own, in that language — not a title you gave a group, nor the language chosen for the Portfolio.
 
 ### Card options
@@ -370,9 +373,11 @@ Gains and losses take your theme's success and error colours, green and red in H
 |---|---|---|---|
 | `title` | text | `Bitpanda Portfolio` | the card's heading |
 | `timeframe` | `day`, `week`, `month`, `six_month`, `year` | `day` | the timeframe the card opens with |
-| `show_total` | `true`, `false` | `true` | the total value and its return; the timeframe buttons stay while the line is shown |
+| `show_total` | `true`, `false` | `true` | the total value and its return; the timeframe buttons stay while the line is shown, unless `show_timeframes` is off |
+| `show_since_purchase` | `true`, `false` | `true` | under the return: the return since purchase; only with `show_total` |
 | `show_graph` | `true`, `false` | `true` | the line of the total value |
 | `show_cash` | `true`, `false` | `true` | Cash and Cash Plus |
+| `show_staking` | `true`, `false` | `true` | the staking line under Cash; left out while nothing is staked |
 | `show_allocation` | `true`, `false` | `true` | the split by asset type, Cash and Cash Plus |
 | `show_wallets` | `true`, `false` | `true` | the wallets |
 | `show_search` | `true`, `false` | `false` | a search field above the wallets: finds them by name, symbol or ISIN, as one list without groups |
@@ -383,6 +388,8 @@ Gains and losses take your theme's success and error colours, green and red in H
 | `groups` | `crypto`, `stock`, `etf`, `etc`, `index`, `metal`, `other` | — | with `all_except` or `only`: the asset groups left out or shown |
 | `asset_selection` | `all`, `all_except`, `only` | `all` | which wallets the card shows, within the asset groups shown |
 | `assets` | asset IDs | — | with `all_except` or `only`: the wallets left out or shown |
+| `show_header` | `true`, `false` | `true` | the header with the title and the eye; without it the eye stands beside the total value, or in a row of its own when that is left out too |
+| `show_timeframes` | `true`, `false` | `true` | the timeframe buttons; without them the card keeps `timeframe` |
 | `hide_amounts` | `true`, `false` | `false` | start with amounts hidden |
 
 `assets` holds Bitpanda's asset IDs — a device's serial number; the visual editor fills it in. Device IDs from older configurations still work.
@@ -397,12 +404,17 @@ Hiding a section, an asset group or a wallet changes only what the card shows: t
 | `layout` | `list`, `tiles` | `list` | the prices as a list or as tiles |
 | `timeframe` | `day`, `week`, `month`, `six_month`, `year` | `day` | the timeframe the card opens with |
 | `currency` | `EUR` or a currency set up in the Price Tracker | `EUR` | the currency the card opens with; EUR while that currency is not set up |
-| `sort` | `selection`, `name`, `change_desc`, `change_asc` | `name` | the order of the assets; `change_desc` and `change_asc` by the change of the timeframe shown, `selection` keeps the order of `assets` with `only`, otherwise by name |
+| `sort` | `selection`, `name`, `change_desc`, `change_asc` | `name` | the order of the assets; `change_desc` and `change_asc` by the change of the timeframe shown, `selection` keeps the order of `assets` with `only` — in the visual editor you drag the chosen assets into it —, otherwise by name |
 | `limit` | 0 or more; 0 shows all | `0` | assets before "Show all" |
 | `group_selection` | `all`, `all_except`, `only` | `all` | which asset groups' prices the card shows |
 | `groups` | `crypto`, `stock`, `etf`, `etc`, `index`, `metal`, `other` | — | with `all_except` or `only`: the asset groups left out or shown |
 | `asset_selection` | `all`, `all_except`, `only` | `all` | which assets the card shows, within the asset groups shown |
 | `assets` | asset IDs | — | with `all_except` or `only`: the price trackers left out or shown |
+| `show_header` | `true`, `false` | `true` | the header with the title |
+| `show_timeframes` | `true`, `false` | `true` | the timeframe buttons; without them the card keeps `timeframe` |
+| `show_currencies` | `true`, `false` | `true` | the currency buttons; without them the card keeps `currency` |
+| `show_lines` | `true`, `false` | `true` | a line in every row and tile; the changes come from the statistics either way |
+| `show_amounts` | `true`, `false` | `true` | the change in the price's currency beside its percentage; without it the footer of another currency speaks of the percentages only |
 
 `assets` holds Bitpanda's asset IDs — a device's serial number; the visual editor fills it in. Device IDs from older configurations still work.
 

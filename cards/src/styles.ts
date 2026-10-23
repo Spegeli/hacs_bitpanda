@@ -7,7 +7,9 @@ export const cardStyles = css`
     container-type: inline-size;
     --bp-up: var(--success-color, #43a047);
     --bp-down: var(--error-color, #db4437);
-    --bp-chip: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.06);
+    /* From the text colour itself: a theme that sets it as a var() leaves
+       Home Assistant no --rgb-primary-text-color to derive. */
+    --bp-chip: color-mix(in srgb, var(--primary-text-color, #212121) 6%, transparent);
     --bp-divider: var(--divider-color, rgba(0, 0, 0, 0.12));
     --bp-muted: var(--secondary-text-color, #727272);
     --bp-accent: var(--primary-color, #03a9f4);

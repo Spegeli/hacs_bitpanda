@@ -377,6 +377,16 @@ describe("allFit", () => {
 });
 
 describe("the shared styles", () => {
+  it("mix the chips' background from the theme's text colour, not from its RGB variable", async () => {
+    // A theme that sets its text colour as a var() -- Noctis does -- leaves
+    // Home Assistant nothing to derive --rgb-primary-text-color from: it stays
+    // the light default, near black, and a chip on a dark card vanished.
+    const { cardStyles } = await import("../src/styles");
+    const css = cardStyles.cssText.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(css.match(/--bp-chip:\s*([^;]*);/)?.[1]).toBe("color-mix(in srgb, var(--primary-text-color, #212121) 6%, transparent)");
+    expect(css).not.toMatch(/--rgb-/);
+  });
+
   it("set the staked share right below the units and the detail as wide as its row", async () => {
     const { cardStyles } = await import("../src/styles");
     const css = cardStyles.cssText;

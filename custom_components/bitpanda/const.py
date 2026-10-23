@@ -90,9 +90,12 @@ OPERATIONS_FULL_READ_INTERVAL = timedelta(days=7)
 CHANGE_24H_UPDATE_INTERVAL = timedelta(minutes=5)
 CHANGE_24H_TOLERANCE = timedelta(minutes=30)
 
-# Retry for the Earn offers and the ECB rates while they never loaded: until
-# then the APRs and the other currencies have no value at all.
+# Retry for the Earn offers while they never loaded: until then the APRs have
+# no value at all.
 FIRST_LOAD_RETRY_INTERVAL = timedelta(minutes=15)
+# The same for the ECB rates, sooner: until they load, every price in another
+# currency has no value, and the ECB's small file costs no Bitpanda request.
+ECB_FIRST_LOAD_RETRY_INTERVAL = timedelta(minutes=5)
 
 # Floor for the bitpanda.refresh cooldown, which otherwise follows the price
 # interval (see __init__.py's _refresh_cooldown).

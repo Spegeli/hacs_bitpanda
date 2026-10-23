@@ -15,12 +15,12 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
 from .const import (
     DOMAIN,
+    ECB_FIRST_LOAD_RETRY_INTERVAL,
     ECB_UPDATE_INTERVAL,
     ERROR_CONNECTION,
     ERROR_HTTP_STATUS,
     ERROR_TIMEOUT,
     ERROR_UNREADABLE,
-    FIRST_LOAD_RETRY_INTERVAL,
     PRICE_UPDATE_INTERVAL_BASE,
 )
 from .ecb import EcbError, EcbRates, async_fetch_ecb_rates
@@ -314,7 +314,7 @@ class EcbCoordinator(DataUpdateCoordinator[EcbRates]):
     A failed fetch leaves `data` at the last rates -- DataUpdateCoordinator
     keeps them -- and the price sensors keep converting with those, showing
     their `rate_date`. While no rates were ever loaded, the other currencies
-    show nothing, so a failure then is retried after FIRST_LOAD_RETRY_INTERVAL
+    show nothing, so a failure then is retried after ECB_FIRST_LOAD_RETRY_INTERVAL
     instead of the 6 hours the rates themselves need.
     """
 
@@ -339,7 +339,7 @@ class EcbCoordinator(DataUpdateCoordinator[EcbRates]):
             rates = await async_fetch_ecb_rates(self._session)
         except EcbError as err:
             if self.data is None:
-                self.update_interval = FIRST_LOAD_RETRY_INTERVAL
+                self.update_interval = ECB_FIRST_LOAD_RETRY_INTERVAL
             raise _ecb_failed(err) from None
         self.update_interval = ECB_UPDATE_INTERVAL
         return rates

@@ -880,7 +880,7 @@ async def test_ecb_retries_sooner_while_no_rates_were_ever_loaded():
         with pytest.raises(UpdateFailed) as excinfo:
             await coordinator._async_update_data()
         assert _translation(excinfo.value) == ("bitpanda", "ecb_rates_failed_timeout", None)
-        assert coordinator.update_interval == timedelta(minutes=15)
+        assert coordinator.update_interval == timedelta(minutes=5)
         await coordinator._async_update_data()
     assert coordinator.update_interval == timedelta(hours=6)
 

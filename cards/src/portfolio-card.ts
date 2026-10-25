@@ -1,5 +1,6 @@
-// Bitpanda Portfolio: total value, return and value line, Cash and Cash
-// Plus, the allocation, and every wallet by category with its detail.
+// Bitpanda Portfolio: total value, return, the return since purchase and
+// the value line, Cash and Cash Plus, the staking line, the allocation, and
+// every wallet by category with its detail.
 import { html, nothing, type PropertyValues, type TemplateResult } from "lit";
 
 import { BitpandaCard, COMMON_OPTIONS } from "./base-card";

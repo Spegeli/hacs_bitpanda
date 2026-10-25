@@ -19,7 +19,7 @@ export interface SummaryOptions {
   points: Point[] | undefined;
   /** The total value and its return. */
   total: boolean;
-  /** The return since purchase and the invested amount, under the return. */
+  /** The return since purchase and its amount, under the return. */
   since: boolean;
   line: boolean;
   /** The timeframe buttons. */

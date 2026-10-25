@@ -24,12 +24,12 @@ body:
       options:
         - Price Tracker (price sensors, currencies, Add price tracker)
         - Portfolio wallets (Balance (available), Balance (total), Balance (staking))
-        - Portfolio (Total value, Cash, Cash Plus, returns)
-        - Notifications and events (new wallets, staking rewards)
+        - Portfolio (Total value, Cash, Cash Plus, returns, Invested, Total return, group values)
+        - Notifications and events (new wallets, staking rewards, Earn changes, event entities)
         - Dashboard card (Bitpanda Portfolio)
         - Dashboard card (Bitpanda Price Tracker)
         - Dialogs (setup, Configure, Reconfigure, new API key)
-        - Refresh action (bitpanda.refresh)
+        - Actions (bitpanda.refresh, bitpanda.get_portfolio, bitpanda.get_portfolio_history, bitpanda.get_staking_rewards)
         - Upgrade from a date version
         - Documentation
         - Other

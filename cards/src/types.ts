@@ -152,7 +152,7 @@ export interface PortfolioConfig extends BaseConfig {
   timeframe?: Timeframe;
   /** The total value and its return. */
   show_total?: boolean;
-  /** The return since purchase and the invested amount, under the return. */
+  /** The return since purchase and its amount, under the return. */
   show_since_purchase?: boolean;
   show_graph?: boolean;
   show_cash?: boolean;
@@ -188,6 +188,6 @@ export interface PriceTrackerConfig extends BaseConfig {
   /** A line in every row and tile; the changes come from the statistics
    * either way. */
   show_lines?: boolean;
-  /** The change in the price's currency beside its percentage. */
+  /** The change in the price's currency beside or below its percentage. */
   show_amounts?: boolean;
 }

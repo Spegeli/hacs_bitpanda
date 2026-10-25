@@ -7,8 +7,6 @@ for the monetary device class; each sensor's currency never changes.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-import logging
 from typing import Any, cast
 
 from homeassistant.components.sensor import (
@@ -17,16 +15,13 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, State, callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from homeassistant.helpers.event import async_track_time_interval
-from homeassistant.util import dt as dt_util
 
 from .assets import asset_attributes
 from .const import (
-    CHANGE_24H_UPDATE_INTERVAL,
     CONF_ASSETS,
     CONF_EXTRA_CURRENCIES,
     DOMAIN,
@@ -34,6 +29,7 @@ from .const import (
     PRICES_URL,
     SUBENTRY_TYPE_PRICE_GROUP,
 )
+from .day_ago import DayAgoPrices, async_prices_24h_ago
 from .devices import device_identifiers
 from .groups import groups_of_type, tracked_assets
 from .naming import (
@@ -53,8 +49,6 @@ from .price_coordinator import (
     convert_price,
 )
 from .tolerance import TolerantEntity
-
-_LOGGER = logging.getLogger(__name__)
 
 
 def display_precision(value: float | None) -> int:
@@ -123,9 +117,11 @@ class PriceSensor(TolerantEntity[TickerCoordinator], SensorEntity):
         entry_id: str,
         asset: dict[str, Any],
         currency: str,
+        day_ago: DayAgoPrices | None = None,
     ) -> None:
         super().__init__(tickers)
         self._ecb = ecb
+        self._day_ago = day_ago
         self._asset = asset
         self._asset_id = asset["id"]
         self._currency = currency
@@ -178,12 +174,8 @@ class PriceSensor(TolerantEntity[TickerCoordinator], SensorEntity):
             self.async_on_remove(
                 self._ecb.async_add_listener(self._handle_coordinator_update, None)
             )
-        await self._async_update_24h_change()
-        self.async_on_remove(
-            async_track_time_interval(
-                self.hass, self._async_update_24h_change, CHANGE_24H_UPDATE_INTERVAL
-            )
-        )
+        if self._day_ago is not None:
+            self.async_on_remove(self._day_ago.join(self))
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -196,29 +188,10 @@ class PriceSensor(TolerantEntity[TickerCoordinator], SensorEntity):
             self.async_registry_entry_updated()
         super()._handle_coordinator_update()
 
-    async def _async_update_24h_change(self, _: datetime | None = None) -> None:
-        """Read this sensor's own value from about 24 hours ago from the recorder."""
-        try:
-            from homeassistant.components.recorder import get_instance
-            from homeassistant.components.recorder.history import get_significant_states
-
-            now = dt_util.utcnow()
-            history = await get_instance(self.hass).async_add_executor_job(
-                get_significant_states,
-                self.hass,
-                now - timedelta(hours=24, minutes=5),
-                now - timedelta(hours=23, minutes=55),
-                [self.entity_id],
-            )
-            states = history.get(self.entity_id, [])
-            if states:
-                # States, not dicts: neither minimal_response nor
-                # compressed_state_format is asked for.
-                self._price_24h_ago = float(cast(State, states[-1]).state)
-        except Exception as err:  # noqa: BLE001 - optional data, never fatal
-            _LOGGER.debug(
-                "No 24 h history for %s: %s", self.entity_id, type(err).__name__
-            )
+    @callback
+    def set_price_24h_ago(self, value: float | None) -> None:
+        """The price of 24 hours ago (DayAgoPrices); None: none known."""
+        self._price_24h_ago = value
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -281,10 +254,13 @@ async def async_setup_price_entities(
     runtime: PriceTrackerRuntime = entry.runtime_data
     currencies = tracked_currencies(entry)
     _remove_untracked(hass, entry, currencies)
+    day_ago = DayAgoPrices(hass, async_prices_24h_ago)
     for group in groups_of_type(entry, SUBENTRY_TYPE_PRICE_GROUP):
         add_entities(
             [
-                PriceSensor(runtime.tickers, runtime.ecb, entry.entry_id, asset, currency)
+                PriceSensor(
+                    runtime.tickers, runtime.ecb, entry.entry_id, asset, currency, day_ago
+                )
                 for asset in group.data[CONF_ASSETS].values()
                 for currency in currencies
             ],

@@ -5,7 +5,11 @@ from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.const import DOMAIN
-from custom_components.bitpanda.devices import device_identifiers, find_entry_device
+from custom_components.bitpanda.devices import (
+    device_identifiers,
+    find_entry_device,
+    find_wallet_device,
+)
 
 _PACKAGE = Path(__file__).parent.parent / "custom_components" / "bitpanda"
 
@@ -62,3 +66,24 @@ async def test_device_identifiers_are_every_one_under_this_domain(hass):
     )
     assert device_identifiers(ours) == {"eid_portfolio", "eid_wallets"}
     assert device_identifiers(foreign) == set()
+
+
+async def test_find_wallet_device_finds_the_entrys_wallet_of_an_asset(hass):
+    """The wallet device of an asset, of this entry only: another entry's
+    wallet of the same asset and a price device of it are not it."""
+    mine = MockConfigEntry(domain=DOMAIN)
+    other = MockConfigEntry(domain=DOMAIN)
+    mine.add_to_hass(hass)
+    other.add_to_hass(hass)
+    dev_reg = dr.async_get(hass)
+    wallet = dev_reg.async_get_or_create(
+        config_entry_id=mine.entry_id, identifiers={(DOMAIN, f"{mine.entry_id}_wallet_x")}
+    )
+    dev_reg.async_get_or_create(
+        config_entry_id=mine.entry_id, identifiers={(DOMAIN, f"{mine.entry_id}_price_y")}
+    )
+    dev_reg.async_get_or_create(
+        config_entry_id=other.entry_id, identifiers={(DOMAIN, f"{other.entry_id}_wallet_y")}
+    )
+    assert find_wallet_device(dev_reg, mine.entry_id, "x") == wallet
+    assert find_wallet_device(dev_reg, mine.entry_id, "y") is None

@@ -36,10 +36,9 @@ def test_a_failure_streak_counts_from_its_first_request():
 
 
 def test_a_failure_streak_spans_its_requests_whatever_order_they_end_in():
-    """Refreshes that overlap end in any order: the streak runs from the
-    earliest request to the latest, however the failures come in. Added
-    as they end here -- asked for at 10, 0 and 5 minutes -- they confirm
-    as they would have in order."""
+    """The streak runs from the earliest request to the latest, whatever
+    order the failures are added in. Added out of order here -- asked for at
+    10, 0 and 5 minutes -- they confirm as they would have in order."""
     streak = FailureStreak()
     for minutes in (10, 0, 5):
         streak.add(_T0 + timedelta(minutes=minutes))

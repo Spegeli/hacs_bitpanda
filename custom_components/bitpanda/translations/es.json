@@ -87,14 +87,14 @@
       },
       "reauth_confirm": {
         "title": "Se necesita una nueva clave API de Bitpanda",
-        "description": "Bitpanda ha rechazado la clave API guardada. Puede que haya caducado o que sea anterior a los permisos que necesita esta versión. Tus sensores se conservan.\n\nAsí puedes crear una clave API nueva:\n\n1. Abre [{api_key_url}]({api_key_url}) y crea una clave API nueva.\n2. Selecciona solo los permisos \"Créditos\", \"Transacción\" y \"Earn (Lectura)\" – no \"Trading (Lectura)\".\n3. Copia la clave API y pégala abajo. Bitpanda solo la muestra una vez.\n\nCon la clave API, la integración solo lee: no puede operar ni mover dinero.\nLas claves API de Bitpanda son válidas hasta la fecha que eliges al crearlas, como máximo un año; después, Home Assistant pide una nueva.",
+        "description": "Bitpanda ha rechazado la clave API guardada. Puede que haya caducado o que sea anterior a los permisos que necesita esta versión. Tus sensores se conservan. La nueva clave API debe pertenecer a la misma cuenta de Bitpanda. Para otra cuenta, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda, elige \"Eliminar\" y vuelve a configurar el Portfolio.\n\nAsí puedes crear una clave API nueva:\n\n1. Abre [{api_key_url}]({api_key_url}) y crea una clave API nueva.\n2. Selecciona solo los permisos \"Créditos\", \"Transacción\" y \"Earn (Lectura)\" – no \"Trading (Lectura)\".\n3. Copia la clave API y pégala abajo. Bitpanda solo la muestra una vez.\n\nCon la clave API, la integración solo lee: no puede operar ni mover dinero.\nLas claves API de Bitpanda son válidas hasta la fecha que eliges al crearlas, como máximo un año; después, Home Assistant pide una nueva.",
         "data": {
           "api_key": "Clave API"
         }
       },
       "reconfigure": {
         "title": "Reconfigurar Bitpanda Portfolio",
-        "description": "Sustituye la clave API guardada, cambia la moneda o ambas cosas.",
+        "description": "Sustituye la clave API guardada, cambia la moneda o ambas cosas. Una nueva clave API debe pertenecer a la misma cuenta de Bitpanda. Para otra cuenta, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda, elige \"Eliminar\" y vuelve a configurar el Portfolio.",
         "data": {
           "api_key": "Nueva clave API",
           "currency": "Moneda"
@@ -133,6 +133,10 @@
       "no_reconfigure": "El Bitpanda Price Tracker por ahora no tiene nada que reconfigurar. Cambia sus monedas adicionales y el idioma de los títulos de grupo con \"Configurar\" (⚙) en la misma entrada.",
       "unload_failed": "No se ha podido detener el Portfolio, así que no se ha cambiado la moneda ni se ha eliminado nada. Reinicia Home Assistant e inténtalo de nuevo.",
       "setup_cancelled": "El Portfolio no se ha configurado y no se ha eliminado nada."
+    },
+    "create_entry": {
+      "portfolio": "Para ver tu cartera en un panel, añade la tarjeta \"Bitpanda Portfolio\": abre el panel, selecciona \"Editar panel de control\" (✏ arriba a la derecha; en el móvil en el menú ⋮), luego \"Añadir tarjeta\" y la pestaña \"Por tarjeta\", y busca \"Bitpanda\". Si no aparece ninguna tarjeta de Bitpanda, recarga la página dos veces; en la app de Home Assistant, [restablece en su lugar la caché del frontend]({cards_url}).\n\nLa nueva \"Vista general\", la predeterminada en las instalaciones nuevas desde Home Assistant 2026.2, no admite tarjetas: crea primero un panel en \"Configuración\" → \"Paneles de control\" → \"Añadir panel de control\".",
+      "price_tracker": "Añade los activos que quieras seguir con \"Añadir seguimiento de precio\" en la entrada \"Bitpanda Price Tracker\" de la página de la integración Bitpanda. Después añade la tarjeta \"Bitpanda Price Tracker\" a un panel: abre el panel, selecciona \"Editar panel de control\" (✏ arriba a la derecha; en el móvil en el menú ⋮), luego \"Añadir tarjeta\" y la pestaña \"Por tarjeta\", y busca \"Bitpanda\". Si no aparece ninguna tarjeta de Bitpanda, recarga la página dos veces; en la app de Home Assistant, [restablece en su lugar la caché del frontend]({cards_url}).\n\nLa nueva \"Vista general\", la predeterminada en las instalaciones nuevas desde Home Assistant 2026.2, no admite tarjetas: crea primero un panel en \"Configuración\" → \"Paneles de control\" → \"Añadir panel de control\"."
     }
   },
   "options": {
@@ -202,7 +206,7 @@
             "category": "Tipo de activo"
           },
           "data_description": {
-            "category": "El siguiente paso muestra todos los activos de este tipo que aún no sigues. Las listas grandes, como las acciones, tardan unos segundos en cargarse la primera vez."
+            "category": "El siguiente paso muestra todos los activos de este tipo que aún no sigues. Las listas grandes, como las acciones, tardan hasta medio minuto en cargarse la primera vez."
           }
         },
         "asset": {
@@ -235,6 +239,9 @@
       "abort": {
         "already_configured": "Este activo ya se está siguiendo.",
         "asset_added": "Ahora se hace seguimiento de {asset} en el grupo {group}."
+      },
+      "create_entry": {
+        "default": "Ahora se hace seguimiento de {asset} en el grupo {group}."
       }
     },
     "wallet_group": {
@@ -293,9 +300,160 @@
         "nl": "Nederlands",
         "pl": "Polski"
       }
+    },
+    "history_timeframe": {
+      "options": {
+        "day": "1 día",
+        "week": "1 semana",
+        "month": "1 mes",
+        "six_month": "6 meses",
+        "year": "1 año"
+      }
     }
   },
   "entity": {
+    "event": {
+      "new_wallet": {
+        "name": "Nuevo wallet",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "wallet_added": "Wallet añadido"
+            }
+          },
+          "device_id": {
+            "name": "Wallet: ID del dispositivo"
+          },
+          "asset_id": {
+            "name": "Activo: ID"
+          },
+          "symbol": {
+            "name": "Activo: símbolo"
+          },
+          "name": {
+            "name": "Activo: nombre"
+          },
+          "wallet": {
+            "name": "Wallet: nombre"
+          },
+          "category": {
+            "name": "Activo: categoría"
+          },
+          "units": {
+            "name": "Wallet: cantidad"
+          },
+          "value": {
+            "name": "Wallet: valor"
+          },
+          "currency": {
+            "name": "Wallet: moneda"
+          },
+          "message": {
+            "name": "Mensaje"
+          }
+        }
+      },
+      "staking_reward": {
+        "name": "Recompensa de staking",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "staking_reward_received": "Recompensa de staking recibida"
+            }
+          },
+          "device_id": {
+            "name": "Wallet: ID del dispositivo"
+          },
+          "asset_id": {
+            "name": "Activo: ID"
+          },
+          "symbol": {
+            "name": "Activo: símbolo"
+          },
+          "name": {
+            "name": "Activo: nombre"
+          },
+          "wallet": {
+            "name": "Wallet: nombre"
+          },
+          "count": {
+            "name": "Pagos: número"
+          },
+          "gross": {
+            "name": "Pagos: bruto (cantidad)"
+          },
+          "fee": {
+            "name": "Pagos: comisión (cantidad)"
+          },
+          "net": {
+            "name": "Pagos: neto (cantidad)"
+          },
+          "value": {
+            "name": "Pagos: valor neto (actual)"
+          },
+          "currency": {
+            "name": "Pagos: moneda"
+          },
+          "credited_at": {
+            "name": "Pagos: último"
+          },
+          "apr_percent": {
+            "name": "Recompensas: tasa anual (APR %)"
+          },
+          "rewards_net": {
+            "name": "Recompensas: neto (cantidad)"
+          },
+          "message": {
+            "name": "Mensaje"
+          }
+        }
+      },
+      "earn_change": {
+        "name": "Cambio de Earn",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "offered": "Ofrecido",
+              "withdrawn": "Retirado",
+              "sold_out": "Agotado",
+              "available_again": "Disponible de nuevo",
+              "apr": "Tasa anual (APR) modificada"
+            }
+          },
+          "device_id": {
+            "name": "Wallet: ID del dispositivo"
+          },
+          "asset_id": {
+            "name": "Activo: ID"
+          },
+          "symbol": {
+            "name": "Activo: símbolo"
+          },
+          "name": {
+            "name": "Activo: nombre"
+          },
+          "wallet": {
+            "name": "Wallet: nombre"
+          },
+          "change": {
+            "name": "Earn: cambio",
+            "state": {
+              "offered": "Ofrecido",
+              "withdrawn": "Retirado",
+              "sold_out": "Agotado",
+              "available_again": "Disponible de nuevo",
+              "apr": "Tasa anual (APR) modificada"
+            }
+          },
+          "apr_before": {
+            "name": "Earn: tasa anual antes (APR %)"
+          },
+          "apr_after": {
+            "name": "Earn: tasa anual después (APR %)"
+          }
+        }
+      }
+    },
     "sensor": {
       "total_value": {
         "name": "Valor total"
@@ -318,19 +476,208 @@
         }
       },
       "return_day": {
-        "name": "Rentabilidad 1 día"
+        "name": "Rentabilidad 1 día",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rentabilidad: importe"
+          }
+        }
       },
       "return_week": {
-        "name": "Rentabilidad 1 semana"
+        "name": "Rentabilidad 1 semana",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rentabilidad: importe"
+          }
+        }
       },
       "return_month": {
-        "name": "Rentabilidad 1 mes"
+        "name": "Rentabilidad 1 mes",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rentabilidad: importe"
+          }
+        }
       },
       "return_six_month": {
-        "name": "Rentabilidad 6 meses"
+        "name": "Rentabilidad 6 meses",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rentabilidad: importe"
+          }
+        }
       },
       "return_year": {
-        "name": "Rentabilidad 1 año"
+        "name": "Rentabilidad 1 año",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rentabilidad: importe"
+          }
+        }
+      },
+      "invested": {
+        "name": "Importe invertido",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: wallets"
+          }
+        }
+      },
+      "total_return": {
+        "name": "Rentabilidad total",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: wallets"
+          }
+        }
+      },
+      "total_return_percent": {
+        "name": "Rentabilidad total %",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: wallets"
+          }
+        }
+      },
+      "value_crypto": {
+        "name": "Valor: criptomonedas",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupo: participación %"
+          },
+          "invested_amount": {
+            "name": "Grupo: importe invertido"
+          },
+          "total_return": {
+            "name": "Grupo: rentabilidad total"
+          },
+          "total_return_percent": {
+            "name": "Grupo: rentabilidad total %"
+          },
+          "wallets": {
+            "name": "Grupo: wallets"
+          }
+        }
+      },
+      "value_stock": {
+        "name": "Valor: acciones",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupo: participación %"
+          },
+          "invested_amount": {
+            "name": "Grupo: importe invertido"
+          },
+          "total_return": {
+            "name": "Grupo: rentabilidad total"
+          },
+          "total_return_percent": {
+            "name": "Grupo: rentabilidad total %"
+          },
+          "wallets": {
+            "name": "Grupo: wallets"
+          }
+        }
+      },
+      "value_etf": {
+        "name": "Valor: ETF",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupo: participación %"
+          },
+          "invested_amount": {
+            "name": "Grupo: importe invertido"
+          },
+          "total_return": {
+            "name": "Grupo: rentabilidad total"
+          },
+          "total_return_percent": {
+            "name": "Grupo: rentabilidad total %"
+          },
+          "wallets": {
+            "name": "Grupo: wallets"
+          }
+        }
+      },
+      "value_etc": {
+        "name": "Valor: ETC",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupo: participación %"
+          },
+          "invested_amount": {
+            "name": "Grupo: importe invertido"
+          },
+          "total_return": {
+            "name": "Grupo: rentabilidad total"
+          },
+          "total_return_percent": {
+            "name": "Grupo: rentabilidad total %"
+          },
+          "wallets": {
+            "name": "Grupo: wallets"
+          }
+        }
+      },
+      "value_index": {
+        "name": "Valor: índices cripto",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupo: participación %"
+          },
+          "invested_amount": {
+            "name": "Grupo: importe invertido"
+          },
+          "total_return": {
+            "name": "Grupo: rentabilidad total"
+          },
+          "total_return_percent": {
+            "name": "Grupo: rentabilidad total %"
+          },
+          "wallets": {
+            "name": "Grupo: wallets"
+          }
+        }
+      },
+      "value_metal": {
+        "name": "Valor: metales preciosos",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupo: participación %"
+          },
+          "invested_amount": {
+            "name": "Grupo: importe invertido"
+          },
+          "total_return": {
+            "name": "Grupo: rentabilidad total"
+          },
+          "total_return_percent": {
+            "name": "Grupo: rentabilidad total %"
+          },
+          "wallets": {
+            "name": "Grupo: wallets"
+          }
+        }
+      },
+      "value_other": {
+        "name": "Valor: otros",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Grupo: participación %"
+          },
+          "invested_amount": {
+            "name": "Grupo: importe invertido"
+          },
+          "total_return": {
+            "name": "Grupo: rentabilidad total"
+          },
+          "total_return_percent": {
+            "name": "Grupo: rentabilidad total %"
+          },
+          "wallets": {
+            "name": "Grupo: wallets"
+          }
+        }
       },
       "wallet": {
         "name": "Saldo (disponible)",
@@ -340,6 +687,9 @@
           },
           "asset_name": {
             "name": "Activo: nombre"
+          },
+          "asset_category": {
+            "name": "Activo: categoría"
           },
           "asset_isin": {
             "name": "Activo: ISIN"
@@ -358,6 +708,9 @@
           "asset_name": {
             "name": "Activo: nombre"
           },
+          "asset_category": {
+            "name": "Activo: categoría"
+          },
           "asset_isin": {
             "name": "Activo: ISIN"
           },
@@ -366,6 +719,23 @@
           },
           "apr_percent": {
             "name": "Recompensas: tasa anual (APR %)"
+          },
+          "earn_type": {
+            "name": "Earn: tipo",
+            "state": {
+              "flexible": "Flexible",
+              "locked": "Bloqueado"
+            }
+          },
+          "earn_mode": {
+            "name": "Earn: modo",
+            "state": {
+              "staking": "Staking",
+              "stable_coin": "Stablecoin"
+            }
+          },
+          "earn_sold_out": {
+            "name": "Earn: agotado"
           },
           "rewards_gross": {
             "name": "Recompensas: bruto (cantidad)"
@@ -384,6 +754,18 @@
           },
           "rewards_last_at": {
             "name": "Recompensas: último pago"
+          },
+          "rewards_net_30d": {
+            "name": "Recompensas: neto, últimos 30 días (cantidad)"
+          },
+          "rewards_net_value_30d": {
+            "name": "Recompensas: valor neto, últimos 30 días (actual)"
+          },
+          "rewards_last_net": {
+            "name": "Recompensas: último pago, neto (cantidad)"
+          },
+          "rewards_last_value": {
+            "name": "Recompensas: último pago, valor (actual)"
           }
         }
       },
@@ -396,11 +778,17 @@
           "asset_name": {
             "name": "Activo: nombre"
           },
+          "asset_category": {
+            "name": "Activo: categoría"
+          },
           "asset_isin": {
             "name": "Activo: ISIN"
           },
           "units": {
             "name": "Activo: cantidad"
+          },
+          "price": {
+            "name": "Activo: precio"
           },
           "average_buy_price": {
             "name": "Posición: precio medio de compra"
@@ -409,10 +797,22 @@
             "name": "Posición: importe invertido"
           },
           "total_return": {
-            "name": "Posición: ganancia/pérdida"
+            "name": "Posición: rentabilidad total"
           },
           "total_return_percent": {
-            "name": "Posición: ganancia/pérdida %"
+            "name": "Posición: rentabilidad total %"
+          },
+          "portfolio_share_percent": {
+            "name": "Posición: participación en el portfolio %"
+          },
+          "price_24h_ago": {
+            "name": "24 h: precio anterior"
+          },
+          "change_24h_pct": {
+            "name": "24 h: variación %"
+          },
+          "return_24h": {
+            "name": "24 h: rentabilidad"
           }
         }
       },
@@ -423,6 +823,9 @@
           },
           "asset_name": {
             "name": "Activo: nombre"
+          },
+          "asset_category": {
+            "name": "Activo: categoría"
           },
           "asset_isin": {
             "name": "Activo: ISIN"
@@ -533,6 +936,18 @@
     },
     "staking_reward_value": {
       "message": "Valor actual: unos {value} {currency}."
+    },
+    "no_portfolio": {
+      "message": "No hay ningún Bitpanda Portfolio configurado y cargado."
+    },
+    "portfolio_unavailable": {
+      "message": "Las cifras del Bitpanda Portfolio no están disponibles en este momento."
+    },
+    "rewards_start_after_end": {
+      "message": "El inicio es posterior al fin."
+    },
+    "refresh_unknown_entry": {
+      "message": "El servicio elegido no es un servicio de Bitpanda cargado."
     }
   },
   "issues": {
@@ -567,16 +982,46 @@
     "portfolio_exists": {
       "title": "Migración de Bitpanda bloqueada: ya hay un Bitpanda Portfolio configurado",
       "description": "La entrada de Bitpanda \"{entry}\" de antes de la migración no se puede migrar: se convertiría en un segundo Bitpanda Portfolio junto a \"{portfolio}\", y solo se puede configurar uno. No se ha modificado nada en ella. Elimina una de las dos entradas en la página de la integración Bitpanda (⋮ → \"Eliminar\"). Si conservas \"{entry}\", reinicia después Home Assistant para migrarla."
-    },
-    "slow_price_interval": {
-      "title": "Bitpanda Price Tracker: precios actualizados solo cada {minutes} minutos",
-      "description": "El Bitpanda Price Tracker sigue {count} activos y necesita una solicitud por activo en cada actualización. Para no superar su presupuesto de solicitudes, actualiza sus precios solo cada {minutes} minutos. Sigue menos activos para obtener actualizaciones más rápidas: elimina el dispositivo de un activo (⋮ en su página de dispositivo) o un grupo entero (⋮ en la página de la integración Bitpanda)."
     }
   },
   "services": {
     "refresh": {
       "name": "Actualizar",
-      "description": "Obtiene ahora la cartera y los precios de Bitpanda y espera a que ambos terminen. Se ignora durante el tiempo de espera tras la última llamada; falla si falla una actualización."
+      "description": "Obtiene ahora la cartera y los precios de Bitpanda, o solo el servicio elegido, y espera a que termine. Un servicio dentro de su tiempo de espera se omite; falla si falla una actualización.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Servicio",
+          "description": "Solo este servicio: Bitpanda Portfolio o Bitpanda Price Tracker. Vacío: ambos."
+        }
+      }
+    },
+    "get_portfolio": {
+      "name": "Obtener la cartera",
+      "description": "Devuelve las cifras del Portfolio y cada wallet tal como las muestran los sensores, sin consultar a Bitpanda."
+    },
+    "get_portfolio_history": {
+      "name": "Obtener el historial de la cartera",
+      "description": "Devuelve el valor del Portfolio en un periodo, tal como lo dibuja la tarjeta Portfolio.",
+      "fields": {
+        "timeframe": {
+          "name": "Periodo",
+          "description": "El periodo del historial."
+        }
+      }
+    },
+    "get_staking_rewards": {
+      "name": "Obtener las recompensas de staking",
+      "description": "Devuelve cada pago de staking que ha leído el Portfolio, el más antiguo primero, opcionalmente entre dos momentos.",
+      "fields": {
+        "start": {
+          "name": "Inicio",
+          "description": "Los pagos desde este momento, en la zona horaria de Home Assistant."
+        },
+        "end": {
+          "name": "Fin",
+          "description": "Los pagos antes de este momento, en la zona horaria de Home Assistant."
+        }
+      }
     }
   }
 }

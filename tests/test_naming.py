@@ -255,6 +255,12 @@ def test_the_figures_and_every_wallet_id_are_portfolio_ids():
         "sensor.bitpanda_portfolio_cash_plus", "sensor.bitpanda_portfolio_return_day",
         "sensor.bitpanda_portfolio_return_week", "sensor.bitpanda_portfolio_return_month",
         "sensor.bitpanda_portfolio_return_6_months", "sensor.bitpanda_portfolio_return_year",
+        "sensor.bitpanda_portfolio_invested", "sensor.bitpanda_portfolio_total_return",
+        "sensor.bitpanda_portfolio_total_return_percent",
+        "sensor.bitpanda_portfolio_value_crypto", "sensor.bitpanda_portfolio_value_stock",
+        "sensor.bitpanda_portfolio_value_etf", "sensor.bitpanda_portfolio_value_etc",
+        "sensor.bitpanda_portfolio_value_index", "sensor.bitpanda_portfolio_value_metal",
+        "sensor.bitpanda_portfolio_value_other",
     ]
     wallets = [
         make(asset)

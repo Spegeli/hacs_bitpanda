@@ -24,6 +24,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
     SelectSelectorMode,
 )
+from homeassistant.util.hass_dict import HassKey
 
 from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
 from .assets import (
@@ -45,19 +46,30 @@ from .groups import (
 from .language import entry_language
 from .naming import asset_display_label
 
+# Home Assistant 2026.10 types form schemas as probatio schemas; the voluptuous
+# ones built here work the same from 2025.5 on, hence `type: ignore[arg-type]`
+# where a form or section takes one. Strict mypy flags these once unneeded.
+
 # The stock listing alone is ~103 requests: kept for an hour, it serves a
 # round of picks, and an asset Bitpanda adds shows within the hour.
 _CATALOGUE_CACHE_TTL = timedelta(hours=1)
 
 # Its own top-level hass.data key, never inside hass.data[DOMAIN]: it serves
 # every flow and survives entry reloads.
-_CATALOGUE_KEY = f"{DOMAIN}_asset_catalogue"
+_CATALOGUE_KEY: HassKey[dict[str, list[dict[str, Any]]]] = HassKey(f"{DOMAIN}_asset_catalogue")
+
+# Bitpanda's old securities line: listed beside the current one with the
+# same symbol and ISIN and a near-equal price, but never buyable again. The
+# dialog leaves it out; ASSET_CATEGORY_FILTERS keeps it, so that an asset of
+# it tracked or held already still finds its group.
+_OLD_SECURITIES = frozenset({("security", "stock"), ("security", "etf"), ("security", "etc")})
 
 
 async def async_category_listing(
     hass: HomeAssistant, client: BitpandaApiClient, category: str
 ) -> list[dict[str, Any]]:
-    """Every asset of one category, all pages, slimmed, kept for an hour.
+    """Every asset of one category, all pages, slimmed, kept for an hour --
+    Bitpanda's old securities line left out (_OLD_SECURITIES).
 
     A timer drops each listing an hour after it was loaded, whether or not
     the dialog is opened again: no listing outstays its hour in memory --
@@ -70,7 +82,7 @@ async def async_category_listing(
     Nothing here catches an API error: an error partway through a
     multi-filter category must not cache a partial listing.
     """
-    store: dict[str, list[dict[str, Any]]] = hass.data.setdefault(_CATALOGUE_KEY, {})
+    store = hass.data.setdefault(_CATALOGUE_KEY, {})
     cached = store.get(category)
     if cached is not None:
         return cached
@@ -78,6 +90,8 @@ async def async_category_listing(
     assets: list[dict[str, Any]] = []
     seen: set[str] = set()
     for type_, group in ASSET_CATEGORY_FILTERS[category]:
+        if (type_, group) in _OLD_SECURITIES:
+            continue
         for asset in await client.async_list_assets(type_, group):
             asset_id = asset.get("id")
             if asset_id and asset_id not in seen:
@@ -133,7 +147,7 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
         )
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema(
+            data_schema=vol.Schema(  # type: ignore[arg-type]
                 {
                     category: SelectSelector(
                         SelectSelectorConfig(
@@ -159,7 +173,7 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
         """
         return self.async_show_form(
             step_id="security" if self._category in ISIN_CATEGORIES else "asset",
-            data_schema=vol.Schema(
+            data_schema=vol.Schema(  # type: ignore[arg-type]
                 {
                     vol.Optional("asset"): SelectSelector(
                         SelectSelectorConfig(
@@ -239,8 +253,10 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
     async def _async_track(self, record: dict[str, Any]) -> SubentryFlowResult:
         """Add `record` to the group of its asset type, or start that group.
 
-        Joining ends the dialog with a message naming the group: no subentry
-        is created, so Home Assistant's own confirmation would not fit.
+        Both end the dialog with the same message, naming the asset and its
+        group: joining one as an abort -- no subentry is created, so Home
+        Assistant's own confirmation would not fit --, starting one with
+        that text as the new subentry's (create_entry.default).
         """
         category = asset_category(record)
         # A new group is titled in the entry's language. _get_entry() raises
@@ -256,6 +272,10 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
                 title=titles[category],
                 data=price_group_data(category, [record]),
                 unique_id=category,
+                description_placeholders={
+                    "asset": asset_display_label(record),
+                    "group": titles[category],
+                },
             )
         async_add_asset_to_group(self.hass, entry, group, record)
         return self.async_abort(

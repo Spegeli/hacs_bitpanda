@@ -4,6 +4,7 @@ from __future__ import annotations
 from homeassistant.helpers import device_registry as dr
 
 from .const import DOMAIN
+from .naming import wallet_device_identifier
 
 
 def device_identifiers(device: dr.DeviceEntry) -> set[str]:
@@ -39,3 +40,10 @@ def find_entry_device(
         ),
         None,
     )
+
+
+def find_wallet_device(
+    dev_reg: dr.DeviceRegistry, entry_id: str, asset_id: str
+) -> dr.DeviceEntry | None:
+    """The wallet device of `asset_id` of the Portfolio entry `entry_id`."""
+    return find_entry_device(dev_reg, entry_id, wallet_device_identifier(entry_id, asset_id))

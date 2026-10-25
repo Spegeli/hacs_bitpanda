@@ -19,6 +19,15 @@
   successful rewards refresh without it marks every asset's newest payout
   and announces nothing. A mark stays as long as the entry: it is what keeps
   an asset sold and bought back from announcing its old payouts again.
+- `operations` (OperationsHistory): what the rewards coordinator has read of
+  /operations so far -- when it last read the whole history, the newest time
+  it saw, the ids of the operations of the last day before it, the kinds it
+  evaluates (`staking` now) and, per kind, its evaluation: for `staking` the
+  totals and every timed payout per asset (portfolio_model.RewardTotals). It
+  lets the coordinator read only what is new; without it, the whole history
+  is read again, and nothing is lost but time. Nothing of the API key is
+  kept here: a dialog that stores another key notes the entry in memory
+  (note_new_key), and its next start reads the whole history again.
 
 Each section is read on its own. A missing one is that feature's first run,
 quietly: another section may have begun the file. A malformed one is a first
@@ -36,13 +45,16 @@ cancels such a save before deleting the file.
 from __future__ import annotations
 
 from collections.abc import Callable, Collection, Iterable, Mapping
+from datetime import datetime
 import logging
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
+from homeassistant.util.hass_dict import HassKey
 
 from .const import DOMAIN
+from .portfolio_model import RewardTotals, totals_from_section, totals_to_section
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,8 +64,12 @@ _STORAGE_VERSION = 1
 _SAVE_DELAY = 1
 _WALLETS = "known_wallets"
 _REWARDS = "known_rewards"
+_OPERATIONS = "operations"
 # hass.data key of the stores, by entry id: they outlive the entries' reloads.
-_STORES = f"{DOMAIN}_portfolio_stores"
+_STORES: HassKey[dict[str, PortfolioStore]] = HassKey(f"{DOMAIN}_portfolio_stores")
+# hass.data key of the Portfolio entries a dialog stored another API key for
+# since they last started (note_new_key): their ids, nothing of the key.
+_NEW_KEYS: HassKey[set[str]] = HassKey(f"{DOMAIN}_new_api_keys")
 # The type name a section reports for a value of the wrong shape.
 _MALFORMED = ValueError.__name__
 
@@ -84,6 +100,7 @@ class PortfolioStore:
 
     known_wallets: KnownWallets
     reward_marks: RewardMarks
+    operations: OperationsHistory
 
     def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
         self._store: Store[dict[str, Any]] = Store(
@@ -106,11 +123,18 @@ class PortfolioStore:
             read_error = _MALFORMED
         self.known_wallets = KnownWallets(self, self._data.get(_WALLETS), read_error)
         self.reward_marks = RewardMarks(self, self._data.get(_REWARDS), read_error)
+        self.operations = OperationsHistory(self, self._data.get(_OPERATIONS), read_error)
 
     def write_section(self, key: str, value: Any) -> None:
         """Set the section `key` to `value` and ask for the delayed save."""
         self._data[key] = value
         self._store.async_delay_save(self._data_to_save, _SAVE_DELAY)
+
+    def remove_section(self, key: str) -> None:
+        """Drop the section `key`, if there is one, and ask for the delayed
+        save."""
+        if self._data.pop(key, None) is not None:
+            self._store.async_delay_save(self._data_to_save, _SAVE_DELAY)
 
     async def async_remove(self) -> None:
         """Delete the file, a save still waiting included."""
@@ -127,6 +151,32 @@ def _is_asset_list(raw: object) -> bool:
 def _is_mark_map(raw: object) -> bool:
     return isinstance(raw, dict) and all(
         isinstance(asset, str) and isinstance(mark, str) for asset, mark in raw.items()
+    )
+
+
+def _read_time(raw: object) -> datetime | None:
+    """A time with its offset, as OperationsHistory writes it; None else."""
+    if not isinstance(raw, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else None
+
+
+def _is_operations_section(raw: object) -> bool:
+    return (
+        isinstance(raw, dict)
+        and isinstance(raw.get("kinds"), list)
+        and all(isinstance(kind, str) for kind in raw["kinds"])
+        and _read_time(raw.get("full_read_at")) is not None
+        # A section written before the time of the last read was stored has
+        # none.
+        and (raw.get("read_at") is None or _read_time(raw.get("read_at")) is not None)
+        and (raw.get("anchor") is None or isinstance(raw.get("anchor"), str))
+        and _is_mark_map(raw.get("recent_ids"))
+        and totals_from_section(raw.get("staking")) is not None
     )
 
 
@@ -228,10 +278,107 @@ class RewardMarks:
         self._store.write_section(_REWARDS, dict(sorted((self._marks or {}).items())))
 
 
+class OperationsHistory:
+    """What the rewards coordinator has read of /operations so far: the
+    section `operations`. `staking` is None while there is nothing to build
+    on -- no section, a malformed one, an unreadable file, or one dropped
+    after a new key -- and the whole history is read next."""
+
+    staking: dict[str, RewardTotals] | None
+    # The newest time seen, of any operation; operation id -> its time, for
+    # the last day before it; the kinds evaluated over the whole history;
+    # when it was last read whole, and last read at all.
+    anchor: str | None
+    recent_ids: dict[str, str]
+    kinds: list[str]
+    full_read_at: datetime | None
+    read_at: datetime | None
+
+    def __init__(self, store: PortfolioStore, raw: object, read_error: str | None) -> None:
+        self._store = store
+        section = _section_value(
+            raw,
+            read_error,
+            _is_operations_section,
+            "Could not read the Bitpanda operations read so far (%s); "
+            "reading the whole history again",
+        )
+        self._set_empty()
+        if section is not None:
+            self.staking = totals_from_section(section["staking"])
+            self.anchor = section["anchor"]
+            self.recent_ids = dict(section["recent_ids"])
+            self.kinds = list(section["kinds"])
+            self.full_read_at = _read_time(section["full_read_at"])
+            self.read_at = _read_time(section.get("read_at"))
+
+    def _set_empty(self) -> None:
+        self.staking = None
+        self.anchor = None
+        self.recent_ids = {}
+        self.kinds = []
+        self.full_read_at = None
+        self.read_at = None
+
+    def replace(
+        self,
+        *,
+        staking: Mapping[str, RewardTotals],
+        anchor: str | None,
+        recent_ids: Mapping[str, str],
+        kinds: Iterable[str],
+        full_read_at: datetime,
+        read_at: datetime,
+    ) -> None:
+        """Keep what was read now, and ask for the delayed save."""
+        self.staking = dict(staking)
+        self.anchor = anchor
+        self.recent_ids = dict(recent_ids)
+        self.kinds = list(kinds)
+        self.full_read_at = full_read_at
+        self.read_at = read_at
+        self._store.write_section(
+            _OPERATIONS,
+            {
+                "kinds": self.kinds,
+                "full_read_at": full_read_at.isoformat(),
+                "read_at": read_at.isoformat(),
+                "anchor": anchor,
+                "recent_ids": dict(sorted(self.recent_ids.items())),
+                "staking": totals_to_section(self.staking),
+            },
+        )
+
+    def drop(self) -> None:
+        """Forget what was read: the whole history is read next."""
+        self._set_empty()
+        self._store.remove_section(_OPERATIONS)
+
+
+def note_new_key(hass: HomeAssistant, entry_id: str) -> None:
+    """A dialog stored another API key for the Portfolio entry `entry_id` --
+    reauth or Reconfigure, the currency change included: the operations read
+    so far may be another account's, so its next start reads the whole
+    history again (take_new_key). Only the entry's id is noted, in memory:
+    nothing of the key. A restart forgets the note, which is safe: the
+    dialog reloads the entry at once."""
+    hass.data.setdefault(_NEW_KEYS, set()).add(entry_id)
+
+
+def take_new_key(hass: HomeAssistant, entry_id: str) -> bool:
+    """Whether a dialog stored another API key for the Portfolio entry
+    `entry_id` since it last started -- once: the note goes."""
+    noted = hass.data.get(_NEW_KEYS)
+    if noted is None or entry_id not in noted:
+        return False
+    noted.discard(entry_id)
+    return True
+
+
 async def async_get_portfolio_store(hass: HomeAssistant, entry_id: str) -> PortfolioStore:
     """The store of the Portfolio entry `entry_id`, loaded once and kept
     across its reloads."""
-    stores: dict[str, PortfolioStore] = hass.data.setdefault(_STORES, {})
+    stores = hass.data.setdefault(_STORES, {})
     store = stores.get(entry_id)
     if store is None:
         store = PortfolioStore(hass, entry_id)

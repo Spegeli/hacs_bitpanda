@@ -1,8 +1,8 @@
 """Pure data model of the Portfolio service: no Home Assistant, no network."""
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass, field
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 import logging
 import math
@@ -34,9 +34,10 @@ def confirmed(count: int, since: datetime, now: datetime) -> bool:
 
 
 # The Portfolio figures that wait before they show 0 once what they show has
-# vanished from the answer, by the `_key` of the sensor that shows each: Total
-# value, Cash and Cash Plus.
-PORTFOLIO_FIGURES: tuple[str, ...] = ("total", "cash", "cash_plus")
+# vanished from the answer, by the key their sensors wait on (`_watch`): Total
+# value, Cash, Cash Plus -- and the positions, on which Invested and the total
+# return of the whole portfolio depend.
+PORTFOLIO_FIGURES: tuple[str, ...] = ("total", "cash", "cash_plus", "positions")
 
 
 @dataclass
@@ -57,9 +58,9 @@ class FigureWatch:
     it stays 0, with nothing more counted, while the entry stays missing: it
     waits again only after the entry came back and vanished anew.
 
-    An answer may also leave the entry in doubt -- Cash Plus beside a
-    holding that cannot be read or is not classified yet, which might or
-    might not be Cash Plus. Doubt is neither there nor missing: it clears a
+    An answer may also leave the entry in doubt -- Cash Plus or the
+    positions beside a holding that cannot be read or is not classified yet,
+    which might or might not be one. Doubt is neither there nor missing: it clears a
     running count, so nothing waits, but never makes the figure there. Had
     it, a figure that never was there would wait once the holding is read
     or classified.
@@ -147,20 +148,6 @@ class Holding:
     def staked(self) -> float:
         return round(max(self.balance - self.available, 0.0), DECIMALS)
 
-    @property
-    def price(self) -> float | None:
-        """What one unit is worth in this answer: `value` over `balance`, the
-        proportion `_share` splits the value by. None while it cannot be
-        told -- the value is unknown, or there are no units to divide it by.
-
-        Unrounded: it is multiplied by a number of units, and rounded to
-        DECIMALS the price of a token worth a fraction of a cent would keep
-        only a few significant digits.
-        """
-        if self.value is None or self.balance <= 0:
-            return None
-        return self.value / self.balance
-
     def _share(self, units: float) -> float | None:
         if self.value is None:
             return None
@@ -198,16 +185,17 @@ class PortfolioData:
 
     Each figure depends on one kind of entry, which the answer lists or does
     not (`figures_listed`): Total value on any entry at all, Cash on a fiat
-    entry, Cash Plus on a holding of the group `fiat_earn`. An entry that
+    entry, Cash Plus on a holding of the group `fiat_earn`, the positions'
+    figures on a holding that is not Cash Plus (`positions`). An entry that
     cannot be read is listed all the same -- there for Total value, and a
-    fiat one for Cash: it is no sign of a sale. Cash Plus alone can be in
-    doubt: a holding that cannot be read, or is not classified yet, might or
-    might not be Cash Plus. Doubt is neither there nor missing (FigureWatch):
-    it clears a running count but never makes Cash Plus there. Either way
-    the figure shows `unknown`, neither 0 nor a wait. Only a holding the
-    catalogue does not list is sure to be no Cash Plus. `waiting` names the
-    figures whose entry vanished and whose vanishing is not confirmed yet
-    (FigureWatch).
+    fiat one for Cash: it is no sign of a sale. Cash Plus and the positions
+    can be in doubt: a holding that cannot be read, or is not classified
+    yet, might or might not be one of them. Doubt is neither there nor
+    missing (FigureWatch): it clears a running count but never makes the
+    figure there. Either way the figure shows `unknown`, neither 0 nor a
+    wait. Only a holding the catalogue does not list is sure to be no Cash
+    Plus -- and so a position. `waiting` names the figures whose entry
+    vanished and whose vanishing is not confirmed yet (FigureWatch).
     """
 
     holdings: dict[str, Holding] = field(default_factory=dict)
@@ -315,14 +303,45 @@ class PortfolioData:
         holdings = self._cash_plus_holdings()
         return None if holdings is None else bool(holdings)
 
+    @property
+    def in_doubt(self) -> bool:
+        """Whether a held entry might be anything: one that could not be read
+        at all (`unparsed_assets`), or a holding not classified yet -- but
+        one the catalogue does not list, which is no Cash Plus."""
+        return bool(self.unparsed_assets) or any(
+            self.is_cash_plus(asset_id) is None and asset_id not in self.unlisted
+            for asset_id in self.holdings
+        )
+
+    @property
+    def positions(self) -> dict[str, Holding] | None:
+        """The holdings that are not Cash Plus, by asset id: the wallets, and
+        a held asset the catalogue does not list. None while that cannot be
+        told (`in_doubt`): never a sum that quietly leaves one out."""
+        if self.in_doubt:
+            return None
+        return {
+            asset_id: holding
+            for asset_id, holding in self.holdings.items()
+            if not self.is_cash_plus(asset_id)
+        }
+
+    @property
+    def listed_positions(self) -> bool | None:
+        """Whether the answer lists a position; None while that is in doubt."""
+        positions = self.positions
+        return None if positions is None else bool(positions)
+
     def figures_listed(self) -> dict[str, bool | None]:
         """Whether the answer lists the entry of each figure, by the figure's
-        key (PORTFOLIO_FIGURES) -- None for Cash Plus in doubt: what the
-        coordinator tells each FigureWatch after every successful answer."""
+        key (PORTFOLIO_FIGURES) -- None for Cash Plus or the positions in
+        doubt: what the coordinator tells each FigureWatch after every
+        successful answer."""
         return {
             "total": self.listed_any,
             "cash": self.listed_fiat,
             "cash_plus": self.listed_cash_plus,
+            "positions": self.listed_positions,
         }
 
     @property
@@ -335,6 +354,91 @@ class PortfolioData:
         """Every asset /portfolio listed, its balances readable or not: an
         unreadable entry is no sign of a sale."""
         return set(self.holdings) | self.unparsed_assets
+
+
+@dataclass(frozen=True)
+class PositionTotals:
+    """What some positions are worth together and what went into them, in
+    the Portfolio currency, and how many they are."""
+
+    value: float
+    invested: float
+    count: int
+
+    @property
+    def total_return(self) -> float:
+        return round(self.value - self.invested, DECIMALS)
+
+    @property
+    def total_return_percent(self) -> float | None:
+        """The return over what was invested, as the Portfolio card's groups
+        compute it; None unless something was invested."""
+        if self.invested <= 0:
+            return None
+        return round(self.total_return / self.invested * 100, 2)
+
+
+def significant(value: float) -> float:
+    """`value` to 10 significant digits: a price of a token worth a fraction
+    of a cent keeps its digits, which DECIMALS would cut."""
+    return float(f"{value:.10g}")
+
+
+def performance(holding: Holding) -> dict[str, float]:
+    """The position performance Bitpanda computes for the whole position,
+    by attribute key; a figure it did not send is left out."""
+    out: dict[str, float] = {}
+    for key, value in (
+        ("average_buy_price", holding.avg_buy_price),
+        ("invested_amount", holding.invested),
+        ("total_return", holding.total_return),
+        ("total_return_percent", holding.total_return_pct),
+    ):
+        if value is not None:
+            out[key] = round(value, DECIMALS)
+    return out
+
+
+def change_24h(
+    price: float | None, then: float | None, units: float
+) -> tuple[float, float] | None:
+    """The price's change over 24 hours, in percent, and what it made of
+    today's `units`; None without both prices."""
+    if price is None or not then:
+        return None
+    return round((price - then) / then * 100, 2), round(units * (price - then), DECIMALS)
+
+
+def return_amount(total: float | None, percent: float | None) -> float | None:
+    """What a return of `percent` means in money on today's total value
+    `total`: Bitpanda's percentage leaves deposits and withdrawals out, so
+    the amount is taken from it, not from the value's history -- as the
+    Portfolio card computes it. None without both, or at -100 % or below."""
+    if total is None or percent is None or percent <= -100:
+        return None
+    return round(total * percent / (100 + percent), 2)
+
+
+def share_percent(part: float | None, total: float | None) -> float | None:
+    """`part` as a share of `total`, in percent; None without both or while
+    `total` is not above 0."""
+    if part is None or total is None or total <= 0:
+        return None
+    return round(part / total * 100, 2)
+
+
+def position_totals(holdings: Iterable[Holding]) -> PositionTotals | None:
+    """The sums of `holdings`; None when one lacks its value or its invested
+    amount -- never a sum that leaves it out."""
+    value = invested = 0.0
+    count = 0
+    for holding in holdings:
+        if holding.value is None or holding.invested is None:
+            return None
+        value += holding.value
+        invested += holding.invested
+        count += 1
+    return PositionTotals(round(value, DECIMALS), round(invested, DECIMALS), count)
 
 
 @dataclass(frozen=True)
@@ -353,6 +457,32 @@ class PortfolioReturns:
 
     values: dict[str, float]
     failed: frozenset[str] = frozenset()
+    # The portfolio's value over each timeframe, as (milliseconds, value)
+    # pairs in time order: the dashboard cards draw their line from it.
+    # Kept in memory only, replaced with every refresh.
+    series: dict[str, tuple[tuple[int, float], ...]] = field(default_factory=dict)
+
+
+def parse_history_points(datapoints: Any) -> tuple[tuple[int, float], ...]:
+    """A /portfolio-history `datapoints` list as (milliseconds, value)
+    pairs in time order; a point without a readable time or a finite value
+    is left out."""
+    points: list[tuple[int, float]] = []
+    for point in datapoints if isinstance(datapoints, list) else []:
+        if not isinstance(point, dict):
+            continue
+        amount = point.get("value")
+        raw = amount.get("value") if isinstance(amount, dict) else None
+        if raw is None:
+            continue
+        try:
+            time = datetime.fromisoformat(str(point.get("time")).replace("Z", "+00:00"))
+            value = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if time.tzinfo is not None and math.isfinite(value):
+            points.append((int(time.timestamp() * 1000), value))
+    return tuple(sorted(points))
 
 
 def tolerate_failed_timeframes(
@@ -379,6 +509,7 @@ def tolerate_failed_timeframes(
     for timeframe in streaks.keys() - result.failed:
         del streaks[timeframe]
     values = dict(result.values)
+    series = dict(result.series)
     failed = set(result.failed)
     for timeframe in result.failed:
         streak = streaks.setdefault(timeframe, FailureStreak())
@@ -388,7 +519,9 @@ def tolerate_failed_timeframes(
         failed.discard(timeframe)
         if timeframe in previous.values:
             values[timeframe] = previous.values[timeframe]
-    return PortfolioReturns(values=values, failed=frozenset(failed))
+        if timeframe in previous.series:
+            series[timeframe] = previous.series[timeframe]
+    return PortfolioReturns(values=values, failed=frozenset(failed), series=series)
 
 
 def lists_nothing(entries: list[dict[str, Any]]) -> bool:
@@ -523,13 +656,44 @@ def time_key(timestamp: str) -> tuple[int, datetime | str]:
     return (0, parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC))
 
 
+def rewards_since(payouts: Iterable[RewardPayout], since: datetime) -> float:
+    """The net of the payouts credited after `since`, DECIMALS; 0 without
+    one. A payout whose time does not parse is in no window."""
+    net = 0.0
+    for payout in payouts:
+        rank, credited = time_key(payout.credited_at)
+        if rank == 0 and cast(datetime, credited) > since:
+            net += payout.net
+    return round(net, DECIMALS)
+
+
+def last_payout_net(totals: RewardTotals) -> float | None:
+    """The net of the last payout: of every payout credited at `last_at` --
+    the same moment however its fraction is written. None without one."""
+    if totals.last_at is None:
+        return None
+    last = time_key(totals.last_at)
+    nets = [payout.net for payout in totals.payouts if time_key(payout.credited_at) == last]
+    return round(sum(nets), DECIMALS) if nets else None
+
+
 def payouts_after(payouts: Sequence[RewardPayout], mark: str | None) -> list[RewardPayout]:
     """The payouts credited after `mark` -- all of them without one."""
     return [payout for payout in payouts if _is_later(payout.credited_at, mark)]
 
 
-def sum_rewards(operations: list[dict[str, Any]]) -> dict[str, RewardTotals]:
-    """Aggregate staking rewards per asset.
+def sum_rewards(operations: Iterable[dict[str, Any]]) -> dict[str, RewardTotals]:
+    """Aggregate staking rewards per asset over `operations`: add_rewards
+    onto nothing."""
+    return add_rewards({}, operations)
+
+
+def add_rewards(
+    totals: Mapping[str, RewardTotals], operations: Iterable[dict[str, Any]]
+) -> dict[str, RewardTotals]:
+    """`totals` with the staking rewards of `operations` added: new objects,
+    `totals` left as it is. Read in parts -- the history so far, then what
+    came since -- the result is that of one read over all of it.
 
     Only `operation_type == "reward"` with `wallet_owner == "staking-service"`
     counts. `earn_on_fiat_reward` is Cash Plus interest, a different product.
@@ -540,14 +704,15 @@ def sum_rewards(operations: list[dict[str, Any]]) -> dict[str, RewardTotals]:
     payouts showed exactly 20 % while lifetime aggregates sat near 17 %. Always
     read `fee_amount`.
     """
-    totals: dict[str, RewardTotals] = {}
-    payouts: dict[str, list[RewardPayout]] = {}
+    out = {asset_id: replace(entry) for asset_id, entry in totals.items()}
+    payouts = {asset_id: list(entry.payouts) for asset_id, entry in out.items()}
+    changed: set[str] = set()
 
     for operation in operations:
         if operation.get("operation_type") != "reward":
             continue
         for tx in operation.get("transactions") or []:
-            if tx.get("wallet_owner") != "staking-service":
+            if not isinstance(tx, dict) or tx.get("wallet_owner") != "staking-service":
                 continue
             asset_id = tx.get("asset_id")
             gross = to_float(tx.get("asset_amount"))
@@ -555,7 +720,8 @@ def sum_rewards(operations: list[dict[str, Any]]) -> dict[str, RewardTotals]:
                 continue
             fee = to_float(tx.get("fee_amount")) or 0.0
 
-            entry = totals.setdefault(asset_id, RewardTotals())
+            entry = out.setdefault(asset_id, RewardTotals())
+            changed.add(asset_id)
             entry.gross += gross
             entry.fee += fee
             entry.net += gross - fee
@@ -577,8 +743,11 @@ def sum_rewards(operations: list[dict[str, Any]]) -> dict[str, RewardTotals]:
                 )
 
     # The amounts are 8-decimal strings; summing them as floats leaves noise
-    # such as 751.4920099999999. Rounded once, at the end, not per step.
-    for asset_id, entry in totals.items():
+    # such as 751.4920099999999. Rounded once a part is added, not per step:
+    # the totals so far are exact to 8 decimals already, so a history read
+    # in parts rounds to the same as one read over all of it.
+    for asset_id in changed:
+        entry = out[asset_id]
         entry.gross = round(entry.gross, DECIMALS)
         entry.fee = round(entry.fee, DECIMALS)
         entry.net = round(entry.net, DECIMALS)
@@ -586,34 +755,152 @@ def sum_rewards(operations: list[dict[str, Any]]) -> dict[str, RewardTotals]:
             sorted(payouts.get(asset_id, ()), key=lambda payout: time_key(payout.credited_at))
         )
 
-    return totals
+    return out
+
+
+def operation_credited_at(operation: dict[str, Any]) -> str | None:
+    """When `operation` was credited: the newest `credited_at` of its
+    transactions -- a swap's two legs may differ -- or None without one."""
+    newest: str | None = None
+    for tx in operation.get("transactions") or []:
+        credited = tx.get("credited_at") if isinstance(tx, dict) else None
+        if isinstance(credited, str) and credited and _is_later(credited, newest):
+            newest = credited
+    return newest
+
+
+def newest_credited_at(
+    operations: Iterable[dict[str, Any]], current: str | None
+) -> str | None:
+    """The newest of `current` and the times `operations` were credited."""
+    newest = current
+    for operation in operations:
+        credited = operation_credited_at(operation)
+        if _is_later(credited, newest):
+            newest = credited
+    return newest
+
+
+def totals_to_section(totals: Mapping[str, RewardTotals]) -> dict[str, Any]:
+    """`totals` as the Portfolio's file keeps them (portfolio_store.py):
+    per asset the sums, the count, the newest time and every timed payout as
+    [credited_at, gross, fee, net]."""
+    return {
+        asset_id: {
+            "gross": entry.gross,
+            "fee": entry.fee,
+            "net": entry.net,
+            "count": entry.count,
+            "last_at": entry.last_at,
+            "payouts": [
+                [payout.credited_at, payout.gross, payout.fee, payout.net]
+                for payout in entry.payouts
+            ],
+        }
+        for asset_id, entry in sorted(totals.items())
+    }
+
+
+def _is_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _is_section_payout(raw: object) -> bool:
+    return (
+        isinstance(raw, list)
+        and len(raw) == 4
+        and isinstance(raw[0], str)
+        and all(_is_number(value) for value in raw[1:])
+    )
+
+
+def _is_section_entry(raw: object) -> bool:
+    return (
+        isinstance(raw, dict)
+        and all(_is_number(raw.get(key)) for key in ("gross", "fee", "net"))
+        and isinstance(raw.get("count"), int)
+        and not isinstance(raw.get("count"), bool)
+        and (raw.get("last_at") is None or isinstance(raw.get("last_at"), str))
+        and isinstance(raw.get("payouts"), list)
+        and all(_is_section_payout(payout) for payout in raw["payouts"])
+    )
+
+
+def totals_from_section(raw: object) -> dict[str, RewardTotals] | None:
+    """The totals totals_to_section wrote, or None for anything else: a
+    malformed section counts as none, and the whole history is read again."""
+    if not isinstance(raw, dict) or not all(
+        isinstance(asset_id, str) and _is_section_entry(entry) for asset_id, entry in raw.items()
+    ):
+        return None
+    return {
+        asset_id: RewardTotals(
+            gross=float(entry["gross"]),
+            fee=float(entry["fee"]),
+            net=float(entry["net"]),
+            count=entry["count"],
+            last_at=entry["last_at"],
+            payouts=tuple(
+                RewardPayout(credited, float(gross), float(fee), float(net))
+                for credited, gross, fee, net in entry["payouts"]
+            ),
+        )
+        for asset_id, entry in raw.items()
+    }
+
+
+@dataclass(frozen=True)
+class EarnProduct:
+    """One asset's Earn product, as /earn/configs lists it: its APR (a
+    fraction; None when not a number), its `type` (FLEXIBLE, LOCKED) and
+    `mode` (STAKING_EARN, STABLE_COIN_EARN) as Bitpanda sends them, None
+    without one, and whether it is sold out and enabled."""
+
+    apr: float | None
+    type: str | None
+    mode: str | None
+    sold_out: bool
+    enabled: bool
 
 
 @dataclass(frozen=True)
 class EarnData:
-    """The Earn catalogue: APR per asset (a fraction) and the offered assets."""
+    """The Earn catalogue: APR per asset (a fraction), the offered assets,
+    and each asset's product."""
 
     apr: dict[str, float]
     offered: frozenset[str]
+    products: dict[str, EarnProduct] = field(default_factory=dict)
 
 
 def parse_earn_configs(configs: list[dict[str, Any]]) -> EarnData:
     """An asset is offered while it has an enabled product -- sold out or not:
     `soldout` and `enabled` are separate flags, and a sold-out product still
     pays the users already in it. The APR is a JSON number and a fraction:
-    0.0544 means 5.44 %."""
-    apr: dict[str, float] = {}
-    offered: set[str] = set()
+    0.0544 means 5.44 %. Bitpanda sends one product per asset; should one
+    have two, the enabled one counts, for the APR and the offer alike."""
+    products: dict[str, EarnProduct] = {}
     for config in configs:
         asset_id = config.get("asset_id")
         if not asset_id:
             continue
-        if config.get("enabled") is True:
-            offered.add(asset_id)
         rate = config.get("annual_percentage_rate")
-        if isinstance(rate, (int, float)) and not isinstance(rate, bool):
-            apr[asset_id] = float(rate)
-    return EarnData(apr=apr, offered=frozenset(offered))
+        kind, mode = config.get("type"), config.get("mode")
+        product = EarnProduct(
+            apr=float(rate) if isinstance(rate, (int, float)) and not isinstance(rate, bool) else None,
+            type=kind if isinstance(kind, str) else None,
+            mode=mode if isinstance(mode, str) else None,
+            sold_out=config.get("soldout") is True,
+            enabled=config.get("enabled") is True,
+        )
+        known = products.get(asset_id)
+        if known is None or product.enabled or not known.enabled:
+            products[asset_id] = product
+    return EarnData(
+        apr={asset_id: p.apr for asset_id, p in products.items() if p.apr is not None},
+        offered=frozenset(asset_id for asset_id, p in products.items() if p.enabled),
+        products=products,
+    )
 
 
 def staking_applies(holding: Holding, earn: EarnData | None) -> bool | None:

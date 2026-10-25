@@ -71,7 +71,7 @@ def test_eur_is_the_ticker_price():
     sensor = _sensor("EUR", ecb=False)
     assert sensor.native_value == 73188.51648958
     assert sensor.extra_state_attributes == {
-        "asset": "BTC", "asset_name": "Bitcoin",
+        "asset": "BTC", "asset_name": "Bitcoin", "asset_category": "crypto",
     }
 
 
@@ -84,15 +84,23 @@ def test_a_stock_etf_or_etc_shows_its_isin():
     sensor = PriceSensor(_Coordinator({etf["id"]: 540.5}), None, "eid", etf, "EUR")
     assert sensor.extra_state_attributes == {
         "asset": "LYY1", "asset_name": "Amundi PEA S&P 500 UCITS ETF",
-        "asset_isin": "FR0011871136",
+        "asset_category": "etf", "asset_isin": "FR0011871136",
     }
+
+
+def test_price_sensors_name_their_category():
+    """`asset_category` in every currency, as on the wallet sensors."""
+    for currency in ("EUR", "USD"):
+        sensor = PriceSensor(_Coordinator({GOLD["id"]: 98.12}), _Coordinator(_RATES), "eid",
+                             GOLD, currency)
+        assert sensor.extra_state_attributes["asset_category"] == "metal", currency
 
 
 def test_other_currencies_are_converted_with_the_ecb_rate():
     sensor = _sensor("USD")
     assert sensor.native_value == round(73188.51648958 * 1.1367, 8)
     assert sensor.extra_state_attributes == {
-        "asset": "BTC", "asset_name": "Bitcoin",
+        "asset": "BTC", "asset_name": "Bitcoin", "asset_category": "crypto",
         "conversion_rate": 1.1367, "rate_date": "2026-09-24", "rate_source": "ECB",
     }
 
@@ -140,7 +148,7 @@ def test_a_confirmed_failure_makes_the_price_unavailable():
 
 def test_change_24h_attributes_from_the_recorded_price():
     sensor = _sensor("EUR", prices={BTC["id"]: 110.0}, ecb=False)
-    sensor._price_24h_ago = 100.0
+    sensor.set_price_24h_ago(100.0)
     attrs = sensor.extra_state_attributes
     assert attrs["change_24h_pct"] == 10.0
     assert attrs["price_24h_ago"] == 100.0

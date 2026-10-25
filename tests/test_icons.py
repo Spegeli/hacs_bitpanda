@@ -26,10 +26,27 @@ _SENSOR_ICONS = {
     "return_month": "mdi:chart-line",
     "return_six_month": "mdi:chart-line",
     "return_year": "mdi:chart-line",
+    "invested": "mdi:cash-check",
+    "total_return": "mdi:chart-line-variant",
+    "total_return_percent": "mdi:percent-outline",
+    "value_crypto": "mdi:chart-donut",
+    "value_stock": "mdi:chart-donut",
+    "value_etf": "mdi:chart-donut",
+    "value_etc": "mdi:chart-donut",
+    "value_index": "mdi:chart-donut",
+    "value_metal": "mdi:chart-donut",
+    "value_other": "mdi:chart-donut",
     "wallet": "mdi:wallet",
     "staking": "mdi:lock-clock",
     "wallet_total": "mdi:sigma",
     "price": "mdi:chart-line",
+}
+
+
+_EVENT_ICONS = {
+    "new_wallet": "mdi:wallet-plus",
+    "staking_reward": "mdi:gift",
+    "earn_change": "mdi:percent-circle",
 }
 
 
@@ -47,6 +64,12 @@ def test_every_sensor_keeps_its_icon():
     } == _SENSOR_ICONS
 
 
+def test_every_event_entity_keeps_its_icon():
+    assert {
+        key: icons["default"] for key, icons in _icons()["entity"]["event"].items()
+    } == _EVENT_ICONS
+
+
 def test_every_sensor_translation_key_has_an_icon():
     """A sensor's icon is found by its translation key: every key a sensor
     can carry (entity.sensor in strings.json) has one."""
@@ -54,8 +77,13 @@ def test_every_sensor_translation_key_has_an_icon():
     assert set(_icons()["entity"]["sensor"]) == set(strings["entity"]["sensor"])
 
 
-def test_the_refresh_action_has_an_icon():
-    assert _icons()["services"] == {"refresh": {"service": "mdi:refresh"}}
+def test_every_action_has_an_icon():
+    assert _icons()["services"] == {
+        "refresh": {"service": "mdi:refresh"},
+        "get_portfolio": {"service": "mdi:briefcase-search"},
+        "get_portfolio_history": {"service": "mdi:chart-timeline-variant"},
+        "get_staking_rewards": {"service": "mdi:gift-outline"},
+    }
 
 
 def _sensor_classes() -> list[type]:
@@ -86,5 +114,13 @@ async def test_home_assistant_reads_the_icons(hass):
     assert {
         key: icons["default"] for key, icons in entity[DOMAIN]["sensor"].items()
     } == _SENSOR_ICONS
+    assert {
+        key: icons["default"] for key, icons in entity[DOMAIN]["event"].items()
+    } == _EVENT_ICONS
     services = await async_get_icons(hass, "services", {DOMAIN})
-    assert services[DOMAIN] == {"refresh": {"service": "mdi:refresh"}}
+    assert services[DOMAIN] == {
+        "refresh": {"service": "mdi:refresh"},
+        "get_portfolio": {"service": "mdi:briefcase-search"},
+        "get_portfolio_history": {"service": "mdi:chart-timeline-variant"},
+        "get_staking_rewards": {"service": "mdi:gift-outline"},
+    }

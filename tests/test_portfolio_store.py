@@ -2,7 +2,8 @@
 Home Assistant's storage, a section per feature -- the assets it announced a
 wallet for, and when the newest staking payout announced per asset was
 credited."""
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
+import json
 from unittest.mock import patch
 
 from homeassistant.const import EVENT_HOMEASSISTANT_FINAL_WRITE
@@ -15,10 +16,13 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.bitpanda import async_remove_entry
 from custom_components.bitpanda.const import DOMAIN
+from custom_components.bitpanda.portfolio_model import RewardPayout, RewardTotals
 from custom_components.bitpanda.portfolio_store import (
     PortfolioStore,
     async_get_portfolio_store,
     async_remove_portfolio_store,
+    note_new_key,
+    take_new_key,
 )
 
 _KEY = "bitpanda.portfolio.eid"
@@ -30,6 +34,10 @@ _WALLETS_LOST = (
 _REWARDS_LOST = (
     "Could not read which Bitpanda staking rewards were announced before ({}); "
     "the payouts listed now count as known"
+)
+_OPERATIONS_LOST = (
+    "Could not read the Bitpanda operations read so far ({}); "
+    "reading the whole history again"
 )
 
 
@@ -130,9 +138,11 @@ async def test_an_unreadable_file_warns_once_per_section(hass, hass_storage, cap
         store = await _loaded(hass)
     assert store.known_wallets.first_run is True
     assert store.reward_marks.first_run is True
+    assert store.operations.staking is None
     assert _warnings(caplog) == [
         _WALLETS_LOST.format("HomeAssistantError"),
         _REWARDS_LOST.format("HomeAssistantError"),
+        _OPERATIONS_LOST.format("HomeAssistantError"),
     ]
     assert "detail from the file" not in caplog.text
 
@@ -313,3 +323,129 @@ async def test_deleting_the_price_tracker_leaves_the_portfolios_file(hass, hass_
     hass_storage[_KEY] = _stored("a")
     await async_remove_entry(hass, entry)
     assert hass_storage[_KEY]["data"] == {"known_wallets": ["a"]}
+
+
+# --- The operations read so far ----------------------------------------------
+
+_STAKING = {
+    "vsn": RewardTotals(
+        gross=30.0,
+        fee=6.0,
+        net=24.0,
+        count=2,
+        last_at="2026-09-22T17:16:35Z",
+        payouts=(
+            RewardPayout("2026-09-15T16:20:00Z", 20.0, 4.0, 16.0),
+            RewardPayout("2026-09-22T17:16:35Z", 10.0, 2.0, 8.0),
+        ),
+    )
+}
+_READ_AT = datetime(2026, 10, 14, 12, 0, tzinfo=UTC)
+_LAST_READ_AT = datetime(2026, 10, 14, 13, 0, tzinfo=UTC)
+
+
+def _replace(history) -> None:
+    history.replace(
+        staking=_STAKING,
+        anchor="2026-10-13T16:48:00Z",
+        recent_ids={"op-1": "2026-10-13T16:48:00Z"},
+        kinds=["staking"],
+        full_read_at=_READ_AT,
+        read_at=_LAST_READ_AT,
+    )
+
+
+async def test_without_a_file_nothing_was_read_yet_quietly(hass, hass_storage, caplog):
+    history = (await _loaded(hass)).operations
+    assert history.staking is None
+    assert (
+        history.anchor, history.recent_ids, history.kinds, history.full_read_at, history.read_at
+    ) == (None, {}, [], None, None)
+    assert _warnings(caplog) == []
+
+
+async def test_what_was_read_is_stored_and_read_again(hass, hass_storage, freezer):
+    _replace((await _loaded(hass)).operations)
+    await _flush(hass, freezer)
+    again = (await _loaded(hass)).operations
+    assert again.staking == _STAKING
+    assert again.anchor == "2026-10-13T16:48:00Z"
+    assert again.recent_ids == {"op-1": "2026-10-13T16:48:00Z"}
+    assert again.kinds == ["staking"]
+    assert again.full_read_at == _READ_AT
+    assert again.read_at == _LAST_READ_AT
+
+
+async def test_a_section_without_the_last_read_time_keeps_what_was_read(hass, hass_storage, caplog):
+    """Written by a release that did not store the time of the last read:
+    only that time is unknown."""
+    hass_storage[_KEY] = _file(operations={
+        "kinds": ["staking"], "full_read_at": "2026-10-14T12:00:00+00:00",
+        "anchor": "2026-10-13T16:48:00Z", "recent_ids": {}, "staking": {},
+    })
+    history = (await _loaded(hass)).operations
+    assert history.staking == {}
+    assert history.full_read_at == _READ_AT
+    assert history.read_at is None
+    assert _warnings(caplog) == []
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        [],
+        {"kinds": "staking"},
+        {"kinds": ["staking"], "full_read_at": "yesterday", "anchor": None, "recent_ids": {}, "staking": {}},
+        {"kinds": ["staking"], "full_read_at": 5, "anchor": None, "recent_ids": {}, "staking": {}},
+        {"kinds": ["staking"], "full_read_at": "2026-10-14T12:00:00", "anchor": None, "recent_ids": {}, "staking": {}},
+        {"kinds": ["staking"], "full_read_at": "2026-10-14T12:00:00+00:00", "anchor": 5, "recent_ids": {}, "staking": {}},
+        {"kinds": ["staking"], "full_read_at": "2026-10-14T12:00:00+00:00", "anchor": None, "recent_ids": [], "staking": {}},
+        {"kinds": ["staking"], "full_read_at": "2026-10-14T12:00:00+00:00", "anchor": None, "recent_ids": {}, "staking": {"vsn": 1}},
+        {"kinds": ["staking"], "full_read_at": "2026-10-14T12:00:00+00:00", "read_at": "noon", "anchor": None, "recent_ids": {}, "staking": {}},
+    ],
+    ids=["list", "kinds", "time", "time_number", "time_without_offset", "anchor", "ids", "staking", "last_read"],
+)
+async def test_a_malformed_operations_section_warns_and_leaves_the_others(
+    hass, hass_storage, caplog, value
+):
+    hass_storage[_KEY] = _file(known_wallets=["a"], operations=value)
+    store = await _loaded(hass)
+    assert store.operations.staking is None
+    assert "a" in store.known_wallets
+    assert _warnings(caplog) == [_OPERATIONS_LOST.format("ValueError")]
+
+
+async def test_replacing_and_dropping_leave_the_other_sections(hass, hass_storage, freezer):
+    hass_storage[_KEY] = _file(known_wallets=["a"], newer_feature={"kept": True})
+    store = await _loaded(hass)
+    _replace(store.operations)
+    await _flush(hass, freezer)
+    assert set(hass_storage[_KEY]["data"]) == {"known_wallets", "newer_feature", "operations"}
+    store.operations.drop()
+    await _flush(hass, freezer)
+    assert hass_storage[_KEY]["data"] == {"known_wallets": ["a"], "newer_feature": {"kept": True}}
+    assert store.operations.staking is None
+    assert (await _loaded(hass)).operations.staking is None
+
+
+async def test_a_new_key_is_noted_for_its_entry_and_taken_once(hass):
+    """A dialog that stores another key notes the entry -- no key, no digest
+    of one -- and the entry's next start takes the note, once."""
+    assert take_new_key(hass, "eid") is False
+    note_new_key(hass, "eid")
+    assert take_new_key(hass, "other") is False
+    assert take_new_key(hass, "eid") is True
+    assert take_new_key(hass, "eid") is False
+
+
+async def test_a_noted_key_never_reaches_the_file(hass, hass_storage, freezer):
+    """The note lives in memory only: the file holds what was read, never
+    anything about the key."""
+    store = await _loaded(hass)
+    note_new_key(hass, "eid")
+    _replace(store.operations)
+    await _flush(hass, freezer)
+    assert set(hass_storage[_KEY]["data"]) == {"operations"}
+    assert set(hass_storage[_KEY]["data"]["operations"]) == {
+        "kinds", "full_read_at", "read_at", "anchor", "recent_ids", "staking",
+    }

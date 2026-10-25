@@ -2,28 +2,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 import math
 from typing import Any
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
 from .const import (
     DOMAIN,
+    ECB_FIRST_LOAD_RETRY_INTERVAL,
     ECB_UPDATE_INTERVAL,
     ERROR_CONNECTION,
     ERROR_HTTP_STATUS,
     ERROR_TIMEOUT,
     ERROR_UNREADABLE,
-    FIRST_LOAD_RETRY_INTERVAL,
     PRICE_UPDATE_INTERVAL_BASE,
-    TICKER_HOURLY_BUDGET,
 )
 from .ecb import EcbError, EcbRates, async_fetch_ecb_rates
 from .portfolio_model import DECIMALS
@@ -32,16 +30,8 @@ from .tolerance import TolerantCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-# Past this the prices are stale enough to tell the user about. A warning
-# threshold, never a cap -- see price_interval.
-_SLOW_INTERVAL = timedelta(minutes=30)
-
-# The repair issue while the interval is past _SLOW_INTERVAL; its id is also
-# its translation key (`issues` in strings.json).
-ISSUE_SLOW_PRICE_INTERVAL = "slow_price_interval"
-
 # Each 429 in a row doubles the interval, up to this factor; the first
-# success returns to the budgeted interval.
+# success returns to the regular interval.
 _MAX_BACKOFF = 16
 
 # The kinds of failed request (const.API_ERROR_KINDS) that got no answer at
@@ -81,60 +71,6 @@ def _ecb_failed(err: EcbError) -> UpdateFailed:
         translation_placeholders={name: str(value) for name, value in placeholders.items()}
         or None,
     )
-
-
-def price_interval(ticker_count: int) -> timedelta:
-    """Poll interval that keeps ticker requests within TICKER_HOURLY_BUDGET.
-
-    There is no batch ticker: each tracked asset costs one request per poll.
-    60 s up to 30 assets, then stretched linearly. Deliberately uncapped: a
-    cap would silently break the budget for large tracker counts, and a slow
-    sensor is a visible annoyance where a rate-limited one fails in ways
-    nobody can diagnose.
-    """
-    if ticker_count <= 0:
-        return PRICE_UPDATE_INTERVAL_BASE
-    seconds = ticker_count * 3600 / TICKER_HOURLY_BUDGET
-    return timedelta(seconds=max(PRICE_UPDATE_INTERVAL_BASE.total_seconds(), seconds))
-
-
-@callback
-def async_report_price_interval(hass: HomeAssistant, ticker_count: int) -> None:
-    """Raise the slow-interval repair issue while the interval `ticker_count`
-    tracked assets need is past _SLOW_INTERVAL; delete it once it is not.
-
-    Called at every setup of the Price Tracker, which follows every change
-    to what it tracks. A warning: the prices still come, only slowly. It
-    names the number of assets and the interval in whole minutes, rounded
-    up so that it never reads as the 30 it is past. Not kept across
-    restarts -- every start raises it again while it lasts -- and not
-    deleted when the Price Tracker is merely unloaded: deleting would also
-    forget that the user chose to ignore it.
-    """
-    interval = price_interval(ticker_count)
-    if interval <= _SLOW_INTERVAL:
-        async_delete_price_interval_issue(hass)
-        return
-    ir.async_create_issue(
-        hass,
-        DOMAIN,
-        ISSUE_SLOW_PRICE_INTERVAL,
-        is_fixable=False,
-        is_persistent=False,
-        severity=ir.IssueSeverity.WARNING,
-        translation_key=ISSUE_SLOW_PRICE_INTERVAL,
-        translation_placeholders={
-            "count": str(ticker_count),
-            "minutes": str(math.ceil(interval.total_seconds() / 60)),
-        },
-    )
-
-
-@callback
-def async_delete_price_interval_issue(hass: HomeAssistant) -> None:
-    """Delete the slow-interval repair issue -- for when the Price Tracker
-    goes, or tracks few enough assets."""
-    ir.async_delete_issue(hass, DOMAIN, ISSUE_SLOW_PRICE_INTERVAL)
 
 
 def convert_price(price: Any, rate: float | None) -> float | None:
@@ -207,7 +143,11 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
         client: BitpandaApiClient,
         tracked: dict[str, str],
     ) -> None:
-        self._base_interval = price_interval(len(tracked))
+        # Every 60 seconds, however many assets are tracked: Bitpanda limits
+        # requests per API key, and these carry none. One request per asset
+        # follows the other, and the next round starts a minute after the
+        # last one ended; a 429 slows the rounds down (the backoff).
+        self._base_interval = PRICE_UPDATE_INTERVAL_BASE
         super().__init__(
             hass,
             _LOGGER,
@@ -231,14 +171,6 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
         # The assets warned about: their return is logged.
         self._announced: set[str] = set()
         self._backoff = 1
-        if self._base_interval > _SLOW_INTERVAL:
-            _LOGGER.warning(
-                "%s price trackers need one request each; prices refresh every "
-                "%s to stay within the request budget. Track fewer assets for "
-                "faster updates.",
-                len(tracked),
-                self._base_interval,
-            )
 
     @property
     def failing_assets(self) -> frozenset[str]:
@@ -292,9 +224,7 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
             price = convert_price(ticker.get("price"), None)
             if price is not None:
                 prices[asset_id] = price
-                # A round that overlapped this one may have removed the mark
-                # while this request was under way: Home Assistant 2025.5
-                # lets a refresh by hand run during a scheduled one.
+                # A fresh price takes the asset's mark away.
                 self._marks.pop(asset_id, None)
 
         # Fresh prices only: last prices carried over never keep a round from
@@ -377,27 +307,28 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
 
 
 class EcbCoordinator(DataUpdateCoordinator[EcbRates]):
-    """ECB reference rates. Created only when extra currencies are configured.
+    """ECB reference rates. Created only where a price is converted: for a
+    Price Tracker with extra currencies, and for a Portfolio whose currency
+    is not EUR (its wallets' ticker prices, portfolio_coordinator.WalletPrices).
 
     A failed fetch leaves `data` at the last rates -- DataUpdateCoordinator
     keeps them -- and the price sensors keep converting with those, showing
     their `rate_date`. While no rates were ever loaded, the other currencies
-    show nothing, so a failure then is retried after FIRST_LOAD_RETRY_INTERVAL
+    show nothing, so a failure then is retried after ECB_FIRST_LOAD_RETRY_INTERVAL
     instead of the 6 hours the rates themselves need.
     """
-
-    config_entry: PriceTrackerConfigEntry
 
     def __init__(
         self,
         hass: HomeAssistant,
-        entry: PriceTrackerConfigEntry,
+        entry: ConfigEntry[Any],
         session: aiohttp.ClientSession,
+        name: str = f"{DOMAIN}_ecb",
     ) -> None:
         super().__init__(
             hass,
             _LOGGER,
-            name=f"{DOMAIN}_ecb",
+            name=name,
             update_interval=ECB_UPDATE_INTERVAL,
             config_entry=entry,
         )
@@ -408,7 +339,7 @@ class EcbCoordinator(DataUpdateCoordinator[EcbRates]):
             rates = await async_fetch_ecb_rates(self._session)
         except EcbError as err:
             if self.data is None:
-                self.update_interval = FIRST_LOAD_RETRY_INTERVAL
+                self.update_interval = ECB_FIRST_LOAD_RETRY_INTERVAL
             raise _ecb_failed(err) from None
         self.update_interval = ECB_UPDATE_INTERVAL
         return rates

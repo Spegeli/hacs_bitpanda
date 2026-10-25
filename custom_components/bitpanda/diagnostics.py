@@ -10,6 +10,7 @@ from typing import Any, cast
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState, ConfigSubentry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.util import dt as dt_util
 
 from . import BitpandaConfigEntry
 from .assets import slim_asset
@@ -26,8 +27,10 @@ from .const import (
     notifies_staking_rewards,
 )
 from .groups import entities_by_group, groups_of_type
+from .language import entry_language
 from .portfolio_coordinator import PortfolioRuntime
 from .price_coordinator import PriceTrackerRuntime
+from .price_sensor import tracked_currencies
 
 _REDACTED = "**REDACTED**"
 
@@ -66,9 +69,27 @@ def _marks(runtime: PortfolioRuntime) -> dict[str, Any]:
     """How many assets have a staking reward mark, and whether the marks are
     still to begin (portfolio_store.RewardMarks): counts only, no asset."""
     marks = runtime.reward_marks
-    if marks is None:
-        return {}
     return {"marked_assets": len(marks), "first_run": marks.first_run}
+
+
+def _operations(runtime: PortfolioRuntime) -> dict[str, Any]:
+    """What was read of the operations so far (portfolio_store
+    OperationsHistory): whether there is anything to build on, the kinds it
+    covers, how many hours ago the whole history was read, and for how many
+    assets -- counts and an age only, no id, no amount."""
+    history = runtime.operations
+    read_at = history.full_read_at
+    return {
+        "operations": {
+            "present": history.staking is not None,
+            "kinds": list(history.kinds),
+            "full_read_age_hours": (
+                None if read_at is None
+                else round((dt_util.utcnow() - read_at).total_seconds() / 3600, 1)
+            ),
+            "assets": len(history.staking or {}),
+        }
+    }
 
 
 def _portfolio(
@@ -83,6 +104,8 @@ def _portfolio(
             # notification: the first thing to look at when one did not.
             "notify_new_wallets": notifies_new_wallets(entry),
             "notify_staking_rewards": notifies_staking_rewards(entry),
+            # The language of the group titles, refusals and notifications.
+            "language": entry_language(entry),
         },
         "groups": _wallet_groups(hass, entry),
     }
@@ -103,6 +126,21 @@ def _portfolio(
             # Of those, the ones the catalogue does not list: no Cash Plus,
             # unlike a lookup that failed, which leaves Cash Plus unknown.
             "unlisted_holdings": len(data.unlisted) if data else 0,
+            # Why Total value or Invested is unknown: the holdings Bitpanda
+            # sent no value for, and those that are or may be a position --
+            # anything but Cash Plus -- without an invested amount. Counts,
+            # never an amount.
+            "holdings_without_value": (
+                sum(holding.value is None for holding in data.holdings.values()) if data else 0
+            ),
+            "holdings_without_invested": (
+                sum(
+                    holding.invested is None and data.is_cash_plus(asset_id) is not True
+                    for asset_id, holding in data.holdings.items()
+                )
+                if data
+                else 0
+            ),
             # Figures whose entry vanished, unavailable until confirmed
             # (portfolio_model.FigureWatch): keys only, never an amount.
             "waiting_figures": sorted(data.waiting) if data else [],
@@ -117,6 +155,7 @@ def _portfolio(
             **_health(runtime.rewards),
             "assets_with_rewards": len(runtime.rewards.data or {}),
             **_marks(runtime),
+            **_operations(runtime),
         },
     }
     return out
@@ -144,7 +183,11 @@ def _price_tracker(
     out: dict[str, Any] = {
         "service": "price_tracker",
         "groups": _price_groups(entry),
-        "currencies": ["EUR", *entry.options.get(CONF_EXTRA_CURRENCIES, [])],
+        "config": {
+            "language": entry_language(entry),
+            "extra_currencies": list(entry.options.get(CONF_EXTRA_CURRENCIES, [])),
+        },
+        "currencies": tracked_currencies(entry),
     }
     if runtime is None:
         return out

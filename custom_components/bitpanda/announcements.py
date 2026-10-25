@@ -1,13 +1,17 @@
-"""The Portfolio's announcements: a wallet new to the Portfolio, and new
-staking payouts.
+"""The Portfolio's announcements: a wallet new to the Portfolio, new
+staking payouts, and Earn changes of held assets.
 
 Each is an event, whether its notification is switched on or not -- an
-interface for the users' automations -- and a persistent notification while
+interface for the users' automations -- fired on the bus and, with the same
+data, by one of the Portfolio's event entities (event.py, async_announce),
+and a persistent notification while
 the entry's option for it is on (on by default for new wallets, off for
 staking rewards), in the entry's language, linking to the wallet's device.
 During a start, both wait until Home Assistant has started: it arms the
 automations' triggers only as it finishes starting, and an event fired
-before would reach none.
+before would reach none. At any setup they wait until the entry's platforms
+are set up (PortfolioRuntime.ready): an event fired before would miss the
+event entities.
 
 A new wallet (WalletAnnouncer). The wallet lifecycle manager
 (portfolio_sensor.py) creates wallet entities at every start, after a
@@ -29,8 +33,8 @@ announces it at once.
 New staking payouts (RewardAnnouncer). The rewards coordinator calls the
 announcer after every successful refresh -- hourly while an enabled Staking
 sensor listens, and at every setup, reload and start -- and never as a
-listener, which would keep it reading the whole history every hour with
-every Staking sensor disabled. The Portfolio keeps a mark per asset, when the
+listener, which would keep it reading every hour with every Staking sensor
+disabled. The Portfolio keeps a mark per asset, when the
 newest payout announced was credited (portfolio_store.RewardMarks); the
 first refresh without marks marks every asset's newest payout and announces
 nothing. After that the payouts credited after an asset's mark are new: one
@@ -42,43 +46,63 @@ otherwise its mark stays, and its payouts wait. One pass at a time announces
 them, reading the newest data as it runs; once it has fired its first event
 it awaits nothing, so an unload cancels a pass before it announced anything
 or not at all, and each payout is announced once.
+
+Earn changes of held assets (EarnAnnouncer): after every successful read of
+the Earn catalogue, an event per change -- no notification, no option. What
+it compares with is kept in memory, for held assets only: the first
+catalogue after a setup, a wallet new since and an asset bought back set it
+silently, so a change while Home Assistant was off or during a reload is no
+news.
 """
 from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from dataclasses import dataclass
 import logging
+import re
 from typing import Any
 
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CoreState, Event, HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.translation import async_get_translations
 
 from .const import (
     CONF_CURRENCY,
     DOMAIN,
+    EARN_APR_THRESHOLD,
+    EVENT_EARN_CHANGED,
     EVENT_STAKING_REWARD_RECEIVED,
     EVENT_WALLET_ADDED,
     notifies_new_wallets,
     notifies_staking_rewards,
 )
-from .devices import device_identifiers, find_entry_device
+from .devices import device_identifiers, find_wallet_device
 from .language import entry_language
 from .naming import (
     staking_unique_id,
     wallet_device_asset_id,
-    wallet_device_identifier,
     wallet_device_name,
 )
 from .portfolio_coordinator import (
+    EarnCoordinator,
     PortfolioConfigEntry,
     PortfolioCoordinator,
     RewardsCoordinator,
+    WalletPrices,
 )
-from .portfolio_model import DECIMALS, PortfolioData, RewardPayout, payouts_after, time_key
+from .portfolio_model import (
+    DECIMALS,
+    EarnData,
+    PortfolioData,
+    RewardPayout,
+    payouts_after,
+    time_key,
+)
 from .portfolio_store import KnownWallets, RewardMarks
 
 # What a wallet's name or an asset's symbol may not carry as it is into a
@@ -89,6 +113,50 @@ _MARKDOWN_CHARACTERS = frozenset("\\`*_[]")
 _LOGGER = logging.getLogger(__name__)
 
 _TEXTS = f"component.{DOMAIN}.exceptions"
+
+# The Portfolio's event entities (event.py), by key, with their event types.
+PORTFOLIO_EVENT_TYPES: dict[str, tuple[str, ...]] = {
+    "new_wallet": ("wallet_added",),
+    "staking_reward": ("staking_reward_received",),
+    "earn_change": ("offered", "withdrawn", "sold_out", "available_again", "apr"),
+}
+
+
+def portfolio_event_signal(entry_id: str) -> str:
+    """The signal that brings an announcement of the entry `entry_id` to its
+    event entities."""
+    return f"{DOMAIN}_portfolio_event_{entry_id}"
+
+
+@callback
+def async_announce(
+    hass: HomeAssistant,
+    entry_id: str,
+    *,
+    bus_event: str,
+    entity_key: str,
+    event_type: str,
+    data: dict[str, Any],
+) -> None:
+    """Fire the bus event `bus_event` with `data`, and the event `event_type`
+    of the entry's event entity `entity_key` with the same data: one call, so
+    that the entity never misses an announcement the bus fired, nor shows one
+    it never did. A disabled entity misses it; the bus event fires all the
+    same."""
+    hass.bus.async_fire(bus_event, data)
+    async_dispatcher_send(hass, portfolio_event_signal(entry_id), entity_key, event_type, dict(data))
+
+
+# A link in a notification's text: `[{wallet}]({link})`.
+_LINKED = re.compile(r"\[(\{[a-z_]+\})\]\(\{link\}\)")
+
+
+def plain_template(template: str) -> str:
+    """`template`, a notification's text, without its markup -- bold dropped,
+    a link `[{wallet}]({link})` its text alone -- for an event's `message`.
+    Taken out of the template before it is filled, never out of the text:
+    a name holding Markdown's characters stays whole."""
+    return _LINKED.sub(r"\1", template).replace("**", "")
 
 
 def escape_markdown(text: str) -> str:
@@ -146,6 +214,15 @@ def _is_creation(event_data: dr.EventDeviceRegistryUpdatedData) -> bool:
     return event_data["action"] == "create"
 
 
+def _warn_wallet_notification_failed(wallet: str, error: str) -> None:
+    """Log that the notification about the new wallet `wallet` could not be
+    shown, `error` naming the type of the error: its message and its
+    traceback stay out of the log."""
+    _LOGGER.warning(
+        "Could not show the notification about the new Bitpanda wallet %s (%s)", wallet, error
+    )
+
+
 class WalletAnnouncer:
     """Announces the wallets new to one Portfolio entry, each once."""
 
@@ -155,10 +232,16 @@ class WalletAnnouncer:
         entry: PortfolioConfigEntry,
         known: KnownWallets,
         group_titles: dict[str, str],
+        ready: asyncio.Event,
+        portfolio: PortfolioCoordinator,
     ) -> None:
         self._hass = hass
         self._entry = entry
         self.known = known
+        # PortfolioRuntime.ready: set once the entry's platforms are set up.
+        self._ready = ready
+        # The units and the value of the wallet announced.
+        self._portfolio = portfolio
         # Category -> group title, in the entry's language (runtime.group_titles).
         self._group_titles = group_titles
         # Asset id -> its record and the category of the group its wallet
@@ -189,8 +272,7 @@ class WalletAnnouncer:
         """This entry's wallet device of `asset_id`, looked up among the
         entry's own devices (devices.py): another entry's device may carry
         the same identifier."""
-        entry_id = self._entry.entry_id
-        return find_entry_device(dev_reg, entry_id, wallet_device_identifier(entry_id, asset_id))
+        return find_wallet_device(dev_reg, self._entry.entry_id, asset_id)
 
     @callback
     def async_listen_for_wallet_devices(self) -> Callable[[], None]:
@@ -238,14 +320,18 @@ class WalletAnnouncer:
         The announcement runs once Home Assistant has started -- at once
         while it runs. A start adds the wallets before automations listen:
         Home Assistant arms their triggers only as it finishes starting, and
-        an event fired before would reach none. An unload drops an
-        announcement still waiting; the asset is not known yet, so the
-        entry's next setup marks it again -- and announces it at once, its
-        device being there (mark)."""
+        an event fired before would reach none. An unload while Home
+        Assistant starts drops an announcement still waiting; the asset is
+        not known yet, so the entry's next setup marks it again -- and
+        announces it at once, its device being there (mark). While it runs,
+        only a setup's announcement waits, until the entry's platforms are
+        set up -- the event entities with them -- which setup lets happen
+        whatever becomes of them."""
         asset, category = self._pending.pop(asset_id)
         self._scheduled.add(asset_id)
 
         async def _announce(hass: HomeAssistant) -> None:
+            await self._ready.wait()
             # Up to Home Assistant 2026.6, an automation arms its trigger in a
             # listener of its own for the start's end, which may run after
             # this one: yield once, so that the event comes after them all.
@@ -256,50 +342,87 @@ class WalletAnnouncer:
             await asyncio.sleep(0)
             await self._async_announce(asset_id, asset, category, device_id)
 
-        self._entry.async_on_unload(async_at_started(self._hass, _announce))
+        starting = self._hass.state is not CoreState.running
+        cancel = async_at_started(self._hass, _announce)
+        if starting:
+            self._entry.async_on_unload(cancel)
 
     async def _async_announce(
         self, asset_id: str, asset: dict[str, Any], category: str, device_id: str
     ) -> None:
         """The event, the notification unless switched off, and only then
         the asset in the list -- also when the notification failed: rather a
-        notification missed than the event again at every start."""
+        notification missed than the event again at every start.
+
+        The texts load first, for the event's message too, before anything
+        is announced: an unload cancelling their load leaves the asset
+        unknown, and the next setup announces it. Texts that fail to load
+        leave the message null; the event fires all the same."""
+        wallet = wallet_device_name(asset)
+        texts: dict[str, str] | None = None
+        texts_error: str | None = None
         try:
-            wallet = wallet_device_name(asset)
+            texts = await _async_texts(self._hass, self._entry)
+        except Exception as err:  # noqa: BLE001 - the event fires without its message
+            texts_error = type(err).__name__
+        try:
+            data = self._portfolio.data
+            holding = None if data is None else data.holdings.get(asset_id)
+            value = None if holding is None or holding.value is None else holding.value
             # An interface for the users' automations: later versions may add
             # fields, never rename or drop one.
-            self._hass.bus.async_fire(
-                EVENT_WALLET_ADDED,
-                {
+            async_announce(
+                self._hass,
+                self._entry.entry_id,
+                bus_event=EVENT_WALLET_ADDED,
+                entity_key="new_wallet",
+                event_type="wallet_added",
+                data={
                     "device_id": device_id,
                     "asset_id": asset_id,
                     "symbol": asset["symbol"],
                     "name": asset.get("name"),
                     "wallet": wallet,
                     "category": category,
+                    # Not listed at the announcement -- sold again by now --:
+                    # nothing to count.
+                    "units": None if holding is None else round(holding.balance, DECIMALS),
+                    "value": None if value is None else round(value, DECIMALS),
+                    "currency": self._entry.data[CONF_CURRENCY],
+                    "message": None if texts is None else self._message(texts, wallet, category),
                 },
             )
             if notifies_new_wallets(self._entry):
-                try:
-                    await self._async_notify(asset_id, device_id, wallet, category)
-                except Exception as err:  # noqa: BLE001 - the event has fired; the notification is extra
-                    _LOGGER.warning(
-                        "Could not show the notification about the new Bitpanda wallet %s (%s)",
-                        wallet,
-                        type(err).__name__,
-                    )
+                if texts_error is not None:
+                    _warn_wallet_notification_failed(wallet, texts_error)
+                elif texts is not None:
+                    try:
+                        self._notify(texts, asset_id, device_id, wallet, category)
+                    except Exception as err:  # noqa: BLE001 - the event has fired; the notification is extra
+                        _warn_wallet_notification_failed(wallet, type(err).__name__)
         finally:
             self.known.add(asset_id)
             self._scheduled.discard(asset_id)
 
-    async def _async_notify(
-        self, asset_id: str, device_id: str, wallet: str, category: str
+    def _message(self, texts: dict[str, str], wallet: str, category: str) -> str | None:
+        """The notification's text as plain text, without the hint on
+        disabled sensors: for people, not to be parsed. None without the
+        text."""
+        message = texts.get(f"{_TEXTS}.wallet_added.message")
+        if not message:
+            return None
+        return plain_template(message).format(
+            wallet=wallet, link="", group=self._group_titles.get(category, category)
+        )
+
+    def _notify(
+        self, translations: dict[str, str], asset_id: str, device_id: str, wallet: str,
+        category: str,
     ) -> None:
         """The notification, in the entry's language (_async_texts). A text
         missing even in English -- a broken install -- leaves the wallet
         without a notification, or the notification without its hint on
         disabled sensors."""
-        translations = await _async_texts(self._hass, self._entry)
         title = translations.get(f"{_TEXTS}.wallet_added_title.message")
         message = translations.get(f"{_TEXTS}.wallet_added.message")
         if not title or not message:
@@ -342,6 +465,13 @@ def _warn_reward_notification_failed(wallet: str, error: str) -> None:
     )
 
 
+# How long a pass waits, in seconds, for the wallets' price round under way:
+# the rewards' first refresh of a setup or reload may come before the round
+# reached a staked asset, whose payout would then go without its value today
+# for good.
+_ROUND_WAIT = 30.0
+
+
 class RewardAnnouncer:
     """Announces the new staking payouts of one Portfolio entry, each once."""
 
@@ -352,12 +482,20 @@ class RewardAnnouncer:
         marks: RewardMarks,
         rewards: RewardsCoordinator,
         portfolio: PortfolioCoordinator,
+        earn: EarnCoordinator,
+        ready: asyncio.Event,
+        prices: WalletPrices | None = None,
     ) -> None:
         self._hass = hass
         self._entry = entry
         self._marks = marks
         self._rewards = rewards
         self._portfolio = portfolio
+        # The APR the event names, as Balance (staking) shows it.
+        self._earn = earn
+        # PortfolioRuntime.ready: set once the entry's platforms are set up.
+        self._ready = ready
+        self._prices = prices
         # A refresh came while Home Assistant had not started yet: a pass
         # runs once it has.
         self._due = False
@@ -422,24 +560,31 @@ class RewardAnnouncer:
         # one that started this pass: yield once, so that the events come
         # after them all.
         await asyncio.sleep(0)
+        # A setup's first refresh comes before the event entities exist.
+        await self._ready.wait()
         texts: dict[str, str] | None = None
         texts_error: str | None = None
-        if notifies_staking_rewards(self._entry):
-            # An unload's cancellation is no Exception: it still ends the
-            # pass here, before its first event.
-            try:
-                texts = await _async_texts(self._hass, self._entry)
-            except Exception as err:  # noqa: BLE001 - the events and the marks come all the same
-                texts_error = type(err).__name__
+        # For the events' message and the notification alike. An unload's
+        # cancellation is no Exception: it still ends the pass here, before
+        # its first event.
+        try:
+            texts = await _async_texts(self._hass, self._entry)
+        except Exception as err:  # noqa: BLE001 - the events and the marks come all the same
+            texts_error = type(err).__name__
+        # The payouts' value today needs the wallet's ticker price: a round
+        # under way -- at a setup or reload -- is given a while to bring it.
+        if self._prices is not None:
+            await self._prices.async_wait_for_round(_ROUND_WAIT)
         self._announce(texts, texts_error)
 
     @callback
     def _announce(self, texts: dict[str, str] | None, texts_error: str | None) -> None:
         """The events, the marks and the notifications, with nothing awaited
-        in between. `texts` are the notification's, None while it is
-        switched off -- or while `texts_error` names the type of the error
-        that kept them from loading: each asset announced then logs it, as a
-        notification that failed does."""
+        in between. `texts` are the notifications' and the messages', None
+        while `texts_error` names the type of the error that kept them from
+        loading: the messages are null then, and each asset announced logs
+        it while the notification is on, as a notification that failed
+        does."""
         # Never None: setup makes this announcer once the Portfolio's first
         # refresh has succeeded.
         portfolio = self._portfolio.data
@@ -450,15 +595,19 @@ class RewardAnnouncer:
         ]
         # In the order they were paid, each asset by its newest payout.
         news.sort(key=lambda item: time_key(item[1][-1].credited_at))
+        notify = notifies_staking_rewards(self._entry)
         for asset_id, payouts in news:
             device_id = self._wallet_device_id(asset_id, portfolio)
             if device_id is not None:
-                self._announce_asset(asset_id, payouts, device_id, portfolio, texts, texts_error)
+                self._announce_asset(
+                    asset_id, payouts, device_id, portfolio, texts, texts_error, notify
+                )
 
     def _wallet_device_id(self, asset_id: str, portfolio: PortfolioData) -> str | None:
         """The wallet device of `asset_id` while its payouts may be
-        announced: the Portfolio's data names the asset -- its name, its
-        symbol and its price -- and its Balance (staking) sensor is
+        announced: the Portfolio's data names the asset -- its name and
+        its symbol (its price, if any, comes from WalletPrices) -- and its
+        Balance (staking) sensor is
         registered for this entry and enabled. None otherwise: its mark
         stays, and its payouts come together once it may be announced.
 
@@ -484,25 +633,34 @@ class RewardAnnouncer:
         portfolio: PortfolioData,
         texts: dict[str, str] | None,
         texts_error: str | None,
+        notify: bool,
     ) -> None:
         """The event about `payouts`, the payouts of `asset_id` after its
-        mark; the mark on the newest of them; then the notification, if
-        `texts` are given -- or the warning that it could not be shown, if
-        `texts_error` is."""
+        mark; the mark on the newest of them; then, if `notify`, the
+        notification -- or the warning that it could not be shown, if
+        `texts_error` names why."""
         asset = portfolio.assets[asset_id]
         wallet = wallet_device_name(asset)
         newest = payouts[-1].credited_at
         net = round(sum(payout.net for payout in payouts), DECIMALS)
-        holding = portfolio.holdings.get(asset_id)
-        price = None if holding is None else holding.price
-        # At today's price, as the Staking sensor's rewards_net_value: no
-        # endpoint prices a past date.
+        price = None if self._prices is None else self._prices.price_of(asset_id)
+        # At today's price, the wallet's (the ticker's; none without one), as
+        # the Staking sensor's rewards_net_value: no endpoint prices a past
+        # date.
         value = None if price is None else round(net * price, 2)
+        symbol = asset["symbol"]
+        earn = self._earn.data
+        apr = None if earn is None else earn.apr.get(asset_id)
+        totals = (self._rewards.data or {})[asset_id]
         # An interface for the users' automations: later versions may add
         # fields, never rename or drop one.
-        self._hass.bus.async_fire(
-            EVENT_STAKING_REWARD_RECEIVED,
-            {
+        async_announce(
+            self._hass,
+            self._entry.entry_id,
+            bus_event=EVENT_STAKING_REWARD_RECEIVED,
+            entity_key="staking_reward",
+            event_type="staking_reward_received",
+            data={
                 "device_id": device_id,
                 "asset_id": asset_id,
                 "symbol": asset["symbol"],
@@ -515,11 +673,20 @@ class RewardAnnouncer:
                 "value": value,
                 "currency": self._entry.data[CONF_CURRENCY],
                 "credited_at": newest,
+                # As Balance (staking)'s attribute: percent, none without one.
+                "apr_percent": None if apr is None else round(apr * 100, DECIMALS),
+                # Every payout so far, in units of the asset.
+                "rewards_net": totals.net,
+                "message": None if texts is None else self._message(
+                    texts, wallet, symbol=symbol, count=len(payouts), net=net, value=value
+                ),
             },
         )
         # Before the notification, whatever becomes of it: rather a
         # notification missed than the payouts announced again.
         self._marks.advance(asset_id, newest)
+        if not notify:
+            return
         if texts_error is not None:
             _warn_reward_notification_failed(wallet, texts_error)
         elif texts is not None:
@@ -530,6 +697,33 @@ class RewardAnnouncer:
                 )
             except Exception as err:  # noqa: BLE001 - the event has fired; the notification is extra
                 _warn_reward_notification_failed(wallet, type(err).__name__)
+
+    def _message(
+        self,
+        texts: dict[str, str],
+        wallet: str,
+        *,
+        symbol: str,
+        count: int,
+        net: float,
+        value: float | None,
+    ) -> str | None:
+        """The notification's text as plain text -- for people, not to be
+        parsed -- with the value sentence when a value is known. None
+        without the text."""
+        key = "staking_reward" if count == 1 else "staking_rewards"
+        message = texts.get(f"{_TEXTS}.{key}.message")
+        if not message:
+            return None
+        language = entry_language(self._entry)
+        text = plain_template(message).format(
+            wallet=wallet, link="", count=count, net=format_amount(net, language), symbol=symbol
+        )
+        worth = texts.get(f"{_TEXTS}.staking_reward_value.message")
+        if value is not None and worth:
+            money = format_money(value, language)
+            text = f"{text} {plain_template(worth).format(value=money, currency=self._entry.data[CONF_CURRENCY])}"
+        return text
 
     def _notify(
         self,
@@ -572,4 +766,138 @@ class RewardAnnouncer:
             title,
             # One per asset: the next announcement replaces one not yet dismissed.
             notification_id=f"{DOMAIN}_staking_reward_{asset_id}",
+        )
+
+
+def _percent(apr: float | None) -> float | None:
+    """An APR, a fraction, in percent as Balance (staking) shows it."""
+    return None if apr is None else round(apr * 100, DECIMALS)
+
+
+@dataclass(frozen=True)
+class _EarnState:
+    """What an asset's Earn changes are compared with: whether it has an
+    enabled product, whether that is sold out, the APR an APR move is
+    measured from -- the first seen, then the last announced -- and the APR
+    seen last, which a withdrawal names; None without an enabled product."""
+
+    enabled: bool
+    sold_out: bool
+    reference: float | None
+    last_seen: float | None
+
+
+class EarnAnnouncer:
+    """Announces the Earn changes of one Portfolio entry's held assets.
+
+    One event per change (`change`), its APRs in percent before and after:
+    `offered` -- an enabled product appears, sold out or not; `withdrawn`
+    -- none is enabled any more; `sold_out` and `available_again` -- the
+    enabled product's flag turns; `apr` -- the enabled product's APR moved
+    EARN_APR_THRESHOLD percentage points or more from the reference.
+    `offered` and `withdrawn` come without an `apr` event. A failed read,
+    one that lists no product at all, and a portfolio answer that lists
+    nothing change nothing. No Staking sensor is needed."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: PortfolioConfigEntry,
+        earn: EarnCoordinator,
+        portfolio: PortfolioCoordinator,
+        ready: asyncio.Event,
+    ) -> None:
+        self._hass = hass
+        self._entry = entry
+        self._earn = earn
+        self._portfolio = portfolio
+        self._ready = ready
+        # Asset id -> what its next changes are compared with.
+        self._state: dict[str, _EarnState] = {}
+
+    @callback
+    def async_earn_refreshed(self) -> None:
+        """After every successful read (EarnCoordinator.on_refreshed): a
+        background task of the entry, which its unload cancels, compares
+        once the listeners -- the Staking sensors -- have written."""
+        self._entry.async_create_background_task(
+            self._hass, self._async_compare(), f"{DOMAIN} Earn change announcement"
+        )
+
+    async def _async_compare(self) -> None:
+        # The listeners are told after the hook that started this task.
+        await asyncio.sleep(0)
+        # A setup's first read comes before the event entities exist.
+        await self._ready.wait()
+        self._compare()
+
+    @callback
+    def _compare(self) -> None:
+        earn: EarnData | None = self._earn.data
+        portfolio = self._portfolio.data
+        if earn is None or not earn.products or portfolio is None or not portfolio.listed_any:
+            return
+        for asset_id in set(self._state) - portfolio.held:
+            # Sold: buying it back is no news. An entry that cannot be read,
+            # or an asset not looked up yet, is no sale: it keeps its state
+            # and is compared once it has a wallet again.
+            del self._state[asset_id]
+        for asset_id in portfolio.wallet_ids:
+            product = earn.products.get(asset_id)
+            enabled = product is not None and product.enabled
+            sold_out = enabled and product is not None and product.sold_out
+            apr = product.apr if enabled and product is not None else None
+            known = self._state.get(asset_id)
+            if known is None:
+                # The first catalogue after setup, or a wallet new since.
+                self._state[asset_id] = _EarnState(enabled, sold_out, apr, apr)
+                continue
+            reference = known.reference
+            changes: list[tuple[str, float | None, float | None]] = []
+            if enabled and not known.enabled:
+                changes.append(("offered", None, apr))
+                reference = apr
+            elif known.enabled and not enabled:
+                changes.append(("withdrawn", known.last_seen, None))
+                reference = None
+            elif enabled:
+                if sold_out != known.sold_out:
+                    changes.append(("sold_out" if sold_out else "available_again", apr, apr))
+                if reference is None:
+                    reference = apr
+                elif apr is not None and round(abs(apr - reference) * 100, 8) >= EARN_APR_THRESHOLD:
+                    changes.append(("apr", reference, apr))
+                    reference = apr
+            self._state[asset_id] = _EarnState(enabled, sold_out, reference, apr)
+            for change, before, after in changes:
+                self._announce(asset_id, portfolio, change, before, after)
+
+    def _announce(
+        self,
+        asset_id: str,
+        portfolio: PortfolioData,
+        change: str,
+        before: float | None,
+        after: float | None,
+    ) -> None:
+        asset = portfolio.assets[asset_id]
+        device = find_wallet_device(dr.async_get(self._hass), self._entry.entry_id, asset_id)
+        # An interface for the users' automations: later versions may add
+        # fields or kinds of change, never rename or drop one.
+        async_announce(
+            self._hass,
+            self._entry.entry_id,
+            bus_event=EVENT_EARN_CHANGED,
+            entity_key="earn_change",
+            event_type=change,
+            data={
+                "device_id": None if device is None else device.id,
+                "asset_id": asset_id,
+                "symbol": asset["symbol"],
+                "name": asset.get("name"),
+                "wallet": wallet_device_name(asset),
+                "change": change,
+                "apr_before": _percent(before),
+                "apr_after": _percent(after),
+            },
         )

@@ -29,7 +29,7 @@ from pytest_homeassistant_custom_component.common import (
     async_mock_service,
 )
 
-from custom_components.bitpanda import purge
+from custom_components.bitpanda import event as event_platform, purge
 from custom_components.bitpanda.announcements import WalletAnnouncer, escape_markdown
 from custom_components.bitpanda.api import BitpandaApiError
 from custom_components.bitpanda.const import DOMAIN, UNKNOWN_ASSET_RETRY
@@ -350,6 +350,10 @@ async def test_a_bought_asset_is_announced_once_its_device_exists(
             "name": "Vision",
             "wallet": "Vision (VSN) Wallet",
             "category": "crypto",
+            "units": 1.0,
+            "value": 100.0,
+            "currency": "EUR",
+            "message": "The Portfolio added a new wallet: Vision (VSN) Wallet in the group Cryptocurrencies.",
         }
     ]
     notifications.assert_called_once_with(
@@ -383,6 +387,102 @@ async def test_an_asset_bought_again_after_its_wallet_went_is_announced(
 
     assert [event.data["asset_id"] for event in events] == [VSN["id"]]
     notifications.assert_called_once()
+
+
+async def test_after_an_answer_that_listed_nothing_the_wallets_coming_back_are_no_news(
+    hass, portfolio_api, events, notifications, freezer, hass_storage
+):
+    """Bitpanda answers for a while with nothing at all, not even cash: the
+    wallets go after the confirmed misses (issue #12), but the assets stay
+    known. Listed again, their wallets are no news."""
+    portfolio_api.return_value = _answer(BTC, VSN)
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    portfolio_api.return_value = []
+    for _ in range(3):
+        await _next_refresh(hass, freezer)
+    assert _wallet_device(hass, entry, VSN) is None
+    known = entry.runtime_data.known_wallets
+    assert BTC["id"] in known and VSN["id"] in known
+
+    portfolio_api.return_value = _answer(BTC, VSN)
+    await _next_refresh(hass, freezer)
+
+    assert _wallet_device(hass, entry, VSN) is not None
+    assert events == []
+    notifications.assert_not_called()
+    await _flush(hass, freezer)
+    assert _stored(hass_storage, entry) == sorted([BTC["id"], VSN["id"]])
+
+
+async def _empty_spell(hass, portfolio_api, freezer) -> None:
+    """Bitpanda answers with nothing at all until the wallets went."""
+    portfolio_api.return_value = []
+    for _ in range(3):
+        await _next_refresh(hass, freezer)
+
+
+@pytest.mark.parametrize(
+    "first_back", [[_position(BTC), _CASH], [_CASH]], ids=["one asset back", "only cash back"]
+)
+async def test_an_incomplete_answer_right_after_an_empty_spell_forgets_no_wallet(
+    hass, portfolio_api, events, notifications, freezer, first_back
+):
+    """The first answer after the empty spell lists only part of the
+    portfolio; the next one all of it. An asset missing from one answer
+    is not confirmed gone: listed again, it is no news."""
+    portfolio_api.return_value = _answer(BTC, VSN)
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    await _empty_spell(hass, portfolio_api, freezer)
+    assert _wallet_device(hass, entry, VSN) is None
+
+    portfolio_api.return_value = first_back
+    await _next_refresh(hass, freezer)
+    portfolio_api.return_value = _answer(BTC, VSN)
+    await _next_refresh(hass, freezer)
+
+    assert _wallet_device(hass, entry, VSN) is not None
+    assert events == []
+    notifications.assert_not_called()
+
+
+async def test_an_asset_still_missing_after_an_empty_spell_is_forgotten_once_confirmed(
+    hass, portfolio_api, events, notifications, freezer
+):
+    """Sold while Bitpanda answered empty: once answers that list something
+    confirm it missing -- as a wallet's misses are confirmed --, it leaves
+    the list, and buying it again is news."""
+    portfolio_api.return_value = _answer(BTC, VSN)
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    await _empty_spell(hass, portfolio_api, freezer)
+
+    portfolio_api.return_value = _answer(BTC)
+    for _ in range(2):
+        await _next_refresh(hass, freezer)
+    assert VSN["id"] in entry.runtime_data.known_wallets
+    await _next_refresh(hass, freezer)
+    assert VSN["id"] not in entry.runtime_data.known_wallets
+
+    portfolio_api.return_value = _answer(BTC, VSN)
+    await _next_refresh(hass, freezer)
+    assert [event.data["asset_id"] for event in events] == [VSN["id"]]
+
+
+async def test_an_announcement_while_home_assistant_runs_adds_nothing_to_the_unload_list(
+    hass, portfolio_api, events, freezer
+):
+    """While Home Assistant runs, the announcement is made at once: nothing
+    waits for its start, so nothing is left for the unload to cancel --
+    not one callback more per announcement for the entry's whole life."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    before = len(entry._on_unload)
+    portfolio_api.return_value = _answer(BTC, VSN)
+    await _next_refresh(hass, freezer)
+    assert [event.data["asset_id"] for event in events] == [VSN["id"]]
+    assert len(entry._on_unload) == before
 
 
 async def test_an_asset_bought_again_after_the_user_deleted_its_wallet_is_announced(
@@ -495,6 +595,10 @@ async def test_with_new_entities_disabled_a_bought_asset_is_announced_with_the_h
             "name": "Vision",
             "wallet": "Vision (VSN) Wallet",
             "category": "crypto",
+            "units": 1.0,
+            "value": 100.0,
+            "currency": "EUR",
+            "message": "The Portfolio added a new wallet: Vision (VSN) Wallet in the group Cryptocurrencies.",
         }
     ]
     notifications.assert_called_once_with(
@@ -840,6 +944,31 @@ async def test_an_announcement_dropped_by_an_unload_before_the_start_comes_at_th
     assert VSN["id"] in entry.runtime_data.known_wallets
 
 
+async def test_a_wallet_announced_at_a_setup_shows_on_the_event_entity(
+    hass, portfolio_api, events, notifications, hass_storage
+):
+    """Bought while the Portfolio was not loaded, announced at its setup
+    while Home Assistant runs: the event waits until the Portfolio's
+    platforms are set up -- however long the event platform takes -- and
+    the new wallet entity shows it."""
+    entry = _portfolio_entry(hass)
+    _remember(hass_storage, entry, BTC)
+    portfolio_api.return_value = _answer(BTC, VSN)
+    set_up = event_platform.async_setup_entry
+
+    async def _slow(hass, entry, add):
+        await asyncio.sleep(0.05)
+        await set_up(hass, entry, add)
+
+    with patch.object(event_platform, "async_setup_entry", _slow):
+        await _setup(hass, entry)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    [event] = events
+    state = hass.states.get("event.bitpanda_portfolio_new_wallet")
+    assert state.attributes["event_type"] == "wallet_added"
+    assert state.attributes["device_id"] == event.data["device_id"]
+
+
 # --- Review focus ----------------------------------------------------------------------
 
 
@@ -983,7 +1112,10 @@ async def test_only_a_wallet_device_of_this_entry_announces_a_waiting_asset(
     other = MockConfigEntry(domain=DOMAIN, title="Another Bitpanda Portfolio")
     other.add_to_hass(hass)
     runtime = entry.runtime_data
-    announcer = WalletAnnouncer(hass, entry, runtime.known_wallets, runtime.group_titles)
+    announcer = WalletAnnouncer(
+        hass, entry, runtime.known_wallets, runtime.group_titles, runtime.ready,
+        runtime.portfolio,
+    )
     entry.async_on_unload(announcer.async_listen_for_wallet_devices())
     announcer.mark(VSN, "crypto")
     announcer.mark(SOL, "crypto")
@@ -1018,6 +1150,11 @@ async def test_only_a_wallet_device_of_this_entry_announces_a_waiting_asset(
             "name": "Vision",
             "wallet": "Vision (VSN) Wallet",
             "category": "crypto",
+            # Not held at the announcement: nothing to count.
+            "units": None,
+            "value": None,
+            "currency": "EUR",
+            "message": "The Portfolio added a new wallet: Vision (VSN) Wallet in the group Cryptocurrencies.",
         }
     ]
     notifications.assert_called_once_with(
@@ -1042,7 +1179,10 @@ async def test_a_price_device_created_while_an_asset_waits_is_no_news(
     )
     tracker.add_to_hass(hass)
     runtime = entry.runtime_data
-    announcer = WalletAnnouncer(hass, entry, runtime.known_wallets, runtime.group_titles)
+    announcer = WalletAnnouncer(
+        hass, entry, runtime.known_wallets, runtime.group_titles, runtime.ready,
+        runtime.portfolio,
+    )
     entry.async_on_unload(announcer.async_listen_for_wallet_devices())
     announcer.mark(VSN, "crypto")
     dev_reg = dr.async_get(hass)
@@ -1076,7 +1216,10 @@ async def test_a_creation_heard_after_the_device_went_again_announces_nothing(
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
     runtime = entry.runtime_data
-    announcer = WalletAnnouncer(hass, entry, runtime.known_wallets, runtime.group_titles)
+    announcer = WalletAnnouncer(
+        hass, entry, runtime.known_wallets, runtime.group_titles, runtime.ready,
+        runtime.portfolio,
+    )
     entry.async_on_unload(announcer.async_listen_for_wallet_devices())
     announcer.mark(VSN, "crypto")
     caplog.clear()
@@ -1253,6 +1396,10 @@ async def test_switched_off_the_event_still_fires_without_a_notification(
     await _next_refresh(hass, freezer)
 
     assert [event.data["asset_id"] for event in events] == [VSN["id"]]
+    # The text for people is there all the same.
+    assert [event.data["message"] for event in events] == [
+        "The Portfolio added a new wallet: Vision (VSN) Wallet in the group Cryptocurrencies."
+    ]
     notifications.assert_not_called()
     assert VSN["id"] in entry.runtime_data.known_wallets
 
@@ -1278,6 +1425,43 @@ async def test_the_notification_is_in_the_portfolios_language(
         "Neues Bitpanda-Wallet",
         notification_id=f"bitpanda_wallet_added_{VSN['id']}",
     )
+
+
+async def test_the_events_message_is_in_the_portfolios_language_without_markup(
+    hass, portfolio_api, events, notifications, freezer
+):
+    entry = _portfolio_entry(hass, language="de")
+    await _setup(hass, entry)
+    portfolio_api.return_value = _answer(BTC, VSN)
+
+    await _next_refresh(hass, freezer)
+
+    assert [event.data["message"] for event in events] == [
+        "Das Portfolio hat ein neues Wallet angelegt: Vision (VSN) Wallet in der Gruppe "
+        "Kryptowährungen."
+    ]
+
+
+async def test_a_wallet_event_fires_without_a_message_when_the_texts_cannot_load(
+    hass, portfolio_api, events, notifications, freezer
+):
+    """The texts fail to load: the event fires all the same, its message
+    null, and the asset becomes known."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    portfolio_api.return_value = _answer(BTC, VSN)
+
+    with patch(
+        "custom_components.bitpanda.announcements.async_get_translations",
+        AsyncMock(side_effect=HomeAssistantError("the texts could not be read")),
+    ):
+        await _next_refresh(hass, freezer)
+
+    assert [(event.data["asset_id"], event.data["message"]) for event in events] == [
+        (VSN["id"], None)
+    ]
+    notifications.assert_not_called()
+    assert VSN["id"] in entry.runtime_data.known_wallets
 
 
 async def test_a_missing_text_falls_back_to_english(hass, portfolio_api, notifications, freezer):
@@ -1415,6 +1599,11 @@ async def test_a_name_with_markdown_characters_shows_as_it_is(
 
     device = _wallet_device(hass, entry, VSN)
     assert [event.data["wallet"] for event in events] == ["QuickSwap [Old] (QUICK) Wallet"]
+    # The message is plain text: the name as it is, nothing escaped.
+    assert [event.data["message"] for event in events] == [
+        "The Portfolio added a new wallet: QuickSwap [Old] (QUICK) Wallet in the group "
+        "Cryptocurrencies."
+    ]
     assert notifications.call_args.args[1] == (
         "The Portfolio added a new wallet: "
         rf"**[QuickSwap \[Old\] (QUICK) Wallet](/config/devices/device/{device.id})** "

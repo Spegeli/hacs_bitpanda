@@ -1,5 +1,16 @@
 {
   "entity": {
+    "event": {
+      "new_wallet": {
+        "default": "mdi:wallet-plus"
+      },
+      "staking_reward": {
+        "default": "mdi:gift"
+      },
+      "earn_change": {
+        "default": "mdi:percent-circle"
+      }
+    },
     "sensor": {
       "total_value": {
         "default": "mdi:chart-pie"
@@ -25,6 +36,36 @@
       "return_year": {
         "default": "mdi:chart-line"
       },
+      "invested": {
+        "default": "mdi:cash-check"
+      },
+      "total_return": {
+        "default": "mdi:chart-line-variant"
+      },
+      "total_return_percent": {
+        "default": "mdi:percent-outline"
+      },
+      "value_crypto": {
+        "default": "mdi:chart-donut"
+      },
+      "value_stock": {
+        "default": "mdi:chart-donut"
+      },
+      "value_etf": {
+        "default": "mdi:chart-donut"
+      },
+      "value_etc": {
+        "default": "mdi:chart-donut"
+      },
+      "value_index": {
+        "default": "mdi:chart-donut"
+      },
+      "value_metal": {
+        "default": "mdi:chart-donut"
+      },
+      "value_other": {
+        "default": "mdi:chart-donut"
+      },
       "wallet": {
         "default": "mdi:wallet"
       },
@@ -42,6 +83,15 @@
   "services": {
     "refresh": {
       "service": "mdi:refresh"
+    },
+    "get_portfolio": {
+      "service": "mdi:briefcase-search"
+    },
+    "get_portfolio_history": {
+      "service": "mdi:chart-timeline-variant"
+    },
+    "get_staking_rewards": {
+      "service": "mdi:gift-outline"
     }
   }
 }

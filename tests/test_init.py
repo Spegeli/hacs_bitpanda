@@ -1,5 +1,6 @@
 """Both services set up, reload and unload end to end (API mocked)."""
 import asyncio
+import logging
 from contextlib import nullcontext
 from datetime import timedelta
 from itertools import count
@@ -43,7 +44,7 @@ from custom_components.bitpanda.api import (
     BitpandaAuthError,
     BitpandaRateLimitError,
 )
-from custom_components.bitpanda.assets import slim_asset
+from custom_components.bitpanda.assets import ASSET_CATEGORIES, slim_asset
 from custom_components.bitpanda.const import (
     API_KEY_URL,
     DOMAIN,
@@ -60,6 +61,7 @@ from custom_components.bitpanda.groups import async_add_asset_to_group
 from custom_components.bitpanda.portfolio_store import async_get_portfolio_store
 from custom_components.bitpanda.naming import (
     PORTFOLIO_KEYS,
+    class_key,
     portfolio_device_identifier,
     portfolio_unique_id,
 )
@@ -67,6 +69,7 @@ from custom_components.bitpanda.naming import (
 from tests.conftest import device_names_in_subentry, load_fixture, price_group, wallet_group
 
 _CLIENT = "custom_components.bitpanda.api.BitpandaApiClient."
+_USD_ID = "b88b8879-efe3-11eb-b56f-0691764446a7"
 _EUR_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
 
 
@@ -166,6 +169,19 @@ async def _setup(hass, entry) -> None:
     assert entry.state is ConfigEntryState.LOADED
 
 
+async def test_an_unload_shuts_the_portfolios_rewards_read_down(hass, portfolio_api):
+    """Home Assistant shuts a coordinator with a config entry down at the
+    entry's unload: a staking read still under way then keeps nothing
+    (tests/test_coordinator_earn.py)."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    rewards = entry.runtime_data.rewards
+    assert not rewards._shut_down
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert rewards._shut_down
+
+
 def _value(hass, entity_id) -> float:
     return float(hass.states.get(entity_id).state)
 
@@ -189,6 +205,75 @@ async def test_the_portfolio_keeps_its_store_sections_on_its_runtime(hass, portf
     await hass.async_block_till_done()
     assert entry.runtime_data.known_wallets is known
     assert entry.runtime_data.reward_marks is marks
+
+
+def _reward_payout() -> dict:
+    """One staking payout of Vision, credited now."""
+    return {
+        "operation_id": "op-1",
+        "operation_type": "reward",
+        "transactions": [
+            {
+                "asset_id": VSN["id"],
+                "wallet_owner": "staking-service",
+                "asset_amount": {"value": "1"},
+                "fee_amount": {"value": "0.2"},
+                "credited_at": dt_util.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            }
+        ],
+    }
+
+
+async def _reauth(hass, entry, api_key: str) -> None:
+    """The "New Bitpanda API key needed" dialog, to its end, with `api_key`."""
+    result = await entry.start_reauth_flow(hass)
+    with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=[])):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": api_key}
+        )
+        await hass.async_block_till_done()
+    assert result["reason"] == "reauth_successful"
+
+
+async def test_a_key_entered_again_reads_on_and_another_reads_the_whole_history(
+    hass, portfolio_api
+):
+    """A setup reads the whole history; the same key entered again reads on
+    from the newest time seen; another key -- maybe another account's --
+    has the whole history read again."""
+    entry = _portfolio_entry(hass)
+    with patch(f"{_CLIENT}async_get_operations", AsyncMock(return_value=[_reward_payout()])) as operations:
+        await _setup(hass, entry)
+        assert operations.await_args.kwargs == {}
+        await _reauth(hass, entry, entry.data["api_key"])
+        assert set(operations.await_args.kwargs) == {"from_ts"}
+        await _reauth(hass, entry, "another")
+        assert entry.state is ConfigEntryState.LOADED
+        assert operations.await_args.kwargs == {}
+
+
+async def test_another_key_reads_the_whole_history_also_before_the_first_start(
+    hass, hass_storage, portfolio_api
+):
+    """The operations read in an earlier run, and another key entered before
+    the Portfolio started in this one -- its first start after a restart
+    failed, say: the start reads the whole history, not on from the old
+    newest time."""
+    entry = _portfolio_entry(hass)
+    key = f"bitpanda.portfolio.{entry.entry_id}"
+    now = dt_util.utcnow()
+    hass_storage[key] = {"version": 1, "key": key, "data": {"operations": {
+        "kinds": ["staking"],
+        "full_read_at": now.isoformat(),
+        "read_at": now.isoformat(),
+        "anchor": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "recent_ids": {},
+        "staking": {},
+    }}}
+    with patch(f"{_CLIENT}async_get_operations", AsyncMock(return_value=[_reward_payout()])) as operations:
+        await _reauth(hass, entry, "another")
+        assert entry.state is ConfigEntryState.LOADED
+        assert operations.await_args.kwargs == {}
 
 
 async def test_portfolio_setup_creates_its_devices_and_sensors(hass, portfolio_api):
@@ -324,8 +409,9 @@ async def test_every_sensor_keeps_long_term_statistics(hass, portfolio_api, pric
         )
         for state in hass.states.async_all("sensor")
     }
-    # Eight Portfolio figures, the staked VSN's three sensors, BTC in EUR and USD.
-    assert len(classes) == 13
+    # Eleven Portfolio figures, the crypto group's value, the staked VSN's
+    # three sensors, BTC in EUR and USD.
+    assert len(classes) == 17
     for entity_id, (device_class, state_class, unit) in classes.items():
         if device_class == SensorDeviceClass.MONETARY:
             assert state_class == SensorStateClass.TOTAL, entity_id
@@ -340,7 +426,8 @@ async def test_every_sensor_keeps_long_term_statistics(hass, portfolio_api, pric
 async def test_every_portfolio_figure_is_one_the_currency_purge_knows(hass, portfolio_api):
     """The currency purge (purge.py) tells the Portfolio device's sensors
     apart by naming.PORTFOLIO_KEYS: a figure added without its key there
-    would keep its old-currency history through a currency change."""
+    would keep its old-currency history through a currency change. The keys
+    left over are the values of the groups that do not exist."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
     device = find_entry_device(dr.async_get(hass), entry.entry_id, f"{entry.entry_id}_portfolio")
@@ -349,8 +436,18 @@ async def test_every_portfolio_figure_is_one_the_currency_purge_knows(hass, port
         for reg_entry in er.async_entries_for_device(
             er.async_get(hass), device.id, include_disabled_entities=True
         )
+        # The event entities keep their history (tests/test_event.py).
+        if reg_entry.domain == "sensor"
     }
-    assert figures == {portfolio_unique_id(entry.entry_id, key) for key in PORTFOLIO_KEYS}
+    known = {portfolio_unique_id(entry.entry_id, key) for key in PORTFOLIO_KEYS}
+    assert figures <= known
+    groups = {sub.unique_id for sub in entry.subentries.values()}
+    assert known - figures == {
+        portfolio_unique_id(entry.entry_id, class_key(category))
+        for category in ASSET_CATEGORIES
+        if category not in groups
+    }
+    assert groups == {"crypto"}
 
 
 _RUNTIME_SECRET = "totally-secret-runtime-key"
@@ -583,6 +680,80 @@ async def test_an_empty_portfolio_waits_ten_minutes_then_shows_0_and_removes_the
     assert _value(hass, "sensor.bitpanda_portfolio_total") == 0.0
     assert _value(hass, "sensor.bitpanda_portfolio_cash") == 0.0
     assert ent_reg.async_get("sensor.bitpanda_vision_vsn_wallet_available") is None
+
+
+async def test_a_groups_value_counts_a_wallet_bought_since_with_the_same_refresh(
+    hass, portfolio_api
+):
+    """A new wallet in a group that exists already counts in the group's
+    value with the refresh that brings it -- never one refresh later, the
+    sum leaving it out meanwhile."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    crypto = "sensor.bitpanda_portfolio_value_crypto"
+    assert _value(hass, crypto) == 200.0
+    portfolio_api.return_value = [
+        *portfolio_api.return_value,
+        {
+            "asset_id": BTC["id"],
+            "balance": {"value": "0.01000000"},
+            "available_balance": {"value": "0.01000000"},
+            "currency_balance": {"value": "500.00"},
+        },
+    ]
+    await entry.runtime_data.portfolio.async_refresh()
+    await hass.async_block_till_done()
+    assert _value(hass, crypto) == 700.0
+    assert hass.states.get(crypto).attributes["wallets"] == 2
+
+
+async def test_a_returns_amount_follows_a_new_total_value(hass, portfolio_api):
+    """The amount a return means is reckoned on today's total value: a new
+    portfolio answer moves it without waiting for the next history read."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    day = "sensor.bitpanda_portfolio_return_day"
+    assert hass.states.get(day).attributes["return_amount"] == round(210 * 1.5 / 101.5, 2)
+    portfolio_api.return_value = [
+        {**portfolio_api.return_value[0], "currency_balance": {"value": "400.00"}},
+        *portfolio_api.return_value[1:],
+    ]
+    await entry.runtime_data.portfolio.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get(day).attributes["return_amount"] == round(410 * 1.5 / 101.5, 2)
+
+
+async def test_selling_every_position_makes_invested_wait_then_show_0(
+    hass, portfolio_api, freezer
+):
+    """Every position sold, the money kept -- or a glitch at Bitpanda: through
+    two answers with cash alone, Invested and the total return are
+    unavailable, a gap in their history, never a false 0. The third answer,
+    ten minutes and more after the first, shows 0 invested and 0 return; a
+    percentage over nothing stays unknown."""
+    entry = _portfolio_entry(hass)
+    portfolio_api.return_value = [
+        {**portfolio_api.return_value[0], "invested_amount": {"value": "150.00"}},
+        *portfolio_api.return_value[1:],
+    ]
+    await _setup(hass, entry)
+    assert _value(hass, "sensor.bitpanda_portfolio_invested") == 150.0
+    portfolio_api.return_value = [{"currency_id": _EUR_ID, "balance": {"value": "10.00"}}]
+    figures = (
+        "sensor.bitpanda_portfolio_invested",
+        "sensor.bitpanda_portfolio_total_return",
+        "sensor.bitpanda_portfolio_total_return_percent",
+    )
+    for _ in range(2):
+        await _next_refresh(hass, freezer)
+        for entity_id in figures:
+            assert hass.states.get(entity_id).state == "unavailable", entity_id
+        assert _value(hass, "sensor.bitpanda_portfolio_total") == 10.0
+
+    await _next_refresh(hass, freezer)
+    assert _value(hass, "sensor.bitpanda_portfolio_invested") == 0.0
+    assert _value(hass, "sensor.bitpanda_portfolio_total_return") == 0.0
+    assert hass.states.get("sensor.bitpanda_portfolio_total_return_percent").state == "unknown"
 
 
 async def test_holdings_back_after_an_empty_answer_keep_their_wallets_unannounced(
@@ -1270,6 +1441,186 @@ async def test_price_tracker_setup_creates_one_sensor_per_asset_and_currency(has
     assert device.name == "Bitcoin (BTC) Price Tracker"
 
 
+async def test_without_the_recorder_the_prices_work_and_have_no_24h_change(
+    hass, price_api, freezer, caplog
+):
+    """The recorder is only an after-dependency: without it the 24 h
+    lookup fails quietly -- one debug line --, the 24 h attributes stay
+    absent, and the prices come as ever."""
+    caplog.set_level(logging.DEBUG, logger="custom_components.bitpanda")
+    await _setup(hass, _price_entry(hass, [], price_group("crypto", BTC)))
+    assert "recorder" not in hass.config.components
+    freezer.tick(timedelta(seconds=1))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    await _next_price_round(hass, freezer)
+
+    state = hass.states.get("sensor.bitpanda_bitcoin_btc_price_tracker_eur")
+    assert float(state.state) == 100.0
+    assert "price_24h_ago" not in state.attributes
+    assert "change_24h_pct" not in state.attributes
+    assert "No 24 h statistics" in caplog.text
+    assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
+
+
+async def test_a_portfolio_in_eur_reads_its_wallet_prices_from_the_ticker(hass, portfolio_api, price_api):
+    """EUR: the ticker's price as it comes, and no ECB rates read."""
+    ticker, ecb = price_api
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    assert entry.runtime_data.ecb is None
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert entry.runtime_data.prices.price_of(VSN["id"]) == 100.0
+    assert ticker.await_args_list[-1].args == (VSN["id"],)
+    ecb.assert_not_awaited()
+
+
+async def test_a_portfolio_in_another_currency_converts_its_wallet_prices_with_the_ecb_rate(
+    hass, portfolio_api, price_api
+):
+    """USD: the EUR ticker price times the ECB rate (2.0 in price_api), the
+    rates read before the first refresh."""
+    _, ecb = price_api
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=3, unique_id="portfolio", title="Bitpanda Portfolio",
+        data={"entry_type": "portfolio", "api_key": "key", "currency": "USD", "currency_id": _USD_ID},
+    )
+    entry.add_to_hass(hass)
+    await _setup(hass, entry)
+    assert entry.runtime_data.ecb is not None
+    # Its log lines are told from the Price Tracker's.
+    assert entry.runtime_data.ecb.name == "bitpanda_portfolio_ecb"
+    ecb.assert_awaited()
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert entry.runtime_data.prices.price_of(VSN["id"]) == 200.0
+
+
+async def test_the_portfolio_figures_never_wait_for_the_wallet_prices(hass, portfolio_api):
+    """A ticker that never answers holds up neither setup nor the figures:
+    the prices come in a round of their own."""
+    hang = asyncio.Event()
+
+    async def _never(*_args, **_kwargs):
+        await hang.wait()
+
+    with patch(f"{_CLIENT}async_get_ticker", side_effect=_never):
+        entry = _portfolio_entry(hass)
+        await asyncio.wait_for(_setup(hass, entry), timeout=10)
+        assert _value(hass, "sensor.bitpanda_vision_vsn_wallet_total") == 200.0
+        prices = entry.runtime_data.prices
+        assert prices.price_of(VSN["id"]) is None
+        round_under_way = prices._task
+        assert not round_under_way.done()
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        # The unload ends the round: it asks nothing more for an entry gone.
+        await asyncio.sleep(0)
+        assert round_under_way.cancelled()
+
+
+async def test_a_failed_portfolio_refresh_starts_no_round(hass, portfolio_api, price_api, freezer):
+    """Only a successful answer names the wallets to price."""
+    ticker, _ = price_api
+    await _setup(hass, _portfolio_entry(hass))
+    await hass.async_block_till_done(wait_background_tasks=True)
+    asked = ticker.await_count
+    portfolio_api.side_effect = BitpandaApiError("down", kind="connection", path="/portfolio")
+    freezer.tick(timedelta(minutes=1))
+    await _next_refresh(hass, freezer)
+    assert ticker.await_count == asked
+
+
+async def test_a_wallet_added_later_gets_its_price_and_a_removed_one_no_listener(
+    hass, portfolio_api, price_api, freezer
+):
+    """A refresh that lists Bitcoin too: the round after it prices it. Once
+    Vision's wallet is removed, nothing listens for its price any more."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    prices = entry.runtime_data.prices
+    vision, cash = portfolio_api.return_value
+    bitcoin = {**vision, "asset_id": BTC["id"]}
+    portfolio_api.return_value = [vision, bitcoin, cash]
+    await _next_refresh(hass, freezer)
+    assert hass.states.get("sensor.bitpanda_bitcoin_btc_wallet_total").attributes["price"] == 100.0
+    assert prices._listeners[VSN["id"]]
+
+    portfolio_api.return_value = [bitcoin, cash]
+    for _ in range(3):
+        await _next_refresh(hass, freezer)
+    assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_total") is None
+    assert prices._listeners[VSN["id"]] == []
+
+
+async def test_a_wallet_writes_its_price_when_it_arrives(hass, portfolio_api):
+    """The wallet's figures first, its price once the ticker answered --
+    no value over the units in between."""
+    gate = asyncio.Event()
+
+    async def _later_price(asset_id):
+        await gate.wait()
+        return {"asset_id": asset_id, "price": "2.10000000"}
+
+    with patch(f"{_CLIENT}async_get_ticker", side_effect=_later_price):
+        entry = _portfolio_entry(hass)
+        await _setup(hass, entry)
+        total = hass.states.get("sensor.bitpanda_vision_vsn_wallet_total")
+        assert float(total.state) == 200.0
+        assert "price" not in total.attributes
+        gate.set()
+        await hass.async_block_till_done(wait_background_tasks=True)
+    assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_total").attributes["price"] == 2.1
+
+
+async def test_the_wallet_prices_are_read_without_the_key(hass, portfolio_api):
+    """The ticker is public: its requests never carry the Portfolio's key."""
+    entry = _portfolio_entry(hass)
+    await _setup(hass, entry)
+    client = entry.runtime_data.prices._client
+    assert client._headers == {}
+
+
+async def test_a_portfolio_outside_eur_reads_the_ecb_rates_every_six_hours(
+    hass, portfolio_api, price_api, freezer
+):
+    """Nothing but the wallet prices reads the Portfolio's ECB rates, and
+    they still come every 6 hours."""
+    _, ecb = price_api
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=3, unique_id="portfolio", title="Bitpanda Portfolio",
+        data={"entry_type": "portfolio", "api_key": "key", "currency": "USD", "currency_id": _USD_ID},
+    )
+    entry.add_to_hass(hass)
+    await _setup(hass, entry)
+    calls = ecb.await_count
+    freezer.tick(timedelta(hours=6, minutes=1))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert ecb.await_count == calls + 1
+
+
+async def test_without_the_recorder_the_wallets_work_and_have_no_24h_figures(
+    hass, portfolio_api, freezer, caplog
+):
+    """The 24-hour lookup of the wallets fails quietly without the recorder,
+    as the Price Tracker's: the price is there, the 24-hour figures are not."""
+    caplog.set_level(logging.DEBUG, logger="custom_components.bitpanda")
+    await _setup(hass, _portfolio_entry(hass))
+    assert "recorder" not in hass.config.components
+    freezer.tick(timedelta(seconds=1))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    freezer.tick(timedelta(minutes=6))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    total = hass.states.get("sensor.bitpanda_vision_vsn_wallet_total")
+    assert float(total.state) == 200.0
+    for key in ("price", "price_24h_ago", "change_24h_pct", "return_24h"):
+        assert key not in total.attributes, key
+    assert "No 24 h statistics" in caplog.text
+    assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
+
+
 async def _next_price_round(hass, freezer) -> None:
     """The Price Tracker's next regular round: Home Assistant's clock moves
     on past its update interval -- 60 seconds for a few assets -- and the
@@ -1591,60 +1942,6 @@ async def test_a_group_without_assets_is_dropped_at_setup(hass, price_api):
     assert [sub.unique_id for sub in entry.subentries.values()] == ["crypto"]
     # Dropped before the update listener exists: no reload followed.
     assert ticker.call_count == 1
-
-
-# Four ticker requests an hour: three tracked assets need 45 minutes between
-# refreshes, two need 30 -- the Price Tracker's interval above and at the
-# 30-minute mark without tracking hundreds of assets.
-def _four_tickers_an_hour():
-    return patch("custom_components.bitpanda.price_coordinator.TICKER_HOURLY_BUDGET", 4)
-
-
-def _interval_issue(hass):
-    return ir.async_get(hass).async_get_issue(DOMAIN, "slow_price_interval")
-
-
-async def test_a_price_interval_above_thirty_minutes_is_a_repair_issue_until_it_is_not(
-    hass, price_api
-):
-    """Raised at setup, before any price is asked for; gone with the reload
-    that stopping to track an asset causes, the interval back at 30
-    minutes."""
-    with _four_tickers_an_hour():
-        entry = _price_entry(
-            hass, [], price_group("crypto", BTC, SOL), price_group("metal", GOLD)
-        )
-        await _setup(hass, entry)
-        assert _interval_issue(hass).translation_placeholders == {
-            "count": "3", "minutes": "45"
-        }
-
-        _set_group_assets(hass, entry, "crypto", BTC)
-        await hass.async_block_till_done()
-
-    assert entry.state is ConfigEntryState.LOADED
-    assert _interval_issue(hass) is None
-
-
-async def test_the_price_interval_issue_goes_with_the_price_tracker(
-    hass, price_api, portfolio_api
-):
-    """Deleting the Price Tracker ends it; deleting the Portfolio does not."""
-    with _four_tickers_an_hour():
-        tracker = _price_entry(
-            hass, [], price_group("crypto", BTC, SOL), price_group("metal", GOLD)
-        )
-        portfolio = _portfolio_entry(hass)
-        # The first setup of the domain sets up both entries.
-        await _setup(hass, tracker)
-        assert portfolio.state is ConfigEntryState.LOADED
-        assert _interval_issue(hass) is not None
-
-        await hass.config_entries.async_remove(portfolio.entry_id)
-        assert _interval_issue(hass) is not None
-
-        await hass.config_entries.async_remove(tracker.entry_id)
-    assert _interval_issue(hass) is None
 
 
 async def test_without_extra_currencies_the_ecb_is_never_asked(hass, price_api):

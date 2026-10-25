@@ -1,14 +1,16 @@
 """Coordinators of the Portfolio service.
 
 Every request here carries the API key, except the asset lookups, which the
-AssetDirectory makes keyless. Every 401 raises ConfigEntryAuthFailed, which
-Home Assistant turns into the reauth dialog.
+AssetDirectory makes keyless, and the wallets' ticker prices (WalletPrices),
+read keyless too. Every 401 of a keyed request raises ConfigEntryAuthFailed,
+which Home Assistant turns into the reauth dialog.
 """
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import math
 from typing import Any
@@ -23,7 +25,12 @@ from homeassistant.helpers.update_coordinator import (
 )
 from homeassistant.util import dt as dt_util
 
-from .api import BitpandaApiClient, BitpandaApiError, BitpandaAuthError
+from .api import (
+    BitpandaApiClient,
+    BitpandaApiError,
+    BitpandaAuthError,
+    BitpandaRateLimitError,
+)
 from .assets import AssetDirectory
 from .const import (
     DOMAIN,
@@ -35,11 +42,15 @@ from .const import (
     ERROR_TIMEOUT,
     ERROR_UNREADABLE,
     FIRST_LOAD_RETRY_INTERVAL,
+    OPERATIONS_FULL_READ_INTERVAL,
+    OPERATIONS_OVERLAP,
     PORTFOLIO_TIMEFRAMES,
     PORTFOLIO_UPDATE_INTERVAL,
     REWARDS_UPDATE_INTERVAL,
 )
-from .portfolio_store import KnownWallets, RewardMarks
+from .day_ago import DayAgoPrices
+from .portfolio_store import KnownWallets, OperationsHistory, RewardMarks
+from .price_coordinator import EcbCoordinator, convert_price
 from .portfolio_model import (
     PORTFOLIO_FIGURES,
     EarnData,
@@ -47,7 +58,11 @@ from .portfolio_model import (
     PortfolioData,
     PortfolioReturns,
     RewardTotals,
+    add_rewards,
+    newest_credited_at,
+    operation_credited_at,
     parse_earn_configs,
+    parse_history_points,
     parse_portfolio,
     sum_rewards,
     tolerate_failed_timeframes,
@@ -98,6 +113,199 @@ def _update_failed(err: BitpandaApiError) -> UpdateFailed:
     )
 
 
+# Ticker requests in a row without any answer -- a timeout, or no
+# connection -- that end a round of wallet prices, as the Price Tracker's.
+_TICKER_UNANSWERED_IN_A_ROW = 2
+
+# A round less than this after the last that read the same assets asks
+# nothing: a refresh by hand (bitpanda.refresh, 10 seconds apart at the least
+# for the Portfolio) drives ticker requests no faster than the Price
+# Tracker's 60 seconds.
+_TICKER_REUSE = timedelta(seconds=60)
+
+# How long a wallet keeps its last ticker price through failed requests.
+_TICKER_HOLD = timedelta(minutes=15)
+
+
+class WalletPrices:
+    """Each wallet asset's price from Bitpanda's public ticker, in a round of
+    its own after every successful portfolio refresh (async_request_round):
+    keyless, one request per asset after the other, each with the ticker's
+    timeout. Each asset's listeners hear of its price as soon as it arrives;
+    the Portfolio's figures never wait for a round.
+
+    /tickers answers in EUR. A Portfolio in another currency converts with
+    the ECB rate of that currency (`ecb`, read every 6 hours) as the Price
+    Tracker does, and reads no ticker while it has no such rate: never an
+    EUR price shown in another currency.
+
+    A failed request, or an unusable price, leaves the asset's last ticker
+    price; a 429, or _TICKER_UNANSWERED_IN_A_ROW requests in a row without
+    any answer -- an error the client does not know counts as none --, ends
+    the round. A price is kept while it is at most _TICKER_HOLD old; after
+    that, and before the first, the wallet has none (price_of). Rounds never
+    overlap: rounds asked for while one runs become one that starts when it
+    ends. A round less than _TICKER_REUSE after the last that read the same
+    assets asks nothing. A wallet without a price for more than _TICKER_HOLD
+    -- since its last one, or since it was first asked -- is warned about
+    once, and its return logged once at INFO.
+    """
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: BitpandaApiClient,
+        currency: str,
+        ecb: EcbCoordinator | None,
+    ) -> None:
+        self._hass = hass
+        self._client = client
+        self._currency = currency
+        self._ecb = ecb
+        # Asset id -> its last ticker price, and when it was read.
+        self._prices: dict[str, tuple[float, datetime]] = {}
+        # Asset id -> what to call when its price changes.
+        self._listeners: dict[str, list[Callable[[], None]]] = {}
+        # The last round that asked: when, and the assets it read.
+        self._last: tuple[datetime, frozenset[str]] | None = None
+        self._task: asyncio.Task[None] | None = None
+        # The assets of a round asked for while one runs.
+        self._next: list[str] | None = None
+        # Asset id -> when it was first asked for while it never had a price.
+        self._asked_since: dict[str, datetime] = {}
+        # The assets warned about: without a price for too long.
+        self._warned: set[str] = set()
+
+    def price_of(self, asset_id: str) -> float | None:
+        """The asset's last ticker price, in the Portfolio currency, while it
+        is at most _TICKER_HOLD old; else None."""
+        known = self._prices.get(asset_id)
+        if known is None or dt_util.utcnow() - known[1] > _TICKER_HOLD:
+            return None
+        return known[0]
+
+    @callback
+    def async_listen(self, asset_id: str, update: Callable[[], None]) -> Callable[[], None]:
+        """Call `update` whenever the asset's price arrives; returns the
+        removal."""
+        listeners = self._listeners.setdefault(asset_id, [])
+        listeners.append(update)
+
+        @callback
+        def _remove() -> None:
+            if update in listeners:
+                listeners.remove(update)
+
+        return _remove
+
+    @callback
+    def async_request_round(self, asset_ids: list[str]) -> None:
+        """A round over `asset_ids`: now, or after the one under way."""
+        if self._task is not None and not self._task.done():
+            self._next = list(asset_ids)
+            return
+        self._task = self._hass.async_create_background_task(
+            self._async_rounds(list(asset_ids)), f"{DOMAIN} wallet prices"
+        )
+
+    async def _async_rounds(self, asset_ids: list[str]) -> None:
+        while True:
+            await self.async_round(asset_ids)
+            if self._next is None:
+                return
+            asset_ids, self._next = self._next, None
+
+    async def async_wait_for_round(self, timeout: float) -> None:
+        """Wait, at most `timeout` seconds, for the round under way -- and a
+        round asked for to follow it -- to end. Never ends it."""
+        task = self._task
+        if task is not None and not task.done():
+            await asyncio.wait({task}, timeout=timeout)
+
+    @callback
+    def async_stop(self) -> None:
+        """End the round under way and forget one asked for: the entry
+        unloads."""
+        self._next = None
+        if self._task is not None:
+            self._task.cancel()
+
+    async def async_round(self, asset_ids: list[str]) -> None:
+        """Read the price of each of `asset_ids`, telling each asset's
+        listeners as its price arrives. One round itself: rounds are asked
+        for with async_request_round, which keeps them from overlapping."""
+        now = dt_util.utcnow()
+        if (
+            self._last is not None
+            and now - self._last[0] < _TICKER_REUSE
+            and self._last[1].issuperset(asset_ids)
+        ):
+            return
+        rate: float | None = None
+        if self._currency != "EUR":
+            rates = None if self._ecb is None else self._ecb.data
+            rate = None if rates is None else rates.rates.get(self._currency)
+            if rate is None:
+                return
+        self._last = (now, frozenset(asset_ids))
+        try:
+            await self._async_ask(asset_ids, rate)
+        finally:
+            self._warn_about_the_unpriced(asset_ids)
+
+    async def _async_ask(self, asset_ids: list[str], rate: float | None) -> None:
+        unanswered = 0
+        for asset_id in asset_ids:
+            try:
+                ticker = await self._client.async_get_ticker(asset_id)
+            except BitpandaApiError as err:
+                _LOGGER.debug("No ticker price for %s: %s", asset_id, err.kind)
+                if isinstance(err, BitpandaRateLimitError) or err.kind == ERROR_RATE_LIMITED:
+                    break
+                if err.kind in (ERROR_TIMEOUT, ERROR_CONNECTION):
+                    unanswered += 1
+                    if unanswered >= _TICKER_UNANSWERED_IN_A_ROW:
+                        break
+                else:
+                    unanswered = 0
+                continue
+            except Exception as err:  # noqa: BLE001 - optional data, never fatal
+                # An error the client does not know: no answer either.
+                _LOGGER.debug("No ticker price for %s: %s", asset_id, type(err).__name__)
+                unanswered += 1
+                if unanswered >= _TICKER_UNANSWERED_IN_A_ROW:
+                    break
+                continue
+            unanswered = 0
+            price = convert_price(ticker.get("price"), rate)
+            if price is None or price <= 0:
+                _LOGGER.debug("No usable ticker price for %s", asset_id)
+                continue
+            self._prices[asset_id] = (price, dt_util.utcnow())
+            self._asked_since.pop(asset_id, None)
+            if asset_id in self._warned:
+                self._warned.discard(asset_id)
+                _LOGGER.info("Bitpanda's price ticker gives a price for asset %s again", asset_id)
+            for update in list(self._listeners.get(asset_id, ())):
+                update()
+
+    def _warn_about_the_unpriced(self, asset_ids: list[str]) -> None:
+        """Warn, once, about each of `asset_ids` without a price for more than
+        _TICKER_HOLD: its wallet shows none until the ticker answers."""
+        now = dt_util.utcnow()
+        for asset_id in asset_ids:
+            known = self._prices.get(asset_id)
+            since = known[1] if known else self._asked_since.setdefault(asset_id, now)
+            if now - since > _TICKER_HOLD and asset_id not in self._warned:
+                self._warned.add(asset_id)
+                _LOGGER.warning(
+                    "Bitpanda's price ticker has given no price for asset %s for more "
+                    "than 15 minutes: its wallet shows no price, no 24-hour figures and "
+                    "no value of its rewards until the ticker answers again",
+                    asset_id,
+                )
+
+
 class PortfolioCoordinator(TolerantCoordinator[PortfolioData]):
     """Polls /portfolio in the Portfolio currency and names the holdings.
 
@@ -108,8 +316,8 @@ class PortfolioCoordinator(TolerantCoordinator[PortfolioData]):
     answer no longer lists may be a glitch at Bitpanda rather than a sale,
     so a figure whose entry vanished waits before it shows 0: Total value
     once the answer lists no entry at all, Cash once it lists no fiat entry,
-    Cash Plus once it lists no Cash Plus holding (PortfolioData.
-    figures_listed). One FigureWatch per figure (PORTFOLIO_FIGURES) counts
+    Cash Plus once it lists no Cash Plus holding, the positions' figures once
+    it lists no other holding (PortfolioData.figures_listed). One FigureWatch per figure (PORTFOLIO_FIGURES) counts
     the answers without its entry. While they are too few to confirm it --
     WALLET_REMOVAL_MISSES in a row, the last WALLET_REMOVAL_TIME after the
     first was asked for (portfolio_model.confirmed) -- the figure waits:
@@ -117,8 +325,8 @@ class PortfolioCoordinator(TolerantCoordinator[PortfolioData]):
     the pace at which the wallet manager removes a sold asset's wallet;
     refreshes by hand count, but never make it sooner. An answer that lists
     the entry again shows its value and clears the count; one that leaves
-    Cash Plus in doubt clears it too, without making Cash Plus there
-    (FigureWatch).
+    Cash Plus or the positions in doubt clears it too, without making them
+    there (FigureWatch).
 
     The watches live on this coordinator, so every start -- of Home
     Assistant, or a setup or reload of the entry, a currency change's
@@ -200,11 +408,15 @@ class PortfolioCoordinator(TolerantCoordinator[PortfolioData]):
 
 
 class EarnCoordinator(DataUpdateCoordinator[EarnData]):
-    """Polls the Earn product catalogue once a day.
+    """Polls the Earn product catalogue every hour.
 
     A failed fetch leaves `data` at the last catalogue. While no catalogue
     was ever loaded, no Staking sensor shows its APR, so a failure then is
-    retried after FIRST_LOAD_RETRY_INTERVAL instead of a day.
+    retried after FIRST_LOAD_RETRY_INTERVAL instead of an hour.
+
+    After every successful refresh it calls `on_refreshed`, the
+    announcement of Earn changes (announcements.EarnAnnouncer) -- never
+    after the entry's unload has shut it down.
     """
 
     config_entry: PortfolioConfigEntry
@@ -220,6 +432,22 @@ class EarnCoordinator(DataUpdateCoordinator[EarnData]):
             config_entry=entry,
         )
         self._client = client
+        # Set by the announcer of Earn changes; None where nothing announces.
+        self.on_refreshed: Callable[[], None] | None = None
+        self._shut_down = False
+
+    async def async_shutdown(self) -> None:
+        self._shut_down = True
+        await super().async_shutdown()
+
+    @callback
+    def _async_refresh_finished(self) -> None:
+        """Home Assistant's hook after every refresh, before the listeners
+        are told: the announcer runs after a successful one only, and
+        announces once they are."""
+        super()._async_refresh_finished()
+        if self.last_update_success and self.on_refreshed is not None and not self._shut_down:
+            self.on_refreshed()
 
     async def _async_update_data(self) -> EarnData:
         try:
@@ -234,6 +462,51 @@ class EarnCoordinator(DataUpdateCoordinator[EarnData]):
         return parse_earn_configs(configs)
 
 
+# The kinds of operations the section's evaluations cover (portfolio_store
+# OperationsHistory): a kind the code knows but a section lacks has the whole
+# history read once, so its totals cover all of it.
+_OPERATION_KINDS = ("staking",)
+
+
+def _parse_time(text: str) -> datetime | None:
+    """An API time as an aware datetime; None when it does not parse."""
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=dt_util.UTC)
+
+
+def _recent_ids(
+    operations: list[dict[str, Any]], kept: dict[str, str], anchor: str | None
+) -> dict[str, str]:
+    """The ids of `kept` and of `operations` credited from where the next
+    read begins (_window_start of `anchor`) on, with their times: what that
+    read must not count again."""
+    newest = _parse_time(anchor) if anchor else None
+    if newest is None:
+        return {}
+    since = _window_start(newest)
+    found = dict(kept)
+    for operation in operations:
+        operation_id = operation.get("operation_id")
+        credited = operation_credited_at(operation)
+        if isinstance(operation_id, str) and credited:
+            found[operation_id] = credited
+    return {
+        operation_id: credited
+        for operation_id, credited in found.items()
+        if (at := _parse_time(credited)) is not None and at >= since
+    }
+
+
+def _window_start(newest: datetime) -> datetime:
+    """Where an incremental read begins: OPERATIONS_OVERLAP before the
+    newest time seen, to the second -- Bitpanda's `from` takes whole seconds
+    and includes the bound."""
+    return (newest - OPERATIONS_OVERLAP).astimezone(dt_util.UTC).replace(microsecond=0)
+
+
 class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]):
     """Aggregates Earn rewards from the operation history.
 
@@ -243,24 +516,44 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]
     case is answered by a new key, so it raises ConfigEntryAuthFailed the
     same as every other coordinator, instead of degrading silently.
 
-    A listing that cannot be paged completely raises too (see
-    BitpandaApiClient._paginate) and becomes UpdateFailed: the rewards
-    attributes then stay absent, or keep the last complete totals, rather
-    than showing a recount over part of the history.
+    It reads only what is new: what it read before -- the totals, every
+    timed payout, the newest time seen -- is kept in the Portfolio's file
+    (portfolio_store.OperationsHistory), and a refresh asks for the
+    operations from that time less OPERATIONS_OVERLAP, counting the ones of
+    that last day it counted already once only. The whole history is read
+    when there is nothing to build on -- no section, an unreadable one, one
+    dropped after a new key (__init__._async_start_portfolio) --, for a kind
+    a section does not cover yet, and once every OPERATIONS_FULL_READ_INTERVAL.
+    What it read before is its data from the start, before any request.
+
+    A listing that cannot be paged completely raises (see
+    BitpandaApiClient._paginate) and becomes UpdateFailed, and so does any
+    other failed read: the section stays as it was, the rewards attributes
+    keep the last complete totals or stay absent, rather than showing a
+    recount over part of the history.
 
     Like every DataUpdateCoordinator it polls only while something listens,
     and only Staking sensors do: see async_refresh_if_stale.
 
     After every successful refresh it calls `on_refreshed`, the announcement
     of new payouts (announcements.RewardAnnouncer). That call is no listener:
-    a listener would keep the coordinator reading the whole history every
-    hour even with every Staking sensor disabled.
+    a listener would keep the coordinator reading every hour even with every
+    Staking sensor disabled.
+
+    Home Assistant shuts it down at the entry's unload, while a read may
+    still be under way: one that ends after the shutdown keeps nothing of
+    what it read -- the entry's file may be about to go with the entry --
+    and announces nothing.
     """
 
     config_entry: PortfolioConfigEntry
 
     def __init__(
-        self, hass: HomeAssistant, entry: PortfolioConfigEntry, client: BitpandaApiClient
+        self,
+        hass: HomeAssistant,
+        entry: PortfolioConfigEntry,
+        client: BitpandaApiClient,
+        history: OperationsHistory,
     ) -> None:
         super().__init__(
             hass,
@@ -270,17 +563,111 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]
             config_entry=entry,
         )
         self._client = client
+        self._history = history
         # Set by the announcer of new payouts; None where nothing announces.
         self.on_refreshed: Callable[[], None] | None = None
+        if history.staking is not None:
+            self.data = history.staking
+        # One read at a time: each builds on what the one before kept.
+        # Home Assistant locks each refresh from 2025.11 on; before, the
+        # hourly read could run while one a new Staking sensor asked for was
+        # under way.
+        self._read_lock = asyncio.Lock()
+        self._shut_down = False
+
+    async def async_shutdown(self) -> None:
+        self._shut_down = True
+        await super().async_shutdown()
+
+    def _kept(self) -> dict[str, RewardTotals]:
+        """What a read ending after the shutdown answers: the totals as
+        they were, the section untouched."""
+        return self._history.staking or {}
 
     async def _async_update_data(self) -> dict[str, RewardTotals]:
-        try:
-            operations = await self._client.async_get_operations()
-        except BitpandaAuthError:
-            raise _auth_failed() from None
-        except BitpandaApiError as err:
-            raise _update_failed(err) from None
-        return sum_rewards(operations)
+        async with self._read_lock:
+            try:
+                if self._whole_history_due():
+                    return await self._async_read_whole()
+                return await self._async_read_new()
+            except BitpandaAuthError:
+                raise _auth_failed() from None
+            except BitpandaApiError as err:
+                raise _update_failed(err) from None
+
+    def _whole_history_due(self) -> bool:
+        history = self._history
+        read_at = history.full_read_at
+        return (
+            history.staking is None
+            # Nothing to begin a read from.
+            or history.anchor is None
+            or _parse_time(history.anchor) is None
+            or not set(_OPERATION_KINDS) <= set(history.kinds)
+            or read_at is None
+            or dt_util.utcnow() - read_at >= OPERATIONS_FULL_READ_INTERVAL
+        )
+
+    async def _async_read_whole(self) -> dict[str, RewardTotals]:
+        read_at = dt_util.utcnow()
+        operations = await self._client.async_get_operations()
+        if self._shut_down:
+            return self._kept()
+        totals = sum_rewards(operations)
+        anchor = newest_credited_at(operations, None)
+        self._history.replace(
+            staking=totals,
+            anchor=anchor,
+            recent_ids=_recent_ids(operations, {}, anchor),
+            kinds=_OPERATION_KINDS,
+            full_read_at=read_at,
+            read_at=read_at,
+        )
+        return totals
+
+    async def _async_read_new(self) -> dict[str, RewardTotals]:
+        history = self._history
+        # Both set, the anchor a time: _whole_history_due checked.
+        assert history.staking is not None and history.anchor is not None
+        newest = _parse_time(history.anchor)
+        assert newest is not None
+        since = _window_start(newest)
+        read_at = dt_util.utcnow()
+        operations = await self._client.async_get_operations(
+            from_ts=since.strftime("%Y-%m-%dT%H:%M:%SZ")
+        )
+        if self._shut_down:
+            return self._kept()
+        # New: listed from `since` on -- should Bitpanda list older ones all
+        # the same, they were counted before, or wait for the weekly whole
+        # read -- and not counted in the day before already. An operation
+        # without its id or its time cannot be told from one counted: only
+        # the whole read counts it.
+        new = [
+            operation
+            for operation in operations
+            if isinstance(operation.get("operation_id"), str)
+            and operation["operation_id"] not in history.recent_ids
+            and (credited := operation_credited_at(operation)) is not None
+            and (at := _parse_time(credited)) is not None
+            and at >= since
+        ]
+        totals = add_rewards(history.staking, new) if new else history.staking
+        anchor = newest_credited_at(operations, history.anchor)
+        # Saved after every read, nothing new included: the time of the last
+        # read outlives a restart (bitpanda.get_staking_rewards).
+        assert history.full_read_at is not None
+        history.replace(
+            staking=totals,
+            anchor=anchor,
+            recent_ids=_recent_ids(new, history.recent_ids, anchor),
+            # A later release's kind loses its totals here: never list it, so
+            # that release reads the whole history for it.
+            kinds=_OPERATION_KINDS,
+            full_read_at=history.full_read_at,
+            read_at=read_at,
+        )
+        return totals
 
     @callback
     def _async_refresh_finished(self) -> None:
@@ -288,7 +675,7 @@ class RewardsCoordinator(TimestampDataUpdateCoordinator[dict[str, RewardTotals]]
         are told (2025.5.0 and 2026.9.4 alike): the announcer runs after a
         successful one only."""
         super()._async_refresh_finished()
-        if self.last_update_success and self.on_refreshed is not None:
+        if self.last_update_success and self.on_refreshed is not None and not self._shut_down:
             self.on_refreshed()
 
     @callback
@@ -338,6 +725,7 @@ async def collect_returns(
     whose return is unknown, not a failed one.
     """
     out: dict[str, float] = {}
+    series: dict[str, tuple[tuple[int, float], ...]] = {}
     failed: set[str] = set()
     for timeframe in PORTFOLIO_TIMEFRAMES:
         try:
@@ -350,6 +738,8 @@ async def collect_returns(
             failed.add(timeframe)
             _LOGGER.debug("No history for timeframe %s this cycle", timeframe)
             continue
+        if points := parse_history_points(body.get("datapoints")):
+            series[timeframe] = points
         value = body.get("return_percentage")
         if isinstance(value, bool):
             # isinstance(True, int) is True in Python, so a boolean would be
@@ -378,7 +768,7 @@ async def collect_returns(
             translation_domain=DOMAIN, translation_key="history_unavailable"
         )
 
-    return PortfolioReturns(values=out, failed=frozenset(failed))
+    return PortfolioReturns(values=out, failed=frozenset(failed), series=series)
 
 
 class HistoryCoordinator(TolerantCoordinator[PortfolioReturns]):
@@ -473,11 +863,24 @@ class PortfolioRuntime:
     data_at_setup: dict[str, Any] = field(repr=False)
     options_at_setup: dict[str, Any] = field(repr=False)
     # The assets the Portfolio knows -- announced, or there when the list
-    # began -- and when the newest staking payout announced per asset was
-    # credited (portfolio_store.py): set at setup, None where a test builds a
-    # runtime without them.
-    known_wallets: KnownWallets | None = field(default=None, repr=False)
-    reward_marks: RewardMarks | None = field(default=None, repr=False)
+    # began --, when the newest staking payout announced per asset was
+    # credited, and the operations read so far (portfolio_store.py).
+    known_wallets: KnownWallets = field(repr=False)
+    reward_marks: RewardMarks = field(repr=False)
+    operations: OperationsHistory = field(repr=False)
+    # The ECB rates of a Portfolio whose currency is not EUR, for its
+    # wallets' ticker prices (WalletPrices); None in EUR.
+    ecb: EcbCoordinator | None = None
+    # The wallets' ticker prices, read in a round after each portfolio
+    # refresh.
+    prices: WalletPrices | None = None
+    # Set once setup has set up the entry's platforms, failed or not: the
+    # announcements wait for it, so that none reaches the bus before the
+    # event entities exist (announcements.py).
+    ready: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
+    # The 24-hour references of every wallet's Balance (total), kept by
+    # asset (day_ago.DayAgoPrices.last); set by the sensor platform.
+    day_ago: DayAgoPrices | None = field(default=None, repr=False)
 
 
 # A Portfolio config entry, its runtime data typed.

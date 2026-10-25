@@ -22,16 +22,23 @@ from .const import (
     ERROR_UNREADABLE,
     MAX_PAGE_SIZE,
     REQUIRED_SCOPES,
+    TICKER_TIMEOUT,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 # Hard stop for one paginated listing. The largest real walk is the whole
 # 14,054-asset catalogue, 141 pages of 100; a five-year operation history took
-# 13. 500 pages (50,000 records) leaves a wide margin above both, and even an
-# /operations history that long, re-read at the hourly rewards cadence, stays
-# inside the hourly read budget next to the share reserved for prices.
+# 13. 500 pages (50,000 records) leaves a wide margin above both. Bitpanda
+# limits reads to 50 requests per second per API key, and the pages of a
+# listing are asked for one after the other.
 _MAX_PAGES = 500
+# The operation history grows with every trade: savings plans that buy daily
+# for years run to tens of thousands of operations. Its whole history is read
+# only now and then (portfolio_coordinator.RewardsCoordinator), so it gets
+# room for a million; the repeated-cursor guard of _paginate, not this cap, is
+# what stops the cursor bug's loops.
+_MAX_OPERATION_PAGES = 10_000
 
 # The only cursor shape /operations mishandles: a whole-second UTC timestamp.
 _WHOLE_SECOND_TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
@@ -151,14 +158,14 @@ class BitpandaApiClient:
 
         /currencies, /assets and /tickers answer without a key. A keyless
         client sends no x-api-key header at all, so public lookups never
-        carry the key and never count against its read budget. The key lives
+        carry the key and never count against its rate limit. The key lives
         only inside the header dict -- no second copy on the instance.
         """
         self._session = session
         self._headers = {"x-api-key": api_key} if api_key else {}
 
     async def _request(
-        self, path: str, params: dict[str, Any] | None = None
+        self, path: str, params: dict[str, Any] | None = None, *, timeout: float = API_TIMEOUT
     ) -> dict[str, Any]:
         """Perform one GET and return the decoded body, always a dict.
 
@@ -185,7 +192,7 @@ class BitpandaApiClient:
                 url,
                 headers=self._headers,
                 params=params,
-                timeout=aiohttp.ClientTimeout(total=API_TIMEOUT),
+                timeout=aiohttp.ClientTimeout(total=timeout),
                 allow_redirects=False,
             ) as response:
                 status = response.status
@@ -259,18 +266,20 @@ class BitpandaApiClient:
         params: dict[str, Any],
         *,
         cursor_fix: Callable[[str], str] | None = None,
+        max_pages: int | None = None,
     ) -> list[dict[str, Any]]:
         """Collect every page of a cursor-paginated endpoint, or raise.
 
         Deduplicates by id: pages can overlap by one record. `cursor_fix`
         rewrites each `next_cursor` before it is sent (see
-        `normalize_operations_cursor`).
+        `normalize_operations_cursor`). `max_pages` is the listing's cap,
+        _MAX_PAGES unless given.
 
         Never returns a partial listing. A cursor that was already sent means
         the server is re-serving pages it has answered before -- /operations
         does exactly that for cursors it ignores -- so following it loops until
         rate-limited, and stopping there quietly would pass off the pages so
-        far as the whole listing. That, a listing longer than _MAX_PAGES, and a
+        far as the whole listing. That, a listing longer than its cap, and a
         page that announces another without a cursor all raise instead: a
         failed update is honest, a truncated total published as fact is not.
 
@@ -282,11 +291,12 @@ class BitpandaApiClient:
         """
         params = dict(params)
         params.setdefault("page_size", MAX_PAGE_SIZE)
+        cap = _MAX_PAGES if max_pages is None else max_pages
         out: list[dict[str, Any]] = []
         seen: set[str | int] = set()
         sent_cursors: set[str] = set()
 
-        for _ in range(_MAX_PAGES):
+        for _ in range(cap):
             body = await self._request(path, params)
             for item in _listing(body, path):
                 key = item.get("id")
@@ -320,7 +330,7 @@ class BitpandaApiClient:
             params["cursor"] = cursor
 
         raise BitpandaApiError(
-            f"{path} returned more than {_MAX_PAGES} pages",
+            f"{path} returned more than {cap} pages",
             kind=ERROR_INCOMPLETE_LISTING, path=path,
         )
 
@@ -356,9 +366,8 @@ class BitpandaApiClient:
 
         Builds the "Add price tracker" subentry flow's category pickers (see
         assets.py's ASSET_CATEGORY_FILTERS) -- a handful of these calls
-        cover the whole 14000-asset catalogue, each cached there for 24 hours
-        precisely because even one uncached listing is a meaningful slice of
-        the hourly read budget.
+        cover the whole 14000-asset catalogue, each cached there for an hour:
+        one uncached listing takes up to 141 requests, one after the other.
         """
         params: dict[str, Any] = {"type": type_}
         if group is not None:
@@ -372,7 +381,7 @@ class BitpandaApiClient:
         was probed and is silently ignored, so none is sent.
         """
         path = f"/tickers/{asset_id}"
-        body = await self._request(path)
+        body = await self._request(path, timeout=TICKER_TIMEOUT)
         return _object(body, path)
 
     async def async_get_portfolio(
@@ -436,7 +445,10 @@ class BitpandaApiClient:
         if to_ts:
             params["to"] = to_ts
         return await self._paginate(
-            "/operations", params, cursor_fix=normalize_operations_cursor
+            "/operations",
+            params,
+            cursor_fix=normalize_operations_cursor,
+            max_pages=_MAX_OPERATION_PAGES,
         )
 
     async def async_missing_scopes(self) -> list[str]:

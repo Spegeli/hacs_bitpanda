@@ -13,6 +13,8 @@ from homeassistant.util import dt as dt_util
 
 from custom_components.bitpanda.tolerance import TolerantCoordinator, TolerantEntity
 
+from tests.conftest import async_settle
+
 _REGULAR = timedelta(minutes=5)
 # Refreshes by hand (bitpanda.refresh) come a cooldown apart.
 _BY_HAND = timedelta(seconds=20)
@@ -128,22 +130,6 @@ def _rejection_records(caplog) -> list[logging.LogRecord]:
         record for record in caplog.records
         if "the API key was rejected" in record.getMessage()
     ]
-
-
-async def _refresh_in_steps(probe) -> None:
-    """One refresh as DataUpdateCoordinator._async_refresh runs it on every
-    Home Assistant version supported, as far as the tolerance is concerned:
-    _async_update_data awaited, its outcome recorded, then the hook -- all
-    in the running task. Home Assistant's own notice to the listeners is
-    left out: the listeners hear from the tolerance alone."""
-    try:
-        probe.data = await probe._async_update_data()
-    except (UpdateFailed, ConfigEntryAuthFailed) as err:
-        probe.last_exception = err
-        probe.last_update_success = False
-    else:
-        probe.last_update_success = True
-    probe._async_refresh_finished()
 
 
 async def _cancel_a_refresh(probe) -> None:
@@ -384,97 +370,53 @@ async def test_a_key_rejected_after_a_success_is_left_to_home_assistant(
     ] == [logging.ERROR]
 
 
-def _key_lines(caplog) -> list[str]:
-    """Who logged each line about a rejected key, in order: Home Assistant's
-    "Authentication failed" ERROR, or the tolerance's WARNING."""
-    lines = []
-    for record in caplog.records:
-        if record.getMessage().startswith("Authentication failed"):
-            lines.append("home_assistant")
-        elif "the API key was rejected" in record.getMessage():
-            lines.append("tolerance")
-    return lines
-
-
-@pytest.mark.parametrize(
-    ("before", "logged_by"),
-    [("success", "tolerance"), ("failure", "home_assistant")],
-    ids=["other_refresh_failed", "other_refresh_succeeded"],
-)
-async def test_a_key_rejected_while_refreshes_overlap_is_logged_once(
-    hass, caplog, before, logged_by
-):
-    """Refreshes overlap on Home Assistant 2025.5, whose async_refresh is
-    _async_refresh without the lock. A and B begin after a `before` and
-    wait; B ends the other way -- it fails after a success, or succeeds
-    after a failure -- and then A's key is rejected. Home Assistant logs a
-    rejected key only when the outcome it holds as it catches the rejection
-    is a success: B's, not the one A began after. So the key is logged
-    once: by the tolerance when B failed, by Home Assistant when B
-    succeeded."""
-    held_a = _Held(ConfigEntryAuthFailed())
-    held_b = _Held(_down() if before == "success" else 2)
-    script = [1] if before == "success" else [1, _down()]
-    probe = _Probe(hass, *script, held_a, held_b)
-    for _ in script:
-        await probe.async_refresh()
+async def test_a_refresh_begins_only_once_the_one_under_way_has_ended(hass, freezer):
+    """Home Assistant locks each refresh from 2025.11 on; before, a refresh
+    by hand could run while a scheduled one waited for its answer. The
+    tolerance takes a lock of its own, so every supported release behaves
+    alike: refresh B, asked for while A waits, begins only once A has
+    ended -- asked for then -- and its newer answer is the one that stays.
+    _async_refresh is called directly, as Home Assistant 2025.5 runs it,
+    without Home Assistant's lock."""
+    held_a = _Held(1)
+    probe = _Probe(hass, held_a, 2)
     refresh_a = asyncio.create_task(probe._async_refresh())
     await held_a.entered.wait()
     refresh_b = asyncio.create_task(probe._async_refresh())
-    await held_b.entered.wait()
-    with caplog.at_level(logging.WARNING):
-        held_b.release.set()
-        await refresh_b
-        held_a.release.set()
-        await refresh_a
-    assert _key_lines(caplog) == [logged_by]
-
-
-async def test_overlapping_refreshes_are_each_judged_by_their_own_state(
-    hass, freezer, caplog
-):
-    """Home Assistant 2025.5 takes no lock around a refresh, so refreshes can
-    overlap. Refresh A begins after a failure and waits. Meanwhile refresh C
-    succeeds, then refresh B begins after that success and waits too. B
-    fails, then A fails with a rejected key, which confirms the failure.
-    Each hook takes the state its own refresh noted as it began: the streak
-    spans A's request time to B's, though B's failure came first -- and the
-    clock's time is in neither. A, begun after a failure, tells the
-    listeners itself, exactly once: Home Assistant would not. Judged by B's
-    state, begun after a success, A would not either, and the sensors would
-    go on showing the last data. The key is warned about once: Home
-    Assistant, holding B's failure as it catches the rejection, logs
-    nothing."""
-    held_a = _Held(ConfigEntryAuthFailed())
-    held_b = _Held(_down())
-    probe = _Probe(hass, 1, _down(), held_a, 2, held_b)
-    seen = _listen(probe)
-    await _refresh_in_steps(probe)
-    freezer.tick(_REGULAR)
-    await _refresh_in_steps(probe)
-    freezer.tick(_REGULAR)
-    asked_a = dt_util.utcnow()
-    refresh_a = asyncio.create_task(_refresh_in_steps(probe))
-    await held_a.entered.wait()
-    freezer.tick(_REGULAR)
-    await _refresh_in_steps(probe)
-    freezer.tick(_REGULAR)
-    asked_b = dt_util.utcnow()
-    refresh_b = asyncio.create_task(_refresh_in_steps(probe))
-    await held_b.entered.wait()
-    freezer.tick(_REGULAR)
-    with caplog.at_level(logging.WARNING):
-        held_b.release.set()
-        await refresh_b
-        assert seen == []
-        held_a.release.set()
-        await refresh_a
-    assert seen == [False]
-    assert (probe._streak.count, probe._streak.first, probe._streak.last) == (
-        2, asked_a, asked_b
-    )
-    assert [record.getMessage() for record in _rejection_records(caplog)] == [_KEY_REJECTED]
+    await async_settle()
+    assert len(probe.asked) == 1
+    freezer.tick(_LATE)
+    ended_a = dt_util.utcnow()
+    held_a.release.set()
+    await refresh_a
+    await refresh_b
+    assert probe.asked[1] == ended_a
+    assert probe.data == 2
     assert probe._refreshes == {}
+
+
+async def test_a_refresh_that_waited_is_judged_by_the_outcome_before_the_wait(hass):
+    """Before 2025.11 Home Assistant notes the outcome before a refresh as
+    it begins, before the wait: B, begun after a failure while A was under
+    way, counts as begun after that failure, A's success meanwhile
+    notwithstanding. So when B's key is rejected, Home Assistant tells the
+    listeners nothing, and the tolerance does: judged by A's success, it
+    would leave that to Home Assistant, and the sensors would go on showing
+    the last data. _async_refresh is called directly, as Home Assistant
+    2025.5 runs it."""
+    held_a = _Held(2)
+    probe = _Probe(hass, 1, _down(), held_a, ConfigEntryAuthFailed())
+    await probe.async_refresh()
+    await probe.async_refresh()
+    seen = _listen(probe)
+    refresh_a = asyncio.create_task(probe._async_refresh())
+    await held_a.entered.wait()
+    refresh_b = asyncio.create_task(probe._async_refresh())
+    await async_settle()
+    held_a.release.set()
+    await refresh_a
+    await refresh_b
+    assert seen == [True, False]
 
 
 async def test_a_slow_first_failure_does_not_prolong_it(hass, freezer):

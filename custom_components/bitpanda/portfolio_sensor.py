@@ -10,7 +10,9 @@ currency change clears them with the sensors' history (purge.py).
 """
 from __future__ import annotations
 
-from datetime import datetime
+from collections.abc import Callable
+from datetime import datetime, timedelta
+from functools import partial
 from typing import Any, cast
 
 from homeassistant.components.sensor import (
@@ -19,14 +21,14 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import PERCENTAGE
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from .announcements import WalletAnnouncer
-from .assets import asset_attributes, asset_category
+from .assets import ASSET_CATEGORIES, asset_attributes, asset_category
 from .const import (
     API_KEY_URL,
     CONF_CURRENCY,
@@ -36,7 +38,8 @@ from .const import (
     PRICES_URL,
     SUBENTRY_TYPE_WALLET_GROUP,
 )
-from .devices import find_entry_device
+from .day_ago import DayAgoPrices, async_wallet_prices_24h_ago
+from .devices import find_wallet_device
 from .groups import (
     async_get_or_create_wallet_group,
     entities_by_group,
@@ -45,6 +48,7 @@ from .groups import (
 )
 from .naming import (
     PORTFOLIO_DEVICE_NAME,
+    class_key,
     managed_asset_key,
     portfolio_device_identifier,
     portfolio_entity_id,
@@ -66,6 +70,7 @@ from .portfolio_coordinator import (
     PortfolioCoordinator,
     PortfolioRuntime,
     RewardsCoordinator,
+    WalletPrices,
 )
 from .portfolio_model import (
     DECIMALS,
@@ -73,10 +78,28 @@ from .portfolio_model import (
     Holding,
     PortfolioData,
     PortfolioReturns,
+    PositionTotals,
+    change_24h,
     confirmed,
+    last_payout_net,
+    position_totals,
+    performance,
+    return_amount,
+    rewards_since,
+    share_percent,
+    significant,
     staking_applies,
 )
 from .tolerance import TolerantEntity
+
+# An Earn product's type and mode as Bitpanda sends them -> the values of the
+# Staking sensor's attributes `earn_type` and `earn_mode`; any other is left
+# out.
+_EARN_TYPES = {"FLEXIBLE": "flexible", "LOCKED": "locked"}
+_EARN_MODES = {"STAKING_EARN": "staking", "STABLE_COIN_EARN": "stable_coin"}
+
+# The window of a Staking sensor's recent rewards, up to now.
+RECENT_REWARDS = timedelta(days=30)
 
 
 def portfolio_device_info(entry_id: str) -> DeviceInfo:
@@ -115,7 +138,7 @@ class _PortfolioFigure(TolerantEntity[PortfolioCoordinator], SensorEntity):
 
     Unavailable once a failure is confirmed (tolerance.py), not at the first
     failed update, and before the first answer. Unavailable too while the
-    figure waits (PortfolioData.waiting names it by `_key`): the answers no
+    figure waits (PortfolioData.waiting names it by `_watch`, else `_key`): the answers no
     longer list the entry it depends on, and too few of them confirm that
     yet (PortfolioCoordinator) -- a glitch at Bitpanda then leaves a gap in
     its history, never a false 0. When the answer arrived but the figure
@@ -126,10 +149,13 @@ class _PortfolioFigure(TolerantEntity[PortfolioCoordinator], SensorEntity):
     """
 
     _attr_has_entity_name = True
-    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_device_class: SensorDeviceClass | None = SensorDeviceClass.MONETARY
     _attr_state_class = SensorStateClass.TOTAL
     _attr_suggested_display_precision = 2
     _key: str
+    # The figure (PORTFOLIO_FIGURES) whose wait this sensor shows, when it is
+    # not its own key.
+    _watch: str | None = None
     _attr_translation_key: str
 
     def __init__(
@@ -152,7 +178,8 @@ class _PortfolioFigure(TolerantEntity[PortfolioCoordinator], SensorEntity):
     @property
     def available(self) -> bool:
         data: PortfolioData | None = self.coordinator.data
-        return super().available and data is not None and self._key not in data.waiting
+        watch = self._watch or self._key
+        return super().available and data is not None and watch not in data.waiting
 
 
 class PortfolioTotalSensor(_PortfolioFigure):
@@ -199,6 +226,165 @@ class PortfolioCashPlusSensor(_PortfolioFigure):
         return data.cash_plus_amounts or {}
 
 
+class _PortfolioPositionsFigure(_PortfolioFigure):
+    """A figure of all positions together -- every holding but Cash Plus:
+    the wallets, and a held asset the catalogue does not list
+    (PortfolioData.positions). It waits on the positions: an answer that no
+    longer lists one makes it unavailable, not 0, until that is confirmed.
+    Unknown while a position cannot be told, or lacks its value or its
+    invested amount. Its attribute `wallets` counts the positions summed."""
+
+    _watch = "positions"
+
+    def _totals(self, data: PortfolioData) -> PositionTotals | None:
+        positions = data.positions
+        return None if positions is None else position_totals(positions.values())
+
+    def _of(self, totals: PositionTotals) -> float | None:
+        raise NotImplementedError
+
+    def _figure(self, data: PortfolioData) -> float | None:
+        totals = self._totals(data)
+        return None if totals is None else self._of(totals)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self.coordinator.data
+        totals = None if data is None else self._totals(data)
+        if totals is None or self._of(totals) is None:
+            return {}
+        return {"wallets": totals.count}
+
+
+class PortfolioInvestedSensor(_PortfolioPositionsFigure):
+    """What went into the positions, as Bitpanda reports each one's."""
+
+    _key = "invested"
+    _attr_translation_key = "invested"
+
+    def _of(self, totals: PositionTotals) -> float | None:
+        return totals.invested
+
+
+class PortfolioTotalReturnSensor(_PortfolioPositionsFigure):
+    """What the positions are worth beyond what went into them: open
+    positions only -- /portfolio lists nothing sold."""
+
+    _key = "total_return"
+    _attr_translation_key = "total_return"
+
+    def _of(self, totals: PositionTotals) -> float | None:
+        return totals.total_return
+
+
+class PortfolioTotalReturnPercentSensor(_PortfolioPositionsFigure):
+    """The total return over what was invested, in percent; unknown unless
+    something was invested."""
+
+    _key = "total_return_percent"
+    _attr_translation_key = "total_return_percent"
+    _attr_device_class = None
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self, coordinator: PortfolioCoordinator, entry_id: str, currency: str
+    ) -> None:
+        super().__init__(coordinator, entry_id, currency)
+        self._attr_native_unit_of_measurement = PERCENTAGE
+
+    def _of(self, totals: PositionTotals) -> float | None:
+        return totals.total_return_percent
+
+
+class PortfolioClassSensor(_PortfolioFigure):
+    """The value of one wallet group's wallets together, on the Portfolio
+    device; it exists while its group does (PortfolioEntityManager).
+
+    `members` gives the assets whose wallets the manager tracks in the
+    group, or None while it tracks none of them. The sum is over those held
+    now: a wallet waiting out its misses is left out. The manager settles
+    the members after a portfolio update, which may reach this sensor first:
+    `reconciled` subscribes it to every reconcile, once the wallets are
+    settled, so that a wallet bought since counts with the update that
+    brings it. Unavailable while none
+    is held -- the group's wallets all wait out their misses, or the group
+    holds only a wallet registered before a restart and not tracked since --
+    never a false 0; and with Total value, whose wait it shares. Unknown in
+    doubt (PortfolioData.in_doubt: an entry that cannot be read, or a
+    holding not classified yet, might belong to any group) and while a
+    wallet's value is unknown. Its attributes, absent while it is unknown:
+    the share of Total value, what went into the wallets and their return
+    (absent while one lacks its invested amount), and how many they are.
+    """
+
+    _watch = "total"
+
+    def __init__(
+        self,
+        coordinator: PortfolioCoordinator,
+        entry_id: str,
+        currency: str,
+        category: str,
+        members: Callable[[], list[str] | None],
+        reconciled: Callable[[CALLBACK_TYPE], CALLBACK_TYPE] | None = None,
+    ) -> None:
+        self._key = class_key(category)
+        self._attr_translation_key = self._key
+        self._members = members
+        self._reconciled = reconciled
+        super().__init__(coordinator, entry_id, currency)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self._reconciled is not None:
+            self.async_on_remove(self._reconciled(self.async_write_ha_state))
+
+    def _holdings(self, data: PortfolioData) -> list[Holding] | None:
+        """The held members' holdings; None while no member is held."""
+        members = self._members() or []
+        holdings = [data.holdings[asset_id] for asset_id in members if asset_id in data.holdings]
+        return holdings or None
+
+    def _figure(self, data: PortfolioData) -> float | None:
+        holdings = None if data.in_doubt else self._holdings(data)
+        if holdings is None:
+            return None
+        values = [holding.value for holding in holdings]
+        if None in values:
+            return None
+        return round(sum(cast(list[float], values), 0.0), DECIMALS)
+
+    @property
+    def available(self) -> bool:
+        data: PortfolioData | None = self.coordinator.data
+        if not super().available or data is None:
+            return False
+        members = self._members()
+        return members is not None and not data.held.isdisjoint(members)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data: PortfolioData | None = self.coordinator.data
+        value = None if data is None else self._figure(data)
+        if data is None or value is None:
+            return {}
+        # Known: _figure found held members.
+        holdings = cast(list[Holding], self._holdings(data))
+        attrs: dict[str, Any] = {}
+        total = None if "total" in data.waiting else data.total
+        share = share_percent(value, total)
+        if share is not None:
+            attrs["share_percent"] = share
+        totals = position_totals(holdings)
+        if totals is not None:
+            attrs["invested_amount"] = totals.invested
+            attrs["total_return"] = totals.total_return
+            if totals.total_return_percent is not None:
+                attrs["total_return_percent"] = totals.total_return_percent
+        attrs["wallets"] = len(holdings)
+        return attrs
+
+
 class PortfolioReturnSensor(TolerantEntity[HistoryCoordinator], SensorEntity):
     """The portfolio's return over one timeframe, in percent.
 
@@ -206,6 +392,11 @@ class PortfolioReturnSensor(TolerantEntity[HistoryCoordinator], SensorEntity):
     request: the history update's (tolerance.py) or this timeframe's own
     (PortfolioReturns.failed) -- at once when there is no last return to
     show. Unknown when Bitpanda answered for it without a usable figure.
+
+    Its attribute `return_amount` is what the percentage means in money on
+    today's total value (portfolio_model.return_amount), absent while the
+    total value is not known; it listens to the portfolio too, so the amount
+    follows a new total value.
     """
 
     _attr_has_entity_name = True
@@ -214,15 +405,27 @@ class PortfolioReturnSensor(TolerantEntity[HistoryCoordinator], SensorEntity):
     _attr_suggested_display_precision = 2
 
     def __init__(
-        self, coordinator: HistoryCoordinator, entry_id: str, timeframe: str
+        self,
+        coordinator: HistoryCoordinator,
+        entry_id: str,
+        timeframe: str,
+        portfolio: PortfolioCoordinator | None = None,
     ) -> None:
         super().__init__(coordinator)
         key = return_key(timeframe)
         self._timeframe = timeframe
+        self._portfolio = portfolio
         self._attr_translation_key = key
         self._attr_unique_id = portfolio_unique_id(entry_id, key)
         self.entity_id = portfolio_entity_id(key)
         self._attr_device_info = portfolio_device_info(entry_id)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self._portfolio is not None:
+            self.async_on_remove(
+                self._portfolio.async_add_listener(self._handle_coordinator_update, None)
+            )
 
     @property
     def native_value(self) -> float | None:
@@ -234,22 +437,19 @@ class PortfolioReturnSensor(TolerantEntity[HistoryCoordinator], SensorEntity):
         data: PortfolioReturns | None = self.coordinator.data
         return super().available and data is not None and self._timeframe not in data.failed
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        portfolio = self._portfolio
+        data: PortfolioData | None = None if portfolio is None else portfolio.data
+        if portfolio is None or data is None or not portfolio.data_available:
+            return {}
+        if "total" in data.waiting:
+            return {}
+        amount = return_amount(data.total, self.native_value)
+        return {} if amount is None else {"return_amount": amount}
+
 
 # --- Wallet devices -----------------------------------------------------------------
-
-
-def _performance(holding: Holding) -> dict[str, float]:
-    """The position performance Bitpanda computes for the whole position."""
-    out: dict[str, float] = {}
-    for key, value in (
-        ("average_buy_price", holding.avg_buy_price),
-        ("invested_amount", holding.invested),
-        ("total_return", holding.total_return),
-        ("total_return_percent", holding.total_return_pct),
-    ):
-        if value is not None:
-            out[key] = round(value, DECIMALS)
-    return out
 
 
 class _WalletPart(TolerantEntity[PortfolioCoordinator], SensorEntity):
@@ -272,12 +472,22 @@ class _WalletPart(TolerantEntity[PortfolioCoordinator], SensorEntity):
         entry_id: str,
         currency: str,
         asset: dict[str, Any],
+        prices: WalletPrices | None = None,
     ) -> None:
         super().__init__(coordinator)
         self._asset = asset
         self._asset_id = asset["id"]
+        self._prices = prices
         self._attr_native_unit_of_measurement = currency
         self._attr_device_info = wallet_device_info(entry_id, asset)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        # The price arrives after the portfolio's figures (WalletPrices).
+        if self._prices is not None:
+            self.async_on_remove(
+                self._prices.async_listen(self._asset_id, self.async_write_ha_state)
+            )
 
     @property
     def _holding(self) -> Holding | None:
@@ -304,6 +514,13 @@ class _WalletPart(TolerantEntity[PortfolioCoordinator], SensorEntity):
         cannot be told is unknown."""
         data: PortfolioData | None = self.coordinator.data
         return super().available and data is not None and self._asset_id in data.held
+
+    def _price(self) -> float | None:
+        """One unit's worth: the ticker's price of the last 15 minutes
+        (WalletPrices), else none -- never the value over the units, which
+        /portfolio gives in cents and which would mix with the ticker's in
+        the 24-hour figures."""
+        return None if self._prices is None else self._prices.price_of(self._asset_id)
 
     def _attributes(self) -> dict[str, Any]:
         attrs: dict[str, Any] = asset_attributes(self._asset)
@@ -358,8 +575,9 @@ class StakingSensor(_WalletPart):
         entry_id: str,
         currency: str,
         asset: dict[str, Any],
+        prices: WalletPrices | None = None,
     ) -> None:
-        super().__init__(coordinator, entry_id, currency, asset)
+        super().__init__(coordinator, entry_id, currency, asset, prices)
         self._earn = earn
         self._rewards = rewards
         self._attr_unique_id = staking_unique_id(entry_id, asset["id"])
@@ -389,6 +607,13 @@ class StakingSensor(_WalletPart):
         if apr is not None:
             # The API reports a fraction: 0.0544 means 5.44 %.
             attrs["apr_percent"] = round(apr * 100, DECIMALS)
+        product = earn.products.get(self._asset_id) if earn is not None else None
+        if product is not None:
+            if (kind := _EARN_TYPES.get(product.type or "")) is not None:
+                attrs["earn_type"] = kind
+            if (mode := _EARN_MODES.get(product.mode or "")) is not None:
+                attrs["earn_mode"] = mode
+            attrs["earn_sold_out"] = product.sold_out
         # After a failed refresh `data` still holds the last complete totals;
         # a listing that could not be paged completely never replaces them.
         # Gross, fee and net are units of the asset; `count` counts payouts.
@@ -398,23 +623,39 @@ class StakingSensor(_WalletPart):
             attrs["rewards_fee"] = rewards.fee
             attrs["rewards_net"] = rewards.net
             # What the net units are worth today, in the Portfolio currency,
-            # at the price this /portfolio answer implies -- as the Bitpanda
-            # app shows it. Never their value when paid out: no endpoint
-            # prices a past date.
+            # at the wallet's price (the ticker's, as `price` on Balance
+            # (total)) -- as the Bitpanda app shows it. Never their value when
+            # paid out: no endpoint prices a past date.
             holding = self._holding
-            price = None if holding is None else holding.price
+            price = None if holding is None else self._price()
             if price is not None:
                 attrs["rewards_net_value"] = round(rewards.net * price, 2)
             attrs["rewards_count"] = rewards.count
             attrs["rewards_last_at"] = rewards.last_at
+            # The window moves with every state write -- each portfolio
+            # refresh and each price: no timer.
+            recent = rewards_since(rewards.payouts, dt_util.utcnow() - RECENT_REWARDS)
+            attrs["rewards_net_30d"] = recent
+            if price is not None:
+                attrs["rewards_net_value_30d"] = round(recent * price, 2)
+            last = last_payout_net(rewards)
+            if last is not None:
+                attrs["rewards_last_net"] = last
+                if price is not None:
+                    attrs["rewards_last_value"] = round(last * price, 2)
         return attrs
 
 
 class WalletTotalSensor(_WalletPart):
-    """Value of the whole position, with its performance.
+    """Value of the whole position, with its performance, the asset's price
+    and the price's change over 24 hours.
 
     Every wallet has one for as long as the wallet exists, staking or not:
-    the performance stays on this sensor when staking starts or stops.
+    the performance stays on this sensor when staking starts or stops. The
+    price of 24 hours ago comes from `day_ago` (day_ago.py), which every
+    Balance (total) of the entry joins; the next refresh publishes it. The
+    position's share of Total value is absent while either is unknown, and
+    while Total value waits or is not above 0.
     """
 
     _attr_translation_key = "wallet_total"
@@ -425,10 +666,24 @@ class WalletTotalSensor(_WalletPart):
         entry_id: str,
         currency: str,
         asset: dict[str, Any],
+        day_ago: DayAgoPrices | None = None,
+        prices: WalletPrices | None = None,
     ) -> None:
-        super().__init__(coordinator, entry_id, currency, asset)
+        super().__init__(coordinator, entry_id, currency, asset, prices)
         self._attr_unique_id = total_unique_id(entry_id, asset["id"])
         self.entity_id = total_entity_id(asset)
+        self._day_ago = day_ago
+        self._price_24h_ago: float | None = None
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self._day_ago is not None:
+            # Kept by asset for the actions too (services.py).
+            self.async_on_remove(self._day_ago.join(self, self._asset_id))
+
+    def set_price_24h_ago(self, value: float | None) -> None:
+        """The price of 24 hours ago (DayAgoPrices); None: none known."""
+        self._price_24h_ago = value
 
     def _value(self, holding: Holding) -> float | None:
         return holding.value
@@ -440,8 +695,23 @@ class WalletTotalSensor(_WalletPart):
     def extra_state_attributes(self) -> dict[str, Any]:
         attrs = self._attributes()
         holding = self._holding
-        if holding is not None:
-            attrs.update(_performance(holding))
+        if holding is None:
+            return attrs
+        price = self._price()
+        if price is not None:
+            attrs["price"] = significant(price)
+        attrs.update(performance(holding))
+        data: PortfolioData = self.coordinator.data
+        if "total" not in data.waiting:
+            share = share_percent(holding.value, data.total)
+            if share is not None:
+                attrs["portfolio_share_percent"] = share
+        then = self._price_24h_ago
+        day = change_24h(price, then, holding.balance)
+        if day is not None:
+            # What the price's change made of today's units.
+            attrs["price_24h_ago"] = significant(cast(float, then))
+            attrs["change_24h_pct"], attrs["return_24h"] = day
         return attrs
 
 
@@ -466,8 +736,9 @@ class PortfolioEntityManager:
     migrated from version 1 whose asset is no longer held included. At the
     regular pace the third miss removes it; refreshes by hand count, but
     never remove it sooner. Only unique_ids that name an asset UUID are ever
-    removed (naming.managed_asset_key): a legacy wallet the migration could
-    not resolve is left for the user.
+    removed (naming.managed_asset_key), and the value sensors of groups
+    that are gone: a legacy wallet the migration could not resolve is left
+    for the user.
 
     A wallet's Wallet and Total sensors come and go with the wallet. Its
     Staking sensor follows portfolio_model.staking_applies: added while it
@@ -484,6 +755,15 @@ class PortfolioEntityManager:
     back the wallets of assets still held, in a new group and under the same
     entity IDs, without reloading the entry.
 
+    Each group has a sensor of its value on the Portfolio device
+    (PortfolioClassSensor), outside every group: decided at the end of every
+    successful refresh, once the groups are settled -- added while the
+    group exists, its registry entry removed once the group is gone. A
+    group deleted by the user comes back within the same refresh, so its
+    sensor stays. Added once per group and run, it stays as the user left
+    it -- disabled, say -- and comes back after a restart under the same
+    registry entry.
+
     With an announcer, a wallet it creates for an asset the Portfolio does
     not know (portfolio_store.py) is marked as new, with the category of the
     group it goes into, before its sensors go to Home Assistant: the
@@ -499,6 +779,11 @@ class PortfolioEntityManager:
     a restart or reload in between included. It leaves the list once its
     wallet went -- removed after the misses, deleted by the user, gone with
     its group or with a currency change -- so that buying it again is news.
+    A refresh whose answer lists nothing at all, no asset and no fiat, cuts
+    nothing, and an asset whose wallet such a refresh removes leaves the list
+    only once answers that list something confirm it missing, as a wallet's
+    misses are confirmed: wallets coming back after Bitpanda answered empty
+    are no news, even when the first answer back lists only part of them.
     """
 
     def __init__(
@@ -508,9 +793,11 @@ class PortfolioEntityManager:
         runtime: PortfolioRuntime,
         currency: str,
         add_entities: AddConfigEntryEntitiesCallback,
-        announcer: WalletAnnouncer | None = None,
+        announcer: WalletAnnouncer,
+        day_ago: DayAgoPrices | None = None,
     ) -> None:
         self._hass = hass
+        self._day_ago = day_ago
         self._entry = entry
         self._runtime = runtime
         self._currency = currency
@@ -520,8 +807,17 @@ class PortfolioEntityManager:
         self._wallets: dict[str, str] = {}
         # The assets whose Staking sensor this manager has added.
         self._staking: set[str] = set()
+        # The categories whose value sensor this manager has added.
+        self._classes: set[str] = set()
+        # What runs once a successful reconcile has settled the wallets: the
+        # value sensors' state writes (PortfolioClassSensor).
+        self._on_reconciled: list[CALLBACK_TYPE] = []
         # Asset id -> its misses in a row, and when the first was asked for.
         self._misses: dict[str, tuple[int, datetime]] = {}
+        # The assets whose wallet went while Bitpanda listed nothing at all:
+        # known until answers that list something confirm them missing --
+        # their misses in a row since, and when the first was asked for.
+        self._gone_while_empty: dict[str, tuple[int, datetime] | None] = {}
 
     def _registered(self) -> dict[str, set[str]]:
         """Asset id -> the kinds ("wallet", "staking", "total") registered for it."""
@@ -567,9 +863,7 @@ class PortfolioEntityManager:
                 ent_reg.async_remove(entity_id)
         if device:
             dev_reg = dr.async_get(self._hass)
-            found = find_entry_device(
-                dev_reg, entry_id, wallet_device_identifier(entry_id, asset_id)
-            )
+            found = find_wallet_device(dev_reg, entry_id, asset_id)
             if found is not None:
                 dev_reg.async_remove_device(found.id)
 
@@ -580,7 +874,7 @@ class PortfolioEntityManager:
         if not portfolio.last_update_success or data is None:
             return
         announcer = self._announcer
-        if announcer is not None and announcer.known.first_run:
+        if announcer.known.first_run:
             # No list yet -- a new setup, an upgrade, an update from a version
             # without it: the wallets found now are no news, and neither is a
             # wallet still registered -- a sold asset's waiting out its misses,
@@ -603,17 +897,23 @@ class PortfolioEntityManager:
                 # A wallet registered in a group stays in it, whatever its
                 # asset's category says now. Moving its device to another
                 # group would list it in both on Home Assistant 2025.5;
-                # 2026.9 warns about such a move, and 2027.8 will refuse it.
+                # newer releases warn about such a move, and 2027.8 will
+                # refuse it.
                 sits_in = self._registered_category(asset_id)
                 category = asset_category(asset) if sits_in is None else sits_in
                 self._wallets[asset_id] = category
                 # Before its sensors go to Home Assistant, which creates the
                 # wallet's device -- and so announces the wallet -- as it
                 # takes in the first of them, within this refresh.
-                if announcer is not None and asset_id not in announcer.known:
+                if asset_id not in announcer.known:
                     announcer.mark(asset, category)
                 entities.append(WalletSensor(portfolio, entry_id, self._currency, asset))
-                entities.append(WalletTotalSensor(portfolio, entry_id, self._currency, asset))
+                entities.append(
+                    WalletTotalSensor(
+                        portfolio, entry_id, self._currency, asset, self._day_ago,
+                        self._runtime.prices,
+                    )
+                )
             applies = staking_applies(data.holdings[asset_id], earn)
             kinds = registered.get(asset_id, set())
             wanted = applies is True or (applies is None and "staking" in kinds)
@@ -622,7 +922,7 @@ class PortfolioEntityManager:
                 entities.append(
                     StakingSensor(
                         portfolio, self._runtime.earn, self._runtime.rewards,
-                        entry_id, self._currency, asset,
+                        entry_id, self._currency, asset, self._runtime.prices,
                     )
                 )
             elif applies is False and (asset_id in self._staking or "staking" in kinds):
@@ -648,6 +948,19 @@ class PortfolioEntityManager:
             self._wallets.pop(asset_id, None)
             self._staking.discard(asset_id)
             self._remove(asset_id, ("wallet", "staking", "total"), device=True)
+            if not data.listed_any:
+                self._gone_while_empty[asset_id] = None
+        if data.listed_any:
+            for asset_id, seen in list(self._gone_while_empty.items()):
+                if asset_id in held:
+                    del self._gone_while_empty[asset_id]
+                    continue
+                misses, since = (0, asked_at) if seen is None else seen
+                misses += 1
+                if confirmed(misses, since, asked_at):
+                    del self._gone_while_empty[asset_id]
+                else:
+                    self._gone_while_empty[asset_id] = (misses, since)
 
         # One call per group: the group must exist before its sensors are
         # added, and the registry files each sensor and its device under it --
@@ -658,15 +971,27 @@ class PortfolioEntityManager:
             )
             self._add_entities(entities, config_subentry_id=group.subentry_id)
         self._remove_empty_groups()
-        if announcer is not None:
+        # The members are settled: the value sensors write their state again
+        # -- before a gone group's sensor leaves the registry.
+        for update in list(self._on_reconciled):
+            update()
+        self._reconcile_classes()
+        if data.listed_any:
             # A held asset stays known, and so does a sold one whose wallet
             # still exists: tracked here while it waits out its misses, or
             # registered from before a restart or reload, which this manager
             # tracks only once it is held again. The registry is read afresh:
             # a wallet removed above, after its misses, counts no more. Any
             # other asset has no wallet left, and buying it again is news.
+            # An answer that lists nothing at all, not even cash, cuts
+            # nothing: its wallets go all the same, but listed again they
+            # are no news -- and stay known until answers that list
+            # something confirm them missing (_gone_while_empty).
             announcer.known.keep_only(
-                data.held | set(self._wallets) | set(self._registered())
+                data.held
+                | set(self._wallets)
+                | set(self._registered())
+                | set(self._gone_while_empty)
             )
 
     def _forget_wallets_without_group(self) -> None:
@@ -678,6 +1003,44 @@ class PortfolioEntityManager:
                 del self._wallets[asset_id]
                 self._staking.discard(asset_id)
                 self._misses.pop(asset_id, None)
+
+    def _listen_reconciled(self, update: CALLBACK_TYPE) -> CALLBACK_TYPE:
+        """Run `update` once every successful reconcile has settled the
+        wallets, until the returned callback is called."""
+        self._on_reconciled.append(update)
+        return lambda: self._on_reconciled.remove(update)
+
+    def _members(self, category: str) -> list[str] | None:
+        """The assets whose wallets this manager tracks in the group of
+        `category`; None while it tracks none of them."""
+        return [asset_id for asset_id, sits_in in self._wallets.items() if sits_in == category] or None
+
+    def _reconcile_classes(self) -> None:
+        """A value sensor for every wallet group, none for a group that is
+        gone: only the categories ASSET_CATEGORIES names count."""
+        entry_id = self._entry.entry_id
+        groups = {group.unique_id for group in groups_of_type(self._entry, SUBENTRY_TYPE_WALLET_GROUP)}
+        ent_reg = er.async_get(self._hass)
+        new: list[SensorEntity] = []
+        for category in ASSET_CATEGORIES:
+            if category in groups:
+                if category not in self._classes:
+                    self._classes.add(category)
+                    new.append(
+                        PortfolioClassSensor(
+                            self._runtime.portfolio, entry_id, self._currency, category,
+                            partial(self._members, category), self._listen_reconciled,
+                        )
+                    )
+                continue
+            self._classes.discard(category)
+            entity_id = ent_reg.async_get_entity_id(
+                "sensor", DOMAIN, portfolio_unique_id(entry_id, class_key(category))
+            )
+            if entity_id is not None:
+                ent_reg.async_remove(entity_id)
+        if new:
+            self._add_entities(new)
 
     def _remove_empty_groups(self) -> None:
         """Remove every wallet group that no tracked wallet belongs to and
@@ -697,17 +1060,23 @@ class PortfolioEntityManager:
 
 @callback
 def _keep_polling() -> None:
-    """No-op listener that keeps the Earn coordinator's periodic refresh alive.
+    """No-op listener that keeps a coordinator's periodic refresh alive.
 
     DataUpdateCoordinator only schedules its next refresh while it has at
-    least one listener, and stops once the last one unsubscribes. The Earn
-    coordinator's only other listeners are StakingSensors, so an entry with
-    none registered -- nothing staked and nothing offered, or the last
-    Staking sensor was just removed -- would freeze its catalogue forever at
-    whatever the first refresh returned (or at `None` if that one failed),
-    even though the manager reads it on every portfolio refresh: an Earn
-    product offered later gives a wallet its Staking sensor even with
+    least one listener, and stops once the last one unsubscribes.
+
+    The Earn coordinator's only other listeners are StakingSensors, so an
+    entry with none registered -- nothing staked and nothing offered, or the
+    last Staking sensor was just removed -- would freeze its catalogue
+    forever at whatever the first refresh returned (or at `None` if that one
+    failed), even though the manager reads it on every portfolio refresh: an
+    Earn product offered later gives a wallet its Staking sensor even with
     nothing staked yet.
+
+    The history coordinator's only other listeners are the five return
+    sensors, so with all of them disabled the Portfolio card's line, which
+    the card asks for through `bitpanda/portfolio_history` (cards.py), would
+    freeze at its setup-time answer.
     """
 
 
@@ -717,8 +1086,7 @@ async def async_setup_portfolio_entities(
     add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """The Portfolio device's sensors, outside every group, then the wallets
-    the manager keeps current in their groups -- announcing the new ones
-    wherever setup loaded the list of known wallets."""
+    the manager keeps current in their groups -- announcing the new ones."""
     runtime: PortfolioRuntime = entry.runtime_data
     currency = entry.data[CONF_CURRENCY]
     add_entities(
@@ -726,20 +1094,28 @@ async def async_setup_portfolio_entities(
             PortfolioTotalSensor(runtime.portfolio, entry.entry_id, currency),
             PortfolioCashSensor(runtime.portfolio, entry.entry_id, currency),
             PortfolioCashPlusSensor(runtime.portfolio, entry.entry_id, currency),
+            PortfolioInvestedSensor(runtime.portfolio, entry.entry_id, currency),
+            PortfolioTotalReturnSensor(runtime.portfolio, entry.entry_id, currency),
+            PortfolioTotalReturnPercentSensor(runtime.portfolio, entry.entry_id, currency),
             *(
-                PortfolioReturnSensor(runtime.history, entry.entry_id, timeframe)
+                PortfolioReturnSensor(
+                    runtime.history, entry.entry_id, timeframe, runtime.portfolio
+                )
                 for timeframe in PORTFOLIO_TIMEFRAMES
             ),
         ]
     )
-    known = runtime.known_wallets
-    announcer = (
-        None if known is None else WalletAnnouncer(hass, entry, known, runtime.group_titles)
+    announcer = WalletAnnouncer(
+        hass, entry, runtime.known_wallets, runtime.group_titles, runtime.ready, runtime.portfolio
     )
-    if announcer is not None:
-        # Before the first reconcile, which may create a new wallet's device.
-        entry.async_on_unload(announcer.async_listen_for_wallet_devices())
-    manager = PortfolioEntityManager(hass, entry, runtime, currency, add_entities, announcer)
+    # Before the first reconcile, which may create a new wallet's device.
+    entry.async_on_unload(announcer.async_listen_for_wallet_devices())
+    # The 24-hour references of every wallet's Balance (total), one lookup
+    # for all of them.
+    day_ago = runtime.day_ago = DayAgoPrices(hass, async_wallet_prices_24h_ago)
+    manager = PortfolioEntityManager(
+        hass, entry, runtime, currency, add_entities, announcer, day_ago
+    )
     manager.async_reconcile()
     entry.async_on_unload(runtime.portfolio.async_add_listener(manager.async_reconcile))
     # Keep Earn polling even without a Staking sensor around (see
@@ -748,3 +1124,9 @@ async def async_setup_portfolio_entities(
     # remove a holding after fewer than WALLET_REMOVAL_MISSES portfolio
     # refreshes.
     entry.async_on_unload(runtime.earn.async_add_listener(_keep_polling))
+    # And the value history, for the Portfolio card's line.
+    entry.async_on_unload(runtime.history.async_add_listener(_keep_polling))
+    # And the ECB rates of a Portfolio outside EUR, which nothing else
+    # listens to (portfolio_coordinator.WalletPrices reads them).
+    if runtime.ecb is not None:
+        entry.async_on_unload(runtime.ecb.async_add_listener(_keep_polling))

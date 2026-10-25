@@ -1,4 +1,5 @@
 """Tests for the Portfolio service coordinators."""
+import asyncio
 from datetime import timedelta
 import logging
 
@@ -15,11 +16,15 @@ from custom_components.bitpanda.const import (
     PORTFOLIO_UPDATE_INTERVAL,
     WALLET_REMOVAL_MISSES,
 )
+from custom_components.bitpanda.ecb import EcbRates
 from custom_components.bitpanda.portfolio_coordinator import (
     EarnCoordinator,
     PortfolioCoordinator,
+    WalletPrices,
 )
-from custom_components.bitpanda.portfolio_model import EarnData
+from custom_components.bitpanda.portfolio_model import EarnData, EarnProduct
+
+from tests.conftest import async_settle
 
 VSN = "1f051b7c-5980-6dda-9d3d-cf107d8d4bfb"
 EUR_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
@@ -80,6 +85,30 @@ class _EarnClient:
 # coordinator, with neither.
 
 
+class _TickerClient:
+    """Bitpanda's public ticker: a price per asset id, or the error to
+    raise for it; `asked` lists the ids asked for, in order."""
+
+    def __init__(self, prices=None, errors=None):
+        self.prices = prices or {}
+        self.errors = errors or {}
+        self.asked: list[str] = []
+
+    async def async_get_ticker(self, asset_id):
+        self.asked.append(asset_id)
+        error = self.errors.get(asset_id)
+        if error is not None:
+            raise error
+        return {"asset_id": asset_id, "price": self.prices[asset_id]}
+
+
+class _Ecb:
+    """The ECB rates as the coordinator holds them; None before the first."""
+
+    def __init__(self, rates=None):
+        self.data = None if rates is None else EcbRates(date="2026-10-15", rates=rates)
+
+
 def _entry(hass) -> MockConfigEntry:
     entry = MockConfigEntry(domain=DOMAIN, version=3, data={"entry_type": "portfolio"})
     entry.add_to_hass(hass)
@@ -104,6 +133,186 @@ async def test_portfolio_update_requests_the_portfolio_currency_and_names_holdin
     assert data.assets == {VSN: _VSN_RECORD}
     assert data.cash == 5.0
     assert data.wallet_ids == [VSN]
+
+
+_BTC = "b86c034b-efe3-11eb-b56f-0691764446a7"
+
+
+async def test_the_portfolio_refresh_asks_no_ticker(hass):
+    """The figures never wait for a price: the refresh asks /portfolio
+    alone -- this fake client has no ticker to ask."""
+    data = await _coordinator(hass, _Client(_ENTRIES))._async_update_data()
+    assert data.holdings[VSN].value == 20.0
+
+
+async def test_no_price_before_the_first_round(hass):
+    assert WalletPrices(hass, _TickerClient({VSN: "0.03727184"}), "EUR", None).price_of(VSN) is None
+
+
+async def test_a_round_publishes_each_price_as_it_arrives(hass):
+    """Each wallet hears of its price once its own request answered, before
+    the next asset is asked."""
+    tickers = _TickerClient({VSN: "0.03727184", _BTC: "60000.00000000"})
+    prices = WalletPrices(hass, tickers, "EUR", None)
+    seen = []
+    for asset_id in (VSN, _BTC):
+        prices.async_listen(
+            asset_id, lambda asset_id=asset_id: seen.append((asset_id, list(tickers.asked), prices.price_of(asset_id)))
+        )
+    await prices.async_round([VSN, _BTC])
+    assert seen == [(VSN, [VSN], 0.03727184), (_BTC, [VSN, _BTC], 60000.0)]
+
+
+async def test_a_round_asked_for_during_one_follows_it(hass):
+    """Never two rounds at once: rounds asked for meanwhile become one that
+    starts when the one under way ends."""
+    gate = asyncio.Event()
+
+    class _Held(_TickerClient):
+        async def async_get_ticker(self, asset_id):
+            self.asked.append(asset_id)
+            await gate.wait()
+            return {"asset_id": asset_id, "price": "1.00000000"}
+
+    tickers = _Held()
+    prices = WalletPrices(hass, tickers, "EUR", None)
+    prices.async_request_round([VSN])
+    await async_settle()
+    prices.async_request_round([VSN, _BTC])
+    prices.async_request_round([VSN, _BTC])
+    await async_settle()
+    assert tickers.asked == [VSN]
+    gate.set()
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert tickers.asked == [VSN, VSN, _BTC]
+
+
+async def test_a_price_is_kept_for_15_minutes_then_dropped(hass, freezer):
+    """A failed request keeps the last ticker price while it is at most 15
+    minutes old; then the wallet has none."""
+    tickers = _TickerClient({VSN: "0.03727184"})
+    prices = WalletPrices(hass, tickers, "EUR", None)
+    await prices.async_round([VSN])
+    tickers.errors[VSN] = _failure("timeout")
+    freezer.tick(timedelta(minutes=14))
+    await prices.async_round([VSN])
+    assert prices.price_of(VSN) == 0.03727184
+    freezer.tick(timedelta(minutes=2))
+    assert prices.price_of(VSN) is None
+
+
+async def test_a_price_missing_for_15_minutes_is_warned_about_once(hass, freezer, caplog):
+    """A wallet whose ticker gives no price for more than 15 minutes -- since
+    its last price, or since it was first asked -- shows none: one warning,
+    then quiet until the price is back, which is logged once at INFO."""
+    tickers = _TickerClient({VSN: "0.03727184", _BTC: "60000.00000000"})
+    prices = WalletPrices(hass, tickers, "EUR", None)
+    await prices.async_round([VSN, _BTC])
+    tickers.errors[VSN] = _failure("http_status")
+    with caplog.at_level(logging.INFO, logger="custom_components.bitpanda"):
+        for _ in range(2):
+            freezer.tick(timedelta(minutes=5, seconds=1))
+            await prices.async_round([VSN, _BTC])
+        assert [r.levelno for r in caplog.records if VSN in r.getMessage()] == []
+        freezer.tick(timedelta(minutes=5))
+        await prices.async_round([VSN, _BTC])
+        freezer.tick(timedelta(minutes=5))
+        await prices.async_round([VSN, _BTC])
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1 and VSN in warnings[0].getMessage()
+        del tickers.errors[VSN]
+        freezer.tick(timedelta(minutes=5))
+        await prices.async_round([VSN, _BTC])
+        back = [r for r in caplog.records if r.levelno == logging.INFO and VSN in r.getMessage()]
+        assert len(back) == 1
+    assert prices.price_of(VSN) == 0.03727184
+
+
+async def test_a_wallet_never_priced_is_warned_about_after_15_minutes(hass, freezer, caplog):
+    tickers = _TickerClient(errors={VSN: _failure("http_status")})
+    prices = WalletPrices(hass, tickers, "EUR", None)
+    with caplog.at_level(logging.WARNING, logger="custom_components.bitpanda"):
+        await prices.async_round([VSN])
+        freezer.tick(timedelta(minutes=14))
+        await prices.async_round([VSN])
+        assert caplog.records == []
+        freezer.tick(timedelta(minutes=2))
+        await prices.async_round([VSN])
+        assert len(caplog.records) == 1
+
+
+async def test_a_portfolio_in_another_currency_converts_with_the_ecb_rate(hass):
+    prices = WalletPrices(hass, _TickerClient({VSN: "0.03727184"}), "CHF", _Ecb({"CHF": 0.93}))
+    await prices.async_round([VSN])
+    assert prices.price_of(VSN) == round(0.03727184 * 0.93, 8)
+
+
+@pytest.mark.parametrize("ecb", [None, _Ecb(), _Ecb({"USD": 1.16})], ids=["no ecb", "no rates yet", "no chf"])
+async def test_without_a_rate_there_is_no_ticker_price(hass, ecb):
+    """Never an EUR price shown as CHF: no rate, no ticker price -- and no
+    request at all."""
+    tickers = _TickerClient({VSN: "0.03727184"})
+    prices = WalletPrices(hass, tickers, "CHF", ecb)
+    await prices.async_round([VSN])
+    assert prices.price_of(VSN) is None
+    assert tickers.asked == []
+
+
+async def test_a_failing_ticker_leaves_only_that_asset_without_a_price(hass):
+    tickers = _TickerClient(
+        {_BTC: "60000.00000000", "x": "not a number"},
+        {VSN: BitpandaApiError("404", kind="http_status", path=f"/tickers/{VSN}")},
+    )
+    prices = WalletPrices(hass, tickers, "EUR", None)
+    await prices.async_round([VSN, "x", _BTC])
+    assert tickers.asked == [VSN, "x", _BTC]
+    assert [prices.price_of(asset_id) for asset_id in (VSN, "x", _BTC)] == [None, None, 60000.0]
+
+
+def _failure(kind):
+    return BitpandaApiError(kind, kind=kind, path="/tickers")
+
+
+@pytest.mark.parametrize(
+    ("errors", "asked"),
+    [
+        # Too many requests: the rest is not asked this round.
+        ({"a": _failure("rate_limited")}, ["a"]),
+        # Two requests in a row without any answer end the round; an error
+        # the client does not know counts as no answer.
+        ({"a": _failure("timeout"), "b": _failure("connection")}, ["a", "b"]),
+        ({"a": _failure("timeout"), "b": RuntimeError("no resolver")}, ["a", "b"]),
+        # One unknown error alone ends nothing.
+        ({"a": RuntimeError("no resolver")}, ["a", "b", "c", "d"]),
+        # An answer of any kind in between breaks such a run.
+        ({"a": _failure("timeout"), "b": _failure("http_status"), "c": _failure("timeout")}, ["a", "b", "c", "d"]),
+    ],
+    ids=["429", "two unanswered", "an unknown error second", "one unknown error", "an answer between"],
+)
+async def test_a_429_or_two_unanswered_requests_end_the_round(hass, errors, asked):
+    tickers = _TickerClient({key: "1.00000000" for key in "abcd"}, errors)
+    prices = WalletPrices(hass, tickers, "EUR", None)
+    await prices.async_round(["a", "b", "c", "d"])
+    assert tickers.asked == asked
+    priced = {key for key in "abcd" if prices.price_of(key) is not None}
+    assert priced == set(asked) - set(errors)
+
+
+async def test_a_round_within_a_minute_of_the_last_reuses_its_prices(hass, freezer):
+    """A refresh by hand may follow the last one within seconds: a round
+    less than a minute after the last that read the same assets asks
+    nothing; one with a new asset reads them all."""
+    tickers = _TickerClient({VSN: "0.03727184", _BTC: "60000.00000000"})
+    prices = WalletPrices(hass, tickers, "EUR", None)
+    await prices.async_round([VSN])
+    freezer.tick(timedelta(seconds=59))
+    await prices.async_round([VSN])
+    assert tickers.asked == [VSN]
+    await prices.async_round([VSN, _BTC])
+    assert tickers.asked == [VSN, VSN, _BTC]
+    freezer.tick(timedelta(seconds=61))
+    await prices.async_round([VSN, _BTC])
+    assert tickers.asked == [VSN, VSN, _BTC, VSN, _BTC]
 
 
 async def test_portfolio_update_keeps_an_unnamed_holding_out_of_assets(hass):
@@ -221,16 +430,16 @@ async def test_an_empty_first_answer_of_a_new_account_is_the_truth(hass):
 
 
 async def test_an_empty_answer_is_the_truth_at_once(hass, freezer):
-    """No failed update: the answer is taken as it is, and Total value and
-    Cash, whose entries it no longer lists, wait. Cash Plus was never
-    there."""
+    """No failed update: the answer is taken as it is, and Total value,
+    Cash and the positions' figures, whose entries it no longer lists,
+    wait. Cash Plus was never there."""
     client, coordinator = _portfolio(hass)
     await coordinator._async_update_data()
     client.entries = []
     freezer.tick(_REGULAR)
     data = await coordinator._async_update_data()
     assert data.total == 0.0
-    assert data.waiting == {"total", "cash"}
+    assert data.waiting == {"total", "cash", "positions"}
 
 
 async def test_vanished_fiat_makes_cash_wait_three_answers(hass, freezer):
@@ -372,13 +581,45 @@ async def test_misses_by_hand_never_end_the_wait_sooner(hass, freezer):
 
 async def test_only_a_fiat_entry_is_not_an_empty_answer(hass):
     """Everything sold, the money kept: Total value -- whose entry is any
-    entry at all -- is the cash at once, and nothing waits."""
+    entry at all -- is the cash at once; the positions' figures wait, as
+    Cash Plus does once its holdings vanish."""
     client, coordinator = _portfolio(hass)
     await coordinator._async_update_data()
     client.entries = [{"currency_id": EUR_ID, "balance": {"value": "5.00"}}]
     data = await coordinator._async_update_data()
     assert data.total == 5.0
-    assert data.waiting == frozenset()
+    assert data.waiting == {"positions"}
+
+
+async def test_vanished_positions_wait_three_answers(hass, freezer):
+    """Every position sold: the positions' figures wait through two answers
+    and show 0 with the third, ten minutes after the first."""
+    client, coordinator = _portfolio(hass)
+    await coordinator._async_update_data()
+    client.entries = [_ENTRIES[1]]
+    for _ in range(2):
+        freezer.tick(_REGULAR)
+        assert (await coordinator._async_update_data()).waiting == {"positions"}
+    freezer.tick(_REGULAR)
+    assert (await coordinator._async_update_data()).waiting == frozenset()
+
+
+async def test_positions_missing_since_the_start_do_not_wait(hass):
+    """Cash alone from the first answer: no position was there to vanish."""
+    _, coordinator = _portfolio(hass, [_ENTRIES[1]])
+    assert (await coordinator._async_update_data()).waiting == frozenset()
+
+
+async def test_doubt_about_the_positions_while_they_wait_clears_the_count(hass, freezer):
+    """A holding no record classifies yet might be a position: no miss."""
+    client, coordinator = _portfolio(hass)
+    await coordinator._async_update_data()
+    client.entries = [_ENTRIES[1]]
+    freezer.tick(_REGULAR)
+    assert (await coordinator._async_update_data()).waiting == {"positions"}
+    client.entries = [_ENTRIES[1], _UNCLASSIFIED]
+    freezer.tick(_REGULAR)
+    assert (await coordinator._async_update_data()).waiting == frozenset()
 
 
 async def test_only_entries_of_no_known_shape_are_an_empty_answer(hass):
@@ -388,14 +629,15 @@ async def test_only_entries_of_no_known_shape_are_an_empty_answer(hass):
     client, coordinator = _portfolio(hass)
     await coordinator._async_update_data()
     client.entries = [{"something": "else"}]
-    assert (await coordinator._async_update_data()).waiting == {"total", "cash"}
+    assert (await coordinator._async_update_data()).waiting == {"total", "cash", "positions"}
 
 
 async def test_earn_update_returns_the_catalogue():
     configs = [{"asset_id": VSN, "annual_percentage_rate": 0.05, "enabled": True}]
     coordinator = EarnCoordinator(None, None, _EarnClient(configs))
     assert await coordinator._async_update_data() == EarnData(
-        apr={VSN: 0.05}, offered=frozenset({VSN})
+        apr={VSN: 0.05}, offered=frozenset({VSN}),
+        products={VSN: EarnProduct(apr=0.05, type=None, mode=None, sold_out=False, enabled=True)},
     )
 
 
@@ -418,10 +660,18 @@ async def test_earn_error_fails_the_update():
     )
 
 
+async def test_earn_is_asked_for_every_hour():
+    """Offers and their APR change at Bitpanda's pace: every hour, like the
+    rewards, so a failed fetch costs an hour, not a day."""
+    coordinator = EarnCoordinator(None, None, _EarnClient([]))
+    assert coordinator.update_interval == timedelta(hours=1)
+    assert EARN_UPDATE_INTERVAL == timedelta(hours=1)
+
+
 async def test_earn_is_retried_sooner_until_it_first_loads():
     """Until the Earn catalogue first loads, no Staking sensor shows its APR,
-    so a failure then is retried after 15 minutes, not after a day. Once it
-    loaded, a failure keeps the daily interval: the last catalogue stays."""
+    so a failure then is retried after 15 minutes, not after an hour. Once it
+    loaded, a failure keeps the hourly interval: the last catalogue stays."""
     error = BitpandaApiError(
         "HTTP 503 from /earn/configs", kind="http_status", path="/earn/configs", status=503
     )

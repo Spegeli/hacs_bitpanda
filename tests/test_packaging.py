@@ -21,6 +21,19 @@ def test_manifest_allows_one_entry_per_service():
     assert "recorder" in manifest["after_dependencies"]
 
 
+def test_manifest_depends_on_http_and_loads_after_frontend():
+    """The dashboard cards' bundle is served over http (cards.py), which
+    hassfest wants named once homeassistant.components.http is imported;
+    frontend, whose add_extra_js_url adds it to every dashboard, is an
+    after-dependency: Home Assistant always loads it, and a dependency would
+    make the test harness set up a frontend whose package it lacks. So is
+    websocket_api, over which the cards fetch their Portfolio line: as a
+    dependency, the harness would set it up after its web server started."""
+    manifest = _json("custom_components/bitpanda/manifest.json")
+    assert manifest["dependencies"] == ["http"]
+    assert manifest["after_dependencies"] == ["frontend", "recorder", "websocket_api"]
+
+
 def test_manifest_requires_nothing_home_assistant_ships_itself():
     """Home Assistant installs a custom integration's requirements into its
     own environment, so one that Home Assistant depends on itself could

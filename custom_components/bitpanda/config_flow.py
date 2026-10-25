@@ -60,6 +60,7 @@ from .const import (
     SUBENTRY_TYPE_PRICE_GROUP,
     SUPPORTED_CURRENCIES,
     TROUBLESHOOTING_URL,
+    CARDS_URL,
     entry_type,
     notifies_new_wallets,
     notifies_staking_rewards,
@@ -67,12 +68,17 @@ from .const import (
 from .groups import async_group_titles, price_group_subentries
 from .language import async_shipped_languages, entry_language, preselected_language
 from .migration import ISSUE_CURRENCY_DROPPED
+from .portfolio_store import note_new_key
 from .purge import (
     OldStatistics,
     async_find_old_statistics,
     async_purge_portfolio,
     async_purge_recorded,
 )
+
+# Home Assistant 2026.10 types form schemas as probatio schemas; the voluptuous
+# ones built here work the same from 2025.5 on, hence `type: ignore[arg-type]`
+# where a form or section takes one. Strict mypy flags these once unneeded.
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -96,6 +102,17 @@ def _log_unexpected(step: str, err: Exception) -> None:
         type(err).__name__,
         step,
     )
+
+
+def _form_error(step: str, err: Exception) -> str:
+    """The form error of a key check that raised: rate limited, no
+    connection, or -- logged by type only (_log_unexpected) -- unknown."""
+    if isinstance(err, BitpandaRateLimitError):
+        return "rate_limited"
+    if isinstance(err, BitpandaApiError):
+        return "cannot_connect"
+    _log_unexpected(step, err)
+    return "unknown"
 
 
 def _currency_select(options: list[str], *, multiple: bool = False) -> SelectSelector:
@@ -170,38 +187,40 @@ _SECTION_CURRENCIES = "currencies"
 _SECTION_CURRENCY = "currency"
 _SECTION_LANGUAGE = "language"
 _SECTION_NOTIFICATIONS = "notifications"
-# Every one open: a section is the only way a Home Assistant form sets fields
-# apart, not a place to hide them.
+# Collapsed: on a phone an open section pushes the next one out of sight,
+# while the headings alone show at a glance what can be set. Open only for
+# the Portfolio setup's currency, the one choice a setup asks for.
+_COLLAPSED: SectionConfig = {"collapsed": True}
 _OPEN: SectionConfig = {"collapsed": False}
 
 
 def _currencies_section(selected: list[str]) -> dict[vol.Required, section]:
-    """The extra currencies (extra_currencies_schema) in their open section."""
-    return {vol.Required(_SECTION_CURRENCIES): section(extra_currencies_schema(selected), _OPEN)}
+    """The extra currencies (extra_currencies_schema) in their collapsed section."""
+    return {vol.Required(_SECTION_CURRENCIES): section(extra_currencies_schema(selected), _COLLAPSED)}  # type: ignore[arg-type]
 
 
 def _language_section(languages: list[str], current: str) -> dict[vol.Required, section]:
-    """The language field (see _language_field) in its open section."""
+    """The language field (see _language_field) in its collapsed section."""
     return {
         vol.Required(_SECTION_LANGUAGE): section(
-            vol.Schema(_language_field(languages, current)), _OPEN
+            vol.Schema(_language_field(languages, current)), _COLLAPSED  # type: ignore[arg-type]
         )
     }
 
 
 def _notifications_section(wallets: bool, rewards: bool) -> dict[vol.Required, section]:
-    """The Portfolio's notification switches, in their open section -- new
+    """The Portfolio's notification switches, in their collapsed section -- new
     wallets, then staking rewards; `wallets` and `rewards` are what they
     show."""
     return {
         vol.Required(_SECTION_NOTIFICATIONS): section(
-            vol.Schema(
+            vol.Schema(  # type: ignore[arg-type]
                 {
                     vol.Required(CONF_NOTIFY_NEW_WALLETS, default=wallets): BooleanSelector(),
                     vol.Required(CONF_NOTIFY_STAKING_REWARDS, default=rewards): BooleanSelector(),
                 }
             ),
-            _OPEN,
+            _COLLAPSED,
         )
     }
 
@@ -277,7 +296,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         }
 
     async def _async_language_section(self) -> dict[vol.Required, section]:
-        """The new entry's language (language.py), in its open section, the
+        """The new entry's language (language.py), in its collapsed section, the
         last of the form: Home Assistant's system language first,
         where this integration ships it (language.preselected_language).
         Stored flat in the entry's options, as Configure stores it."""
@@ -301,19 +320,14 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self._currency_ids = await self._async_currency_ids()
                     if not self._currency_ids:
                         errors = {"base": "cannot_connect"}
-            except BitpandaRateLimitError:
-                errors = {"base": "rate_limited"}
-            except BitpandaApiError:
-                errors = {"base": "cannot_connect"}
             except Exception as err:  # noqa: BLE001 - a form error, never a traceback
-                _log_unexpected("portfolio", err)
-                errors = {"base": "unknown"}
+                errors = {"base": _form_error("portfolio", err)}
             if not errors:
                 self._api_key = api_key
                 return await self.async_step_currency()
         return self.async_show_form(
             step_id="portfolio",
-            data_schema=_KEY_SCHEMA,
+            data_schema=_KEY_SCHEMA,  # type: ignore[arg-type]
             errors=errors,
             description_placeholders={"api_key_url": API_KEY_URL, **placeholders},
         )
@@ -345,9 +359,9 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         return self.async_show_form(
             step_id="currency",
-            data_schema=vol.Schema(
+            data_schema=vol.Schema(  # type: ignore[arg-type]
                 {
-                    vol.Required(_SECTION_CURRENCY): section(currency, _OPEN),
+                    vol.Required(_SECTION_CURRENCY): section(currency, _OPEN),  # type: ignore[arg-type]
                     **_notifications_section(
                         DEFAULT_NOTIFY_NEW_WALLETS, DEFAULT_NOTIFY_STAKING_REWARDS
                     ),
@@ -409,11 +423,14 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @callback
     def _async_create_portfolio(self) -> ConfigFlowResult:
-        """The Portfolio entry, from what the currency step stored."""
+        """The Portfolio entry, from what the currency step stored; its
+        closing text says where its dashboard card is."""
         return self.async_create_entry(
             title=PORTFOLIO_TITLE,
             data=self._portfolio_data,
             options=self._portfolio_options,
+            description="portfolio",
+            description_placeholders={"cards_url": CARDS_URL},
         )
 
     # --- Price Tracker ------------------------------------------------------------
@@ -424,6 +441,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(ENTRY_TYPE_PRICE_TRACKER)
         self._abort_if_unique_id_configured()
         if user_input is not None:
+            # Its closing text: how to add assets, then where the card is.
             return self.async_create_entry(
                 title=PRICE_TRACKER_TITLE,
                 data={ENTRY_TYPE: ENTRY_TYPE_PRICE_TRACKER},
@@ -433,10 +451,12 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                     CONF_LANGUAGE: user_input[_SECTION_LANGUAGE][CONF_LANGUAGE],
                 },
+                description="price_tracker",
+                description_placeholders={"cards_url": CARDS_URL},
             )
         return self.async_show_form(
             step_id="price_tracker",
-            data_schema=vol.Schema(
+            data_schema=vol.Schema(  # type: ignore[arg-type]
                 {**_currencies_section([]), **await self._async_language_section()}
             ),
         )
@@ -478,7 +498,12 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         setup failed -- the typical reauth case, a key rejected on the first
         portfolio refresh -- never registered the listener, so there the
         explicit reload is the only one.
+
+        Another key than the stored one is noted for the entry's next start,
+        which then reads the whole operation history (note_new_key).
         """
+        if api_key != entry.data[CONF_API_KEY]:
+            note_new_key(self.hass, entry.entry_id)
         if entry.update_listeners:
             if not self.hass.config_entries.async_update_entry(
                 entry, data={**entry.data, CONF_API_KEY: api_key}
@@ -505,8 +530,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 errors, extra = await self._async_validate_key(api_key)
             except Exception as err:  # noqa: BLE001 - a form error, never a traceback
-                _log_unexpected("reauth", err)
-                errors, extra = {"base": "unknown"}, {}
+                errors, extra = {"base": _form_error("reauth", err)}, {}
             placeholders.update(extra)
             if not errors:
                 return self._async_replace_key(
@@ -514,7 +538,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=_KEY_SCHEMA,
+            data_schema=_KEY_SCHEMA,  # type: ignore[arg-type]
             errors=errors,
             description_placeholders=placeholders,
         )
@@ -569,13 +593,8 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self._currency_ids = await self._async_currency_ids()
                     if currency not in self._currency_ids:
                         errors = {"base": "cannot_connect"}
-            except BitpandaRateLimitError:
-                errors = {"base": "rate_limited"}
-            except BitpandaApiError:
-                errors = {"base": "cannot_connect"}
             except Exception as err:  # noqa: BLE001 - a form error, never a traceback
-                _log_unexpected("reconfigure", err)
-                errors = {"base": "unknown"}
+                errors = {"base": _form_error("reconfigure", err)}
             if not errors:
                 if currency != stored:
                     self._api_key = api_key or None
@@ -587,7 +606,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             shown = currency
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=self._reconfigure_schema(shown),
+            data_schema=self._reconfigure_schema(shown),  # type: ignore[arg-type]
             errors=errors,
             description_placeholders=placeholders,
         )
@@ -637,6 +656,8 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             updates[CONF_API_KEY] = self._api_key
         if not await async_purge_portfolio(self.hass, entry):
             return self.async_abort(reason="unload_failed")
+        if self._api_key and self._api_key != entry.data[CONF_API_KEY]:
+            note_new_key(self.hass, entry.entry_id)
         ir.async_delete_issue(self.hass, DOMAIN, ISSUE_CURRENCY_DROPPED)
         # The purge unloaded the entry, which removed its update listener:
         # this reload is the only one.
@@ -711,7 +732,7 @@ class BitpandaOptionsFlow(config_entries.OptionsFlow):
         return await self.async_step_portfolio()
 
     async def _async_language_section(self) -> dict[vol.Required, section]:
-        """The language of the entry's own texts, in its open section."""
+        """The language of the entry's own texts, in its collapsed section."""
         return _language_section(
             await async_shipped_languages(self.hass), entry_language(self.config_entry)
         )
@@ -733,7 +754,7 @@ class BitpandaOptionsFlow(config_entries.OptionsFlow):
             )
         return self.async_show_form(
             step_id="price_tracker",
-            data_schema=vol.Schema(
+            data_schema=vol.Schema(  # type: ignore[arg-type]
                 {
                     **_currencies_section(
                         self.config_entry.options.get(CONF_EXTRA_CURRENCIES, [])
@@ -759,7 +780,7 @@ class BitpandaOptionsFlow(config_entries.OptionsFlow):
             )
         return self.async_show_form(
             step_id="portfolio",
-            data_schema=vol.Schema(
+            data_schema=vol.Schema(  # type: ignore[arg-type]
                 {
                     **_notifications_section(
                         notifies_new_wallets(self.config_entry),

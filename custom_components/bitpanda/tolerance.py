@@ -75,10 +75,14 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
     are then told. last_update_success stays the real outcome of the last
     refresh, as diagnostics and bitpanda.refresh report it.
 
-    Refreshes can overlap: Home Assistant 2025.5 takes no lock around one,
-    so a refresh by hand can run while a scheduled one is under way. Each is
-    judged by its own request time and the outcome and data before it, as
-    Home Assistant judges each by its own; see _async_refresh_finished.
+    Refreshes never overlap: Home Assistant locks each refresh from 2025.11
+    on, and a lock of the coordinator's own keeps 2025.5 to 2025.10 alike,
+    where a refresh by hand could run while a scheduled one was under way.
+    A refresh asked for meanwhile begins once the one under way has ended,
+    as on 2025.11, and counts as asked for then. The outcome and the data
+    before it are noted before the wait, as Home Assistant notes its own:
+    before 2025.11 its part of a refresh runs outside the lock, and from
+    2025.11 on nothing waits here (see _async_refresh_finished).
     """
 
     def __init__(
@@ -110,6 +114,8 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
         # Whether a rejected key has been logged since the last success: by
         # Home Assistant, rejected right after it, or here.
         self._rejection_logged = False
+        # One fetch at a time (see the class docstring).
+        self._fetch_lock = asyncio.Lock()
 
     @property
     def data_available(self) -> bool:
@@ -120,8 +126,22 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
 
     @final
     async def _async_update_data(self) -> _DataT:
+        # Home Assistant's own previous_update_success and previous_data, for
+        # this refresh alone, noted as it notes them: before any wait for
+        # another refresh. The streak cannot stand in for the outcome: a
+        # refresh cancelled while under way never gets to the hook, yet Home
+        # Assistant 2026.9 marks it failed.
+        succeeded_before, data_before = self.last_update_success, self.data
+        async with self._fetch_lock:
+            return await self._async_fetch_in_turn(succeeded_before, data_before)
+
+    async def _async_fetch_in_turn(
+        self, succeeded_before: bool, data_before: _DataT | None
+    ) -> _DataT:
+        """The refresh proper, once no other is under way."""
         # When the refresh was asked for -- not when its answer arrived,
-        # which a slow request would put later than the regular pace.
+        # which a slow request would put later than the regular pace -- or,
+        # after waiting for another, when that one ended.
         requested_at = dt_util.utcnow()
         # A refresh that never got to _async_refresh_finished left its entry
         # behind: one cancelled while under way, or one whose error Home
@@ -130,19 +150,14 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
         # refresh: every refresh drops the entries of the tasks that are.
         for ended in [task for task in self._refreshes if task is not None and task.done()]:
             del self._refreshes[ended]
-        # Home Assistant's own previous_update_success and previous_data, for
-        # this refresh alone. The streak cannot stand in for the outcome: a
-        # refresh cancelled while under way never gets to the hook, yet Home
-        # Assistant 2026.9 marks it failed.
-        refresh = _Refresh(requested_at, self.last_update_success, self.data)
+        refresh = _Refresh(requested_at, succeeded_before, data_before)
         self._refreshes[asyncio.current_task()] = refresh
         try:
             return await self._async_fetch(requested_at)
         except ConfigEntryAuthFailed:
             # The outcome Home Assistant's own except block reads next --
             # nothing runs in between -- to decide whether it logs the
-            # rejection: overlapping refreshes may have changed it since this
-            # one began.
+            # rejection.
             refresh.succeeded_at_rejection = self.last_update_success
             raise
 
@@ -169,7 +184,7 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
         Each refresh is judged by what it noted as it began, taken back
         here. Home Assistant awaits _async_update_data and calls this in the
         same task, 2025.5 and 2026.9 alike, so the running task finds its
-        own entry even when refreshes overlap. A refresh without an entry --
+        own entry. A refresh without an entry --
         one that never passed _async_update_data, which neither version runs
         -- takes the clock for its request time, and the outcome and the
         data now for those before it. That keeps every confirmation told:

@@ -6,7 +6,6 @@ import logging
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client
@@ -21,36 +20,29 @@ from custom_components.bitpanda.ecb import EcbError, EcbRates
 from custom_components.bitpanda.price_coordinator import (
     EcbCoordinator,
     TickerCoordinator,
-    async_delete_price_interval_issue,
-    async_report_price_interval,
     convert_price,
-    price_interval,
 )
 
-from tests.conftest import assert_issue_texts_render, raised_issues
+from tests.conftest import async_settle
+
 
 BTC = "b86c034b-efe3-11eb-b56f-0691764446a7"
 SOL = "b86da33d-efe3-11eb-b56f-0691764446a7"
 _TRACKED = {BTC: "Bitcoin (BTC)", SOL: "Solana (SOL)"}
 
 
-# --- price_interval -----------------------------------------------------------
+# --- The pace of the rounds ---------------------------------------------------------
 
 
-def test_interval_is_sixty_seconds_up_to_thirty_assets():
-    assert price_interval(0) == timedelta(seconds=60)
-    assert price_interval(30) == timedelta(seconds=60)
-
-
-def test_interval_stretches_above_thirty_assets():
-    assert price_interval(31) > timedelta(seconds=60)
-    assert price_interval(60) == timedelta(seconds=120)
-
-
-def test_interval_keeps_every_count_inside_the_budget():
-    for count in (1, 30, 31, 100, 900, 5000):
-        per_hour = count * 3600 / price_interval(count).total_seconds()
-        assert per_hour <= 1800 + 1e-6
+def test_every_tracked_asset_is_asked_for_every_minute_however_many_are_tracked(caplog):
+    """No budget of its own: Bitpanda limits requests per API key, and the
+    Price Tracker sends none. A 429 slows it down (the backoff below)."""
+    with caplog.at_level(logging.WARNING):
+        for count in (0, 1, 30, 31, 1000):
+            tracked = {f"asset-{number}": f"Asset {number}" for number in range(count)}
+            coordinator = TickerCoordinator(None, None, _Client(), tracked)
+            assert coordinator.update_interval == timedelta(seconds=60), count
+    assert caplog.text == ""
 
 
 # --- convert_price ---------------------------------------------------------------
@@ -80,7 +72,7 @@ def test_convert_price_of_a_non_finite_number_is_none():
 
 # --- TickerCoordinator -------------------------------------------------------------
 
-# The regular pace of the rounds: price_interval of two tracked assets.
+# The regular pace of the rounds.
 _PACE = timedelta(seconds=60)
 
 
@@ -218,22 +210,6 @@ async def test_a_fresh_price_ends_an_assets_streak(freezer):
     assert coordinator.data == {BTC: 3.0, SOL: 2.0}
 
 
-async def test_the_tolerance_stretches_with_the_price_interval(freezer):
-    """Sixty tracked assets are asked for every two minutes (price_interval),
-    and an asset's failures are timed in that interval: failing a minute
-    apart -- rounds asked for by hand -- it keeps its last price until its
-    failures span two such intervals."""
-    tracked = {f"asset-{number}": f"Asset {number}" for number in range(60)}
-    client = _Client(dict.fromkeys(tracked, "1.00000000"))
-    coordinator = _coordinator(client, tracked)
-    await _round(coordinator)
-    client.failing = {"asset-0"}
-    carried = []
-    for _ in range(5):
-        carried.append("asset-0" in await _next_round(coordinator, freezer))
-    assert carried == [True, True, True, True, False]
-
-
 async def test_a_failing_asset_is_warned_about_once_its_failure_is_confirmed(caplog, freezer):
     """Bitcoin fails from the first round on, so it has no last price to
     keep: it is left out of every round. Its failure is warned about once it
@@ -258,6 +234,7 @@ async def test_a_non_finite_price_counts_as_a_failure():
     assert await _coordinator(client)._async_update_data() == {SOL: 150.0}
 
 
+@pytest.mark.real_ticker
 async def test_an_asset_answered_with_no_object_fails_alone():
     """A malformed /tickers body -- here, a bare `null` -- must not escape
     as AttributeError and abort the round for every asset. The real
@@ -733,10 +710,11 @@ async def test_an_outage_cannot_leave_two_hanging_assets_in_front(freezer):
     assert coordinator.data == dict.fromkeys(("a", "b", "c", "d"), 1.0)
 
 
-# --- Overlapping rounds ---------------------------------------------------------------
+# --- Rounds in turn ------------------------------------------------------------------
 #
-# Home Assistant 2025.5 takes no lock around a refresh: a refresh by hand
-# (bitpanda.refresh) can run while a scheduled one waits for an answer.
+# Home Assistant 2025.5 to 2025.10 take no lock around a refresh: a refresh by
+# hand (bitpanda.refresh) could run while a scheduled one waits for an answer.
+# The tolerance's own lock makes it wait, as Home Assistant 2025.11 does.
 
 
 class _HeldClient(_Client):
@@ -756,19 +734,21 @@ class _HeldClient(_Client):
         return await super().async_get_ticker(asset_id)
 
 
-async def test_two_overlapping_rounds_both_return_data():
-    """Round A waits for Bitcoin's answer. Meanwhile round B asks for both
-    assets -- Solana first, as A has marked Bitcoin -- and completes;
-    Bitcoin's fresh price removes its mark. Then Bitcoin answers A, whose
-    fresh price finds no mark left to remove: both rounds return data."""
+async def test_a_round_asked_for_meanwhile_waits_and_asks_for_every_price_again():
+    """Round A waits for Bitcoin's answer. Round B, asked for meanwhile,
+    asks for nothing until A has its prices; then it asks for both again,
+    in tracked order: A's fresh prices left no mark."""
     client = _HeldClient({BTC: "1.00000000", SOL: "2.00000000"}, held=BTC)
     coordinator = _coordinator(client)
     round_a = asyncio.create_task(coordinator._async_update_data())
     await client.asked.wait()
-    assert await coordinator._async_update_data() == {BTC: 1.0, SOL: 2.0}
+    round_b = asyncio.create_task(coordinator._async_update_data())
+    await async_settle()
+    assert client.calls == []
     client.answer.set()
     assert await round_a == {BTC: 1.0, SOL: 2.0}
-    assert client.calls == [SOL, BTC, BTC, SOL]
+    assert await round_b == {BTC: 1.0, SOL: 2.0}
+    assert client.calls == [BTC, SOL, BTC, SOL]
 
 
 # --- TickerCoordinator through Home Assistant's refresh -----------------------------
@@ -883,69 +863,6 @@ async def test_rate_limited_rounds_end_the_tolerance_after_about_seven_minutes(
     ]
 
 
-def test_a_slow_interval_is_announced_at_construction(caplog):
-    tracked = {f"asset-{i}": f"Asset {i}" for i in range(1000)}
-    with caplog.at_level(logging.WARNING):
-        coordinator = TickerCoordinator(None, None, _Client(), tracked)
-    assert coordinator.update_interval == price_interval(1000)
-    assert "1000 price trackers" in caplog.text
-
-
-# --- The slow interval as a repair issue ------------------------------------------------
-
-
-def _interval_issue(hass) -> ir.IssueEntry | None:
-    return ir.async_get(hass).async_get_issue("bitpanda", "slow_price_interval")
-
-
-async def test_an_interval_above_thirty_minutes_is_a_repair_issue(hass):
-    """A warning -- prices still come, only slowly -- naming the number of
-    tracked assets and the interval, in whole minutes rounded up, so it
-    never reads as 30. Raised again at every setup while it lasts, so not
-    kept across restarts; nothing to fix in a dialog."""
-    async_report_price_interval(hass, 1000)
-    issue = _interval_issue(hass)
-    assert (issue.translation_key, issue.translation_placeholders) == (
-        "slow_price_interval", {"count": "1000", "minutes": "34"}
-    )
-    assert (
-        issue.severity, issue.is_fixable, issue.is_persistent, issue.learn_more_url,
-        issue.issue_domain,
-    ) == (ir.IssueSeverity.WARNING, False, False, None, None)
-
-
-async def test_just_above_thirty_minutes_reads_as_thirty_one(hass):
-    async_report_price_interval(hass, 901)
-    assert _interval_issue(hass).translation_placeholders == {"count": "901", "minutes": "31"}
-
-
-@pytest.mark.parametrize("count", [0, 30, 900])
-async def test_thirty_minutes_or_less_raise_no_issue(hass, count):
-    async_report_price_interval(hass, count)
-    assert _interval_issue(hass) is None
-
-
-async def test_the_issue_goes_once_the_interval_is_thirty_minutes_or_less(hass):
-    async_report_price_interval(hass, 950)
-    assert _interval_issue(hass) is not None
-    async_report_price_interval(hass, 900)
-    assert _interval_issue(hass) is None
-
-
-async def test_the_issue_can_be_deleted_outright(hass):
-    """For when the Price Tracker itself goes."""
-    async_report_price_interval(hass, 950)
-    async_delete_price_interval_issue(hass)
-    assert _interval_issue(hass) is None
-
-
-async def test_the_issue_text_renders_in_every_language(hass):
-    async_report_price_interval(hass, 1000)
-    raised = raised_issues(hass)
-    assert set(raised) == {"slow_price_interval"}
-    assert_issue_texts_render(raised)
-
-
 # --- EcbCoordinator ------------------------------------------------------------------
 
 _RATES = EcbRates(date="2026-09-24", rates={"USD": 1.1367})
@@ -963,7 +880,7 @@ async def test_ecb_retries_sooner_while_no_rates_were_ever_loaded():
         with pytest.raises(UpdateFailed) as excinfo:
             await coordinator._async_update_data()
         assert _translation(excinfo.value) == ("bitpanda", "ecb_rates_failed_timeout", None)
-        assert coordinator.update_interval == timedelta(minutes=15)
+        assert coordinator.update_interval == timedelta(minutes=5)
         await coordinator._async_update_data()
     assert coordinator.update_interval == timedelta(hours=6)
 

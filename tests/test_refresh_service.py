@@ -1,9 +1,9 @@
 """The bitpanda.refresh action: registered once with the integration,
 throttled to the ticker interval, and failing when a refresh fails.
 
-Every accepted call costs a portfolio request plus one ticker request per
-tracked asset; the ticker interval is what keeps the latter inside the
-self-imposed budget, so the cooldown follows it and never drops below 10 s.
+Every accepted call costs a portfolio request, five history requests for
+the returns and one ticker request per tracked asset; the ticker interval, slowed after a 429, is the pace Bitpanda
+gets the latter at, so the cooldown follows it and never drops below 10 s.
 The clock is the module's own `monotonic` name, patched there alone.
 """
 import asyncio
@@ -24,6 +24,8 @@ import yaml
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.portfolio_coordinator import PortfolioRuntime
 from custom_components.bitpanda.price_coordinator import PriceTrackerRuntime
+
+from tests.conftest import portfolio_runtime
 
 
 class _Coordinator:
@@ -66,10 +68,14 @@ def _loaded(hass, entry_type: str, runtime) -> MockConfigEntry:
     return entry
 
 
-def _portfolio_runtime(portfolio: _Coordinator) -> PortfolioRuntime:
-    return PortfolioRuntime(
-        portfolio=portfolio, history=None, earn=None, rewards=None,
-        group_titles={}, data_at_setup={}, options_at_setup={},
+def _portfolio_runtime(
+    hass, portfolio: _Coordinator, history: _Coordinator | None = None
+) -> PortfolioRuntime:
+    return portfolio_runtime(
+        hass,
+        portfolio=portfolio,
+        history=history if history is not None else _Coordinator(timedelta(minutes=5)),
+        earn=None, rewards=None,
     )
 
 
@@ -91,16 +97,18 @@ async def _register(
     await _set_up_the_integration(hass)
     portfolio = _Coordinator(timedelta(minutes=5), fails=portfolio_fails)
     tickers = _Coordinator(ticker_interval, fails=tickers_fail)
-    _loaded(hass, "portfolio", _portfolio_runtime(portfolio))
+    _loaded(hass, "portfolio", _portfolio_runtime(hass, portfolio))
     _loaded(hass, "price_tracker", PriceTrackerRuntime(tickers=tickers, ecb=None))
     return portfolio, tickers
 
 
-async def _call(hass) -> None:
-    await hass.services.async_call(DOMAIN, "refresh", blocking=True)
+async def _call(hass, **data) -> None:
+    await hass.services.async_call(DOMAIN, "refresh", data, blocking=True)
 
 
 async def test_refresh_reaches_both_services_and_is_throttled(hass):
+    """Each service by its own cooldown: the Portfolio's ten seconds, the
+    prices' ticker interval."""
     portfolio, tickers = await _register(hass, timedelta(seconds=60))
     clock = _Clock(1000.0)
     with patch("custom_components.bitpanda.monotonic", clock):
@@ -110,10 +118,40 @@ async def test_refresh_reaches_both_services_and_is_throttled(hass):
         clock.now += 46
         await _call(hass)
     assert tickers.async_refresh.await_count == 2
-    assert portfolio.async_refresh.await_count == 2
+    assert portfolio.async_refresh.await_count == 3
 
 
-async def test_cooldown_follows_a_stretched_ticker_interval(hass):
+async def test_the_portfolio_refresh_takes_its_returns_along(hass):
+    """The returns have a coordinator of their own: a refresh by hand asks
+    for them too, so a report right after it shows the current return. A
+    return that could not be fetched fails nothing -- it keeps its last
+    value, as after a scheduled refresh."""
+    await _set_up_the_integration(hass)
+    portfolio = _Coordinator(timedelta(minutes=5))
+    history = _Coordinator(timedelta(minutes=5), fails=True)
+    _loaded(hass, "portfolio", _portfolio_runtime(hass, portfolio, history))
+    await _call(hass)
+    assert portfolio.async_refresh.await_count == 1
+    assert history.async_refresh.await_count == 1
+
+
+async def test_a_failed_portfolio_refresh_leaves_the_returns_alone(hass):
+    """While Bitpanda hangs, each of the five return requests would wait out
+    its own timeout before the call ends: after a failed portfolio refresh
+    the returns are not asked for, and keep their last value."""
+    await _set_up_the_integration(hass)
+    portfolio = _Coordinator(timedelta(minutes=5), fails=True)
+    history = _Coordinator(timedelta(minutes=5))
+    _loaded(hass, "portfolio", _portfolio_runtime(hass, portfolio, history))
+    with pytest.raises(HomeAssistantError):
+        await _call(hass)
+    assert portfolio.async_refresh.await_count == 1
+    assert history.async_refresh.await_count == 0
+
+
+async def test_cooldown_follows_a_slowed_ticker_interval(hass):
+    """After a 429 the prices are asked for less often (the backoff): no
+    refresh by hand comes sooner."""
     _, tickers = await _register(hass, timedelta(seconds=120))
     clock = _Clock(1000.0)
     with patch("custom_components.bitpanda.monotonic", clock):
@@ -149,7 +187,7 @@ async def test_only_the_loaded_services_are_refreshed(hass):
     has nothing to refresh; the loaded one is refreshed as usual."""
     await _set_up_the_integration(hass)
     portfolio = _Coordinator(timedelta(minutes=5))
-    _loaded(hass, "portfolio", _portfolio_runtime(portfolio))
+    _loaded(hass, "portfolio", _portfolio_runtime(hass, portfolio))
     MockConfigEntry(
         domain=DOMAIN, version=3, data={"entry_type": "price_tracker"},
         state=ConfigEntryState.SETUP_RETRY,
@@ -217,7 +255,7 @@ async def test_a_service_is_named_by_the_title_its_entry_carries(hass):
     """The title the integration page shows, renamed by the user or not."""
     await _set_up_the_integration(hass)
     entry = _loaded(hass, "portfolio", _portfolio_runtime(
-        _Coordinator(timedelta(minutes=5), fails=True)
+        hass, _Coordinator(timedelta(minutes=5), fails=True)
     ))
     hass.config_entries.async_update_entry(entry, title="My Bitpanda")
     with pytest.raises(HomeAssistantError) as excinfo:
@@ -233,7 +271,7 @@ async def test_an_entry_unloaded_while_an_earlier_refresh_runs_is_skipped(hass):
     await _set_up_the_integration(hass)
     portfolio = _Coordinator(timedelta(minutes=5))
     tickers = _Coordinator(timedelta(seconds=60))
-    _loaded(hass, "portfolio", _portfolio_runtime(portfolio))
+    _loaded(hass, "portfolio", _portfolio_runtime(hass, portfolio))
     tracker = _loaded(hass, "price_tracker", PriceTrackerRuntime(tickers=tickers, ecb=None))
 
     async def _refresh_while_the_tracker_unloads() -> None:
@@ -256,7 +294,7 @@ async def test_an_entry_reloaded_during_a_refresh_is_refreshed_with_its_new_stat
     portfolio = _Coordinator(timedelta(minutes=5))
     old_tickers = _Coordinator(timedelta(seconds=60), fails=True)
     new_tickers = _Coordinator(timedelta(seconds=60))
-    _loaded(hass, "portfolio", _portfolio_runtime(portfolio))
+    _loaded(hass, "portfolio", _portfolio_runtime(hass, portfolio))
     tracker = _loaded(
         hass, "price_tracker", PriceTrackerRuntime(tickers=old_tickers, ecb=None)
     )
@@ -300,8 +338,79 @@ async def test_a_call_within_the_cooldown_stays_silent_after_a_failed_one(hass):
     with patch("custom_components.bitpanda.monotonic", clock):
         with pytest.raises(HomeAssistantError):
             await _call(hass)
-        clock.now += 30
+        clock.now += 5
         await _call(hass)
+    assert portfolio.async_refresh.await_count == 1
+
+
+# --- One service -------------------------------------------------------------------
+
+
+def _entries(hass):
+    """The loaded Portfolio and Price Tracker entries of _register."""
+    by_type = {
+        entry.data["entry_type"]: entry for entry in hass.config_entries.async_entries(DOMAIN)
+    }
+    return by_type["portfolio"], by_type["price_tracker"]
+
+
+async def test_refresh_with_an_entry_refreshes_only_that_one(hass):
+    portfolio, tickers = await _register(hass, timedelta(seconds=60))
+    portfolio_entry, tracker_entry = _entries(hass)
+    with patch("custom_components.bitpanda.monotonic", _Clock(1000.0)):
+        await _call(hass, config_entry_id=tracker_entry.entry_id)
+    assert (portfolio.async_refresh.await_count, tickers.async_refresh.await_count) == (0, 1)
+    with patch("custom_components.bitpanda.monotonic", _Clock(2000.0)):
+        await _call(hass, config_entry_id=portfolio_entry.entry_id)
+    assert (portfolio.async_refresh.await_count, tickers.async_refresh.await_count) == (1, 1)
+
+
+async def test_refresh_with_an_unknown_or_unloaded_entry_is_refused(hass):
+    """An ID that names no loaded Bitpanda entry -- none at all, another
+    integration's, one whose setup is retried: a translated validation
+    error, and nothing refreshed."""
+    portfolio, tickers = await _register(hass, timedelta(seconds=60))
+    other = MockConfigEntry(domain="sun")
+    other.add_to_hass(hass)
+    retried = MockConfigEntry(
+        domain=DOMAIN, version=3, data={"entry_type": "price_tracker"},
+        state=ConfigEntryState.SETUP_RETRY,
+    )
+    retried.add_to_hass(hass)
+    for entry_id in ("no-such-entry", other.entry_id, retried.entry_id):
+        with pytest.raises(ServiceValidationError) as excinfo:
+            await _call(hass, config_entry_id=entry_id)
+        assert excinfo.value.translation_key == "refresh_unknown_entry"
+    assert (portfolio.async_refresh.await_count, tickers.async_refresh.await_count) == (0, 0)
+
+
+async def test_each_service_has_its_own_cooldown(hass):
+    """The prices refreshed by name, then both asked for within the ticker
+    interval: the Portfolio -- its cooldown untouched -- is refreshed, the
+    prices skipped; ten seconds later the Portfolio again, alone."""
+    portfolio, tickers = await _register(hass, timedelta(seconds=60))
+    _, tracker_entry = _entries(hass)
+    clock = _Clock(1000.0)
+    with patch("custom_components.bitpanda.monotonic", clock):
+        await _call(hass, config_entry_id=tracker_entry.entry_id)
+        clock.now += 5
+        await _call(hass)
+        clock.now += 5
+        await _call(hass)
+        clock.now += 5
+        await _call(hass)
+    assert tickers.async_refresh.await_count == 1
+    assert portfolio.async_refresh.await_count == 2
+
+
+async def test_a_named_entry_within_its_cooldown_returns_quietly(hass):
+    portfolio, _ = await _register(hass, timedelta(seconds=60))
+    portfolio_entry, _ = _entries(hass)
+    clock = _Clock(1000.0)
+    with patch("custom_components.bitpanda.monotonic", clock):
+        await _call(hass, config_entry_id=portfolio_entry.entry_id)
+        clock.now += 9
+        await _call(hass, config_entry_id=portfolio_entry.entry_id)
     assert portfolio.async_refresh.await_count == 1
 
 
@@ -368,7 +477,9 @@ async def test_the_refresh_service_is_named_and_described_in_every_language(hass
     each checked against its own translations file -- the source of truth
     for what it should say, guarded for content by tests/test_strings.py."""
     await _register(hass, timedelta(seconds=60))
-    assert (await async_get_all_descriptions(hass))[DOMAIN]["refresh"]["fields"] == {}
+    assert set((await async_get_all_descriptions(hass))[DOMAIN]["refresh"]["fields"]) == {
+        "config_entry_id"
+    }
     name_key, description_key = (
         f"component.{DOMAIN}.services.refresh.name",
         f"component.{DOMAIN}.services.refresh.description",
@@ -381,4 +492,12 @@ async def test_the_refresh_service_is_named_and_described_in_every_language(hass
         assert (translations[name_key], translations[description_key]) == (
             raw["name"], raw["description"]
         )
-    assert yaml.safe_load(_SERVICES_YAML.read_text(encoding="utf-8")) == {"refresh": None}
+    declared = yaml.safe_load(_SERVICES_YAML.read_text(encoding="utf-8"))
+    # One field: the service to refresh, picked among Bitpanda's entries.
+    assert declared["refresh"] == {
+        "fields": {"config_entry_id": {"selector": {"config_entry": {"integration": DOMAIN}}}}
+    }
+    # Beside it, the Portfolio's actions with response data (services.py).
+    assert set(declared) == {
+        "refresh", "get_portfolio", "get_portfolio_history", "get_staking_rewards",
+    }

@@ -87,14 +87,14 @@
       },
       "reauth_confirm": {
         "title": "Nieuwe Bitpanda API-sleutel nodig",
-        "description": "Bitpanda heeft de opgeslagen API-sleutel geweigerd. Misschien is hij verlopen, of hij dateert van vóór de rechten die deze versie nodig heeft. Je sensoren blijven behouden.\n\nZo maak je een nieuwe API-sleutel aan:\n\n1. Open [{api_key_url}]({api_key_url}) en maak een nieuwe API-sleutel aan.\n2. Kies alleen de rechten \"Saldi\", \"Transactie\" en \"Earn (Lezen)\" – niet \"Traden (Lezen)\".\n3. Kopieer de API-sleutel en plak hem hieronder. Bitpanda toont hem maar één keer.\n\nDe integratie leest er alleen mee: handelen of geld verplaatsen kan ze niet.\nBitpanda-API-sleutels zijn geldig tot de datum die je bij het aanmaken kiest, hoogstens een jaar; daarna vraagt Home Assistant om een nieuwe.",
+        "description": "Bitpanda heeft de opgeslagen API-sleutel geweigerd. Misschien is hij verlopen, of hij dateert van vóór de rechten die deze versie nodig heeft. Je sensoren blijven behouden. De nieuwe API-sleutel moet bij hetzelfde Bitpanda-account horen. Voor een ander account open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\", kies je \"Verwijderen\" en stel je het Portfolio daarna opnieuw in.\n\nZo maak je een nieuwe API-sleutel aan:\n\n1. Open [{api_key_url}]({api_key_url}) en maak een nieuwe API-sleutel aan.\n2. Kies alleen de rechten \"Saldi\", \"Transactie\" en \"Earn (Lezen)\" – niet \"Traden (Lezen)\".\n3. Kopieer de API-sleutel en plak hem hieronder. Bitpanda toont hem maar één keer.\n\nDe integratie leest er alleen mee: handelen of geld verplaatsen kan ze niet.\nBitpanda-API-sleutels zijn geldig tot de datum die je bij het aanmaken kiest, hoogstens een jaar; daarna vraagt Home Assistant om een nieuwe.",
         "data": {
           "api_key": "API-sleutel"
         }
       },
       "reconfigure": {
         "title": "Bitpanda Portfolio herconfigureren",
-        "description": "Vervang de opgeslagen API-sleutel, wijzig de valuta, of allebei.",
+        "description": "Vervang de opgeslagen API-sleutel, wijzig de valuta, of allebei. Een nieuwe API-sleutel moet bij hetzelfde Bitpanda-account horen. Voor een ander account open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\", kies je \"Verwijderen\" en stel je het Portfolio daarna opnieuw in.",
         "data": {
           "api_key": "Nieuwe API-sleutel",
           "currency": "Valuta"
@@ -133,6 +133,10 @@
       "no_reconfigure": "Bij de Bitpanda Price Tracker valt momenteel niets te herconfigureren. Wijzig de extra valuta en de taal van groepstitels via \"Configureren\" (⚙) bij dezelfde invoer.",
       "unload_failed": "Het Portfolio kon niet worden gestopt, dus de valuta is niet gewijzigd en er is niets verwijderd. Herstart Home Assistant en probeer het opnieuw.",
       "setup_cancelled": "Het Portfolio is niet ingesteld en er is niets verwijderd."
+    },
+    "create_entry": {
+      "portfolio": "Om je portfolio op een dashboard te zien, voeg je de kaart \"Bitpanda Portfolio\" toe: open het dashboard, kies \"Dashboard bewerken\" (✏ rechtsboven; op een telefoon in het ⋮-menu), dan \"Kaart toevoegen\" en het tabblad \"Per kaart\", en zoek naar \"Bitpanda\". Staat er geen Bitpanda-kaart bij, laad de pagina dan twee keer opnieuw; reset in de Home Assistant-app in plaats daarvan [de frontend-cache]({cards_url}).\n\nHet nieuwe dashboard \"Thuis\", sinds Home Assistant 2026.2 de standaard van nieuwe installaties, neemt geen kaarten op: maak eerst een dashboard aan onder \"Instellingen\" → \"Dashboards\" → \"Dashboard toevoegen\".",
+      "price_tracker": "Voeg de assets die je wilt volgen toe met \"Prijstracker toevoegen\" bij de invoer \"Bitpanda Price Tracker\" op de integratiepagina van Bitpanda. Voeg daarna de kaart \"Bitpanda Price Tracker\" toe aan een dashboard: open het dashboard, kies \"Dashboard bewerken\" (✏ rechtsboven; op een telefoon in het ⋮-menu), dan \"Kaart toevoegen\" en het tabblad \"Per kaart\", en zoek naar \"Bitpanda\". Staat er geen Bitpanda-kaart bij, laad de pagina dan twee keer opnieuw; reset in de Home Assistant-app in plaats daarvan [de frontend-cache]({cards_url}).\n\nHet nieuwe dashboard \"Thuis\", sinds Home Assistant 2026.2 de standaard van nieuwe installaties, neemt geen kaarten op: maak eerst een dashboard aan onder \"Instellingen\" → \"Dashboards\" → \"Dashboard toevoegen\"."
     }
   },
   "options": {
@@ -202,7 +206,7 @@
             "category": "Assettype"
           },
           "data_description": {
-            "category": "De volgende stap toont alle assets van dit type die je nog niet volgt. Grote lijsten zoals aandelen laden de eerste keer een paar seconden."
+            "category": "De volgende stap toont alle assets van dit type die je nog niet volgt. Grote lijsten zoals aandelen laden de eerste keer tot een halve minuut."
           }
         },
         "asset": {
@@ -235,6 +239,9 @@
       "abort": {
         "already_configured": "Deze asset wordt al gevolgd.",
         "asset_added": "{asset} wordt nu gevolgd in de groep {group}."
+      },
+      "create_entry": {
+        "default": "{asset} wordt nu gevolgd in de groep {group}."
       }
     },
     "wallet_group": {
@@ -293,9 +300,160 @@
         "nl": "Nederlands",
         "pl": "Polski"
       }
+    },
+    "history_timeframe": {
+      "options": {
+        "day": "1 dag",
+        "week": "1 week",
+        "month": "1 maand",
+        "six_month": "6 maanden",
+        "year": "1 jaar"
+      }
     }
   },
   "entity": {
+    "event": {
+      "new_wallet": {
+        "name": "Nieuwe wallet",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "wallet_added": "Wallet toegevoegd"
+            }
+          },
+          "device_id": {
+            "name": "Wallet: apparaat-ID"
+          },
+          "asset_id": {
+            "name": "Asset: ID"
+          },
+          "symbol": {
+            "name": "Asset: symbool"
+          },
+          "name": {
+            "name": "Asset: naam"
+          },
+          "wallet": {
+            "name": "Wallet: naam"
+          },
+          "category": {
+            "name": "Asset: categorie"
+          },
+          "units": {
+            "name": "Wallet: hoeveelheid"
+          },
+          "value": {
+            "name": "Wallet: waarde"
+          },
+          "currency": {
+            "name": "Wallet: valuta"
+          },
+          "message": {
+            "name": "Bericht"
+          }
+        }
+      },
+      "staking_reward": {
+        "name": "Stakingbeloning",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "staking_reward_received": "Stakingbeloning ontvangen"
+            }
+          },
+          "device_id": {
+            "name": "Wallet: apparaat-ID"
+          },
+          "asset_id": {
+            "name": "Asset: ID"
+          },
+          "symbol": {
+            "name": "Asset: symbool"
+          },
+          "name": {
+            "name": "Asset: naam"
+          },
+          "wallet": {
+            "name": "Wallet: naam"
+          },
+          "count": {
+            "name": "Uitbetalingen: aantal"
+          },
+          "gross": {
+            "name": "Uitbetalingen: bruto (hoeveelheid)"
+          },
+          "fee": {
+            "name": "Uitbetalingen: kosten (hoeveelheid)"
+          },
+          "net": {
+            "name": "Uitbetalingen: netto (hoeveelheid)"
+          },
+          "value": {
+            "name": "Uitbetalingen: nettowaarde (actueel)"
+          },
+          "currency": {
+            "name": "Uitbetalingen: valuta"
+          },
+          "credited_at": {
+            "name": "Uitbetalingen: laatste"
+          },
+          "apr_percent": {
+            "name": "Beloningen: jaarlijks rendement (APR %)"
+          },
+          "rewards_net": {
+            "name": "Beloningen: netto (hoeveelheid)"
+          },
+          "message": {
+            "name": "Bericht"
+          }
+        }
+      },
+      "earn_change": {
+        "name": "Earn-wijziging",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "offered": "Aangeboden",
+              "withdrawn": "Niet meer aangeboden",
+              "sold_out": "Uitverkocht",
+              "available_again": "Weer beschikbaar",
+              "apr": "Jaarlijks rendement (APR) gewijzigd"
+            }
+          },
+          "device_id": {
+            "name": "Wallet: apparaat-ID"
+          },
+          "asset_id": {
+            "name": "Asset: ID"
+          },
+          "symbol": {
+            "name": "Asset: symbool"
+          },
+          "name": {
+            "name": "Asset: naam"
+          },
+          "wallet": {
+            "name": "Wallet: naam"
+          },
+          "change": {
+            "name": "Earn: wijziging",
+            "state": {
+              "offered": "Aangeboden",
+              "withdrawn": "Niet meer aangeboden",
+              "sold_out": "Uitverkocht",
+              "available_again": "Weer beschikbaar",
+              "apr": "Jaarlijks rendement (APR) gewijzigd"
+            }
+          },
+          "apr_before": {
+            "name": "Earn: jaarlijks rendement voorheen (APR %)"
+          },
+          "apr_after": {
+            "name": "Earn: jaarlijks rendement daarna (APR %)"
+          }
+        }
+      }
+    },
     "sensor": {
       "total_value": {
         "name": "Totale waarde"
@@ -318,19 +476,208 @@
         }
       },
       "return_day": {
-        "name": "Rendement 1 dag"
+        "name": "Rendement 1 dag",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendement: bedrag"
+          }
+        }
       },
       "return_week": {
-        "name": "Rendement 1 week"
+        "name": "Rendement 1 week",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendement: bedrag"
+          }
+        }
       },
       "return_month": {
-        "name": "Rendement 1 maand"
+        "name": "Rendement 1 maand",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendement: bedrag"
+          }
+        }
       },
       "return_six_month": {
-        "name": "Rendement 6 maanden"
+        "name": "Rendement 6 maanden",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendement: bedrag"
+          }
+        }
       },
       "return_year": {
-        "name": "Rendement 1 jaar"
+        "name": "Rendement 1 jaar",
+        "state_attributes": {
+          "return_amount": {
+            "name": "Rendement: bedrag"
+          }
+        }
+      },
+      "invested": {
+        "name": "Geïnvesteerd bedrag",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: wallets"
+          }
+        }
+      },
+      "total_return": {
+        "name": "Totaalrendement",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: wallets"
+          }
+        }
+      },
+      "total_return_percent": {
+        "name": "Totaalrendement %",
+        "state_attributes": {
+          "wallets": {
+            "name": "Portfolio: wallets"
+          }
+        }
+      },
+      "value_crypto": {
+        "name": "Waarde: cryptovaluta",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Groep: aandeel %"
+          },
+          "invested_amount": {
+            "name": "Groep: geïnvesteerd bedrag"
+          },
+          "total_return": {
+            "name": "Groep: totaalrendement"
+          },
+          "total_return_percent": {
+            "name": "Groep: totaalrendement %"
+          },
+          "wallets": {
+            "name": "Groep: wallets"
+          }
+        }
+      },
+      "value_stock": {
+        "name": "Waarde: aandelen",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Groep: aandeel %"
+          },
+          "invested_amount": {
+            "name": "Groep: geïnvesteerd bedrag"
+          },
+          "total_return": {
+            "name": "Groep: totaalrendement"
+          },
+          "total_return_percent": {
+            "name": "Groep: totaalrendement %"
+          },
+          "wallets": {
+            "name": "Groep: wallets"
+          }
+        }
+      },
+      "value_etf": {
+        "name": "Waarde: ETF's",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Groep: aandeel %"
+          },
+          "invested_amount": {
+            "name": "Groep: geïnvesteerd bedrag"
+          },
+          "total_return": {
+            "name": "Groep: totaalrendement"
+          },
+          "total_return_percent": {
+            "name": "Groep: totaalrendement %"
+          },
+          "wallets": {
+            "name": "Groep: wallets"
+          }
+        }
+      },
+      "value_etc": {
+        "name": "Waarde: ETC's",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Groep: aandeel %"
+          },
+          "invested_amount": {
+            "name": "Groep: geïnvesteerd bedrag"
+          },
+          "total_return": {
+            "name": "Groep: totaalrendement"
+          },
+          "total_return_percent": {
+            "name": "Groep: totaalrendement %"
+          },
+          "wallets": {
+            "name": "Groep: wallets"
+          }
+        }
+      },
+      "value_index": {
+        "name": "Waarde: crypto-indices",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Groep: aandeel %"
+          },
+          "invested_amount": {
+            "name": "Groep: geïnvesteerd bedrag"
+          },
+          "total_return": {
+            "name": "Groep: totaalrendement"
+          },
+          "total_return_percent": {
+            "name": "Groep: totaalrendement %"
+          },
+          "wallets": {
+            "name": "Groep: wallets"
+          }
+        }
+      },
+      "value_metal": {
+        "name": "Waarde: edelmetalen",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Groep: aandeel %"
+          },
+          "invested_amount": {
+            "name": "Groep: geïnvesteerd bedrag"
+          },
+          "total_return": {
+            "name": "Groep: totaalrendement"
+          },
+          "total_return_percent": {
+            "name": "Groep: totaalrendement %"
+          },
+          "wallets": {
+            "name": "Groep: wallets"
+          }
+        }
+      },
+      "value_other": {
+        "name": "Waarde: overige",
+        "state_attributes": {
+          "share_percent": {
+            "name": "Groep: aandeel %"
+          },
+          "invested_amount": {
+            "name": "Groep: geïnvesteerd bedrag"
+          },
+          "total_return": {
+            "name": "Groep: totaalrendement"
+          },
+          "total_return_percent": {
+            "name": "Groep: totaalrendement %"
+          },
+          "wallets": {
+            "name": "Groep: wallets"
+          }
+        }
       },
       "wallet": {
         "name": "Saldo (beschikbaar)",
@@ -340,6 +687,9 @@
           },
           "asset_name": {
             "name": "Asset: naam"
+          },
+          "asset_category": {
+            "name": "Asset: categorie"
           },
           "asset_isin": {
             "name": "Asset: ISIN"
@@ -358,6 +708,9 @@
           "asset_name": {
             "name": "Asset: naam"
           },
+          "asset_category": {
+            "name": "Asset: categorie"
+          },
           "asset_isin": {
             "name": "Asset: ISIN"
           },
@@ -366,6 +719,23 @@
           },
           "apr_percent": {
             "name": "Beloningen: jaarlijks rendement (APR %)"
+          },
+          "earn_type": {
+            "name": "Earn: type",
+            "state": {
+              "flexible": "Flexibel",
+              "locked": "Vastgezet"
+            }
+          },
+          "earn_mode": {
+            "name": "Earn: modus",
+            "state": {
+              "staking": "Staking",
+              "stable_coin": "Stablecoin"
+            }
+          },
+          "earn_sold_out": {
+            "name": "Earn: uitverkocht"
           },
           "rewards_gross": {
             "name": "Beloningen: bruto (hoeveelheid)"
@@ -384,6 +754,18 @@
           },
           "rewards_last_at": {
             "name": "Beloningen: laatste uitbetaling"
+          },
+          "rewards_net_30d": {
+            "name": "Beloningen: netto, laatste 30 dagen (hoeveelheid)"
+          },
+          "rewards_net_value_30d": {
+            "name": "Beloningen: nettowaarde, laatste 30 dagen (actueel)"
+          },
+          "rewards_last_net": {
+            "name": "Beloningen: laatste uitbetaling, netto (hoeveelheid)"
+          },
+          "rewards_last_value": {
+            "name": "Beloningen: laatste uitbetaling, waarde (actueel)"
           }
         }
       },
@@ -396,11 +778,17 @@
           "asset_name": {
             "name": "Asset: naam"
           },
+          "asset_category": {
+            "name": "Asset: categorie"
+          },
           "asset_isin": {
             "name": "Asset: ISIN"
           },
           "units": {
             "name": "Asset: hoeveelheid"
+          },
+          "price": {
+            "name": "Asset: prijs"
           },
           "average_buy_price": {
             "name": "Positie: gemiddelde aankoopprijs"
@@ -409,10 +797,22 @@
             "name": "Positie: geïnvesteerd bedrag"
           },
           "total_return": {
-            "name": "Positie: winst/verlies"
+            "name": "Positie: totaalrendement"
           },
           "total_return_percent": {
-            "name": "Positie: winst/verlies %"
+            "name": "Positie: totaalrendement %"
+          },
+          "portfolio_share_percent": {
+            "name": "Positie: aandeel in portfolio %"
+          },
+          "price_24h_ago": {
+            "name": "24 uur: vorige prijs"
+          },
+          "change_24h_pct": {
+            "name": "24 uur: wijziging %"
+          },
+          "return_24h": {
+            "name": "24 uur: rendement"
           }
         }
       },
@@ -423,6 +823,9 @@
           },
           "asset_name": {
             "name": "Asset: naam"
+          },
+          "asset_category": {
+            "name": "Asset: categorie"
           },
           "asset_isin": {
             "name": "Asset: ISIN"
@@ -533,6 +936,18 @@
     },
     "staking_reward_value": {
       "message": "Vandaag ongeveer {value} {currency} waard."
+    },
+    "no_portfolio": {
+      "message": "Er is geen Bitpanda Portfolio ingesteld en geladen."
+    },
+    "portfolio_unavailable": {
+      "message": "De cijfers van het Bitpanda Portfolio zijn op dit moment niet beschikbaar."
+    },
+    "rewards_start_after_end": {
+      "message": "Het begin ligt na het einde."
+    },
+    "refresh_unknown_entry": {
+      "message": "De gekozen dienst is geen geladen Bitpanda-dienst."
     }
   },
   "issues": {
@@ -567,16 +982,46 @@
     "portfolio_exists": {
       "title": "Bitpanda-overstap geblokkeerd: er is al een Bitpanda Portfolio ingesteld",
       "description": "De Bitpanda-invoer \"{entry}\" van vóór de overstap kan niet worden omgezet: die zou naast \"{portfolio}\" een tweede Bitpanda Portfolio worden, en er kan er maar één worden ingesteld. Er is niets aan gewijzigd. Verwijder een van beide op de integratiepagina van Bitpanda (⋮ → \"Verwijderen\"): \"{entry}\" of \"{portfolio}\". Houd je \"{entry}\", herstart Home Assistant daarna om die om te zetten."
-    },
-    "slow_price_interval": {
-      "title": "Bitpanda Price Tracker: prijzen slechts elke {minutes} minuten vernieuwd",
-      "description": "De Bitpanda Price Tracker volgt {count} assets en heeft per vernieuwing één verzoek per asset nodig. Om binnen zijn verzoekbudget te blijven, vernieuwt hij hun prijzen slechts elke {minutes} minuten. Volg minder assets voor snellere updates: verwijder het apparaat van een asset (⋮ op de apparaatpagina) of een hele groep (⋮ op de integratiepagina van Bitpanda)."
     }
   },
   "services": {
     "refresh": {
       "name": "Vernieuwen",
-      "description": "Haalt je portfolio en de prijzen nu op bij Bitpanda en wacht tot beide klaar zijn. Genegeerd binnen de wachttijd na de vorige aanroep; mislukt als een vernieuwing mislukt."
+      "description": "Haalt je portfolio en de prijzen nu op bij Bitpanda, of alleen de gekozen dienst, en wacht tot dat klaar is. Een dienst binnen zijn wachttijd wordt overgeslagen; mislukt als een vernieuwing mislukt.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Dienst",
+          "description": "Alleen deze dienst: Bitpanda Portfolio of Bitpanda Price Tracker. Leeg: beide."
+        }
+      }
+    },
+    "get_portfolio": {
+      "name": "Portfolio ophalen",
+      "description": "Geeft de cijfers van het Portfolio en elke wallet zoals de sensoren ze tonen, zonder Bitpanda te vragen."
+    },
+    "get_portfolio_history": {
+      "name": "Portfoliogeschiedenis ophalen",
+      "description": "Geeft de waarde van het Portfolio over een periode, zoals de Portfolio-kaart die tekent.",
+      "fields": {
+        "timeframe": {
+          "name": "Periode",
+          "description": "De periode van de geschiedenis."
+        }
+      }
+    },
+    "get_staking_rewards": {
+      "name": "Stakingbeloningen ophalen",
+      "description": "Geeft elke stakinguitbetaling die het Portfolio heeft gelezen, de oudste eerst, eventueel tussen twee tijdstippen.",
+      "fields": {
+        "start": {
+          "name": "Begin",
+          "description": "Uitbetalingen vanaf dit tijdstip, in de tijdzone van Home Assistant."
+        },
+        "end": {
+          "name": "Einde",
+          "description": "Uitbetalingen vóór dit tijdstip, in de tijdzone van Home Assistant."
+        }
+      }
     }
   }
 }

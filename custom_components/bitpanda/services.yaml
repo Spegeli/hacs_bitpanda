@@ -1,2 +1,30 @@
-# Name and description are translations: services.refresh in strings.json.
+# Names, descriptions and field labels are translations: services in
+# strings.json.
 refresh:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: bitpanda
+get_portfolio:
+get_portfolio_history:
+  fields:
+    timeframe:
+      required: true
+      selector:
+        select:
+          options:
+            - day
+            - week
+            - month
+            - six_month
+            - year
+          translation_key: history_timeframe
+get_staking_rewards:
+  fields:
+    start:
+      selector:
+        datetime:
+    end:
+      selector:
+        datetime:

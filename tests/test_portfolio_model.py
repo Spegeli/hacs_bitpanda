@@ -1,5 +1,7 @@
 """Tests for the Portfolio data model."""
+import copy
 from datetime import UTC, datetime, timedelta
+import json
 
 import pytest
 
@@ -7,19 +9,30 @@ from custom_components.bitpanda.const import PORTFOLIO_UPDATE_INTERVAL
 from custom_components.bitpanda.portfolio_model import (
     PORTFOLIO_FIGURES,
     EarnData,
+    EarnProduct,
     FigureWatch,
     Holding,
     PortfolioData,
     PortfolioReturns,
+    PositionTotals,
     RewardPayout,
+    RewardTotals,
     _is_later,
+    add_rewards,
+    last_payout_net,
     lists_nothing,
+    newest_credited_at,
+    operation_credited_at,
     parse_earn_configs,
     parse_portfolio,
     payouts_after,
+    position_totals,
+    rewards_since,
     staking_applies,
     sum_rewards,
     tolerate_failed_timeframes,
+    totals_from_section,
+    totals_to_section,
 )
 
 from tests.conftest import load_fixture
@@ -92,18 +105,6 @@ def test_available_above_balance_is_clamped():
     assert holding.staked == 0.0
     assert holding.wallet_value == 20.0
     assert holding.staking_value == 0.0
-
-
-def test_the_price_is_what_one_unit_is_worth_in_the_same_answer():
-    """The value over the units -- the proportion the value is split by --
-    unrounded, so a token worth a fraction of a cent keeps its digits."""
-    holding = Holding(asset_id=VSN, balance=21466.95, available=0.0, value=826.72)
-    assert holding.price == 826.72 / 21466.95
-
-
-def test_the_price_is_unknown_without_a_value_or_without_units():
-    assert Holding(asset_id=VSN, balance=10.0, available=10.0, value=None).price is None
-    assert Holding(asset_id=VSN, balance=0.0, available=0.0, value=0.0).price is None
 
 
 # --- parse_portfolio ------------------------------------------------------------
@@ -339,23 +340,30 @@ def test_a_cash_plus_holding_without_a_value_makes_cash_plus_unknown():
 
 def test_the_figures_follow_what_the_answer_lists():
     """Each figure depends on its own entry: Total value on any entry at all,
-    Cash on a fiat entry, Cash Plus on a holding of the group `fiat_earn`."""
-    nothing = {"total": False, "cash": False, "cash_plus": False}
+    Cash on a fiat entry, Cash Plus on a holding of the group `fiat_earn`,
+    the positions' figures on a holding that is not Cash Plus."""
+    nothing = {"total": False, "cash": False, "cash_plus": False, "positions": False}
     empty = parse_portfolio([])
     assert empty.figures_listed() == nothing
     # Keyed as the figures are: the coordinator looks each one up by its key.
     assert set(empty.figures_listed()) == set(PORTFOLIO_FIGURES)
 
     fiat = parse_portfolio([_fiat_entry("5.00")])
-    assert fiat.figures_listed() == {"total": True, "cash": True, "cash_plus": False}
+    assert fiat.figures_listed() == {
+        "total": True, "cash": True, "cash_plus": False, "positions": False
+    }
 
     token = parse_portfolio([_asset_entry(VSN, "1.0", "1.0", "5.00")])
     token.assets = {VSN: {"id": VSN, "group": "token"}}
-    assert token.figures_listed() == {"total": True, "cash": False, "cash_plus": False}
+    assert token.figures_listed() == {
+        "total": True, "cash": False, "cash_plus": False, "positions": True
+    }
 
     cash_plus = parse_portfolio([_asset_entry(BCPEUR, "1.0", "1.0", "1.00")])
     cash_plus.assets = {BCPEUR: _cash_plus_asset(BCPEUR, "BCPEUR")}
-    assert cash_plus.figures_listed() == {"total": True, "cash": False, "cash_plus": True}
+    assert cash_plus.figures_listed() == {
+        "total": True, "cash": False, "cash_plus": True, "positions": False
+    }
 
     # An entry of no shape this endpoint documents is no entry at all.
     assert parse_portfolio([{"something": "else"}]).figures_listed() == nothing
@@ -365,27 +373,116 @@ def test_data_built_by_hand_lists_nothing_and_waits_for_nothing():
     """What the sensors read of data built by hand, before the coordinator
     tells which figures wait."""
     data = PortfolioData()
-    assert data.figures_listed() == {"total": False, "cash": False, "cash_plus": False}
+    assert data.figures_listed() == {
+        "total": False, "cash": False, "cash_plus": False, "positions": False
+    }
     assert data.waiting == frozenset()
 
 
-def test_only_cash_plus_can_be_in_doubt():
+def test_cash_plus_and_the_positions_can_be_in_doubt():
     """An entry that is listed but cannot be read is there for Total value,
     and a fiat one for Cash: an unreadable entry is no sign of a sale. Cash
-    Plus alone can be in doubt (None): a holding that cannot be read, or
-    that no record classifies yet, might or might not be one. Only a holding
-    the catalogue does not list is sure to be no Cash Plus."""
+    Plus and the positions can be in doubt (None): a holding that cannot be
+    read, or that no record classifies yet, might or might not be one. Only
+    a holding the catalogue does not list is sure to be no Cash Plus -- and
+    so a position."""
     fiat = parse_portfolio([{"currency_id": EUR_ID, "balance": {"value": "x"}}])
     assert fiat.cash is None
     assert fiat.listed_fiat is True
 
     unreadable = parse_portfolio([{"asset_id": BCPEUR, "balance": {"value": "x"}}])
-    assert unreadable.figures_listed() == {"total": True, "cash": False, "cash_plus": None}
+    assert unreadable.figures_listed() == {
+        "total": True, "cash": False, "cash_plus": None, "positions": None
+    }
 
     unclassified = parse_portfolio([_asset_entry(VSN, "1.0", "1.0", "5.00")])
     assert unclassified.listed_cash_plus is None
+    assert unclassified.listed_positions is None
     unclassified.unlisted = {VSN}
     assert unclassified.listed_cash_plus is False
+    assert unclassified.listed_positions is True
+
+
+# --- PortfolioData: the positions -----------------------------------------------
+
+
+def test_positions_are_the_holdings_that_are_not_cash_plus():
+    """A wallet is a position, and so is a held asset the catalogue does
+    not list -- never Cash Plus, which the catalogue lists."""
+    data = parse_portfolio(
+        [
+            _asset_entry(VSN, "1.0", "1.0", "5.00"),
+            _asset_entry("unlisted-asset", "2.0", "2.0", "7.00"),
+            _asset_entry(BCPEUR, "1.0", "1.0", "1.00"),
+            _fiat_entry("3.00"),
+        ]
+    )
+    data.assets = {VSN: {"id": VSN, "group": "token"}, BCPEUR: _cash_plus_asset(BCPEUR, "BCPEUR")}
+    data.unlisted = {"unlisted-asset"}
+    assert data.positions is not None
+    assert set(data.positions) == {VSN, "unlisted-asset"}
+    assert data.in_doubt is False
+
+
+def test_positions_are_unknown_while_an_entry_is_unparsed():
+    data = parse_portfolio(
+        [_asset_entry(VSN, "1.0", "1.0", "5.00"), {"asset_id": "x", "balance": {"value": "?"}}]
+    )
+    data.assets = {VSN: {"id": VSN, "group": "token"}}
+    assert data.unparsed_assets == {"x"}
+    assert data.positions is None
+    assert data.listed_positions is None
+    assert data.in_doubt is True
+
+
+def test_positions_are_unknown_while_a_holding_is_unclassified():
+    data = parse_portfolio([_asset_entry(VSN, "1.0", "1.0", "5.00")])
+    assert data.positions is None
+    assert data.in_doubt is True
+
+
+def test_position_totals_sum_value_and_invested():
+    totals = position_totals(
+        [
+            Holding(asset_id="a", balance=1.0, available=1.0, value=200.0, invested=150.0),
+            Holding(asset_id="b", balance=1.0, available=1.0, value=100.0, invested=50.0),
+        ]
+    )
+    assert totals == PositionTotals(value=300.0, invested=200.0, count=2)
+    assert totals.total_return == 100.0
+    assert totals.total_return_percent == 50.0
+
+
+def test_position_totals_round_to_the_apis_decimals():
+    totals = position_totals(
+        [
+            Holding(asset_id="a", balance=1.0, available=1.0, value=0.1, invested=0.2),
+            Holding(asset_id="b", balance=1.0, available=1.0, value=0.2, invested=0.1),
+        ]
+    )
+    assert totals is not None
+    assert totals.value == 0.3
+    assert totals.invested == 0.3
+    assert totals.total_return == 0.0
+
+
+@pytest.mark.parametrize("missing", ["value", "invested"])
+def test_position_totals_are_unknown_when_a_value_or_invested_is_missing(missing):
+    holding = Holding(asset_id="a", balance=1.0, available=1.0, value=10.0, invested=5.0)
+    setattr(holding, missing, None)
+    assert position_totals([holding]) is None
+
+
+@pytest.mark.parametrize("invested", [0.0, -5.0])
+def test_total_return_percent_needs_something_invested(invested):
+    totals = PositionTotals(value=10.0, invested=invested, count=1)
+    assert totals.total_return_percent is None
+
+
+def test_no_positions_sum_to_zero():
+    totals = position_totals([])
+    assert totals == PositionTotals(value=0.0, invested=0.0, count=0)
+    assert totals.total_return_percent is None
 
 
 # --- Returns: a timeframe whose own request fails ----------------------------------
@@ -407,6 +504,19 @@ def test_a_failing_timeframe_keeps_its_last_return_until_confirmed():
         assert returns == PortfolioReturns(values={"DAY": 1.0, "WEEK": 2.0})
     returns = tolerate_failed_timeframes(_WEEK_FAILED, returns, streaks, _T0 + 2 * _I, _I)
     assert returns == PortfolioReturns(values={"DAY": 1.0}, failed=frozenset({"WEEK"}))
+
+
+def test_a_failing_timeframe_keeps_its_value_series_with_its_return():
+    """The cards' line of the week stays while its return does, and goes
+    with it once the failure is confirmed."""
+    line = ((1, 100.0), (2, 101.0))
+    streaks = {}
+    returns = PortfolioReturns(values={"DAY": 1.0, "WEEK": 2.0}, series={"WEEK": line})
+    for at in (_T0, _T0 + _I):
+        returns = tolerate_failed_timeframes(_WEEK_FAILED, returns, streaks, at, _I)
+        assert returns.series == {"WEEK": line}
+    returns = tolerate_failed_timeframes(_WEEK_FAILED, returns, streaks, _T0 + 2 * _I, _I)
+    assert returns.series == {}
 
 
 def test_a_timeframe_answered_without_a_figure_stays_unknown_while_it_fails():
@@ -590,6 +700,38 @@ def test_parse_earn_configs_counts_sold_out_products_but_not_disabled_ones():
     assert earn.apr == {"a": 0.05, "b": 0.04}
 
 
+def test_the_earn_catalogue_keeps_each_products_type_mode_and_sold_out():
+    configs = load_fixture("earn-configs.json")
+    earn = parse_earn_configs(configs)
+    first = configs[0]
+    assert earn.products[first["asset_id"]] == EarnProduct(
+        apr=0.0544, type="FLEXIBLE", mode="STAKING_EARN", sold_out=False, enabled=True
+    )
+    earn = parse_earn_configs([{"asset_id": "a", "enabled": True, "soldout": True}])
+    assert earn.products["a"] == EarnProduct(
+        apr=None, type=None, mode=None, sold_out=True, enabled=True
+    )
+
+
+def test_an_asset_with_two_products_takes_the_enabled_one():
+    """Bitpanda sends one product per asset; should it send two, the enabled
+    one counts -- for the APR and for whether the asset is offered alike."""
+    for configs in (
+        [
+            {"asset_id": "a", "annual_percentage_rate": 0.02, "enabled": False, "type": "LOCKED"},
+            {"asset_id": "a", "annual_percentage_rate": 0.05, "enabled": True, "type": "FLEXIBLE"},
+        ],
+        [
+            {"asset_id": "a", "annual_percentage_rate": 0.05, "enabled": True, "type": "FLEXIBLE"},
+            {"asset_id": "a", "annual_percentage_rate": 0.02, "enabled": False, "type": "LOCKED"},
+        ],
+    ):
+        earn = parse_earn_configs(configs)
+        assert (earn.apr, earn.offered, earn.products["a"].type) == (
+            {"a": 0.05}, frozenset({"a"}), "FLEXIBLE"
+        )
+
+
 # --- When a wallet has a Staking sensor ------------------------------------------
 
 
@@ -663,6 +805,63 @@ def test_payouts_after_compares_times_not_text():
     payouts = (early, later, latest)
     assert payouts_after(payouts, "2026-09-22T17:16:35Z") == [later, latest]
     assert payouts_after(payouts, None) == [early, later, latest]
+
+
+_THIRTY_DAYS_AGO = datetime(2026, 9, 22, 12, 0, tzinfo=UTC)
+
+
+def test_the_rewards_of_the_last_30_days_are_summed():
+    """The net of the payouts credited after the moment 30 days ago: not
+    one exactly then, nor before; a time without an offset counts as UTC,
+    one with an offset by its offset."""
+    payouts = [
+        RewardPayout("2026-09-21T12:00:00Z", 1.0, 0.2, 0.8),
+        RewardPayout("2026-09-22T12:00:00Z", 1.0, 0.2, 0.8),
+        RewardPayout("2026-09-22T13:00:00+02:00", 1.0, 0.2, 0.8),
+        RewardPayout("2026-09-22T12:00:00.001Z", 2.0, 0.4, 1.6),
+        RewardPayout("2026-09-23T12:00:00", 3.0, 0.6, 2.4),
+        RewardPayout("2026-10-21T12:00:00+02:00", 1.0, 0.2, 0.8),
+    ]
+    assert rewards_since(payouts, _THIRTY_DAYS_AGO) == 4.8
+
+
+def test_no_reward_in_the_last_30_days_reads_0():
+    assert rewards_since([RewardPayout("2026-08-01T00:00:00Z", 1.0, 0.0, 1.0)], _THIRTY_DAYS_AGO) == 0.0
+    assert rewards_since([], _THIRTY_DAYS_AGO) == 0.0
+
+
+def test_a_payout_whose_time_does_not_parse_is_not_in_the_window():
+    payouts = [
+        RewardPayout("yesterday", 1.0, 0.0, 1.0),
+        RewardPayout("2026-10-20T00:00:00Z", 1.0, 0.0, 1.0),
+    ]
+    assert rewards_since(payouts, _THIRTY_DAYS_AGO) == 1.0
+
+
+def test_the_rewards_of_the_last_30_days_round_to_eight_decimals():
+    payouts = [RewardPayout("2026-10-20T00:00:00Z", 0.1, 0.0, 0.1)] * 3
+    assert rewards_since(payouts, _THIRTY_DAYS_AGO) == 0.3
+
+
+def test_the_last_payout_sums_the_payouts_of_the_newest_time():
+    """Several payouts credited at the same moment are one payout -- the
+    same moment whether written with or without its fraction."""
+    totals = RewardTotals(
+        gross=45.0, fee=9.0, net=36.0, count=3, last_at="2026-09-22T17:16:35Z",
+        payouts=(
+            RewardPayout("2026-09-15T16:20:00Z", 30.0, 6.0, 24.0),
+            RewardPayout("2026-09-22T17:16:35Z", 10.0, 2.0, 8.0),
+            RewardPayout("2026-09-22T17:16:35.000Z", 5.0, 1.0, 4.0),
+        ),
+    )
+    assert last_payout_net(totals) == 12.0
+
+
+def test_the_last_payout_is_absent_without_a_timed_payout():
+    assert last_payout_net(RewardTotals(gross=3.0, net=3.0, count=2)) is None
+    assert last_payout_net(
+        RewardTotals(gross=1.0, net=1.0, count=1, last_at="2026-09-22T17:16:35Z")
+    ) is None
 
 
 def test_sum_rewards_totals_gross_fee_and_net():
@@ -770,3 +969,114 @@ def test_is_later_survives_a_mixed_timezone_batch():
 def test_is_later_survives_a_non_string():
     result = _is_later(12345, "2026-09-21T00:00:00Z")
     assert isinstance(result, bool)
+
+
+# --- Rewards read in parts: add_rewards, operation times, the section form ----
+
+
+def _staking_history():
+    """Payouts of three assets, one of them without its time."""
+    return [
+        _reward("vsn", "10.00000001", "2.00000001", "2026-09-09T18:31:22.080Z"),
+        _reward("ada", "1", "0.2", "2026-09-10T10:00:00Z"),
+        _reward("vsn", "0.1", "0.02", "2026-09-22T17:16:35Z"),
+        _reward("eth", "0.00004", "0.00001", "2026-09-23T08:00:00Z"),
+        _reward("ada", "0.5", "0.1", None),
+    ]
+
+
+def test_adding_operations_to_totals_equals_summing_them_all_at_once():
+    """Read in two parts -- the history so far, then what came since -- the
+    totals and payouts are those of one read over all of it."""
+    history = _staking_history()
+    for cut in range(len(history) + 1):
+        assert add_rewards(sum_rewards(history[:cut]), history[cut:]) == sum_rewards(history), cut
+
+
+def test_adding_operations_leaves_the_totals_it_was_given_alone():
+    totals = sum_rewards(_staking_history()[:2])
+    before = copy.deepcopy(totals)
+    added = add_rewards(totals, [_reward("vsn", "1", "0", "2026-09-22T17:16:35Z")])
+    assert totals == before
+    assert added["vsn"].count == before["vsn"].count + 1
+
+
+def test_a_transaction_that_is_no_object_is_skipped():
+    """Bitpanda's operations are open-ended: a transaction in an unexpected
+    shape is no payout, and the valid one beside it still counts."""
+    operation = _reward("vsn", "10", "2", "2026-09-22T17:16:35Z")
+    operation["transactions"] = ["oops", None, *operation["transactions"]]
+    totals = add_rewards({}, [operation])
+    assert totals["vsn"].count == 1
+    assert totals["vsn"].net == 8.0
+
+
+def test_an_operation_is_as_new_as_its_newest_transaction():
+    """A swap carries two legs; one may be credited later than the other,
+    and one may lack its time. Times compare as times, not as text."""
+    swap = {
+        "operation_id": "swap",
+        "operation_type": "swap",
+        "transactions": [
+            {"credited_at": "2026-09-22T17:16:35Z"},
+            {"credited_at": "2026-09-22T17:16:35.500Z"},
+            {"credited_at": None},
+        ],
+    }
+    assert operation_credited_at(swap) == "2026-09-22T17:16:35.500Z"
+    assert operation_credited_at({"operation_type": "x", "transactions": None}) is None
+    assert operation_credited_at({"operation_type": "x", "transactions": [{}]}) is None
+
+
+def test_the_newest_time_of_operations_compares_times_not_text():
+    operations = [
+        _reward("vsn", "1", "0", "2026-09-22T17:16:35Z"),
+        _reward("vsn", "1", "0", "2026-09-22T17:16:34.999Z"),
+    ]
+    assert newest_credited_at(operations, None) == "2026-09-22T17:16:35Z"
+    assert newest_credited_at(operations, "2026-09-22T17:16:35.001Z") == "2026-09-22T17:16:35.001Z"
+    assert newest_credited_at([], "2026-09-01T00:00:00Z") == "2026-09-01T00:00:00Z"
+    assert newest_credited_at([], None) is None
+
+
+def test_totals_survive_the_section_form_through_json():
+    totals = sum_rewards(_staking_history())
+    stored = json.loads(json.dumps(totals_to_section(totals)))
+    assert totals_from_section(stored) == totals
+    assert totals_from_section({}) == {}
+
+
+def _section_entry(**changes):
+    entry = {
+        "gross": 1.0,
+        "fee": 0.2,
+        "net": 0.8,
+        "count": 1,
+        "last_at": "2026-09-22T17:16:35Z",
+        "payouts": [["2026-09-22T17:16:35Z", 1.0, 0.2, 0.8]],
+    }
+    entry.update(changes)
+    return entry
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        None,
+        [],
+        "vsn",
+        {"vsn": []},
+        {"vsn": {"gross": 1.0}},
+        {1: _section_entry()},
+        {"vsn": _section_entry(gross="1.0")},
+        {"vsn": _section_entry(count=True)},
+        {"vsn": _section_entry(count=1.5)},
+        {"vsn": _section_entry(last_at=5)},
+        {"vsn": _section_entry(payouts=None)},
+        {"vsn": _section_entry(payouts=[["2026-09-22T17:16:35Z", 1.0, 0.2]])},
+        {"vsn": _section_entry(payouts=[[None, 1.0, 0.2, 0.8]])},
+        {"vsn": _section_entry(payouts=[["2026-09-22T17:16:35Z", 1.0, False, 0.8]])},
+    ],
+)
+def test_a_malformed_section_form_reads_as_none(raw):
+    assert totals_from_section(raw) is None

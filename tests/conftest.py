@@ -1,13 +1,15 @@
 """Shared fixtures for Bitpanda integration tests."""
+import asyncio
 from collections.abc import Mapping
 from datetime import timedelta
 from functools import partial
 import json
 import logging
 from pathlib import Path
+import re
 import string
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.history import get_significant_states
@@ -22,8 +24,17 @@ from homeassistant.data_entry_flow import FlowManager, FlowResultType
 from homeassistant.helpers import device_registry as dr, issue_registry as ir
 from homeassistant.util import dt as dt_util
 import pytest
+import yaml
 
+from custom_components.bitpanda.api import BitpandaApiError
 from custom_components.bitpanda.assets import slim_asset
+from custom_components.bitpanda.portfolio_coordinator import PortfolioRuntime
+from custom_components.bitpanda.portfolio_store import (
+    KnownWallets,
+    OperationsHistory,
+    PortfolioStore,
+    RewardMarks,
+)
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 
@@ -55,14 +66,68 @@ def pytest_configure(config):
     # written to stderr, and the recorder's thread can write one between two
     # tests, outside pytest's capture. Its warnings still show.
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+    # A test that runs the real ticker request (no_real_ticker).
+    config.addinivalue_line(
+        "markers", "real_ticker: the test runs the real BitpandaApiClient.async_get_ticker"
+    )
 
 _FIXTURES = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture(autouse=True)
+def stub_the_dashboard_cards(request):
+    """Every test but test_cards.py sets up the integration without serving
+    the cards' bundle: the test environment has no frontend package, so
+    add_extra_js_url finds nothing to add to. test_cards.py owns it."""
+    if request.module.__name__.endswith("test_cards"):
+        yield
+        return
+    with patch("custom_components.bitpanda.async_register_cards", AsyncMock()):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def no_real_ticker(request):
+    """A Portfolio reads each wallet's price from Bitpanda's ticker in a round
+    after every successful refresh: in tests no ticker answers -- a request
+    fails at once, as an HTTP error, and the wallets have no price.
+    A test that wants ticker prices patches async_get_ticker itself; the API
+    tests (test_api_*.py) and a test marked `real_ticker` run the real
+    method."""
+    if request.node.path.name.startswith("test_api") or request.node.get_closest_marker(
+        "real_ticker"
+    ):
+        yield
+        return
+    failure = BitpandaApiError("no ticker in tests", kind="http_status", path="/tickers")
+    with patch(
+        "custom_components.bitpanda.api.BitpandaApiClient.async_get_ticker",
+        AsyncMock(side_effect=failure),
+    ):
+        yield
 
 
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
     """Make Home Assistant load custom_components during tests."""
     return
+
+
+async def async_settle(rounds: int = 1000) -> None:
+    """Let the event loop run until it has no callback ready: whatever
+    still waits then waits for something -- an event, a lock, a timer, an
+    executor job --, and no task of the loop will move it on its own. That
+    is what "nothing happened yet" asserts in the tests that call it; a job
+    running in a thread can still finish later, so they wait on none.
+    Fails when the loop is still busy after `rounds` turns, rather than
+    passing on a guess."""
+    loop = asyncio.get_running_loop()
+    for _ in range(rounds):
+        await asyncio.sleep(0)
+        # The loop's queue of callbacks ready to run (CPython's asyncio).
+        if not loop._ready:  # type: ignore[attr-defined]
+            return
+    raise AssertionError(f"the event loop was still busy after {rounds} turns")
 
 
 def load_fixture(name: str):
@@ -87,6 +152,26 @@ def price_group(category: str, *assets: dict, title: str | None = None) -> Confi
     )
 
 
+def portfolio_runtime(hass, entry_id: str = "eid", **fields: Any) -> PortfolioRuntime:
+    """A Portfolio's runtime data built by hand: `fields` as given -- the
+    coordinators at least --, no group titles and setup data unless given,
+    the Portfolio's file as at a first start: no list of known wallets, no
+    marks, nothing read of the operations -- and its platforms set up."""
+    store = PortfolioStore(hass, entry_id)
+    runtime = PortfolioRuntime(**{
+        "group_titles": {},
+        "data_at_setup": {},
+        "options_at_setup": {},
+        "known_wallets": KnownWallets(store, None, None),
+        "reward_marks": RewardMarks(store, None, None),
+        "operations": OperationsHistory(store, None, None),
+        **fields,
+    })
+    # Set up already: nothing waits for the platforms.
+    runtime.ready.set()
+    return runtime
+
+
 def wallet_group(category: str, title: str | None = None) -> ConfigSubentryData:
     """A Portfolio wallet group as the integration stores it: one config
     subentry per asset category, keyed by the category, holding just that."""
@@ -97,6 +182,23 @@ def wallet_group(category: str, title: str | None = None) -> ConfigSubentryData:
         unique_id=category,
     )
 
+
+# The data of each of the Portfolio's announcements, by event entity key
+# (announcements.PORTFOLIO_EVENT_TYPES): the bus event's fields, which the
+# entity shows as its attributes.
+ANNOUNCEMENT_FIELDS = {
+    "new_wallet": frozenset({
+        "device_id", "asset_id", "symbol", "name", "wallet", "category", "units", "value",
+        "currency", "message",
+    }),
+    "staking_reward": frozenset({
+        "device_id", "asset_id", "symbol", "name", "wallet", "count", "gross", "fee", "net",
+        "value", "currency", "credited_at", "apr_percent", "rewards_net", "message",
+    }),
+    "earn_change": frozenset({
+        "device_id", "asset_id", "symbol", "name", "wallet", "change", "apr_before", "apr_after",
+    }),
+}
 
 _INTEGRATION = Path(__file__).parent.parent / "custom_components" / "bitpanda"
 
@@ -159,9 +261,21 @@ def flow_text_problems(texts: dict, result: Mapping[str, Any]) -> list[tuple]:
             shown.append(texts["abort"][result["reason"]])
         else:
             problems.append(("no abort text", result["reason"]))
+    elif result["type"] == FlowResultType.CREATE_ENTRY:
+        # The frontend shows create_entry.<description>, create_entry.default
+        # without one -- or its own text when there is no such key.
+        key = result.get("description") or "default"
+        if key in texts.get("create_entry", {}):
+            shown.append(texts["create_entry"][key])
+        elif result.get("description"):
+            problems.append(("no create_entry text", key))
     supplied = set(result.get("description_placeholders") or {})
     problems.extend(
-        ("placeholder not supplied", result.get("step_id") or result["reason"], missing)
+        (
+            "placeholder not supplied",
+            result.get("step_id") or result.get("reason") or result.get("description") or "default",
+            missing,
+        )
         for text in shown
         if (missing := _placeholders(text) - supplied)
     )
@@ -170,15 +284,16 @@ def flow_text_problems(texts: dict, result: Mapping[str, Any]) -> list[tuple]:
 
 @pytest.fixture(autouse=True)
 def check_flow_texts():
-    """Every form, menu and abort a Bitpanda flow shows has its texts, and
-    every placeholder of a text it shows is supplied.
+    """Every form, menu, abort and created entry a Bitpanda flow shows has
+    its texts, and every placeholder of a text it shows is supplied.
 
     Home Assistant core checks this with its check_translations fixture,
     which pytest-homeassistant-custom-component does not ship. Without the
     check, a dropped text or a renamed placeholder shows the user a raw key
     or a literal {placeholder}. Checked for the config, options and subentry
     flows: the step's title and texts, a form's errors and sections, a menu's
-    option labels, and the abort reason.
+    option labels, the abort reason, and a created entry's text
+    (`create_entry.<description>`, else `create_entry.default`).
     Read from translations/en.json, which equals strings.json (test_strings).
     """
     english = json.loads(
@@ -298,3 +413,17 @@ async def statistics_units(hass, entity_ids) -> dict[str, str | None]:
         statistic_id: meta["unit_of_measurement"]
         for statistic_id, (_, meta) in metadata.items()
     }
+
+
+def readme_event_guard() -> tuple[dict, list]:
+    """The README's state trigger on an event entity (section "Event
+    entities"): its `not_from` and `not_to`, which keep a reload from running
+    it, and its conditions, which keep an entity coming back with its last
+    event restored -- after a currency change, say -- from running it."""
+    readme = (Path(__file__).parent.parent / "README.md").read_text(encoding="utf-8")
+    section = readme[readme.index("### Event entities"):]
+    block = re.search(r"```yaml\n(.*?)```", section, re.DOTALL)
+    assert block is not None
+    config = yaml.safe_load(block.group(1))
+    [trigger] = config["triggers"]
+    return {key: trigger[key] for key in ("not_from", "not_to")}, config.get("conditions", [])

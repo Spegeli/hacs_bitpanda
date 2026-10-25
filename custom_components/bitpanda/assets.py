@@ -28,9 +28,12 @@ CATALOGUE_FIELDS = ("id", "symbol", "name", "isin", "type", "group")
 # filters -- (type, group), group None for any -- that list it. Every filter
 # was verified live on 2026-09-24. Together they cover 14,051 of 14,054
 # catalogue assets -- the three left out are security/fiat_earn (Cash Plus),
-# a cash equivalent. Stocks exist in two families, equity_security/
-# equity_stock and security/stock, often the same company twice; both are
-# genuine, priced listings, so a category can merge several filters.
+# a cash equivalent. Stocks, ETFs and ETCs exist in two families: the
+# current equity_security one and Bitpanda's old security line, often the
+# same company twice. Both are priced, so a category can merge several
+# filters -- an asset of the old line, tracked or held, still finds its
+# group --, but "Add price tracker" offers the current line only
+# (asset_flow._OLD_SECURITIES).
 ASSET_CATEGORY_FILTERS: dict[str, list[tuple[str, str | None]]] = {
     "crypto": [("cryptocoin", None)],
     "stock": [("equity_security", "equity_stock"), ("security", "stock")],
@@ -46,6 +49,10 @@ ASSET_CATEGORY_FILTERS: dict[str, list[tuple[str, str | None]]] = {
 
 # The category of an asset no filter above lists, such as Cash Plus.
 CATEGORY_OTHER = "other"
+
+# Every category an asset can fall in, in the order of the groups: one wallet
+# group each, and one value sensor of the Portfolio each (naming.class_key).
+ASSET_CATEGORIES: tuple[str, ...] = (*ASSET_CATEGORY_FILTERS, CATEGORY_OTHER)
 
 # The categories whose assets show their ISIN (asset_isin), and so the ones
 # "Add price tracker" lets search by ISIN (asset_flow). The catalogue gives
@@ -81,9 +88,14 @@ def asset_isin(asset: dict[str, Any]) -> str | None:
 
 def asset_attributes(asset: dict[str, Any]) -> dict[str, str | None]:
     """What every sensor of `asset` shows about it: `asset` (the symbol),
-    `asset_name`, and `asset_isin` where asset_isin gives one -- no such
-    key at all for any other asset."""
-    attrs = {"asset": asset.get("symbol"), "asset_name": asset.get("name")}
+    `asset_name`, `asset_category` (the key of asset_category, which the
+    dashboard cards group by), and `asset_isin` where asset_isin gives one
+    -- no such key at all for any other asset."""
+    attrs = {
+        "asset": asset.get("symbol"),
+        "asset_name": asset.get("name"),
+        "asset_category": asset_category(asset),
+    }
     isin = asset_isin(asset)
     if isin is not None:
         attrs["asset_isin"] = isin

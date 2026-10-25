@@ -38,7 +38,7 @@ class FailureStreak:
 
     `add` records one more failure at the time it was asked for. `first` and
     `last` are the earliest and the latest of those times, whatever order
-    the failures come in: refreshes that overlap can end in any order.
+    the failures are added in.
     `confirmed` says whether the streak so far -- FAILURE_TOLERANCE of them,
     spread over the regular pace at the least -- outweighs whatever a
     coordinator held before; False while nothing has been added yet, rather

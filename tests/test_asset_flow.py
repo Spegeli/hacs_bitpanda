@@ -18,6 +18,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
 from custom_components.bitpanda.assets import asset_label, slim_asset
 from custom_components.bitpanda.const import API_BASE_URL, DOMAIN
+from custom_components.bitpanda.naming import asset_display_label
 
 from tests.conftest import load_fixture, price_group
 
@@ -212,16 +213,23 @@ async def test_the_catalogue_is_fetched_without_a_key(hass):
     client_cls.assert_called_once_with(None, ANY)
 
 
-async def test_the_stock_category_merges_both_listing_families(hass):
+@pytest.mark.parametrize(
+    ("category", "filters"),
+    [
+        ("stock", [("equity_security", "equity_stock")]),
+        ("etf", [("equity_security", "equity_etf"), ("equity_security", "equity_complex_etf")]),
+        ("etc", [("equity_security", "equity_complex_etc")]),
+    ],
+)
+async def test_the_add_dialog_lists_only_bitpandas_current_securities(hass, category, filters):
+    """Bitpanda lists most stocks, ETFs and ETCs twice: in its old line
+    (type security, never buyable again) and in its current one, same
+    symbol and ISIN. The dialog asks for the current line only."""
     entry = _entry(hass)
-    listing = AsyncMock(side_effect=[[_fixture("517")], [_fixture("ESSITYB", "security")]])
+    listing = AsyncMock(return_value=[_fixture("517")])
     with patch(_LIST, listing):
-        result = await _pick_category(hass, entry, "stock")
-    assert [call.args for call in listing.call_args_list] == [
-        ("equity_security", "equity_stock"),
-        ("security", "stock"),
-    ]
-    assert len(_options(result)) == 2
+        await _pick_category(hass, entry, category)
+    assert [call.args for call in listing.call_args_list] == filters
 
 
 async def test_a_listing_is_kept_for_an_hour_in_slim_records(hass):
@@ -347,6 +355,18 @@ async def test_the_first_asset_of_a_type_starts_its_group(hass):
     assert group.unique_id == "metal"
     assert group.title == "Precious metals"
     assert dict(group.data) == {"category": "metal", "assets": {SILVER["id"]: slim_asset(SILVER)}}
+
+
+async def test_the_first_asset_of_a_type_ends_with_the_text_every_later_one_ends_with(hass):
+    """Starting a group, the dialog names the asset and the new group, as
+    joining one does (strings.json: create_entry.default = asset_added)."""
+    entry = _entry(hass)
+    result = await _pick_metal(hass, entry, SILVER)
+    assert result["type"] == _FLOW.CREATE_ENTRY
+    assert result["description_placeholders"] == {
+        "asset": asset_display_label(slim_asset(SILVER)),
+        "group": "Precious metals",
+    }
 
 
 async def test_the_picked_label_is_submitted_and_resolves_to_the_asset(hass):

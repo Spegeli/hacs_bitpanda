@@ -1,30 +1,48 @@
 """The string files: structurally identical, BOM-free, and every translation
 true to its English original in what it must carry over unchanged."""
+from datetime import timedelta
 import json
 from pathlib import Path
 import re
 import string
 
+from homeassistant.util import dt as dt_util
+
 from custom_components.bitpanda import migration
 from custom_components.bitpanda.api import BitpandaApiError
-from custom_components.bitpanda.assets import ASSET_CATEGORY_FILTERS, CATEGORY_OTHER
+from custom_components.bitpanda.assets import (
+    ASSET_CATEGORIES,
+    ASSET_CATEGORY_FILTERS,
+    CATEGORY_OTHER,
+)
 from custom_components.bitpanda.const import API_ERROR_KINDS, REQUIRED_SCOPES
+from custom_components.bitpanda.announcements import PORTFOLIO_EVENT_TYPES
 from custom_components.bitpanda.ecb import EcbError, EcbRates
 from custom_components.bitpanda.portfolio_coordinator import _update_failed
 from custom_components.bitpanda.portfolio_model import (
     EarnData,
+    EarnProduct,
     Holding,
     PortfolioData,
+    PortfolioReturns,
+    RewardPayout,
     RewardTotals,
 )
 from custom_components.bitpanda.portfolio_sensor import (
     PortfolioCashPlusSensor,
+    PortfolioClassSensor,
+    PortfolioInvestedSensor,
+    PortfolioReturnSensor,
+    PortfolioTotalReturnPercentSensor,
+    PortfolioTotalReturnSensor,
     StakingSensor,
     WalletSensor,
     WalletTotalSensor,
 )
-from custom_components.bitpanda.price_coordinator import ISSUE_SLOW_PRICE_INTERVAL, _ecb_failed
+from custom_components.bitpanda.price_coordinator import _ecb_failed
 from custom_components.bitpanda.price_sensor import PriceSensor
+
+from tests.conftest import ANNOUNCEMENT_FIELDS
 
 _DIR = Path(__file__).parent.parent / "custom_components" / "bitpanda"
 # Every language file under translations/, found the way the integration
@@ -153,35 +171,58 @@ def test_no_language_is_an_untranslated_copy_of_english():
 # ui.common.submit). The button reads "Next" instead (config_flow.next: en
 # "Next", de "Weiter", fr "Suivant", nl "Volgende", it "Prossimo", es
 # "Siguiente", pl "Dalej") only on a step shown with last_step=False, and no
-# step of this integration is.
+# step of this integration is. And, as bundled with 2026.10, the way to a
+# dashboard card: "Edit dashboard" (ui.panel.lovelace.menu.configure_ui),
+# "Add card" (ui.panel.lovelace.editor.section.add_card, the same as
+# .editor.edit_card.add), the card dialog's "By card" tab
+# (ui.panel.lovelace.editor.cardpicker.by_card: the dialog opens on "By entity"),
+# "Add dashboard"
+# (ui.panel.config.lovelace.dashboards.picker.add_dashboard), "Settings"
+# (panel.config), "Dashboards" (ui.panel.config.dashboard.dashboards.main)
+# and the Overview's sidebar label (panel.home).
 _MENU_LABELS = {
     "de": {
         "reconfigure": "Neu konfigurieren", "configure": "Konfigurieren", "submit": "OK",
-        "delete": "Löschen",
+        "delete": "Löschen", "edit_dashboard": "Dashboard bearbeiten",
+        "add_card": "Karte hinzufügen", "by_card": "Nach Karte", "add_dashboard": "Dashboard hinzufügen",
+        "settings": "Einstellungen", "dashboards": "Dashboards", "overview": "Übersicht",
     },
     "en": {
         "reconfigure": "Reconfigure", "configure": "Configure", "submit": "Submit",
-        "delete": "Delete",
+        "delete": "Delete", "edit_dashboard": "Edit dashboard", "add_card": "Add card", "by_card": "By card",
+        "add_dashboard": "Add dashboard", "settings": "Settings", "dashboards": "Dashboards",
+        "overview": "Overview",
     },
     "es": {
         "reconfigure": "Reconfigurar", "configure": "Configurar", "submit": "Enviar",
-        "delete": "Eliminar",
+        "delete": "Eliminar", "edit_dashboard": "Editar panel de control",
+        "add_card": "Añadir tarjeta", "by_card": "Por tarjeta", "add_dashboard": "Añadir panel de control",
+        "settings": "Configuración", "dashboards": "Paneles de control",
+        "overview": "Vista general",
     },
     "fr": {
         "reconfigure": "Reconfigurer", "configure": "Configurer", "submit": "Valider",
-        "delete": "Supprimer",
+        "delete": "Supprimer", "edit_dashboard": "Modifier le tableau de bord",
+        "add_card": "Ajouter une carte", "by_card": "Par carte", "add_dashboard": "Ajouter un tableau de bord",
+        "settings": "Paramètres", "dashboards": "Tableaux de bord", "overview": "Vue d’ensemble",
     },
     "it": {
         "reconfigure": "Riconfigura", "configure": "Configura", "submit": "Invia",
-        "delete": "Elimina",
+        "delete": "Elimina", "edit_dashboard": "Modifica la plancia", "add_card": "Aggiungi scheda", "by_card": "Per scheda",
+        "add_dashboard": "Aggiungi plancia", "settings": "Impostazioni", "dashboards": "Plance",
+        "overview": "Panoramica",
     },
     "nl": {
         "reconfigure": "Herconfigureer", "configure": "Configureren", "submit": "Verzenden",
-        "delete": "Verwijderen",
+        "delete": "Verwijderen", "edit_dashboard": "Dashboard bewerken",
+        "add_card": "Kaart toevoegen", "by_card": "Per kaart", "add_dashboard": "Dashboard toevoegen",
+        "settings": "Instellingen", "dashboards": "Dashboards", "overview": "Thuis",
     },
     "pl": {
         "reconfigure": "Rekonfiguracja", "configure": "Konfiguruj", "submit": "Zatwierdź",
-        "delete": "Usuń",
+        "delete": "Usuń", "edit_dashboard": "Edytuj panel", "add_card": "Dodaj kartę", "by_card": "Według karty",
+        "add_dashboard": "Dodaj panel", "settings": "Ustawienia", "dashboards": "Panele",
+        "overview": "Przegląd",
     },
 }
 
@@ -206,7 +247,15 @@ _LABEL_REFERENCES = {
     "delete": [
         ("issues", "portfolio_exists", "description"),
         ("exceptions", "portfolio_device_not_removable", "message"),
+        ("config", "step", "reauth_confirm", "description"),
+        ("config", "step", "reconfigure", "description"),
     ],
+    **{
+        control: [("config", "create_entry", "portfolio"), ("config", "create_entry", "price_tracker")]
+        for control in (
+            "edit_dashboard", "add_card", "by_card", "add_dashboard", "settings", "dashboards", "overview"
+        )
+    },
 }
 
 
@@ -217,9 +266,9 @@ def _quoted(label: str) -> re.Pattern:
 
 
 def test_menu_items_are_named_with_home_assistants_own_labels():
-    """Where a text sends the user to a menu item of the integration entry or
-    to a dialog's button, it names it in quotation marks exactly as the
-    frontend labels it in that language."""
+    """Where a text sends the user to a menu item of the integration entry,
+    to a dialog's button or along the way to a dashboard card, it names it
+    in quotation marks exactly as the frontend labels it in that language."""
     assert sorted(_MENU_LABELS) == _LANGUAGES
     for language, labels in _MENU_LABELS.items():
         strings = _load(f"translations/{language}.json")
@@ -267,7 +316,9 @@ _LOCATED_TEXTS = {
     ("issues", "price_tracker_exists", "description"): "",
     ("issues", "portfolio_exists", "description"): "⋮",
     ("exceptions", "portfolio_device_not_removable", "message"): "⋮",
-    ("issues", "slow_price_interval", "description"): "⋮",
+    ("config", "step", "reauth_confirm", "description"): "⋮",
+    ("config", "step", "reconfigure", "description"): "⋮",
+    ("config", "create_entry", "price_tracker"): "",
 }
 # Shown right on the Price Tracker's entry, after its ⋮ -> "Reconfigure": it
 # sends the user to "Configure" (⚙) on "the same entry".
@@ -313,6 +364,7 @@ def test_texts_name_the_add_price_tracker_button_by_its_own_label():
         for key in (
             ("config", "step", "price_tracker", "description"),
             ("issues", "price_tracker_exists", "description"),
+            ("config", "create_entry", "price_tracker"),
         ):
             text = strings
             for part in key:
@@ -1036,8 +1088,9 @@ def test_the_reconfigure_key_help_has_a_line_per_sentence():
 
 
 def test_the_reauth_dialog_walks_through_creating_the_key_as_the_setup_does():
-    """The new-key dialog says what happened, why, and that the sensors are
-    kept; then, as the Portfolio's setup does, it walks through creating the
+    """The new-key dialog says what happened, why, that the sensors are kept
+    and that the key must be of the same account; then, as the Portfolio's
+    setup does, it walks through creating the
     key -- the same numbered steps -- and says that the integration only
     reads with it and how long a key is valid. Its field has no help text:
     the steps are the guide. In the approved English and German wording."""
@@ -1052,7 +1105,10 @@ def test_the_reauth_dialog_walks_through_creating_the_key_as_the_setup_does():
         assert key.split("\n") == setup_key.split("\n")[:2], name
     assert _load("strings.json")["config"]["step"]["reauth_confirm"]["description"] == (
         "Bitpanda rejected the stored API key. It may have expired, or it predates the"
-        " permissions this version needs. Your sensors are kept.\n\n"
+        " permissions this version needs. Your sensors are kept. The new API key must belong"
+        " to the same Bitpanda account. For another account, open the \u22ee menu of the"
+        ' "Bitpanda Portfolio" entry on the Bitpanda integration page, choose "Delete" and set'
+        " up the Portfolio again.\n\n"
         "To create a new API key:\n\n"
         "1. Open [{api_key_url}]({api_key_url}) and create a new API key.\n"
         '2. Select only the permissions "Balances", "Transaction" and "Earn (Read)"'
@@ -1065,7 +1121,10 @@ def test_the_reauth_dialog_walks_through_creating_the_key_as_the_setup_does():
     assert _load("translations/de.json")["config"]["step"]["reauth_confirm"]["description"] == (
         "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen,"
         " oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht. Deine"
-        " Sensoren bleiben erhalten.\n\n"
+        " Sensoren bleiben erhalten. Der neue API-Schlüssel muss zum selben Bitpanda-Konto"
+        " gehören. Für ein anderes Konto öffne auf der Bitpanda-Integrationsseite das Menü"
+        " \u22ee beim Eintrag „Bitpanda Portfolio“, wähle „Löschen“ und richte das Portfolio"
+        " danach neu ein.\n\n"
         "So erstellst du einen neuen API-Schlüssel:\n\n"
         "1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen API-Schlüssel.\n"
         "2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“"
@@ -1427,17 +1486,21 @@ def test_no_language_but_german_names_a_permission_in_german():
 
 def test_the_refresh_action_says_what_it_does():
     """The action picker shows this text alone. It says what the action
-    fetches, that the call waits for it, that a call within the cooldown is
-    ignored and that a failed refresh fails the call -- in the approved
-    English and German wording."""
+    fetches -- both services, or the one picked --, that the call waits for
+    it, that a service within its cooldown is skipped and that a failed
+    refresh fails the call -- in English and German."""
     assert _load("strings.json")["services"]["refresh"]["description"] == (
-        "Fetches the portfolio and the prices from Bitpanda now and waits until both are "
-        "done. Ignored within the cooldown of the last call; fails when a refresh fails."
+        "Fetches the portfolio and the prices from Bitpanda now, or only the chosen service, "
+        "and waits until it is done. A service within its cooldown is skipped; fails when a "
+        "refresh fails."
     )
     assert _load("translations/de.json")["services"]["refresh"]["description"] == (
-        "Holt Portfolio und Preise sofort und wartet, bis beides fertig ist. Innerhalb der "
-        "Sperrzeit ignoriert; schlägt fehl, wenn eine Aktualisierung fehlschlägt."
+        "Holt Portfolio und Preise sofort, oder nur den gewählten Dienst, und wartet, bis es "
+        "fertig ist. Ein Dienst innerhalb seiner Sperrzeit wird übersprungen; schlägt fehl, "
+        "wenn eine Aktualisierung fehlschlägt."
     )
+    field = _load("translations/de.json")["services"]["refresh"]["fields"]["config_entry_id"]
+    assert field["name"] == "Dienst"
 
 
 # The steps whose field has no help text: the Portfolio's setup and the
@@ -1543,12 +1606,11 @@ def test_no_exception_text_takes_an_english_message():
 
 def test_every_issue_text_is_one_the_code_raises():
     """strings.json holds no repair-issue text the code never raises: the
-    upgrade's reports, what blocks the upgrade, and the Price Tracker's slow
-    interval. Each module's own tests render its issues in every language."""
+    upgrade's reports and what blocks the upgrade. Each module's own tests
+    render its issues in every language."""
     assert set(_load("strings.json")["issues"]) == {
         *migration.UPGRADE_ISSUES,
         *migration.BLOCKER_ISSUES,
-        ISSUE_SLOW_PRICE_INTERVAL,
     }
 
 
@@ -1575,8 +1637,10 @@ def test_every_currency_and_entity_name_is_translated():
     }
     assert set(strings["entity"]["sensor"]) == {
         "total_value", "cash", "cash_plus", "return_day", "return_week",
-        "return_month", "return_six_month", "return_year", "staking", "wallet_total",
-        "wallet", "price",
+        "return_month", "return_six_month", "return_year", "invested", "total_return",
+        "total_return_percent", "value_crypto", "value_stock", "value_etf", "value_etc",
+        "value_index", "value_metal", "value_other", "staking", "wallet_total", "wallet",
+        "price",
     }
 
 
@@ -1614,6 +1678,48 @@ def test_the_price_group_flow_has_its_strings():
     assert set(group["abort"]) == {"already_configured", "asset_added"}
     assert "{asset}" in group["abort"]["asset_added"]
     assert "{group}" in group["abort"]["asset_added"]
+    assert set(group["create_entry"]) == {"default"}
+
+
+def test_a_new_group_and_a_joined_one_end_with_the_same_text():
+    """The first asset of a type starts its group, every later one joins
+    it: both dialogs end with the same message, naming asset and group."""
+    for name in _FILES:
+        group = _load(name)["config_subentries"]["price_group"]
+        assert group["create_entry"]["default"] == group["abort"]["asset_added"], name
+
+
+# The asset type step's hint: how long a large list takes the first time
+# (measured: about 12 seconds for Bitpanda's stocks).
+_CATEGORY_HINT = {
+    "de": "Der nächste Schritt zeigt alle Assets dieses Typs, die du noch nicht verfolgst. "
+    "Große Listen wie Aktien brauchen beim ersten Öffnen bis zu einer halben Minute.",
+    "en": "The next step lists every asset of this type that you do not track yet. "
+    "Large lists such as stocks take up to half a minute to load the first time.",
+    "es": "El siguiente paso muestra todos los activos de este tipo que aún no sigues. "
+    "Las listas grandes, como las acciones, tardan hasta medio minuto en cargarse la primera vez.",
+    "fr": "L'étape suivante liste tous les actifs de ce type que vous ne suivez pas encore. "
+    "Les grandes listes, comme les actions, mettent jusqu'à une demi-minute à se charger "
+    "la première fois.",
+    "it": "Il passaggio successivo elenca tutti gli asset di questo tipo che non monitori ancora. "
+    "Gli elenchi grandi, come le azioni, impiegano fino a mezzo minuto a caricarsi la prima volta.",
+    "nl": "De volgende stap toont alle assets van dit type die je nog niet volgt. "
+    "Grote lijsten zoals aandelen laden de eerste keer tot een halve minuut.",
+    "pl": "Następny krok pokaże wszystkie aktywa tego rodzaju, których jeszcze nie śledzisz. "
+    "Duże listy, takie jak akcje, wczytują się za pierwszym razem do pół minuty.",
+}
+
+
+def test_the_asset_type_hint_says_how_long_a_large_list_takes():
+    assert sorted(_CATEGORY_HINT) == _LANGUAGES
+    for language, hint in _CATEGORY_HINT.items():
+        step = _load(f"translations/{language}.json")["config_subentries"]["price_group"]["step"]
+        assert step["user"]["data_description"]["category"] == hint, language
+
+
+def test_the_german_reauth_title_joins_the_compound_with_hyphens():
+    config = _load("translations/de.json")["config"]
+    assert config["step"]["reauth_confirm"]["title"] == "Neuer Bitpanda-API-Schlüssel nötig"
 
 
 def test_only_the_securities_search_names_the_isin():
@@ -1737,6 +1843,22 @@ def _cash_plus_portfolio_data() -> PortfolioData:
     return data
 
 
+class _TickerPrices:
+    """Every wallet's ticker price, 2.0, as WalletPrices gives it."""
+
+    def price_of(self, asset_id):
+        return 2.0
+
+    def async_listen(self, asset_id, update):
+        return lambda: None
+
+
+def _with_a_day_ago(sensor):
+    """`sensor` once its price of 24 hours ago is known."""
+    sensor.set_price_24h_ago(1.0)
+    return sensor
+
+
 def _attribute_scenarios() -> list[tuple[str, dict]]:
     """(translation_key, published attributes) for every sensor class that
     publishes attributes. A translation_key may appear more than once, when
@@ -1746,9 +1868,18 @@ def _attribute_scenarios() -> list[tuple[str, dict]]:
     test unions every scenario sharing a key before comparing it to that
     key's labels, so this still proves each one has a label."""
     wallet_coordinator = _Coordinator(_wallet_portfolio_data())
+    # The last payout a day ago: within the last 30 days.
+    last_at = (dt_util.utcnow() - timedelta(days=1)).isoformat()
     rewards = _Coordinator({_VSN["id"]: RewardTotals(
-        gross=12.0, fee=2.4, net=9.6, count=3, last_at="2026-09-22T17:16:35Z")})
-    earn = _Coordinator(EarnData(apr={_VSN["id"]: 0.0544}, offered=frozenset({_VSN["id"]})))
+        gross=12.0, fee=2.4, net=9.6, count=3, last_at=last_at,
+        payouts=(RewardPayout(last_at, 4.0, 0.8, 3.2),),
+    )})
+    earn = _Coordinator(EarnData(
+        apr={_VSN["id"]: 0.0544}, offered=frozenset({_VSN["id"]}),
+        products={_VSN["id"]: EarnProduct(
+            apr=0.0544, type="FLEXIBLE", mode="STAKING_EARN", sold_out=False, enabled=True
+        )},
+    ))
 
     price_with_rate = PriceSensor(
         _Coordinator({_BTC["id"]: 100.0}),
@@ -1771,11 +1902,14 @@ def _attribute_scenarios() -> list[tuple[str, dict]]:
                 wallet_coordinator, "eid", "EUR", asset
             ).extra_state_attributes),
             ("staking", StakingSensor(
-                wallet_coordinator, earn, rewards, "eid", "EUR", asset
+                wallet_coordinator, earn, rewards, "eid", "EUR", asset, _TickerPrices()
             ).extra_state_attributes),
             ("wallet_total", WalletTotalSensor(
                 wallet_coordinator, "eid", "EUR", asset
             ).extra_state_attributes),
+            ("wallet_total", _with_a_day_ago(WalletTotalSensor(
+                wallet_coordinator, "eid", "EUR", asset, prices=_TickerPrices()
+            )).extra_state_attributes),
         )
     ]
     return [
@@ -1786,6 +1920,28 @@ def _attribute_scenarios() -> list[tuple[str, dict]]:
         ("cash_plus", PortfolioCashPlusSensor(
             _Coordinator(_cash_plus_portfolio_data()), "eid", "EUR"
         ).extra_state_attributes),
+        *(
+            (f"return_{timeframe.lower()}", PortfolioReturnSensor(
+                _Coordinator(PortfolioReturns(values={timeframe: 1.25})), "eid", timeframe,
+                wallet_coordinator,
+            ).extra_state_attributes)
+            for timeframe in ("DAY", "WEEK", "MONTH", "SIX_MONTH", "YEAR")
+        ),
+        *(
+            (sensor_class._key, sensor_class(
+                wallet_coordinator, "eid", "EUR"
+            ).extra_state_attributes)
+            for sensor_class in (
+                PortfolioInvestedSensor, PortfolioTotalReturnSensor,
+                PortfolioTotalReturnPercentSensor,
+            )
+        ),
+        *(
+            (f"value_{category}", PortfolioClassSensor(
+                wallet_coordinator, "eid", "EUR", category, lambda: [_VSN["id"], _ETF["id"]],
+            ).extra_state_attributes)
+            for category in ASSET_CATEGORIES
+        ),
     ]
 
 
@@ -1907,38 +2063,103 @@ def test_the_reward_attributes_say_what_they_count():
             assert labels[key].endswith(f" ({quantity})"), (language, key)
 
 
+# The rewards of the last 30 days and of the last payout on the Staking
+# sensor, by language: quantities and today's values named as the lifetime
+# ones are, French with a no-break space before the colon and after the 30.
+_RECENT_REWARD_LABELS = {
+    "de": {
+        "rewards_net_30d": "Belohnungen: netto, letzte 30 Tage (Menge)",
+        "rewards_net_value_30d": "Belohnungen: Wert netto, letzte 30 Tage (aktuell)",
+        "rewards_last_net": "Belohnungen: letzte Gutschrift, netto (Menge)",
+        "rewards_last_value": "Belohnungen: letzte Gutschrift, Wert (aktuell)",
+    },
+    "en": {
+        "rewards_net_30d": "Rewards: net, last 30 days (quantity)",
+        "rewards_net_value_30d": "Rewards: net value, last 30 days (current)",
+        "rewards_last_net": "Rewards: last payout, net (quantity)",
+        "rewards_last_value": "Rewards: last payout, value (current)",
+    },
+    "es": {
+        "rewards_net_30d": "Recompensas: neto, últimos 30 días (cantidad)",
+        "rewards_net_value_30d": "Recompensas: valor neto, últimos 30 días (actual)",
+        "rewards_last_net": "Recompensas: último pago, neto (cantidad)",
+        "rewards_last_value": "Recompensas: último pago, valor (actual)",
+    },
+    "fr": {
+        "rewards_net_30d": "Récompenses\u00a0: net, 30\u00a0derniers jours (quantité)",
+        "rewards_net_value_30d": "Récompenses\u00a0: valeur nette, 30\u00a0derniers jours (actuelle)",
+        "rewards_last_net": "Récompenses\u00a0: dernier versement, net (quantité)",
+        "rewards_last_value": "Récompenses\u00a0: dernier versement, valeur (actuelle)",
+    },
+    "it": {
+        "rewards_net_30d": "Ricompense: netto, ultimi 30 giorni (quantità)",
+        "rewards_net_value_30d": "Ricompense: valore netto, ultimi 30 giorni (attuale)",
+        "rewards_last_net": "Ricompense: ultimo accredito, netto (quantità)",
+        "rewards_last_value": "Ricompense: ultimo accredito, valore (attuale)",
+    },
+    "nl": {
+        "rewards_net_30d": "Beloningen: netto, laatste 30 dagen (hoeveelheid)",
+        "rewards_net_value_30d": "Beloningen: nettowaarde, laatste 30 dagen (actueel)",
+        "rewards_last_net": "Beloningen: laatste uitbetaling, netto (hoeveelheid)",
+        "rewards_last_value": "Beloningen: laatste uitbetaling, waarde (actueel)",
+    },
+    "pl": {
+        "rewards_net_30d": "Nagrody: netto, ostatnie 30 dni (ilość)",
+        "rewards_net_value_30d": "Nagrody: wartość netto, ostatnie 30 dni (bieżąca)",
+        "rewards_last_net": "Nagrody: ostatnie naliczenie, netto (ilość)",
+        "rewards_last_value": "Nagrody: ostatnie naliczenie, wartość (bieżąca)",
+    },
+}
+
+
+def test_the_recent_rewards_are_named_like_the_lifetime_ones():
+    assert sorted(_RECENT_REWARD_LABELS) == _LANGUAGES
+    for language, labels in _RECENT_REWARD_LABELS.items():
+        attributes = _load(f"translations/{language}.json")["entity"]["sensor"]["staking"][
+            "state_attributes"
+        ]
+        assert {key: attributes[key]["name"] for key in labels} == labels, language
+        prefix = attributes["rewards_net"]["name"].split(":", 1)[0]
+        quantity = attributes["rewards_net"]["name"].rsplit("(", 1)[1]
+        current = attributes["rewards_net_value"]["name"].rsplit("(", 1)[1]
+        for key, label in labels.items():
+            assert label.split(":", 1)[0] == prefix, (language, key)
+            suffix = current if "value" in key else quantity
+            assert label.endswith(f"({suffix}"), (language, key)
+
+
 # The position performance on a wallet's Total sensor, by language, in the
 # order of _POSITION_KEYS. French puts a no-break space before the colon and
 # the percent sign.
 _POSITION_KEYS = ("average_buy_price", "invested_amount", "total_return", "total_return_percent")
 _POSITION_LABELS = {
     "de": (
-        "Bilanz: Ø Kaufpreis", "Bilanz: investiert", "Bilanz: Gewinn/Verlust",
-        "Bilanz: Gewinn/Verlust %",
+        "Bilanz: Ø Kaufpreis", "Bilanz: investiert", "Bilanz: Gesamtrendite",
+        "Bilanz: Gesamtrendite %",
     ),
     "en": (
-        "Position: average buy price", "Position: invested", "Position: profit/loss",
-        "Position: profit/loss %",
+        "Position: average buy price", "Position: invested", "Position: total return",
+        "Position: total return %",
     ),
     "es": (
         "Posición: precio medio de compra", "Posición: importe invertido",
-        "Posición: ganancia/pérdida", "Posición: ganancia/pérdida %",
+        "Posición: rentabilidad total", "Posición: rentabilidad total %",
     ),
     "fr": (
         "Position\u00a0: prix d'achat moyen", "Position\u00a0: montant investi",
-        "Position\u00a0: gain/perte", "Position\u00a0: gain/perte en\u00a0%",
+        "Position\u00a0: rendement total", "Position\u00a0: rendement total en\u00a0%",
     ),
     "it": (
         "Posizione: prezzo medio di acquisto", "Posizione: importo investito",
-        "Posizione: profitto/perdita", "Posizione: profitto/perdita %",
+        "Posizione: rendimento totale", "Posizione: rendimento totale %",
     ),
     "nl": (
         "Positie: gemiddelde aankoopprijs", "Positie: geïnvesteerd bedrag",
-        "Positie: winst/verlies", "Positie: winst/verlies %",
+        "Positie: totaalrendement", "Positie: totaalrendement %",
     ),
     "pl": (
         "Pozycja: średnia cena zakupu", "Pozycja: zainwestowana kwota",
-        "Pozycja: zysk/strata", "Pozycja: zysk/strata %",
+        "Pozycja: całkowity zwrot", "Pozycja: całkowity zwrot %",
     ),
 }
 
@@ -1961,6 +2182,264 @@ def test_the_position_figures_are_not_labelled_like_the_wallet_sensors():
             assert not sensors[key]["name"].startswith(prefix), (language, key)
 
 
+# The asset's price and the 24 hours on a wallet's Total sensor, by
+# language: the price under the asset's prefix, the 24 hours under the
+# prefix the Price Tracker uses, its two keys named as there.
+_WALLET_PRICE_LABELS = {
+    "de": {"price": "Asset: Preis", "return_24h": "24 h: Rendite"},
+    "en": {"price": "Asset: price", "return_24h": "24 h: return"},
+    "es": {"price": "Activo: precio", "return_24h": "24 h: rentabilidad"},
+    "fr": {"price": "Actif\u00a0: prix", "return_24h": "24\u00a0h\u00a0: rendement"},
+    "it": {"price": "Asset: prezzo", "return_24h": "24 h: rendimento"},
+    "nl": {"price": "Asset: prijs", "return_24h": "24 uur: rendement"},
+    "pl": {"price": "Aktywo: cena", "return_24h": "24 h: zwrot"},
+}
+
+
+def test_a_wallets_price_and_24_hours_are_named_like_the_price_trackers():
+    assert sorted(_WALLET_PRICE_LABELS) == _LANGUAGES
+    for language, labels in _WALLET_PRICE_LABELS.items():
+        sensors = _load(f"translations/{language}.json")["entity"]["sensor"]
+        total = sensors["wallet_total"]["state_attributes"]
+        price = sensors["price"]["state_attributes"]
+        assert {key: total[key]["name"] for key in labels} == labels, language
+        for key in ("price_24h_ago", "change_24h_pct"):
+            assert total[key]["name"] == price[key]["name"], (language, key)
+        assert labels["price"].split(":", 1)[0] == total["asset"]["name"].split(":", 1)[0], language
+    german = _load("translations/de.json")["entity"]["sensor"]["wallet_total"]["state_attributes"]
+    assert (german["price_24h_ago"]["name"], german["change_24h_pct"]["name"]) == (
+        "24 h: Preis davor", "24 h: Änderung %",
+    )
+
+
+# The value of each wallet group, by language: the word for "value", then
+# the group's title as setup names the groups, in the case the language
+# writes it mid-sentence -- French with a no-break space before the colon.
+_CLASS_NAMES = {
+    "de": ("Wert: Kryptowährungen", "Wert: Aktien", "Wert: ETFs", "Wert: ETCs",
+           "Wert: Krypto-Indizes", "Wert: Edelmetalle", "Wert: Sonstige"),
+    "en": ("Value: cryptocurrencies", "Value: stocks", "Value: ETFs", "Value: ETCs",
+           "Value: crypto indices", "Value: precious metals", "Value: other"),
+    "es": ("Valor: criptomonedas", "Valor: acciones", "Valor: ETF", "Valor: ETC",
+           "Valor: índices cripto", "Valor: metales preciosos", "Valor: otros"),
+    "fr": ("Valeur\u00a0: cryptomonnaies", "Valeur\u00a0: actions", "Valeur\u00a0: ETF",
+           "Valeur\u00a0: ETC", "Valeur\u00a0: indices crypto", "Valeur\u00a0: métaux précieux",
+           "Valeur\u00a0: autres"),
+    "it": ("Valore: criptovalute", "Valore: azioni", "Valore: ETF", "Valore: ETC",
+           "Valore: indici cripto", "Valore: metalli preziosi", "Valore: altro"),
+    "nl": ("Waarde: cryptovaluta", "Waarde: aandelen", "Waarde: ETF's", "Waarde: ETC's",
+           "Waarde: crypto-indices", "Waarde: edelmetalen", "Waarde: overige"),
+    "pl": ("Wartość: kryptowaluty", "Wartość: akcje", "Wartość: ETF", "Wartość: ETC",
+           "Wartość: indeksy kryptowalut", "Wartość: metale szlachetne", "Wartość: inne"),
+}
+
+
+def test_each_groups_value_is_named_after_its_group():
+    assert sorted(_CLASS_NAMES) == _LANGUAGES
+    for language, names in _CLASS_NAMES.items():
+        strings = _load(f"translations/{language}.json")
+        sensors = strings["entity"]["sensor"]
+        titles = strings["selector"]["asset_group"]["options"]
+        assert tuple(sensors[f"value_{category}"]["name"] for category in ASSET_CATEGORIES) == (
+            names
+        ), language
+        for category, name in zip(ASSET_CATEGORIES, names):
+            group = name.split(":", 1)[1].strip()
+            assert group.casefold() == titles[category].casefold(), (language, category)
+
+
+# A group's figures, by language, under a prefix of their own; the money
+# figures named as a wallet's position figures are.
+_GROUP_KEYS = ("share_percent", "invested_amount", "total_return", "total_return_percent", "wallets")
+_GROUP_LABELS = {
+    "de": ("Gruppe: Anteil %", "Gruppe: investiert", "Gruppe: Gesamtrendite",
+           "Gruppe: Gesamtrendite %", "Gruppe: Wallets"),
+    "en": ("Group: share %", "Group: invested", "Group: total return", "Group: total return %",
+           "Group: wallets"),
+    "es": ("Grupo: participación %", "Grupo: importe invertido", "Grupo: rentabilidad total",
+           "Grupo: rentabilidad total %", "Grupo: wallets"),
+    "fr": ("Groupe\u00a0: part en\u00a0%", "Groupe\u00a0: montant investi", "Groupe\u00a0: rendement total",
+           "Groupe\u00a0: rendement total en\u00a0%", "Groupe\u00a0: wallets"),
+    "it": ("Gruppo: quota %", "Gruppo: importo investito", "Gruppo: rendimento totale",
+           "Gruppo: rendimento totale %", "Gruppo: wallet"),
+    "nl": ("Groep: aandeel %", "Groep: geïnvesteerd bedrag", "Groep: totaalrendement",
+           "Groep: totaalrendement %", "Groep: wallets"),
+    "pl": ("Grupa: udział %", "Grupa: zainwestowana kwota", "Grupa: całkowity zwrot",
+           "Grupa: całkowity zwrot %", "Grupa: portfele"),
+}
+
+# A wallet's share of the portfolio, under its position figures' prefix.
+_SHARE_LABELS = {
+    "de": "Bilanz: Anteil am Portfolio %",
+    "en": "Position: share of portfolio %",
+    "es": "Posición: participación en el portfolio %",
+    "fr": "Position\u00a0: part du portfolio en\u00a0%",
+    "it": "Posizione: quota del portfolio %",
+    "nl": "Positie: aandeel in portfolio %",
+    "pl": "Pozycja: udział w portfolio %",
+}
+
+
+def test_a_groups_figures_are_named_like_a_positions():
+    assert sorted(_GROUP_LABELS) == sorted(_SHARE_LABELS) == _LANGUAGES
+    for language, labels in _GROUP_LABELS.items():
+        sensors = _load(f"translations/{language}.json")["entity"]["sensor"]
+        position = sensors["wallet_total"]["state_attributes"]
+        for category in ASSET_CATEGORIES:
+            attributes = sensors[f"value_{category}"]["state_attributes"]
+            assert tuple(attributes[key]["name"] for key in _GROUP_KEYS) == labels, language
+        for key, label in zip(_GROUP_KEYS[1:4], labels[1:4]):
+            assert label.split(":", 1)[1] == position[key]["name"].split(":", 1)[1], (language, key)
+        share = position["portfolio_share_percent"]["name"]
+        assert share == _SHARE_LABELS[language], language
+        assert share.split(":", 1)[0] == position["invested_amount"]["name"].split(":", 1)[0]
+
+
+# The Portfolio's event entities: their names, and the names of their event
+# types, in English and German.
+_EVENT_NAMES = {
+    "en": {
+        "new_wallet": ("New wallet", {"wallet_added": "Wallet added"}),
+        "staking_reward": ("Staking reward", {"staking_reward_received": "Staking reward received"}),
+        "earn_change": ("Earn change", {
+            "offered": "Offered", "withdrawn": "Withdrawn", "sold_out": "Sold out",
+            "available_again": "Available again", "apr": "APR changed",
+        }),
+    },
+    "de": {
+        "new_wallet": ("Neues Wallet", {"wallet_added": "Wallet angelegt"}),
+        "staking_reward": ("Staking-Belohnung", {"staking_reward_received": "Staking-Belohnung erhalten"}),
+        "earn_change": ("Earn-Änderung", {
+            "offered": "Angeboten", "withdrawn": "Nicht mehr angeboten", "sold_out": "Ausverkauft",
+            "available_again": "Wieder verfügbar", "apr": "Zinssatz (APR) geändert",
+        }),
+    },
+}
+
+
+def test_each_event_entity_and_event_type_has_a_name():
+    """Every language names the three entities and every event type of
+    theirs; English and German as approved."""
+    for language in _LANGUAGES:
+        events = _load(f"translations/{language}.json")["entity"]["event"]
+        assert set(events) == set(PORTFOLIO_EVENT_TYPES), language
+        for key, types in PORTFOLIO_EVENT_TYPES.items():
+            assert events[key]["name"], (language, key)
+            assert set(events[key]["state_attributes"]["event_type"]["state"]) == set(types), (
+                language, key,
+            )
+    for language, names in _EVENT_NAMES.items():
+        events = _load(f"translations/{language}.json")["entity"]["event"]
+        for key, (name, types) in names.items():
+            assert events[key]["name"] == name, (language, key)
+            assert events[key]["state_attributes"]["event_type"]["state"] == types, (language, key)
+
+
+def test_every_field_an_event_entity_shows_has_a_label():
+    """Each announcement's fields are the entity's attributes: every one is
+    labelled, in every language, and nothing else is."""
+    strings = _load("strings.json")["entity"]["event"]
+    for key, fields in ANNOUNCEMENT_FIELDS.items():
+        labels = set(strings[key]["state_attributes"]) - {"event_type"}
+        assert labels == fields, key
+    for language in _LANGUAGES:
+        events = _load(f"translations/{language}.json")["entity"]["event"]
+        for key in PORTFOLIO_EVENT_TYPES:
+            assert set(events[key]["state_attributes"]) == set(strings[key]["state_attributes"]), (
+                language, key,
+            )
+            for attribute, label in events[key]["state_attributes"].items():
+                if attribute != "event_type":
+                    assert label["name"], (language, key, attribute)
+
+
+def test_an_event_entitys_asset_fields_are_labelled_like_a_wallets():
+    """Symbol, name and category as on Balance (total), in every language."""
+    for language in _LANGUAGES:
+        sensors = _load(f"translations/{language}.json")["entity"]
+        total = sensors["sensor"]["wallet_total"]["state_attributes"]
+        for key in ("new_wallet", "staking_reward"):
+            attributes = sensors["event"][key]["state_attributes"]
+            for field, attribute in (("symbol", "asset"), ("name", "asset_name")):
+                assert attributes[field]["name"] == total[attribute]["name"], (language, key)
+        assert sensors["event"]["new_wallet"]["state_attributes"]["category"]["name"] == (
+            total["asset_category"]["name"]
+        ), language
+
+
+# The Earn attributes of the Staking sensor, in English and German, with the
+# names of their values.
+_EARN_LABELS = {
+    "en": {
+        "earn_type": ("Earn: type", {"flexible": "Flexible", "locked": "Locked"}),
+        "earn_mode": ("Earn: mode", {"staking": "Staking", "stable_coin": "Stablecoin"}),
+        "earn_sold_out": ("Earn: sold out", None),
+    },
+    "de": {
+        "earn_type": ("Earn: Typ", {"flexible": "Flexibel", "locked": "Gebunden"}),
+        "earn_mode": ("Earn: Modus", {"staking": "Staking", "stable_coin": "Stablecoin"}),
+        "earn_sold_out": ("Earn: ausverkauft", None),
+    },
+}
+
+
+def test_the_earn_attributes_and_their_values_are_named():
+    for language in _LANGUAGES:
+        attributes = _load(f"translations/{language}.json")["entity"]["sensor"]["staking"][
+            "state_attributes"
+        ]
+        assert set(attributes["earn_type"]["state"]) == {"flexible", "locked"}, language
+        assert set(attributes["earn_mode"]["state"]) == {"staking", "stable_coin"}, language
+    for language, labels in _EARN_LABELS.items():
+        attributes = _load(f"translations/{language}.json")["entity"]["sensor"]["staking"][
+            "state_attributes"
+        ]
+        for key, (name, states) in labels.items():
+            assert attributes[key]["name"] == name, (language, key)
+            assert attributes[key].get("state") == states, (language, key)
+
+
+# The Portfolio's actions with response data, in English and German.
+_ACTION_NAMES = {
+    "en": {
+        "get_portfolio": "Get portfolio",
+        "get_portfolio_history": "Get portfolio history",
+        "get_staking_rewards": "Get staking rewards",
+    },
+    "de": {
+        "get_portfolio": "Portfolio abrufen",
+        "get_portfolio_history": "Portfolio-Verlauf abrufen",
+        "get_staking_rewards": "Staking-Belohnungen abrufen",
+    },
+}
+
+
+def test_every_action_and_field_is_named_and_described():
+    """Each action services.yaml declares, and each of its fields, has a
+    name and a description in every language; the timeframes are named."""
+    import yaml
+
+    declared = yaml.safe_load((_DIR / "services.yaml").read_text(encoding="utf-8"))
+    timeframes = declared["get_portfolio_history"]["fields"]["timeframe"]["selector"]["select"]
+    for language in _LANGUAGES:
+        texts = _load(f"translations/{language}.json")
+        assert set(texts["services"]) == set(declared), language
+        for name, service in declared.items():
+            assert texts["services"][name]["name"] and texts["services"][name]["description"]
+            fields = (service or {}).get("fields", {})
+            assert set(texts["services"][name].get("fields", {})) == set(fields), (language, name)
+            for field in texts["services"][name].get("fields", {}).values():
+                assert field["name"] and field["description"], (language, name)
+        assert set(texts["selector"][timeframes["translation_key"]]["options"]) == set(
+            timeframes["options"]
+        ), language
+        for key in ("no_portfolio", "portfolio_unavailable", "rewards_start_after_end"):
+            assert texts["exceptions"][key]["message"], (language, key)
+    for language, names in _ACTION_NAMES.items():
+        services = _load(f"translations/{language}.json")["services"]
+        assert {name: services[name]["name"] for name in names} == names, language
+
+
 def test_the_conversion_status_has_a_translated_name_and_state():
     """`conversion` is a status key, not a raw sentence: its own name plus a
     `state` translation for `no_rate` -- the only value it ever takes."""
@@ -1978,3 +2457,153 @@ def test_the_conversion_status_has_a_translated_name_and_state():
         "name": "Umrechnung: Status",
         "state": {"no_rate": "Noch kein Umrechnungskurs geladen"},
     }
+
+
+def test_the_category_attribute_is_labelled_like_the_other_asset_attributes():
+    """The approved names of `asset_category` in each language, on every sensor
+    that carries the other asset attributes."""
+    labels = {
+        "en": "Asset: category", "de": "Asset: Kategorie", "fr": "Actif : catégorie",
+        "nl": "Asset: categorie", "it": "Asset: categoria", "es": "Activo: categoría",
+        "pl": "Aktywo: kategoria",
+    }
+    assert sorted(labels) == _LANGUAGES
+    for name in _FILES:
+        language = "en" if name == "strings.json" else Path(name).stem
+        sensors = _load(name)["entity"]["sensor"]
+        for key in ("wallet", "wallet_total", "staking", "price"):
+            attribute = sensors[key]["state_attributes"]["asset_category"]
+            assert attribute == {"name": labels[language]}, (name, key)
+
+
+# Bitpanda's API does not tell which account a key belongs to: the key dialogs
+# say that a new key must be of the same account, and that another account
+# means deleting the Portfolio and setting it up again (approved 2026-10-14).
+# The new-key dialog says it in its first paragraph, Reconfigure after its own
+# line.
+_SAME_ACCOUNT = {
+    "de": (
+        "Der neue API-Schlüssel muss zum selben Bitpanda-Konto gehören.",
+        "Ein neuer API-Schlüssel muss zum selben Bitpanda-Konto gehören.",
+        " Für ein anderes Konto öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag "
+        "„Bitpanda Portfolio“, wähle „Löschen“ und richte das Portfolio danach neu ein.",
+    ),
+    "en": (
+        "The new API key must belong to the same Bitpanda account.",
+        "A new API key must belong to the same Bitpanda account.",
+        " For another account, open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda "
+        "integration page, choose \"Delete\" and set up the Portfolio again.",
+    ),
+    "es": (
+        "La nueva clave API debe pertenecer a la misma cuenta de Bitpanda.",
+        "Una nueva clave API debe pertenecer a la misma cuenta de Bitpanda.",
+        " Para otra cuenta, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la "
+        "integración Bitpanda, elige \"Eliminar\" y vuelve a configurar el Portfolio.",
+    ),
+    "fr": (
+        "La nouvelle clé API doit appartenir au même compte Bitpanda.",
+        "Une nouvelle clé API doit appartenir au même compte Bitpanda.",
+        " Pour un autre compte, ouvrez le menu ⋮ de l'entrée « Bitpanda Portfolio » sur la page de "
+        "l'intégration Bitpanda, choisissez « Supprimer » puis configurez à nouveau le Portfolio.",
+    ),
+    "it": (
+        "La nuova chiave API deve appartenere allo stesso account Bitpanda.",
+        "Una nuova chiave API deve appartenere allo stesso account Bitpanda.",
+        " Per un altro account apri il menu ⋮ della voce \"Bitpanda Portfolio\" nella pagina "
+        "dell'integrazione Bitpanda, scegli \"Elimina\" e configura di nuovo il Portfolio.",
+    ),
+    "nl": (
+        "De nieuwe API-sleutel moet bij hetzelfde Bitpanda-account horen.",
+        "Een nieuwe API-sleutel moet bij hetzelfde Bitpanda-account horen.",
+        " Voor een ander account open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer "
+        "\"Bitpanda Portfolio\", kies je \"Verwijderen\" en stel je het Portfolio daarna opnieuw in.",
+    ),
+    "pl": (
+        "Nowy klucz API musi należeć do tego samego konta Bitpanda.",
+        "Nowy klucz API musi należeć do tego samego konta Bitpanda.",
+        " Aby użyć innego konta, otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie "
+        "„Bitpanda Portfolio”, wybierz „Usuń” i skonfiguruj Portfolio od nowa.",
+    ),
+}
+
+
+def test_the_key_dialogs_say_a_new_key_must_be_of_the_same_account():
+    """Both dialogs that take a new key -- the new-key dialog
+    (reauth_confirm), at the end of its first paragraph, and Reconfigure, at
+    the end of its description -- say that the key must belong to the same
+    Bitpanda account, and how to switch to another one: delete the Portfolio
+    and set it up again."""
+    assert sorted(_SAME_ACCOUNT) == _LANGUAGES
+    for language, (reauth, reconfigure, another) in _SAME_ACCOUNT.items():
+        step = _load(f"translations/{language}.json")["config"]["step"]
+        first_paragraph = step["reauth_confirm"]["description"].split("\n\n")[0]
+        assert first_paragraph.endswith(f" {reauth}{another}"), language
+        assert step["reconfigure"]["description"].endswith(f" {reconfigure}{another}"), language
+
+
+def test_the_setups_end_with_the_way_to_the_cards():
+    """Both setups end by saying where the Bitpanda cards are and how to put
+    one on a dashboard; the Price Tracker's first how to add assets. The
+    English and German wording, word for word."""
+    way = {
+        "en": (
+            'open the dashboard, select "Edit dashboard" (✏ at the top right; on a phone in the ⋮ '
+            'menu), then "Add card" and the "By card" tab, and search for "Bitpanda". If no '
+            'Bitpanda card is listed, reload the page twice; in the Home Assistant app, '
+            '[reset its frontend cache]({cards_url}) instead.\n\nThe new "Overview", the default of '
+            'new installations since Home Assistant 2026.2, takes no cards: first create a dashboard under "Settings" → '
+            '"Dashboards" → "Add dashboard".'
+        ),
+        "de": (
+            "Öffne das Dashboard, wähle „Dashboard bearbeiten“ (✏ oben rechts, auf dem Handy im "
+            "⋮-Menü), dann „Karte hinzufügen“ und den Reiter „Nach Karte“, und suche nach "
+            "„Bitpanda“. Erscheint keine Bitpanda-Karte, lade die Seite zweimal neu; in der "
+            "Home-Assistant-App [setze stattdessen ihren Frontend-Cache zurück]({cards_url}).\n\n"
+            "Die neue „Übersicht“, seit Home Assistant 2026.2 der Standard neuer Installationen, nimmt keine Karten auf: Lege zuerst unter "
+            "„Einstellungen“ → „Dashboards“ → „Dashboard hinzufügen“ ein eigenes Dashboard an."
+        ),
+    }
+    expected = {
+        "en": {
+            "portfolio": 'To see your portfolio on a dashboard, add the "Bitpanda Portfolio" card: '
+            + way["en"],
+            "price_tracker": 'Add the assets you want to track with "Add price tracker" on the '
+            '"Bitpanda Price Tracker" entry of the Bitpanda integration page. Then add the '
+            '"Bitpanda Price Tracker" card to a dashboard: ' + way["en"],
+        },
+        "de": {
+            "portfolio": "Um dein Portfolio auf einem Dashboard zu sehen, füge ihm die Karte "
+            "„Bitpanda Portfolio“ hinzu: " + way["de"],
+            "price_tracker": "Füge die gewünschten Assets mit „Preis-Tracker hinzufügen“ beim "
+            "Eintrag „Bitpanda Price Tracker“ auf der Bitpanda-Integrationsseite hinzu. Füge "
+            "danach einem Dashboard die Karte „Bitpanda Price Tracker“ hinzu: " + way["de"],
+        },
+    }
+    for language, texts in expected.items():
+        assert _load(f"translations/{language}.json")["config"]["create_entry"] == texts, language
+    assert _load("strings.json")["config"]["create_entry"] == expected["en"]
+    # Every language: both texts, each naming its card.
+    for language in _LANGUAGES:
+        endings = _load(f"translations/{language}.json")["config"]["create_entry"]
+        assert set(endings) == {"portfolio", "price_tracker"}, language
+        assert "Bitpanda Portfolio" in endings["portfolio"], language
+        assert endings["price_tracker"].count("Bitpanda Price Tracker") == 2, language
+
+
+def test_the_closing_texts_send_the_app_to_the_readmes_card_section():
+    """Reloading does not help in the Home Assistant app: both closing texts
+    link the README's card section, which says what does, in every language."""
+    for language in _LANGUAGES:
+        endings = _load(f"translations/{language}.json")["config"]["create_entry"]
+        for key, text in endings.items():
+            assert re.search(r"\]\(\{cards_url\}\)", text), (language, key)
+            # The Overview's sentence stands in a paragraph of its own.
+            assert "\n\n" in text, (language, key)
+
+
+def test_no_text_carries_the_emoji_variation_selector():
+    """A symbol in a text stands as it is ("✏", "⚙"): never with U+FE0F, which
+    some fonts draw as a coloured emoji in the middle of a sentence."""
+    for name in _FILES:
+        path = _DIR / name
+        assert "\ufe0f" not in path.read_text(encoding="utf-8"), name

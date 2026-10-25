@@ -23,10 +23,13 @@ body:
       label: Which area does this affect?
       options:
         - Price Tracker (price sensors, currencies, Add price tracker)
-        - Portfolio (wallet, staking and total sensors)
-        - Portfolio (total value, cash, Cash Plus, returns)
+        - Portfolio wallets (Balance (available), Balance (total), Balance (staking))
+        - Portfolio (Total value, Cash, Cash Plus, returns, Invested, Total return, group values)
+        - Notifications and events (new wallets, staking rewards, Earn changes, event entities)
+        - Dashboard card (Bitpanda Portfolio)
+        - Dashboard card (Bitpanda Price Tracker)
         - Dialogs (setup, Configure, Reconfigure, new API key)
-        - Refresh action (bitpanda.refresh)
+        - Actions (bitpanda.refresh, bitpanda.get_portfolio, bitpanda.get_portfolio_history, bitpanda.get_staking_rewards)
         - Upgrade from a date version
         - Documentation
         - Other
@@ -45,7 +48,7 @@ body:
     id: solution
     attributes:
       label: Proposed solution
-      description: What should the integration do instead? Name the sensor, attribute or option you have in mind.
+      description: What should the integration do instead? Name the sensor, attribute, option or card you have in mind.
     validations:
       required: true
 

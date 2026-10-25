@@ -13,7 +13,7 @@ from typing import Any
 
 from homeassistant.util import slugify
 
-from .assets import asset_isin
+from .assets import ASSET_CATEGORIES, asset_isin
 
 _ENTITY_ID_PREFIX = "sensor.bitpanda_"
 
@@ -70,14 +70,25 @@ def return_key(timeframe: str) -> str:
     return f"return_{timeframe.lower()}"
 
 
+def class_key(category: str) -> str:
+    """The Portfolio sensor key of the value of one wallet group."""
+    return f"value_{category}"
+
+
 # The figures of the Portfolio device, by the key each of its sensors passes
-# to portfolio_unique_id and portfolio_entity_id: three values, then one
-# return per /portfolio-history timeframe.
+# to portfolio_unique_id and portfolio_entity_id: three values, one return
+# per /portfolio-history timeframe, the positions' invested amount and total
+# return, then the value of each wallet group -- a sensor that exists only
+# while its group does.
 PORTFOLIO_KEYS: tuple[str, ...] = (
     "total",
     "cash",
     "cash_plus",
     *(return_key(timeframe) for timeframe in RETURN_SUFFIXES),
+    "invested",
+    "total_return",
+    "total_return_percent",
+    *(class_key(category) for category in ASSET_CATEGORIES),
 )
 
 
@@ -93,6 +104,13 @@ def portfolio_device_identifier(entry_id: str) -> str:
 
 def portfolio_unique_id(entry_id: str, key: str) -> str:
     return f"{entry_id}_portfolio_{key}"
+
+
+def portfolio_event_entity_id(key: str) -> str:
+    """The entity ID of the Portfolio's event entity `key` (event.py): the
+    Portfolio's scheme in the `event` domain. No Portfolio figure: the keys
+    are not in PORTFOLIO_KEYS, so the currency purge leaves their history."""
+    return f"event.{_entity_id(PORTFOLIO_DEVICE_NAME, key).split('.', 1)[1]}"
 
 
 def portfolio_entity_id(key: str) -> str:
@@ -150,7 +168,7 @@ _WALLET_ENTITY_ID = re.compile(
 
 def is_portfolio_entity_id(entity_id: str) -> bool:
     """Whether `entity_id` is a default ID of a Portfolio sensor: one of the
-    eight figures, or a wallet's Balance, Staking or Total sensor.
+    figures (PORTFOLIO_KEYS), or a wallet's Balance, Staking or Total sensor.
 
     A new Portfolio setup meets exactly these IDs again. The entity registry
     restores a deleted entity by (domain, platform, unique_id), and the

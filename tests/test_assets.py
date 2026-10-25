@@ -4,6 +4,7 @@ import pytest
 from custom_components.bitpanda.assets import (
     ASSET_CATEGORY_FILTERS,
     CATEGORY_OTHER,
+    asset_attributes,
     asset_category,
     asset_isin,
     asset_label,
@@ -365,3 +366,24 @@ def test_a_stock_without_an_isin_has_none():
     assert asset_isin(stock) is None
     assert asset_isin({**stock, "isin": None}) is None
     assert asset_isin({**stock, "isin": ""}) is None
+
+
+# --- asset_attributes ------------------------------------------------------------
+#
+# What every sensor of an asset shows about it; `asset_category` lets a
+# dashboard card group assets without reading the integration's groups.
+
+
+@pytest.mark.parametrize(
+    ("record", "category"),
+    [
+        ({"id": "b", "symbol": "BTC", "name": "Bitcoin", "type": "cryptocoin", "group": "coin"},
+         "crypto"),
+        ({"id": "e", "symbol": "LYY1", "name": "Amundi PEA S&P 500 UCITS ETF",
+          "isin": "FR0011871136", "type": "equity_security", "group": "equity_etf"}, "etf"),
+        ({"id": "c", "symbol": "BCPEUR", "name": "Cash Plus EUR", "type": "security",
+          "group": "fiat_earn"}, "other"),
+    ],
+)
+def test_asset_attributes_name_the_category(record, category):
+    assert asset_attributes(record)["asset_category"] == category

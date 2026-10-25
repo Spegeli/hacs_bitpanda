@@ -23,6 +23,10 @@ from .migration import (
     left_over_entity_ids,
 )
 
+# Home Assistant 2026.10 types form schemas as probatio schemas; the voluptuous
+# ones built here work the same from 2025.5 on, hence `type: ignore[arg-type]`
+# where a form or section takes one. Strict mypy flags these once unneeded.
+
 if TYPE_CHECKING:
     # Not in Home Assistant 2025.5, which typed the results as FlowResult.
     from homeassistant.components.repairs import RepairsFlowResult
@@ -59,7 +63,7 @@ class LeftOverEntitiesFlow(RepairsFlow):
             return self.async_create_entry(data={})
         return self.async_show_form(
             step_id="confirm",
-            data_schema=vol.Schema({}),
+            data_schema=vol.Schema({}),  # type: ignore[arg-type]
             description_placeholders={"entities": entity_id_list(self._entity_ids)},
         )
 

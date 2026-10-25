@@ -13,7 +13,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
 from custom_components.bitpanda.assets import slim_asset
-from custom_components.bitpanda.const import API_KEY_URL, DOMAIN, TROUBLESHOOTING_URL
+from custom_components.bitpanda.const import API_KEY_URL, CARDS_URL, DOMAIN, TROUBLESHOOTING_URL
+from custom_components.bitpanda.portfolio_store import take_new_key
 from custom_components.bitpanda.purge import OldStatistics
 
 from tests.conftest import load_fixture
@@ -309,13 +310,13 @@ async def test_portfolio_creates_the_entry(hass):
 
 async def test_the_setup_asks_about_new_wallets_on_and_staking_rewards_off(hass):
     """A section of its own between the currency and the language -- the
-    language comes last in every form -- open, the wallet switch on and the
-    staking reward switch off; the choices are stored flat beside the
+    language comes last in every form -- collapsed, the wallet switch on and
+    the staking reward switch off; the choices are stored flat beside the
     language, as Configure stores them."""
     result = await _submit_key(hass, await _portfolio_form(hass), "good")
     schema = result["data_schema"]
     assert list(schema.schema) == ["currency", "notifications", "language"]
-    assert dict(schema.schema)["notifications"].options == {"collapsed": False}
+    assert dict(schema.schema)["notifications"].options == {"collapsed": True}
     assert list(_section_schema(schema, "notifications").schema) == [
         "notify_new_wallets", "notify_staking_rewards",
     ]
@@ -355,6 +356,9 @@ async def _submit_currency(hass, found: OldStatistics):
 
 def _assert_portfolio_created(result) -> None:
     assert result["type"] == _FLOW.CREATE_ENTRY
+    # Every ending of the Portfolio's setup says where its card is.
+    assert result["description"] == "portfolio"
+    assert result["description_placeholders"] == {"cards_url": CARDS_URL}
     assert dict(result["result"].data) == {
         "entry_type": "portfolio", "api_key": "good", "currency": "USD", "currency_id": _USD_ID,
     }
@@ -486,6 +490,33 @@ async def test_price_tracker_creates_a_keyless_entry(hass):
     assert dict(entry.options) == {"extra_currencies": ["CHF", "USD"], "language": "nl"}
 
 
+async def test_the_price_tracker_setup_ends_with_how_to_add_assets_and_its_card(hass):
+    result = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "price_tracker"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"currencies": {"extra_currencies": []}, **_setup_language("en")}
+    )
+    assert result["type"] == _FLOW.CREATE_ENTRY
+    assert result["description"] == "price_tracker"
+    assert result["description_placeholders"] == {"cards_url": CARDS_URL}
+    # Configure ends without it: the assets and the card are there by then.
+    await hass.async_block_till_done()
+    options = await hass.config_entries.options.async_init(result["result"].entry_id)
+    options = await hass.config_entries.options.async_configure(
+        options["flow_id"], _price_tracker_input([], "en")
+    )
+    assert options["type"] == _FLOW.CREATE_ENTRY
+    assert options.get("description") is None
+
+
+def test_the_closing_texts_link_the_readmes_card_section():
+    assert CARDS_URL == "https://github.com/Spegeli/hacs_bitpanda#-dashboard-cards"
+    readme = (Path(__file__).parent.parent / "README.md").read_text(encoding="utf-8")
+    assert "\n## 🃏 Dashboard cards\n" in readme
+
+
 async def test_a_second_price_tracker_aborts_even_from_an_open_dialog(hass):
     """As for the Portfolio: the fixed unique_id is checked again when the
     form is submitted."""
@@ -597,6 +628,9 @@ async def _finish_reauth(hass, entry, result) -> None:
         )
     assert (result["type"], result["reason"]) == (_FLOW.ABORT, "reauth_successful")
     assert entry.data["api_key"] == "fresh"
+    # Another key than the stored one: the next start reads the whole
+    # operation history (portfolio_store.note_new_key).
+    assert take_new_key(hass, entry.entry_id) is True
 
 
 async def test_reauth_form_links_the_key_page(hass):
@@ -622,6 +656,7 @@ async def test_reauth_missing_scopes_keeps_the_stored_key_and_leaks_nothing(hass
     assert entry.data["api_key"] == "key"
     assert secret not in repr(result["description_placeholders"])
     assert secret not in caplog.text
+    assert take_new_key(hass, entry.entry_id) is False
     await _finish_reauth(hass, entry, result)
 
 
@@ -661,6 +696,7 @@ async def test_reauth_with_a_listener_lets_the_listener_reload(hass):
     assert entry.data["api_key"] == "new"
     listener.assert_called_once()
     reload.assert_not_called()
+    assert take_new_key(hass, entry.entry_id) is True
 
 
 async def test_reauth_with_the_same_key_and_a_listener_reloads_once(hass):
@@ -681,6 +717,8 @@ async def test_reauth_with_the_same_key_and_a_listener_reloads_once(hass):
     assert entry.data["api_key"] == "key"
     reload.assert_called_once_with(entry.entry_id)
     listener.assert_not_called()
+    # The same key: nothing to read anew.
+    assert take_new_key(hass, entry.entry_id) is False
 
 
 async def test_reauth_without_a_listener_schedules_one_reload(hass):
@@ -695,6 +733,7 @@ async def test_reauth_without_a_listener_schedules_one_reload(hass):
     assert entry.data["api_key"] == "new"
     assert entry.data["currency"] == "EUR"
     reload.assert_called_once()
+    assert take_new_key(hass, entry.entry_id) is True
 
 
 async def test_reauth_unexpected_error_shows_unknown(hass, caplog):
@@ -739,6 +778,7 @@ async def _finish_reconfigure_with_a_new_key(hass, entry, result) -> None:
         )
     assert (result["type"], result["reason"]) == (_FLOW.ABORT, "reconfigure_successful")
     assert (entry.data["api_key"], entry.data["currency"]) == ("fresh", "EUR")
+    assert take_new_key(hass, entry.entry_id) is True
 
 
 async def _finish_currency_change(hass, entry, result, user_input) -> None:
@@ -935,6 +975,7 @@ async def test_saving_only_the_new_key_keeps_the_currency_and_deletes_nothing(ha
     purge.assert_not_called()
     reload.assert_called_once()
     assert (entry.data["api_key"], entry.data["currency"]) == ("new", "EUR")
+    assert take_new_key(hass, entry.entry_id) is True
 
 
 @pytest.mark.parametrize(
@@ -953,6 +994,7 @@ async def test_cancelling_the_currency_change_changes_nothing(hass, user_input):
     assert (result["type"], result["reason"]) == (_FLOW.ABORT, "no_changes")
     purge.assert_not_called()
     assert dict(entry.data) == before
+    assert take_new_key(hass, entry.entry_id) is False
 
 
 async def test_confirmed_currency_change_purges_then_stores_and_reloads(hass):
@@ -971,6 +1013,7 @@ async def test_confirmed_currency_change_purges_then_stores_and_reloads(hass):
     assert entry.data["currency"] == "USD"
     assert entry.data["currency_id"] == _USD_ID
     assert entry.data["api_key"] == "new"
+    assert take_new_key(hass, entry.entry_id) is True
 
 
 async def test_confirmed_currency_change_without_a_new_key_keeps_the_old_one(hass):
@@ -985,6 +1028,7 @@ async def test_confirmed_currency_change_without_a_new_key_keeps_the_old_one(has
         )
     assert entry.data["api_key"] == "key"
     assert entry.data["currency"] == "CHF"
+    assert take_new_key(hass, entry.entry_id) is False
 
 
 async def test_a_currency_change_whose_unload_fails_changes_nothing(hass):
@@ -1005,6 +1049,8 @@ async def test_a_currency_change_whose_unload_fails_changes_nothing(hass):
     purge.assert_awaited_once_with(hass, entry)
     reload.assert_not_called()
     assert dict(entry.data) == before
+    # The key was not stored: nothing to read anew.
+    assert take_new_key(hass, entry.entry_id) is False
 
 
 @pytest.mark.parametrize(
@@ -1165,15 +1211,16 @@ async def test_both_services_have_options(hass):
     assert BitpandaConfigFlow.async_supports_options_flow(_portfolio_entry())
 
 
-async def test_the_price_tracker_options_come_in_two_open_sections(hass):
+async def test_the_price_tracker_options_come_in_two_collapsed_sections(hass):
     """The currencies first, then the language, each under a heading of its
-    own -- a Home Assistant form has no plain divider -- and both open."""
+    own -- a Home Assistant form has no plain divider -- and both collapsed:
+    on a phone, the headings show at a glance what can be changed."""
     result = await _options_form(hass, _price_tracker_entry(extra=["USD"]))
     assert result["step_id"] == "price_tracker"
     schema = result["data_schema"]
     assert list(schema.schema) == ["currencies", "language"]
     assert [dict(schema.schema)[key].options for key in schema.schema] == [
-        {"collapsed": False}, {"collapsed": False},
+        {"collapsed": True}, {"collapsed": True},
     ]
     assert list(_section_schema(schema, "currencies").schema) == ["extra_currencies"]
     assert list(_section_schema(schema, "language").schema) == ["language"]
@@ -1187,10 +1234,11 @@ async def test_the_price_tracker_options_come_in_two_open_sections(hass):
     }
 
 
-async def test_the_frontend_gets_the_two_sections_open_and_filled_in(hass, hass_client):
+async def test_the_frontend_gets_the_two_sections_collapsed_and_filled_in(hass, hass_client):
     """What the Configure dialog receives, through Home Assistant's own
-    options-flow API: two expandable sections, expanded, each with its
-    field and the stored value as its default."""
+    options-flow API: two expandable sections, collapsed, each with its
+    field and the stored value as its default -- so "Submit" without
+    opening one keeps what is stored."""
     entry = _with_options(_price_tracker_entry(extra=["USD"]), language="de")
     entry.add_to_hass(hass)
     assert await async_setup_component(hass, "config", {})
@@ -1202,7 +1250,7 @@ async def test_the_frontend_gets_the_two_sections_open_and_filled_in(hass, hass_
     assert shown["step_id"] == "price_tracker"
     assert [
         (field["name"], field["type"], field["expanded"]) for field in shown["data_schema"]
-    ] == [("currencies", "expandable", True), ("language", "expandable", True)]
+    ] == [("currencies", "expandable", False), ("language", "expandable", False)]
     assert [
         [(inner["name"], inner["default"]) for inner in field["schema"]]
         for field in shown["data_schema"]
@@ -1254,16 +1302,16 @@ async def test_the_price_tracker_options_store_the_language_and_reload(hass):
     listener.assert_called_once()
 
 
-async def test_the_portfolio_options_offer_the_language_in_an_open_section(hass):
+async def test_the_portfolio_options_offer_the_language_in_a_collapsed_section(hass):
     """The notifications in a section of their own, then the language in
-    one like the Price Tracker's -- last, as in every form; its key and
-    currency change through Reconfigure."""
+    one like the Price Tracker's -- last, as in every form, both collapsed;
+    its key and currency change through Reconfigure."""
     result = await _options_form(hass, _portfolio_entry())
     assert result["step_id"] == "portfolio"
     schema = result["data_schema"]
     assert list(schema.schema) == ["notifications", "language"]
     assert [dict(schema.schema)[key].options for key in schema.schema] == [
-        {"collapsed": False}, {"collapsed": False},
+        {"collapsed": True}, {"collapsed": True},
     ]
     assert list(_section_schema(schema, "language").schema) == ["language"]
     config = _selector_config(_section_schema(schema, "language"), "language")
@@ -1273,9 +1321,9 @@ async def test_the_portfolio_options_offer_the_language_in_an_open_section(hass)
     assert _form_defaults(result) == {"language": {"language": "en"}, **_notifications()}
 
 
-async def test_the_frontend_gets_the_portfolio_language_open_and_filled_in(hass, hass_client):
+async def test_the_frontend_gets_the_portfolio_language_collapsed_and_filled_in(hass, hass_client):
     """Through Home Assistant's own options-flow API: two expandable
-    sections, expanded, the stored language and the switch as defaults."""
+    sections, collapsed, the stored language and the switches as defaults."""
     entry = _with_options(_portfolio_entry(), language="de")
     entry.add_to_hass(hass)
     assert await async_setup_component(hass, "config", {})
@@ -1287,7 +1335,7 @@ async def test_the_frontend_gets_the_portfolio_language_open_and_filled_in(hass,
     assert shown["step_id"] == "portfolio"
     assert [
         (field["name"], field["type"], field["expanded"]) for field in shown["data_schema"]
-    ] == [("notifications", "expandable", True), ("language", "expandable", True)]
+    ] == [("notifications", "expandable", False), ("language", "expandable", False)]
     assert [
         [(inner["name"], inner["default"]) for inner in field["schema"]]
         for field in shown["data_schema"]
@@ -1422,17 +1470,17 @@ def _preselected(result) -> str:
 @pytest.mark.parametrize(
     ("service", "own_field"), [("price_tracker", "currencies"), ("portfolio", "currency")]
 )
-async def test_the_setup_asks_for_the_language_in_an_open_section_below(
+async def test_the_setup_asks_for_the_language_in_a_collapsed_section_below(
     hass, service, own_field
 ):
     """Last, below the service's own field, under a heading of its own and
-    open: every shipped language, one to pick -- the field Configure shows.
+    collapsed: every shipped language, one to pick -- the field Configure shows.
     The Portfolio's notifications come between, in a section of their own."""
     result = await _setup_form(hass, service)
     schema = result["data_schema"]
     between = ["notifications"] if service == "portfolio" else []
     assert list(schema.schema) == [own_field, *between, "language"]
-    assert dict(schema.schema)["language"].options == {"collapsed": False}
+    assert dict(schema.schema)["language"].options == {"collapsed": True}
     assert list(_section_schema(schema, "language").schema) == ["language"]
     config = _selector_config(_section_schema(schema, "language"), "language")
     assert config["options"] == _LANGUAGES
@@ -1441,17 +1489,17 @@ async def test_the_setup_asks_for_the_language_in_an_open_section_below(
 
 
 async def test_the_price_tracker_setup_shows_its_currencies_as_configure_does(hass):
-    """Under a heading of their own, open, in the section Configure shows
-    them in -- none chosen yet."""
+    """Under a heading of their own, collapsed, in the section Configure
+    shows them in -- none chosen yet."""
     schema = (await _setup_form(hass, "price_tracker"))["data_schema"]
-    assert dict(schema.schema)["currencies"].options == {"collapsed": False}
+    assert dict(schema.schema)["currencies"].options == {"collapsed": True}
     assert list(_section_schema(schema, "currencies").schema) == ["extra_currencies"]
     assert _section_schema(schema, "currencies")({}) == {"extra_currencies": []}
 
 
 async def test_the_portfolio_setup_shows_its_currency_in_an_open_section(hass):
-    """Like the language below it: under a heading of its own, open, with
-    EUR chosen until the user picks another."""
+    """Under a heading of its own and, unlike the sections below it, open:
+    the setup's one decision, with EUR chosen until the user picks another."""
     schema = (await _setup_form(hass, "portfolio"))["data_schema"]
     assert dict(schema.schema)["currency"].options == {"collapsed": False}
     assert list(_section_schema(schema, "currency").schema) == ["currency"]
@@ -1470,9 +1518,9 @@ async def test_the_setup_offers_home_assistants_language_first(hass, service, sy
     assert _preselected(await _setup_form(hass, service)) == shown
 
 
-async def test_the_frontend_gets_the_setup_language_open_and_preselected(hass, hass_client):
+async def test_the_frontend_gets_the_setup_language_collapsed_and_preselected(hass, hass_client):
     """What the Price Tracker's setup dialog receives, through Home
-    Assistant's own flow API: two expandable sections, expanded -- the
+    Assistant's own flow API: two expandable sections, collapsed -- the
     currencies with none chosen, then the language with the system language
     as its default."""
     hass.config.language = "de"
@@ -1488,7 +1536,7 @@ async def test_the_frontend_gets_the_setup_language_open_and_preselected(hass, h
     assert shown["step_id"] == "price_tracker"
     assert [
         (field["name"], field["type"], field["expanded"]) for field in shown["data_schema"]
-    ] == [("currencies", "expandable", True), ("language", "expandable", True)]
+    ] == [("currencies", "expandable", False), ("language", "expandable", False)]
     assert [
         [(inner["name"], inner["default"]) for inner in field["schema"]]
         for field in shown["data_schema"]

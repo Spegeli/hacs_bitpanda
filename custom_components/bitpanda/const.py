@@ -19,6 +19,9 @@ CONF_TRACKED_WALLETS = "tracked_wallets"
 
 API_BASE_URL = "https://api.public.bitpanda.com/v1"
 API_TIMEOUT = 15
+# A ticker answers in well under a second, and the Price Tracker asks for one
+# asset after the other: a hanging request holds up the whole round of prices.
+TICKER_TIMEOUT = 5
 MAX_PAGE_SIZE = 100
 
 # What made a request fail, as api.py and ecb.py report it beside their
@@ -51,6 +54,9 @@ PRICES_URL = "https://www.bitpanda.com/en/prices"
 # The README's Troubleshooting section. A text links it through a placeholder:
 # hassfest allows no URL in a strings file.
 TROUBLESHOOTING_URL = "https://github.com/Spegeli/hacs_bitpanda#-troubleshooting"
+# The README's section on the dashboard cards, which the setups' closing texts
+# link for the Home Assistant app (where reloading does not load them).
+CARDS_URL = "https://github.com/Spegeli/hacs_bitpanda#-dashboard-cards"
 
 # The integration's version, as its manifest states it: every device shows it
 # ("Version …"). Read once, when Home Assistant imports the integration -- in
@@ -71,13 +77,25 @@ EUR_CURRENCY_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"
 
 PORTFOLIO_UPDATE_INTERVAL = timedelta(minutes=5)
 PRICE_UPDATE_INTERVAL_BASE = timedelta(seconds=60)
-EARN_UPDATE_INTERVAL = timedelta(hours=24)
+EARN_UPDATE_INTERVAL = timedelta(hours=1)
 REWARDS_UPDATE_INTERVAL = timedelta(hours=1)
-CHANGE_24H_UPDATE_INTERVAL = timedelta(minutes=15)
+# The rewards read only what is new (portfolio_coordinator.RewardsCoordinator):
+# from the newest time seen less a day -- an operation booked late with an
+# earlier time is caught -- and the whole history again once a week.
+OPERATIONS_OVERLAP = timedelta(hours=24)
+OPERATIONS_FULL_READ_INTERVAL = timedelta(days=7)
+# The Price Tracker's 24 h reference: looked up in Home Assistant's 5-minute
+# statistics as often as they are written, the value nearest to a day ago
+# within half an hour (day_ago.async_prices_24h_ago).
+CHANGE_24H_UPDATE_INTERVAL = timedelta(minutes=5)
+CHANGE_24H_TOLERANCE = timedelta(minutes=30)
 
-# Retry for the Earn offers and the ECB rates while they never loaded: until
-# then the APRs and the other currencies have no value at all.
+# Retry for the Earn offers while they never loaded: until then the APRs have
+# no value at all.
 FIRST_LOAD_RETRY_INTERVAL = timedelta(minutes=15)
+# The same for the ECB rates, sooner: until they load, every price in another
+# currency has no value, and the ECB's small file costs no Bitpanda request.
+ECB_FIRST_LOAD_RETRY_INTERVAL = timedelta(minutes=5)
 
 # Floor for the bitpanda.refresh cooldown, which otherwise follows the price
 # interval (see __init__.py's _refresh_cooldown).
@@ -103,9 +121,10 @@ CONF_EXTRA_CURRENCIES = "extra_currencies"
 
 # Option of both services: the language of the integration's own texts --
 # group titles, the refusals to delete a device and the Portfolio's
-# notification about a new wallet (language.py). Chosen at setup, Home
-# Assistant's system language offered first, and changed under Configure;
-# English for an entry without it (one upgraded from version 1).
+# notifications about a new wallet and new staking rewards (language.py).
+# Chosen at setup, Home Assistant's system language offered first, and
+# changed under Configure; English for an entry without it (one upgraded
+# from version 1).
 CONF_LANGUAGE = "language"
 DEFAULT_LANGUAGE = "en"
 
@@ -124,6 +143,12 @@ EVENT_WALLET_ADDED = f"{DOMAIN}_wallet_added"
 CONF_NOTIFY_STAKING_REWARDS = "notify_staking_rewards"
 DEFAULT_NOTIFY_STAKING_REWARDS = False
 EVENT_STAKING_REWARD_RECEIVED = f"{DOMAIN}_staking_reward_received"
+
+# An Earn change of a held asset (announcements.EarnAnnouncer): an event, never
+# a notification. An APR move is news from this many percentage points on,
+# measured from the APR last announced -- or first seen.
+EVENT_EARN_CHANGED = f"{DOMAIN}_earn_changed"
+EARN_APR_THRESHOLD = 0.25
 
 # The Price Tracker keeps its assets in groups by asset type (groups.py): one
 # config subentry per category, keyed by the category, whose data holds the
@@ -151,16 +176,13 @@ EXTRA_CURRENCIES: tuple[str, ...] = tuple(c for c in SUPPORTED_CURRENCIES if c !
 ECB_RATES_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
 ECB_UPDATE_INTERVAL = timedelta(hours=6)
 
-# The keyless ticker endpoint documents no limit. The Price Tracker holds
-# itself to this many requests per hour: 30 assets at the 60 s base interval.
-TICKER_HOURLY_BUDGET = 1800
-
 # A holding is removed only after this many consecutive successful portfolio
 # refreshes without it, spread over WALLET_REMOVAL_TIME at the least: the
 # time they take at the regular pace, which refreshes by hand
 # (bitpanda.refresh) can therefore never shorten. A Portfolio figure whose
-# entry vanished from the answer -- Total value, Cash, Cash Plus -- shows 0
-# only after the same (portfolio_model.FigureWatch).
+# entry vanished from the answer -- Total value, Cash, Cash Plus, the
+# positions' invested amount and return -- shows 0 only after the same
+# (portfolio_model.FigureWatch).
 WALLET_REMOVAL_MISSES = 3
 WALLET_REMOVAL_TIME = (WALLET_REMOVAL_MISSES - 1) * PORTFOLIO_UPDATE_INTERVAL
 

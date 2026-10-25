@@ -6,7 +6,7 @@ announcement. Never the payouts listed at the first refresh. End to end,
 Bitpanda mocked as in tests/test_wallet_announcements.py."""
 import asyncio
 from contextlib import contextmanager
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -28,7 +28,8 @@ from pytest_homeassistant_custom_component.common import (
     async_mock_service,
 )
 
-from custom_components.bitpanda import announcements
+from custom_components.bitpanda.api import BitpandaApiError
+from custom_components.bitpanda import announcements, event as event_platform
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.devices import find_entry_device
 
@@ -117,8 +118,28 @@ def _lookup(**kwargs):
 
 @pytest.fixture
 def operations():
-    """/operations: Vision's first four payouts, unless a test lists others."""
-    with patch(f"{_CLIENT}async_get_operations", AsyncMock(return_value=_paid(4))) as listing:
+    """/operations: Vision's first four payouts, unless a test lists others
+    (`return_value`) -- from `from_ts` on, as Bitpanda answers it: the
+    Portfolio reads only what is new once it has read the whole history."""
+    listing = AsyncMock(return_value=_paid(4))
+
+    async def _answer(*, from_ts=None, to_ts=None):
+        listed = listing.return_value
+        if from_ts is None:
+            return listed
+        since = datetime.fromisoformat(from_ts)
+        return [
+            operation
+            for operation in listed
+            if any(
+                datetime.fromisoformat(tx["credited_at"]) >= since
+                for tx in operation["transactions"]
+                if tx.get("credited_at")
+            )
+        ]
+
+    listing.side_effect = _answer
+    with patch(f"{_CLIENT}async_get_operations", listing):
         yield listing
 
 
@@ -132,6 +153,9 @@ def portfolio_api(operations):
         f"{_CLIENT}async_get_portfolio_history", AsyncMock(return_value={"return_percentage": 1.5})
     ), patch(f"{_CLIENT}async_get_earn_configs", AsyncMock(return_value=[])), patch(
         f"{_CLIENT}async_get_assets", AsyncMock(side_effect=_lookup)
+    ), patch(
+        # The ticker's price: 0.0066 a unit, as the positions are worth.
+        f"{_CLIENT}async_get_ticker", AsyncMock(return_value={"price": "0.00660000"})
     ):
         yield portfolio
 
@@ -177,8 +201,11 @@ def _known(hass_storage, entry, mark: str) -> None:
 
 
 def _stored(hass_storage, entry) -> dict:
-    """The sections in the file of `entry`."""
-    return hass_storage[f"{DOMAIN}.portfolio.{entry.entry_id}"]["data"]
+    """The sections the announcements keep in the file of `entry`: the
+    operations read so far are the rewards coordinator's
+    (test_coordinator_earn.py)."""
+    data = hass_storage[f"{DOMAIN}.portfolio.{entry.entry_id}"]["data"]
+    return {key: value for key, value in data.items() if key != "operations"}
 
 
 async def _setup(hass, entry) -> None:
@@ -297,6 +324,12 @@ async def test_a_new_payout_fires_the_event_and_the_notification(
             "value": 0.07,
             "currency": "EUR",
             "credited_at": "2026-09-29T16:20:00Z",
+            # Nothing offered: no APR.
+            "apr_percent": None,
+            # Every payout so far, the five of them.
+            "rewards_net": 49.10617248,
+            "message": "Vision (VSN) Wallet received a staking reward of 9.87654312 VSN. "
+            "Worth about 0.07 EUR today.",
         }
     ]
     notifications.assert_called_once_with(
@@ -308,6 +341,162 @@ async def test_a_new_payout_fires_the_event_and_the_notification(
     )
     await _flush(hass, freezer)
     assert _stored(hass_storage, entry)["known_rewards"] == {VSN["id"]: _WHEN[4]}
+
+
+async def test_a_payouts_value_today_uses_the_wallets_ticker_price(
+    hass, portfolio_api, operations, events, notifications, hass_storage, freezer
+):
+    """At the wallet's price, as the card's „Heutiger Wert“: the ticker's
+    0.01 a unit, not the 0.0066 the portfolio's value over its units gives."""
+    entry = _portfolio_entry(hass, notify_staking_rewards=True)
+    _known(hass_storage, entry, _WHEN[3])
+    with patch(f"{_CLIENT}async_get_ticker", AsyncMock(return_value={"price": "0.01000000"})):
+        await _setup(hass, entry)
+        operations.return_value = _paid(5)
+        await _next_hour(hass, freezer)
+    assert [event.data["value"] for event in events] == [round(9.87654312 * 0.01, 2)]
+    assert "Worth about 0.10 EUR today." in notifications.call_args.args[1]
+
+
+async def test_a_payout_announced_at_a_reload_waits_for_the_price_round(
+    hass, portfolio_api, operations, events, notifications, hass_storage
+):
+    """A setup or reload announces a payout read with the rewards' first
+    refresh while the price round may still run: the announcement waits for
+    it -- at most a while -- and carries the value at the ticker's price."""
+    entry = _portfolio_entry(hass, notify_staking_rewards=True)
+    _known(hass_storage, entry, _WHEN[3])
+    await _setup(hass, entry)
+    operations.return_value = _paid(5)
+    gate = asyncio.Event()
+
+    async def _price_later(asset_id):
+        await gate.wait()
+        return {"asset_id": asset_id, "price": "0.01000000"}
+
+    with patch(f"{_CLIENT}async_get_ticker", AsyncMock(side_effect=_price_later)):
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        assert events == []
+        gate.set()
+        await hass.async_block_till_done(wait_background_tasks=True)
+    assert [event.data["value"] for event in events] == [round(9.87654312 * 0.01, 2)]
+
+
+async def test_a_payout_announced_at_a_reload_shows_on_the_event_entity(
+    hass, portfolio_api, operations, events, hass_storage
+):
+    """A reload while Home Assistant runs, a payout due and a price round
+    that answers at once: the event waits until the Portfolio's platforms
+    are set up -- however long the event platform takes -- and the staking
+    reward entity shows it."""
+    entry = _portfolio_entry(hass)
+    _known(hass_storage, entry, _WHEN[3])
+    await _setup(hass, entry)
+    operations.return_value = _paid(5)
+    order: list[str] = []
+    set_up = event_platform.async_setup_entry
+
+    async def _recorded(hass, entry, add):
+        await asyncio.sleep(0.05)
+        await set_up(hass, entry, add)
+        order.append("platform")
+
+    hass.bus.async_listen(_EVENT, lambda event: order.append("bus"))
+    with patch.object(event_platform, "async_setup_entry", _recorded):
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done(wait_background_tasks=True)
+    assert order == ["platform", "bus"]
+    state = hass.states.get("event.bitpanda_portfolio_staking_reward")
+    assert state.attributes["event_type"] == "staking_reward_received"
+    assert state.attributes["credited_at"] == _WHEN[4]
+
+
+# Home Assistant 2025.5 leaves a failed setup's refresh timers behind; later
+# releases shut its coordinators down.
+@pytest.mark.parametrize("expected_lingering_timers", [True])
+async def test_the_announcements_are_let_go_when_the_platforms_fail_to_set_up(
+    hass, portfolio_api, operations, hass_storage
+):
+    """Readiness is given in any case: a failed setup leaves no announcer
+    waiting for good."""
+    entry = _portfolio_entry(hass)
+    with patch.object(
+        hass.config_entries, "async_forward_entry_setups", AsyncMock(side_effect=RuntimeError)
+    ):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.runtime_data.ready.is_set()
+
+
+@pytest.mark.parametrize("expected_lingering_timers", [True])
+async def test_the_announcements_are_let_go_when_setting_up_the_platforms_is_cancelled(
+    hass, portfolio_api, operations, hass_storage
+):
+    """A cancellation is no Exception: readiness is given all the same."""
+    entry = _portfolio_entry(hass)
+    with patch.object(
+        hass.config_entries,
+        "async_forward_entry_setups",
+        AsyncMock(side_effect=asyncio.CancelledError),
+    ):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.runtime_data.ready.is_set()
+
+
+async def test_a_pass_cancelled_while_setup_waits_leaves_the_others_and_the_setup_alone(
+    hass, portfolio_api, operations, events, hass_storage
+):
+    """The staking reward pass, cancelled while it waits for the platforms,
+    takes the readiness from no one: the wallet new since the last run is
+    announced all the same, and the setup ends loaded."""
+    entry = _portfolio_entry(hass)
+    # Vision's wallet is new since: only Bitcoin's is known.
+    _remember(
+        hass_storage, entry, known_wallets=[BTC["id"]], known_rewards={VSN["id"]: _WHEN[3]}
+    )
+    operations.return_value = _paid(5)
+    wallets = async_capture_events(hass, "bitpanda_wallet_added")
+    set_up = event_platform.async_setup_entry
+
+    async def _cancel_the_pass_first(hass, entry, add):
+        for task in asyncio.all_tasks():
+            if task.get_name() == f"{DOMAIN} staking reward announcement":
+                task.cancel()
+        await asyncio.sleep(0)
+        await set_up(hass, entry, add)
+
+    with patch.object(event_platform, "async_setup_entry", _cancel_the_pass_first):
+        await _setup(hass, entry)
+    # Cancelled: its payout comes with the next pass.
+    assert events == []
+    assert [event.data["asset_id"] for event in wallets] == [VSN["id"]]
+
+
+async def test_a_round_that_takes_too_long_is_not_waited_for(
+    hass, portfolio_api, operations, events, notifications, hass_storage
+):
+    """A ticker that never answers holds the announcement up only a while:
+    then it comes without a value."""
+    entry = _portfolio_entry(hass, notify_staking_rewards=True)
+    _known(hass_storage, entry, _WHEN[3])
+    await _setup(hass, entry)
+    operations.return_value = _paid(5)
+    hang = asyncio.Event()
+
+    async def _never(asset_id):
+        await hang.wait()
+
+    with patch(f"{_CLIENT}async_get_ticker", AsyncMock(side_effect=_never)), patch.object(
+        announcements, "_ROUND_WAIT", 0.05
+    ):
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        await asyncio.sleep(0.2)
+        await hass.async_block_till_done()
+        assert [event.data["value"] for event in events] == [None]
+        assert await hass.config_entries.async_unload(entry.entry_id)
 
 
 async def test_payouts_missed_in_a_pause_come_together(
@@ -338,6 +527,10 @@ async def test_payouts_missed_in_a_pause_come_together(
             "value": 0.2,
             "currency": "EUR",
             "credited_at": "2026-09-29T16:20:00Z",
+            "apr_percent": None,
+            "rewards_net": 49.10617248,
+            "message": "Vision (VSN) Wallet received 3 staking rewards, together 29.90617248 VSN. "
+            "Worth about 0.20 EUR today.",
         }
     ]
     notifications.assert_called_once_with(
@@ -402,7 +595,9 @@ async def test_a_disabled_staking_sensor_holds_the_mark_until_it_is_enabled(
     assert operations.call_count == 1
     await _restart(hass, entry, freezer)
 
+    # The restart reads on from the file: no whole history.
     assert operations.call_count == 2
+    assert set(operations.await_args.kwargs) == {"from_ts"}
     assert events == []
     assert _mark(entry) == _WHEN[2]
 
@@ -415,6 +610,8 @@ async def test_a_disabled_staking_sensor_holds_the_mark_until_it_is_enabled(
         (2, _WHEN[4])
     ]
     assert _mark(entry) == _WHEN[4]
+    # Every payout counted once over the three reads.
+    assert entry.runtime_data.rewards.data[VSN["id"]].count == 5
 
 
 async def test_an_asset_missing_from_the_portfolio_waits(
@@ -880,24 +1077,49 @@ async def test_switched_off_only_the_event_fires(
     assert [event.data["credited_at"] for event in events] == [_WHEN[4]]
     notifications.assert_not_called()
     assert _mark(entry) == _WHEN[4]
+    # The text for people is there all the same.
+    assert [event.data["message"] for event in events] == [
+        "Vision (VSN) Wallet received a staking reward of 9.87654312 VSN. "
+        "Worth about 0.07 EUR today."
+    ]
+
+
+async def test_a_staking_event_brings_the_apr_and_the_lifetime_net(
+    hass, portfolio_api, operations, events, hass_storage, freezer
+):
+    """Vision offered at 5.44 %: the event names the APR as Balance
+    (staking) does, and every payout's net so far."""
+    entry = _portfolio_entry(hass)
+    _known(hass_storage, entry, _WHEN[3])
+    offered = [{"asset_id": VSN["id"], "annual_percentage_rate": 0.0544, "enabled": True}]
+    with patch(f"{_CLIENT}async_get_earn_configs", AsyncMock(return_value=offered)):
+        await _setup(hass, entry)
+        operations.return_value = _paid(5)
+        await _next_hour(hass, freezer)
+    assert [(event.data["apr_percent"], event.data["rewards_net"]) for event in events] == [
+        (5.44, 49.10617248)
+    ]
 
 
 async def test_without_a_price_the_value_is_none_and_the_sentence_left_out(
     hass, portfolio_api, operations, events, notifications, hass_storage, freezer
 ):
-    """/portfolio sent no value for Vision, so there is no price: the
-    event's value is None, and the notification says nothing of what the
-    payout is worth."""
-    portfolio_api.return_value = _answer(_position(BTC), _position(VSN, staked=True, worth=None))
+    """The ticker gives no price for Vision -- and the value over the units
+    never stands in for it --: the event's value is None, and the
+    notification says nothing of what the payout is worth."""
     entry = _portfolio_entry(hass, notify_staking_rewards=True)
     _known(hass_storage, entry, _WHEN[3])
-    await _setup(hass, entry)
-    operations.return_value = _paid(5)
-
-    await _next_hour(hass, freezer)
+    failing = BitpandaApiError("no price", kind="http_status", path="/tickers")
+    with patch(f"{_CLIENT}async_get_ticker", AsyncMock(side_effect=failing)):
+        await _setup(hass, entry)
+        operations.return_value = _paid(5)
+        await _next_hour(hass, freezer)
 
     device = _wallet_device(hass, entry)
     assert [(event.data["net"], event.data["value"]) for event in events] == [(9.87654312, None)]
+    assert [event.data["message"] for event in events] == [
+        "Vision (VSN) Wallet received a staking reward of 9.87654312 VSN."
+    ]
     notifications.assert_called_once_with(
         hass,
         f"**[Vision (VSN) Wallet](/config/devices/device/{device.id})** received a staking "
@@ -930,6 +1152,10 @@ async def test_the_notification_follows_the_entrys_language(
     )
     assert [(event.data["count"], event.data["net"], event.data["value"]) for event in events] == [
         (4, 39.50617248, 0.26)
+    ]
+    assert [event.data["message"] for event in events] == [
+        "Vision (VSN) Wallet hat 4 Staking-Belohnungen erhalten, zusammen 39,50617248 VSN. "
+        "Heute etwa 0,26 EUR wert."
     ]
 
 
@@ -1009,6 +1235,7 @@ async def test_texts_that_cannot_be_loaded_still_fire_the_event_and_advance_the_
         await _next_hour(hass, freezer)
 
     assert [event.data["credited_at"] for event in events] == [_WHEN[4]]
+    assert [event.data["message"] for event in events] == [None]
     assert _mark(entry) == _WHEN[4]
     notifications.assert_not_called()
     [record] = [r for r in caplog.records if r.name == "custom_components.bitpanda.announcements"]
@@ -1064,6 +1291,11 @@ async def test_a_name_with_markdown_characters_shows_as_it_is(
     device = _wallet_device(hass, entry)
     assert [(event.data["wallet"], event.data["symbol"]) for event in events] == [
         ("QuickSwap [Old] (QUICK_OLD) Wallet", "QUICK_OLD")
+    ]
+    # The message is plain text: name and symbol as they are, nothing escaped.
+    assert [event.data["message"] for event in events] == [
+        "QuickSwap [Old] (QUICK_OLD) Wallet received a staking reward of 9.87654312 QUICK_OLD. "
+        "Worth about 0.07 EUR today."
     ]
     assert notifications.call_args.args[1] == (
         rf"**[QuickSwap \[Old\] (QUICK\_OLD) Wallet](/config/devices/device/{device.id})** "

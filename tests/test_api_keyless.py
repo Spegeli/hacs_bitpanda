@@ -28,3 +28,45 @@ async def test_keyed_client_still_sends_its_key():
 def test_client_keeps_no_second_copy_of_the_key():
     client = BitpandaApiClient("secret", None)
     assert not hasattr(client, "_api_key")
+
+
+class _Answer:
+    """A 200 answer holding one record."""
+
+    status = 200
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc_info):
+        return False
+
+    def raise_for_status(self):
+        pass
+
+    async def json(self):
+        return {"data": {"price": "1.00000000"}}
+
+
+class _TimingSession:
+    """Answers every GET and notes how long each one may take."""
+
+    closed = False
+
+    def __init__(self):
+        self.waits = {}
+
+    def get(self, url, **kwargs):
+        self.waits[url.removeprefix(API_BASE_URL)] = kwargs["timeout"].total
+        return _Answer()
+
+
+async def test_a_price_request_gives_up_after_five_seconds():
+    """A ticker answers in well under a second; one that hangs holds up the
+    whole round of prices, so it is given up on after 5 seconds. Every other
+    request keeps 15: a history or a page of operations may take longer."""
+    session = _TimingSession()
+    client = BitpandaApiClient(None, session)
+    await client.async_get_ticker("uuid-btc")
+    await client.async_get_portfolio_history(timeframe="DAY")
+    assert session.waits == {"/tickers/uuid-btc": 5, "/portfolio-history": 15}

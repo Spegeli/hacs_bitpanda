@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.core import CoreState
+from homeassistant.core import CoreState, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import (
     device_registry as dr,
@@ -402,7 +402,9 @@ async def test_a_payout_announced_at_a_reload_shows_on_the_event_entity(
         await set_up(hass, entry, add)
         order.append("platform")
 
-    hass.bus.async_listen(_EVENT, lambda event: order.append("bus"))
+    # A callback runs on the event loop as the event fires; a plain function
+    # would run in an executor thread, later and in no certain order.
+    hass.bus.async_listen(_EVENT, callback(lambda event: order.append("bus")))
     with patch.object(event_platform, "async_setup_entry", _recorded):
         assert await hass.config_entries.async_reload(entry.entry_id)
         await hass.async_block_till_done(wait_background_tasks=True)

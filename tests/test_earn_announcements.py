@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_capture_events
 
@@ -328,12 +329,16 @@ async def test_the_earn_event_comes_after_the_staking_sensor_wrote(hass, portfol
     the read: the sensor writes first."""
     entry = await _set_up_with(hass, earn, _product(BTC, 0.01), _product(VSN, 0.05))
     order: list[str] = []
-    hass.bus.async_listen(
-        "state_changed",
-        lambda event: order.append("sensor")
-        if event.data["entity_id"] == "sensor.bitpanda_vision_vsn_wallet_staking" else None,
-    )
-    hass.bus.async_listen(_EVENT, lambda event: order.append("event"))
+
+    # Callbacks run on the event loop in the order the events fire; a plain
+    # function would run in an executor thread, in no certain order.
+    @callback
+    def _sensor_wrote(event) -> None:
+        if event.data["entity_id"] == "sensor.bitpanda_vision_vsn_wallet_staking":
+            order.append("sensor")
+
+    hass.bus.async_listen("state_changed", _sensor_wrote)
+    hass.bus.async_listen(_EVENT, callback(lambda event: order.append("event")))
     await _catalogue(hass, entry, earn, _product(BTC, 0.01), _product(VSN, 0.06))
     assert order == ["sensor", "event"]
     assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_staking").attributes[

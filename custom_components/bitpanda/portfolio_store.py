@@ -26,7 +26,8 @@
   totals and every timed payout per asset (portfolio_model.RewardTotals). It
   lets the coordinator read only what is new; without it, the whole history
   is read again, and nothing is lost but time. Nothing of the API key is
-  written here: a new key is told in memory (PortfolioStore.key_changed).
+  kept here: a dialog that stores another key notes the entry in memory
+  (note_new_key), and its next start reads the whole history again.
 
 Each section is read on its own. A missing one is that feature's first run,
 quietly: another section may have begun the file. A malformed one is a first
@@ -45,7 +46,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Collection, Iterable, Mapping
 from datetime import datetime
-import hashlib
 import logging
 from typing import Any
 
@@ -67,6 +67,9 @@ _REWARDS = "known_rewards"
 _OPERATIONS = "operations"
 # hass.data key of the stores, by entry id: they outlive the entries' reloads.
 _STORES: HassKey[dict[str, PortfolioStore]] = HassKey(f"{DOMAIN}_portfolio_stores")
+# hass.data key of the Portfolio entries a dialog stored another API key for
+# since they last started (note_new_key): their ids, nothing of the key.
+_NEW_KEYS: HassKey[set[str]] = HassKey(f"{DOMAIN}_new_api_keys")
 # The type name a section reports for a value of the wrong shape.
 _MALFORMED = ValueError.__name__
 
@@ -106,9 +109,6 @@ class PortfolioStore:
         # The file's sections as read, unknown ones included; each section
         # writes its own back here.
         self._data: dict[str, Any] = {}
-        # A digest of the API key the entry last started with: in memory
-        # only, never written (key_changed).
-        self._key_digest: bytes | None = None
 
     async def async_load(self) -> None:
         """Read the file and build the sections from it."""
@@ -124,17 +124,6 @@ class PortfolioStore:
         self.known_wallets = KnownWallets(self, self._data.get(_WALLETS), read_error)
         self.reward_marks = RewardMarks(self, self._data.get(_REWARDS), read_error)
         self.operations = OperationsHistory(self, self._data.get(_OPERATIONS), read_error)
-
-    def key_changed(self, api_key: str) -> bool:
-        """Whether the entry starts with another API key than it last started
-        with in this run: the operations read so far may be another
-        account's. Only a digest of the key is kept, in memory: no second
-        copy of the key itself. A restart forgets it, which is safe: a key
-        changes only through a dialog, which reloads the entry at once."""
-        digest = hashlib.sha256(api_key.encode()).digest()
-        changed = self._key_digest is not None and digest != self._key_digest
-        self._key_digest = digest
-        return changed
 
     def write_section(self, key: str, value: Any) -> None:
         """Set the section `key` to `value` and ask for the delayed save."""
@@ -364,6 +353,26 @@ class OperationsHistory:
         """Forget what was read: the whole history is read next."""
         self._set_empty()
         self._store.remove_section(_OPERATIONS)
+
+
+def note_new_key(hass: HomeAssistant, entry_id: str) -> None:
+    """A dialog stored another API key for the Portfolio entry `entry_id` --
+    reauth or Reconfigure, the currency change included: the operations read
+    so far may be another account's, so its next start reads the whole
+    history again (take_new_key). Only the entry's id is noted, in memory:
+    nothing of the key. A restart forgets the note, which is safe: the
+    dialog reloads the entry at once."""
+    hass.data.setdefault(_NEW_KEYS, set()).add(entry_id)
+
+
+def take_new_key(hass: HomeAssistant, entry_id: str) -> bool:
+    """Whether a dialog stored another API key for the Portfolio entry
+    `entry_id` since it last started -- once: the note goes."""
+    noted = hass.data.get(_NEW_KEYS)
+    if noted is None or entry_id not in noted:
+        return False
+    noted.discard(entry_id)
+    return True
 
 
 async def async_get_portfolio_store(hass: HomeAssistant, entry_id: str) -> PortfolioStore:

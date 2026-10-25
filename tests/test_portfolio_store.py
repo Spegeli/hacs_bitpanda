@@ -21,6 +21,8 @@ from custom_components.bitpanda.portfolio_store import (
     PortfolioStore,
     async_get_portfolio_store,
     async_remove_portfolio_store,
+    note_new_key,
+    take_new_key,
 )
 
 _KEY = "bitpanda.portfolio.eid"
@@ -426,25 +428,24 @@ async def test_replacing_and_dropping_leave_the_other_sections(hass, hass_storag
     assert (await _loaded(hass)).operations.staking is None
 
 
-async def test_the_store_keeps_no_plain_copy_of_the_key(hass):
-    """It tells a new key by a digest of the last one: the key itself lives
-    only in the entry's data, not in a second long-lived copy here."""
-    store = await _loaded(hass)
-    store.key_changed("first-secret-key")
-    assert all("first-secret-key" not in repr(value) for value in vars(store).values())
-    assert store.key_changed("first-secret-key") is False
-    assert store.key_changed("other-secret-key") is True
+async def test_a_new_key_is_noted_for_its_entry_and_taken_once(hass):
+    """A dialog that stores another key notes the entry -- no key, no digest
+    of one -- and the entry's next start takes the note, once."""
+    assert take_new_key(hass, "eid") is False
+    note_new_key(hass, "eid")
+    assert take_new_key(hass, "other") is False
+    assert take_new_key(hass, "eid") is True
+    assert take_new_key(hass, "eid") is False
 
 
-async def test_a_new_key_is_told_in_memory_and_never_written(hass, hass_storage, freezer):
-    """The first key the store meets is no change; the same again is none
-    either; another is. Nothing of either key reaches the file."""
+async def test_a_noted_key_never_reaches_the_file(hass, hass_storage, freezer):
+    """The note lives in memory only: the file holds what was read, never
+    anything about the key."""
     store = await _loaded(hass)
-    assert store.key_changed("first-secret-key") is False
-    assert store.key_changed("first-secret-key") is False
-    assert store.key_changed("other-secret-key") is True
-    assert store.key_changed("other-secret-key") is False
+    note_new_key(hass, "eid")
     _replace(store.operations)
     await _flush(hass, freezer)
-    written = json.dumps(hass_storage[_KEY])
-    assert "secret" not in written
+    assert set(hass_storage[_KEY]["data"]) == {"operations"}
+    assert set(hass_storage[_KEY]["data"]["operations"]) == {
+        "kinds", "full_read_at", "read_at", "anchor", "recent_ids", "staking",
+    }

@@ -14,6 +14,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
 from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.const import API_KEY_URL, CARDS_URL, DOMAIN, TROUBLESHOOTING_URL
+from custom_components.bitpanda.portfolio_store import take_new_key
 from custom_components.bitpanda.purge import OldStatistics
 
 from tests.conftest import load_fixture
@@ -627,6 +628,9 @@ async def _finish_reauth(hass, entry, result) -> None:
         )
     assert (result["type"], result["reason"]) == (_FLOW.ABORT, "reauth_successful")
     assert entry.data["api_key"] == "fresh"
+    # Another key than the stored one: the next start reads the whole
+    # operation history (portfolio_store.note_new_key).
+    assert take_new_key(hass, entry.entry_id) is True
 
 
 async def test_reauth_form_links_the_key_page(hass):
@@ -652,6 +656,7 @@ async def test_reauth_missing_scopes_keeps_the_stored_key_and_leaks_nothing(hass
     assert entry.data["api_key"] == "key"
     assert secret not in repr(result["description_placeholders"])
     assert secret not in caplog.text
+    assert take_new_key(hass, entry.entry_id) is False
     await _finish_reauth(hass, entry, result)
 
 
@@ -691,6 +696,7 @@ async def test_reauth_with_a_listener_lets_the_listener_reload(hass):
     assert entry.data["api_key"] == "new"
     listener.assert_called_once()
     reload.assert_not_called()
+    assert take_new_key(hass, entry.entry_id) is True
 
 
 async def test_reauth_with_the_same_key_and_a_listener_reloads_once(hass):
@@ -711,6 +717,8 @@ async def test_reauth_with_the_same_key_and_a_listener_reloads_once(hass):
     assert entry.data["api_key"] == "key"
     reload.assert_called_once_with(entry.entry_id)
     listener.assert_not_called()
+    # The same key: nothing to read anew.
+    assert take_new_key(hass, entry.entry_id) is False
 
 
 async def test_reauth_without_a_listener_schedules_one_reload(hass):
@@ -725,6 +733,7 @@ async def test_reauth_without_a_listener_schedules_one_reload(hass):
     assert entry.data["api_key"] == "new"
     assert entry.data["currency"] == "EUR"
     reload.assert_called_once()
+    assert take_new_key(hass, entry.entry_id) is True
 
 
 async def test_reauth_unexpected_error_shows_unknown(hass, caplog):
@@ -769,6 +778,7 @@ async def _finish_reconfigure_with_a_new_key(hass, entry, result) -> None:
         )
     assert (result["type"], result["reason"]) == (_FLOW.ABORT, "reconfigure_successful")
     assert (entry.data["api_key"], entry.data["currency"]) == ("fresh", "EUR")
+    assert take_new_key(hass, entry.entry_id) is True
 
 
 async def _finish_currency_change(hass, entry, result, user_input) -> None:
@@ -965,6 +975,7 @@ async def test_saving_only_the_new_key_keeps_the_currency_and_deletes_nothing(ha
     purge.assert_not_called()
     reload.assert_called_once()
     assert (entry.data["api_key"], entry.data["currency"]) == ("new", "EUR")
+    assert take_new_key(hass, entry.entry_id) is True
 
 
 @pytest.mark.parametrize(
@@ -983,6 +994,7 @@ async def test_cancelling_the_currency_change_changes_nothing(hass, user_input):
     assert (result["type"], result["reason"]) == (_FLOW.ABORT, "no_changes")
     purge.assert_not_called()
     assert dict(entry.data) == before
+    assert take_new_key(hass, entry.entry_id) is False
 
 
 async def test_confirmed_currency_change_purges_then_stores_and_reloads(hass):
@@ -1001,6 +1013,7 @@ async def test_confirmed_currency_change_purges_then_stores_and_reloads(hass):
     assert entry.data["currency"] == "USD"
     assert entry.data["currency_id"] == _USD_ID
     assert entry.data["api_key"] == "new"
+    assert take_new_key(hass, entry.entry_id) is True
 
 
 async def test_confirmed_currency_change_without_a_new_key_keeps_the_old_one(hass):
@@ -1015,6 +1028,7 @@ async def test_confirmed_currency_change_without_a_new_key_keeps_the_old_one(has
         )
     assert entry.data["api_key"] == "key"
     assert entry.data["currency"] == "CHF"
+    assert take_new_key(hass, entry.entry_id) is False
 
 
 async def test_a_currency_change_whose_unload_fails_changes_nothing(hass):
@@ -1035,6 +1049,8 @@ async def test_a_currency_change_whose_unload_fails_changes_nothing(hass):
     purge.assert_awaited_once_with(hass, entry)
     reload.assert_not_called()
     assert dict(entry.data) == before
+    # The key was not stored: nothing to read anew.
+    assert take_new_key(hass, entry.entry_id) is False
 
 
 @pytest.mark.parametrize(

@@ -68,6 +68,7 @@ from .const import (
 from .groups import async_group_titles, price_group_subentries
 from .language import async_shipped_languages, entry_language, preselected_language
 from .migration import ISSUE_CURRENCY_DROPPED
+from .portfolio_store import note_new_key
 from .purge import (
     OldStatistics,
     async_find_old_statistics,
@@ -497,7 +498,12 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         setup failed -- the typical reauth case, a key rejected on the first
         portfolio refresh -- never registered the listener, so there the
         explicit reload is the only one.
+
+        Another key than the stored one is noted for the entry's next start,
+        which then reads the whole operation history (note_new_key).
         """
+        if api_key != entry.data[CONF_API_KEY]:
+            note_new_key(self.hass, entry.entry_id)
         if entry.update_listeners:
             if not self.hass.config_entries.async_update_entry(
                 entry, data={**entry.data, CONF_API_KEY: api_key}
@@ -650,6 +656,8 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             updates[CONF_API_KEY] = self._api_key
         if not await async_purge_portfolio(self.hass, entry):
             return self.async_abort(reason="unload_failed")
+        if self._api_key and self._api_key != entry.data[CONF_API_KEY]:
+            note_new_key(self.hass, entry.entry_id)
         ir.async_delete_issue(self.hass, DOMAIN, ISSUE_CURRENCY_DROPPED)
         # The purge unloaded the entry, which removed its update listener:
         # this reload is the only one.

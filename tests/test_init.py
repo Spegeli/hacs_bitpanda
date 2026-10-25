@@ -207,11 +207,9 @@ async def test_the_portfolio_keeps_its_store_sections_on_its_runtime(hass, portf
     assert entry.runtime_data.reward_marks is marks
 
 
-async def test_a_new_key_has_the_whole_operation_history_read_again(hass, portfolio_api):
-    """A setup reads the whole history; a reload with the same key reads on
-    from the newest time seen; a reload with another key -- maybe another
-    account's -- reads the whole history again."""
-    payout = {
+def _reward_payout() -> dict:
+    """One staking payout of Vision, credited now."""
+    return {
         "operation_id": "op-1",
         "operation_type": "reward",
         "transactions": [
@@ -224,15 +222,56 @@ async def test_a_new_key_has_the_whole_operation_history_read_again(hass, portfo
             }
         ],
     }
+
+
+async def _reauth(hass, entry, api_key: str) -> None:
+    """The "New Bitpanda API key needed" dialog, to its end, with `api_key`."""
+    result = await entry.start_reauth_flow(hass)
+    with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=[])):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"api_key": api_key}
+        )
+        await hass.async_block_till_done()
+    assert result["reason"] == "reauth_successful"
+
+
+async def test_a_key_entered_again_reads_on_and_another_reads_the_whole_history(
+    hass, portfolio_api
+):
+    """A setup reads the whole history; the same key entered again reads on
+    from the newest time seen; another key -- maybe another account's --
+    has the whole history read again."""
     entry = _portfolio_entry(hass)
-    with patch(f"{_CLIENT}async_get_operations", AsyncMock(return_value=[payout])) as operations:
+    with patch(f"{_CLIENT}async_get_operations", AsyncMock(return_value=[_reward_payout()])) as operations:
         await _setup(hass, entry)
         assert operations.await_args.kwargs == {}
-        await hass.config_entries.async_reload(entry.entry_id)
-        await hass.async_block_till_done()
+        await _reauth(hass, entry, entry.data["api_key"])
         assert set(operations.await_args.kwargs) == {"from_ts"}
-        hass.config_entries.async_update_entry(entry, data={**entry.data, "api_key": "another"})
-        await hass.async_block_till_done()
+        await _reauth(hass, entry, "another")
+        assert entry.state is ConfigEntryState.LOADED
+        assert operations.await_args.kwargs == {}
+
+
+async def test_another_key_reads_the_whole_history_also_before_the_first_start(
+    hass, hass_storage, portfolio_api
+):
+    """The operations read in an earlier run, and another key entered before
+    the Portfolio started in this one -- its first start after a restart
+    failed, say: the start reads the whole history, not on from the old
+    newest time."""
+    entry = _portfolio_entry(hass)
+    key = f"bitpanda.portfolio.{entry.entry_id}"
+    now = dt_util.utcnow()
+    hass_storage[key] = {"version": 1, "key": key, "data": {"operations": {
+        "kinds": ["staking"],
+        "full_read_at": now.isoformat(),
+        "read_at": now.isoformat(),
+        "anchor": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "recent_ids": {},
+        "staking": {},
+    }}}
+    with patch(f"{_CLIENT}async_get_operations", AsyncMock(return_value=[_reward_payout()])) as operations:
+        await _reauth(hass, entry, "another")
         assert entry.state is ConfigEntryState.LOADED
         assert operations.await_args.kwargs == {}
 

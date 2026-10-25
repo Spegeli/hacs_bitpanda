@@ -51,7 +51,11 @@ from .groups import (
     groups_of_type,
     tracked_assets,
 )
-from .portfolio_store import async_get_portfolio_store, async_remove_portfolio_store
+from .portfolio_store import (
+    async_get_portfolio_store,
+    async_remove_portfolio_store,
+    take_new_key,
+)
 from .services import async_register_portfolio_actions
 from .language import entry_language
 from .naming import (
@@ -194,9 +198,9 @@ async def _async_start_portfolio(
     # Before the first refreshes: the wallets' reconcile reads the list, and
     # the rewards' first refresh may set the marks.
     store = await async_get_portfolio_store(hass, entry.entry_id)
-    if store.key_changed(entry.data[CONF_API_KEY]):
-        # Another key may be another account's: its operations are read
-        # anew, the whole history (RewardsCoordinator).
+    if take_new_key(hass, entry.entry_id):
+        # A dialog stored another key, maybe another account's: its
+        # operations are read anew, the whole history (RewardsCoordinator).
         store.operations.drop()
     runtime = PortfolioRuntime(
         portfolio=PortfolioCoordinator(hass, entry, client, currency_id, directory),

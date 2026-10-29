@@ -2680,52 +2680,74 @@ def test_the_key_dialogs_say_a_new_key_must_be_of_the_same_account():
 
 
 def test_the_setups_end_with_the_way_to_the_cards():
-    """Both setups end by saying where the Bitpanda cards are and how to put
-    one on a dashboard; the Price Tracker's first how to add assets. The
-    English and German wording, word for word."""
-    way = {
+    """Both setups end by saying how to put a Bitpanda card on a dashboard,
+    as numbered steps -- the Price Tracker's first step adds its assets --
+    then, each in a paragraph of its own, what to do when no Bitpanda card is
+    listed and that the new Overview takes no cards. The English and German
+    wording, word for word."""
+    rest = {
         "en": (
-            'open the dashboard, select "Edit dashboard" (✏ at the top right; on a phone in the ⋮ '
-            'menu), then "Add card" and the "By card" tab, and search for "Bitpanda". If no '
-            'Bitpanda card is listed, reload the page twice; in the Home Assistant app, '
-            '[reset its frontend cache]({cards_url}) instead.\n\nThe new "Overview", the default of '
-            'new installations since Home Assistant 2026.2, takes no cards: first create a dashboard under "Settings" → '
-            '"Dashboards" → "Add dashboard".'
+            "If no Bitpanda card is listed, reload the page twice; in the Home Assistant app,"
+            " [reset its frontend cache]({cards_url}) instead.\n\n"
+            'The new "Overview", the default of new installations since Home Assistant 2026.2,'
+            ' takes no cards: first create a dashboard under "Settings" → "Dashboards" →'
+            ' "Add dashboard".'
         ),
         "de": (
-            "Öffne das Dashboard, wähle „Dashboard bearbeiten“ (✏ oben rechts, auf dem Handy im "
-            "⋮-Menü), dann „Karte hinzufügen“ und den Reiter „Nach Karte“, und suche nach "
-            "„Bitpanda“. Erscheint keine Bitpanda-Karte, lade die Seite zweimal neu; in der "
-            "Home-Assistant-App [setze stattdessen ihren Frontend-Cache zurück]({cards_url}).\n\n"
-            "Die neue „Übersicht“, seit Home Assistant 2026.2 der Standard neuer Installationen, nimmt keine Karten auf: Lege zuerst unter "
-            "„Einstellungen“ → „Dashboards“ → „Dashboard hinzufügen“ ein eigenes Dashboard an."
+            "Erscheint keine Bitpanda-Karte, lade die Seite zweimal neu; in der Home-Assistant-App"
+            " [setze stattdessen ihren Frontend-Cache zurück]({cards_url}).\n\n"
+            "Die neue „Übersicht“, seit Home Assistant 2026.2 der Standard neuer Installationen,"
+            " nimmt keine Karten auf: Lege zuerst unter „Einstellungen“ → „Dashboards“ →"
+            " „Dashboard hinzufügen“ ein eigenes Dashboard an."
         ),
+    }
+    open_dashboard = {
+        "en": 'Open a dashboard and select "Edit dashboard" (✏ at the top right; on a phone in the ⋮ menu).',
+        "de": "Öffne ein Dashboard und wähle „Dashboard bearbeiten“ (✏ oben rechts, auf dem Handy im ⋮-Menü).",
+    }
+    add_card = {
+        "en": 'Select "Add card" and the "By card" tab, search for "Bitpanda" and choose the "{card}" card.',
+        "de": "Wähle „Karte hinzufügen“ und den Reiter „Nach Karte“, suche nach „Bitpanda“ und wähle die"
+        " Karte „{card}“.",
     }
     expected = {
         "en": {
-            "portfolio": 'To see your portfolio on a dashboard, add the "Bitpanda Portfolio" card: '
-            + way["en"],
-            "price_tracker": 'Add the assets you want to track with "Add price tracker" on the '
-            '"Bitpanda Price Tracker" entry of the Bitpanda integration page. Then add the '
-            '"Bitpanda Price Tracker" card to a dashboard: ' + way["en"],
+            "portfolio": "To see your portfolio on a dashboard:\n\n"
+            f"1. {open_dashboard['en']}\n"
+            f"2. {add_card['en'].format(card='Bitpanda Portfolio')}\n\n" + rest["en"],
+            "price_tracker": "Next steps:\n\n"
+            '1. Add the assets you want to track with "Add price tracker" on the "Bitpanda Price'
+            ' Tracker" entry of the Bitpanda integration page.\n'
+            f"2. {open_dashboard['en']}\n"
+            f"3. {add_card['en'].format(card='Bitpanda Price Tracker')}\n\n" + rest["en"],
         },
         "de": {
-            "portfolio": "Um dein Portfolio auf einem Dashboard zu sehen, füge ihm die Karte "
-            "„Bitpanda Portfolio“ hinzu: " + way["de"],
-            "price_tracker": "Füge die gewünschten Assets mit „Preis-Tracker hinzufügen“ beim "
-            "Eintrag „Bitpanda Price Tracker“ auf der Bitpanda-Integrationsseite hinzu. Füge "
-            "danach einem Dashboard die Karte „Bitpanda Price Tracker“ hinzu: " + way["de"],
+            "portfolio": "So bringst du dein Portfolio auf ein Dashboard:\n\n"
+            f"1. {open_dashboard['de']}\n"
+            f"2. {add_card['de'].format(card='Bitpanda Portfolio')}\n\n" + rest["de"],
+            "price_tracker": "So geht es weiter:\n\n"
+            "1. Füge die gewünschten Assets mit „Preis-Tracker hinzufügen“ beim Eintrag „Bitpanda"
+            " Price Tracker“ auf der Bitpanda-Integrationsseite hinzu.\n"
+            f"2. {open_dashboard['de']}\n"
+            f"3. {add_card['de'].format(card='Bitpanda Price Tracker')}\n\n" + rest["de"],
         },
     }
     for language, texts in expected.items():
         assert _load(f"translations/{language}.json")["config"]["create_entry"] == texts, language
     assert _load("strings.json")["config"]["create_entry"] == expected["en"]
-    # Every language: both texts, each naming its card.
+    # Every language: both texts, each naming its card; a lead, the steps,
+    # then the two paragraphs on a missing card and on the Overview.
     for language in _LANGUAGES:
         endings = _load(f"translations/{language}.json")["config"]["create_entry"]
         assert set(endings) == {"portfolio", "price_tracker"}, language
         assert "Bitpanda Portfolio" in endings["portfolio"], language
         assert endings["price_tracker"].count("Bitpanda Price Tracker") == 2, language
+        for key, count in (("portfolio", 2), ("price_tracker", 3)):
+            lead, steps, missing, overview = endings[key].split("\n\n")
+            assert lead.endswith(":") and "\n" not in lead, (language, key)
+            numbers = [line[:3] for line in steps.split("\n")]
+            assert numbers == [f"{n}. " for n in range(1, count + 1)], (language, key)
+            assert "({cards_url})" in missing, (language, key)
 
 
 def test_the_closing_texts_send_the_app_to_the_readmes_card_section():

@@ -11,7 +11,7 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Das Bitpanda Portfolio zeigt dein Bitpanda-Konto in Home Assistant: den Gesamtwert, deine Renditen und für jedes Asset, das du besitzt, ein eigenes Wallet. Die Wallets legt die Integration selbst an und entfernt sie wieder, wenn du ein Asset nicht mehr besitzt – hinzufügen oder löschen musst du nichts.\n\nDafür braucht die Integration einen API-Schlüssel. So erstellst du ihn:\n\n1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen API-Schlüssel.\n2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading (Read)“.\n3. Kopiere den API-Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal an.\n\nDie Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\nBitpanda-API-Schlüssel gelten bis zu dem Datum, das du beim Erstellen wählst, höchstens ein Jahr; danach fragt Home Assistant nach einem neuen.\nErsetzen kannst du den API-Schlüssel jederzeit: Öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“ und wähle „Neu konfigurieren“.",
+        "description": "Das Bitpanda Portfolio zeigt dein Bitpanda-Konto in Home Assistant: den Gesamtwert, deine Renditen und für jedes Asset, das du besitzt, ein eigenes Wallet. Die Wallets legt die Integration selbst an und entfernt sie wieder, wenn du ein Asset nicht mehr besitzt – hinzufügen oder löschen musst du nichts.\n\nDafür braucht die Integration einen API-Schlüssel. So erstellst du ihn:\n\n1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen API-Schlüssel.\n2. Wähle die Berechtigungen „Guthaben“, „Transaktion“, „Earn (Read)“ und „Trading (Read)“.\n3. Kopiere den API-Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal an.\n\nDie Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\nDer Bitpanda Price Tracker nutzt denselben API-Schlüssel.\nBitpanda-API-Schlüssel gelten bis zu dem Datum, das du beim Erstellen wählst, höchstens ein Jahr; danach fragt Home Assistant nach einem neuen.\nErsetzen kannst du den API-Schlüssel jederzeit: Öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“ und wähle „Neu konfigurieren“.",
         "data": {
           "api_key": "API-Schlüssel"
         }
@@ -87,20 +87,20 @@
       },
       "reauth_confirm": {
         "title": "Neuer Bitpanda-API-Schlüssel nötig",
-        "description": "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen, oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht. Deine Sensoren bleiben erhalten. Der neue API-Schlüssel muss zum selben Bitpanda-Konto gehören. Für ein anderes Konto öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“, wähle „Löschen“ und richte das Portfolio danach neu ein.\n\nSo erstellst du einen neuen API-Schlüssel:\n\n1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen API-Schlüssel.\n2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading (Read)“.\n3. Kopiere den API-Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal an.\n\nDie Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\nBitpanda-API-Schlüssel gelten bis zu dem Datum, das du beim Erstellen wählst, höchstens ein Jahr; danach fragt Home Assistant nach einem neuen.",
+        "description": "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen, oder ihm fehlt eine Berechtigung, die diese Version braucht: Seit Oktober 2026 gibt Bitpanda Preise nur noch für einen API-Schlüssel mit „Trading (Read)“ heraus.\n\nDeine Sensoren bleiben erhalten. Der neue API-Schlüssel muss zum selben Bitpanda-Konto gehören. Für ein anderes Konto öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“, wähle „Löschen“ und richte das Portfolio danach neu ein.\n\nSo erstellst du einen neuen API-Schlüssel:\n\n1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen API-Schlüssel.\n2. Wähle die Berechtigungen „Guthaben“, „Transaktion“, „Earn (Read)“ und „Trading (Read)“.\n3. Kopiere den API-Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal an.\n\nDie Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\nDer Bitpanda Price Tracker nutzt denselben API-Schlüssel.\nBitpanda-API-Schlüssel gelten bis zu dem Datum, das du beim Erstellen wählst, höchstens ein Jahr; danach fragt Home Assistant nach einem neuen.",
         "data": {
           "api_key": "API-Schlüssel"
         }
       },
       "reconfigure": {
         "title": "Bitpanda Portfolio neu konfigurieren",
-        "description": "Ersetze den gespeicherten API-Schlüssel, ändere die Währung oder beides. Ein neuer API-Schlüssel muss zum selben Bitpanda-Konto gehören. Für ein anderes Konto öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“, wähle „Löschen“ und richte das Portfolio danach neu ein.",
+        "description": "Ersetze den gespeicherten API-Schlüssel, ändere die Währung oder beides. Der Bitpanda Price Tracker nutzt denselben API-Schlüssel.\n\nEin neuer API-Schlüssel muss zum selben Bitpanda-Konto gehören. Für ein anderes Konto öffne auf der Bitpanda-Integrationsseite das Menü ⋮ beim Eintrag „Bitpanda Portfolio“, wähle „Löschen“ und richte das Portfolio danach neu ein.",
         "data": {
           "api_key": "Neuer API-Schlüssel",
           "currency": "Währung"
         },
         "data_description": {
-          "api_key": "Lass das Feld leer, um den aktuellen API-Schlüssel zu behalten.\nEin neuer API-Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“ – kein „Trading (Read)“.\nDie Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.",
+          "api_key": "Lass das Feld leer, um den aktuellen API-Schlüssel zu behalten.\nEin neuer API-Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen „Guthaben“, „Transaktion“, „Earn (Read)“ und „Trading (Read)“.\nDie Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.",
           "currency": "Eine Änderung der Währung löscht alle Portfolio-Sensoren samt Verlauf; das bestätigst du im nächsten Schritt."
         }
       },
@@ -116,8 +116,8 @@
       }
     },
     "error": {
-      "invalid_auth": "Bitpanda hat diesen API-Schlüssel abgelehnt. Vielleicht ist er unvollständig kopiert, in deinem Bitpanda-Konto gelöscht oder abgelaufen, oder er hat keine der Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“. Prüfe den API-Schlüssel oder erstelle einen neuen mit allen dreien.",
-      "missing_scopes": "Berechtigungen dieses API-Schlüssels: „Guthaben“ {balance}, „Transaktion“ {transaction}, „Earn (Read)“ {earn}. Einem bestehenden API-Schlüssel lassen sich keine Berechtigungen hinzufügen. Erstelle einen neuen mit allen dreien.",
+      "invalid_auth": "Bitpanda hat diesen API-Schlüssel abgelehnt. Vielleicht ist er unvollständig kopiert, in deinem Bitpanda-Konto gelöscht oder abgelaufen, oder er hat keine der Berechtigungen „Guthaben“, „Transaktion“, „Earn (Read)“ und „Trading (Read)“. Prüfe den API-Schlüssel oder erstelle einen neuen mit allen vieren.",
+      "missing_scopes": "Berechtigungen dieses API-Schlüssels: „Guthaben“ {balance}, „Transaktion“ {transaction}, „Earn (Read)“ {earn}, „Trading (Read)“ {trading}. Einem bestehenden API-Schlüssel lassen sich keine Berechtigungen hinzufügen. Erstelle einen neuen mit allen vieren.",
       "rate_limited": "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
       "cannot_connect": "Bitpanda ist nicht erreichbar. Versuche es später erneut.",
       "unknown": "Unerwarteter Fehler"

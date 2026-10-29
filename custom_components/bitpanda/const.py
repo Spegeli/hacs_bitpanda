@@ -65,12 +65,14 @@ INTEGRATION_VERSION: str = json.loads(
     (Path(__file__).parent / "manifest.json").read_text(encoding="utf-8")
 )["version"]
 
-# Measured 2026-09-24 with one key per scope: /portfolio needs Balances,
-# /operations Transaction, /earn/configs Earn (Read) -- the names on Bitpanda's
-# English key page. Trade (Read) unlocks nothing the integration calls, so it
-# is not required. The texts name each scope as the key page does in their
-# language; the missing-permissions error takes one placeholder per scope.
-REQUIRED_SCOPES: tuple[str, ...] = ("balance", "transaction", "earn")
+# Measured with one key per scope: /portfolio needs Balances, /operations
+# Transaction, /earn/configs Earn (Read) (2026-09-24), and since 2026-10-28
+# /tickers needs Trade (Read) -- /assets did too on 2026-10-28, and since
+# 2026-10-29 at times. These are the names on Bitpanda's English key page.
+# Both services use the Portfolio's key, so it needs all four. The texts
+# name each scope as the key page does in their language; the
+# missing-permissions error takes one placeholder per scope.
+REQUIRED_SCOPES: tuple[str, ...] = ("balance", "transaction", "earn", "trading")
 
 # Stable and used in nearly every response. Verified 2026-09-24.
 EUR_CURRENCY_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"

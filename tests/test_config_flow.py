@@ -176,7 +176,7 @@ async def test_portfolio_form_links_the_key_page(hass):
 
 async def test_portfolio_rejects_a_key_with_no_scope(hass):
     result = await _submit_key(
-        hass, await _portfolio_form(hass), "bad", missing=("balance", "transaction", "earn")
+        hass, await _portfolio_form(hass), "bad", missing=("balance", "transaction", "earn", "trading")
     )
     assert result["errors"]["base"] == "invalid_auth"
     assert result["description_placeholders"]["api_key_url"] == API_KEY_URL
@@ -191,10 +191,23 @@ async def test_portfolio_names_missing_scopes(hass):
     )
     assert result["errors"]["base"] == "missing_scopes"
     placeholders = result["description_placeholders"]
-    assert {scope: placeholders[scope] for scope in ("balance", "transaction", "earn")} == {
-        "balance": "✓", "transaction": "✗", "earn": "✗"
+    assert {scope: placeholders[scope] for scope in ("balance", "transaction", "earn", "trading")} == {
+        "balance": "✓", "transaction": "✗", "earn": "✗", "trading": "✓"
     }
     assert "missing_scopes" not in placeholders
+    await _finish_portfolio_setup(hass, result)
+
+
+async def test_a_key_made_as_2_1_0_told_lacks_trade_read(hass):
+    """A key with the three permissions 2.1.0 asked for -- Balances,
+    Transaction, Earn (Read) -- lacks Trade (Read), which Bitpanda has asked
+    for prices and asset names since 2026-10-28: the setup says so."""
+    result = await _submit_key(hass, await _portfolio_form(hass), "three", missing=("trading",))
+    assert result["errors"]["base"] == "missing_scopes"
+    placeholders = result["description_placeholders"]
+    assert {scope: placeholders[scope] for scope in ("balance", "transaction", "earn", "trading")} == {
+        "balance": "✓", "transaction": "✓", "earn": "✓", "trading": "✗"
+    }
     await _finish_portfolio_setup(hass, result)
 
 
@@ -650,8 +663,8 @@ async def test_reauth_missing_scopes_keeps_the_stored_key_and_leaks_nothing(hass
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {"api_key": secret})
     assert result["errors"]["base"] == "missing_scopes"
     placeholders = result["description_placeholders"]
-    assert {scope: placeholders[scope] for scope in ("balance", "transaction", "earn")} == {
-        "balance": "✓", "transaction": "✓", "earn": "✗"
+    assert {scope: placeholders[scope] for scope in ("balance", "transaction", "earn", "trading")} == {
+        "balance": "✓", "transaction": "✓", "earn": "✗", "trading": "✓"
     }
     assert entry.data["api_key"] == "key"
     assert secret not in repr(result["description_placeholders"])
@@ -663,7 +676,7 @@ async def test_reauth_missing_scopes_keeps_the_stored_key_and_leaks_nothing(hass
 @pytest.mark.parametrize(
     ("check", "error"),
     [
-        (AsyncMock(return_value=["balance", "transaction", "earn"]), "invalid_auth"),
+        (AsyncMock(return_value=["balance", "transaction", "earn", "trading"]), "invalid_auth"),
         (AsyncMock(side_effect=BitpandaRateLimitError("Rate limited on /portfolio")), "rate_limited"),
         (AsyncMock(side_effect=BitpandaApiError("Timeout for /portfolio")), "cannot_connect"),
     ],
@@ -823,8 +836,8 @@ async def test_reconfigure_missing_scopes_reshows_form_without_leaking_key(hass,
     assert result["errors"]["base"] == "missing_scopes"
     assert result["description_placeholders"]["api_key_url"] == API_KEY_URL
     placeholders = result["description_placeholders"]
-    assert {scope: placeholders[scope] for scope in ("balance", "transaction", "earn")} == {
-        "balance": "✓", "transaction": "✓", "earn": "✗"
+    assert {scope: placeholders[scope] for scope in ("balance", "transaction", "earn", "trading")} == {
+        "balance": "✓", "transaction": "✓", "earn": "✗", "trading": "✓"
     }
     assert entry.data["api_key"] == "key"
     assert secret not in repr(result["description_placeholders"])
@@ -835,7 +848,7 @@ async def test_reconfigure_missing_scopes_reshows_form_without_leaking_key(hass,
 @pytest.mark.parametrize(
     ("check", "error"),
     [
-        (AsyncMock(return_value=["balance", "transaction", "earn"]), "invalid_auth"),
+        (AsyncMock(return_value=["balance", "transaction", "earn", "trading"]), "invalid_auth"),
         (AsyncMock(side_effect=BitpandaRateLimitError("Rate limited on /portfolio")), "rate_limited"),
         (AsyncMock(side_effect=BitpandaApiError("Timeout for /portfolio")), "cannot_connect"),
     ],

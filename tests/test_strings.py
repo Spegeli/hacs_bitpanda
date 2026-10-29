@@ -1003,13 +1003,10 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
         assert "\n" not in shows + needs, name
         open_page, permissions, paste = guide.split("\n")
         assert open_page.startswith("1. ") and "[{api_key_url}]({api_key_url})" in open_page, name
-        chosen, left_out = permissions.split(" \u2013 ")
-        assert chosen.startswith("2. "), name
-        *required, trade = _PERMISSION_LABELS[_language(name)]
-        assert all(label in chosen for label in required) and trade in left_out, name
-        assert trade not in chosen, name
+        assert permissions.startswith("2. ") and " \u2013 " not in permissions, name
+        assert all(label in permissions for label in _PERMISSION_LABELS[_language(name)]), name
         assert paste.startswith("3. "), name
-        assert len(key.split("\n")) == 3, name
+        assert len(key.split("\n")) == 4, name
     assert _load("strings.json")["config"]["step"]["portfolio"] == {
         "title": "Bitpanda Portfolio",
         "description": (
@@ -1019,10 +1016,11 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
             " \u2013 you do not need to add or delete any.\n\n"
             "For this, the integration needs an API key. To create one:\n\n"
             "1. Open [{api_key_url}]({api_key_url}) and create a new API key.\n"
-            '2. Select only the permissions "Balances", "Transaction" and "Earn (Read)"'
-            ' \u2013 not "Trade (Read)".\n'
+            '2. Select the permissions "Balances", "Transaction", "Earn (Read)" and'
+            ' "Trade (Read)".\n'
             "3. Copy the API key and paste it below. Bitpanda shows it only once.\n\n"
             "The integration only reads with it: it cannot trade or move money.\n"
+            "The Bitpanda Price Tracker uses the same API key.\n"
             "Bitpanda API keys are valid until the date you choose when creating them, one year at"
             " most; after that, Home Assistant asks for a new one.\n"
             'You can replace the API key at any time: open the ⋮ menu of the "Bitpanda Portfolio"'
@@ -1039,11 +1037,12 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
             " du ein Asset nicht mehr besitzt \u2013 hinzufügen oder löschen musst du nichts.\n\n"
             "Dafür braucht die Integration einen API-Schlüssel. So erstellst du ihn:\n\n"
             "1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen API-Schlüssel.\n"
-            "2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“"
-            " \u2013 kein „Trading (Read)“.\n"
+            "2. Wähle die Berechtigungen „Guthaben“, „Transaktion“, „Earn (Read)“ und"
+            " „Trading (Read)“.\n"
             "3. Kopiere den API-Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal"
             " an.\n\n"
             "Die Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\n"
+            "Der Bitpanda Price Tracker nutzt denselben API-Schlüssel.\n"
             "Bitpanda-API-Schlüssel gelten bis zu dem Datum, das du beim Erstellen wählst,"
             " höchstens ein Jahr; danach fragt Home Assistant nach einem neuen.\n"
             "Ersetzen kannst du den API-Schlüssel jederzeit: Öffne auf der"
@@ -1056,10 +1055,9 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
 
 def test_the_reconfigure_key_help_has_a_line_per_sentence():
     """Under Reconfigure's key field: that an empty field keeps the key; on
-    a line of its own what a new key needs -- with the trading permission
-    set off by a dash, as in the setup's guide; and on a third, as in the
-    setup, that the integration only reads with it. In the approved English
-    and German wording."""
+    a line of its own what a new key needs -- the four permissions, as in
+    the setup's guide; and on a third, as in the setup, that the integration
+    only reads with it. In the approved English and German wording."""
     help_texts = {
         name: _load(name)["config"]["step"]["reconfigure"]["data_description"]["api_key"]
         for name in _FILES
@@ -1069,27 +1067,26 @@ def test_the_reconfigure_key_help_has_a_line_per_sentence():
         setup_key = _load(name)["config"]["step"]["portfolio"]["description"].split("\n\n")[-1]
         assert reads == setup_key.split("\n")[0], name
         assert "[{api_key_url}]({api_key_url})" in new_key, name
-        chosen, left_out = new_key.split(" \u2013 ")
-        *required, trade = _PERMISSION_LABELS[_language(name)]
-        assert all(label in chosen for label in required) and trade in left_out, name
-        assert trade not in keep + chosen, name
+        assert " \u2013 " not in new_key, name
+        assert all(label in new_key for label in _PERMISSION_LABELS[_language(name)]), name
     assert help_texts["strings.json"] == (
         "Leave empty to keep the current API key.\n"
         'A new API key from [{api_key_url}]({api_key_url}) needs the permissions "Balances",'
-        ' "Transaction" and "Earn (Read)" \u2013 not "Trade (Read)".\n'
+        ' "Transaction", "Earn (Read)" and "Trade (Read)".\n'
         "The integration only reads with it: it cannot trade or move money."
     )
     assert help_texts["translations/de.json"] == (
         "Lass das Feld leer, um den aktuellen API-Schlüssel zu behalten.\n"
         "Ein neuer API-Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen"
-        " „Guthaben“, „Transaktion“ und „Earn (Read)“ \u2013 kein „Trading (Read)“.\n"
+        " „Guthaben“, „Transaktion“, „Earn (Read)“ und „Trading (Read)“.\n"
         "Die Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht."
     )
 
 
 def test_the_reauth_dialog_walks_through_creating_the_key_as_the_setup_does():
-    """The new-key dialog says what happened, why, that the sensors are kept
-    and that the key must be of the same account; then, as the Portfolio's
+    """The new-key dialog says what happened and why; in a paragraph of its
+    own that the sensors are kept and that the key must be of the same
+    account; then, as the Portfolio's
     setup does, it walks through creating the
     key -- the same numbered steps -- and says that the integration only
     reads with it and how long a key is valid. Its field has no help text:
@@ -1098,40 +1095,45 @@ def test_the_reauth_dialog_walks_through_creating_the_key_as_the_setup_does():
         steps = _load(name)["config"]["step"]
         reauth = steps["reauth_confirm"]
         assert set(reauth) == {"title", "description", "data"}, name
-        happened, lead, guide, key = reauth["description"].split("\n\n")
-        assert "\n" not in happened + lead and "{api_key_url}" not in happened, name
+        happened, kept, lead, guide, key = reauth["description"].split("\n\n")
+        assert "\n" not in happened + kept + lead, name
+        assert "{api_key_url}" not in happened + kept, name
         _, _, setup_guide, setup_key = steps["portfolio"]["description"].split("\n\n")
         assert guide == setup_guide, name
-        assert key.split("\n") == setup_key.split("\n")[:2], name
+        assert key.split("\n") == setup_key.split("\n")[:3], name
     assert _load("strings.json")["config"]["step"]["reauth_confirm"]["description"] == (
-        "Bitpanda rejected the stored API key. It may have expired, or it predates the"
-        " permissions this version needs. Your sensors are kept. The new API key must belong"
+        "Bitpanda rejected the stored API key. It may have expired, or it lacks a permission"
+        " this version needs: since October 2026, Bitpanda gives prices only to an API key with"
+        ' "Trade (Read)".\n\nYour sensors are kept. The new API key must belong'
         " to the same Bitpanda account. For another account, open the \u22ee menu of the"
         ' "Bitpanda Portfolio" entry on the Bitpanda integration page, choose "Delete" and set'
         " up the Portfolio again.\n\n"
         "To create a new API key:\n\n"
         "1. Open [{api_key_url}]({api_key_url}) and create a new API key.\n"
-        '2. Select only the permissions "Balances", "Transaction" and "Earn (Read)"'
-        ' \u2013 not "Trade (Read)".\n'
+        '2. Select the permissions "Balances", "Transaction", "Earn (Read)" and'
+        ' "Trade (Read)".\n'
         "3. Copy the API key and paste it below. Bitpanda shows it only once.\n\n"
         "The integration only reads with it: it cannot trade or move money.\n"
+        "The Bitpanda Price Tracker uses the same API key.\n"
         "Bitpanda API keys are valid until the date you choose when creating them, one year at"
         " most; after that, Home Assistant asks for a new one."
     )
     assert _load("translations/de.json")["config"]["step"]["reauth_confirm"]["description"] == (
         "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen,"
-        " oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht. Deine"
+        " oder ihm fehlt eine Berechtigung, die diese Version braucht: Seit Oktober 2026 gibt"
+        " Bitpanda Preise nur noch für einen API-Schlüssel mit „Trading (Read)“ heraus.\n\nDeine"
         " Sensoren bleiben erhalten. Der neue API-Schlüssel muss zum selben Bitpanda-Konto"
         " gehören. Für ein anderes Konto öffne auf der Bitpanda-Integrationsseite das Menü"
         " \u22ee beim Eintrag „Bitpanda Portfolio“, wähle „Löschen“ und richte das Portfolio"
         " danach neu ein.\n\n"
         "So erstellst du einen neuen API-Schlüssel:\n\n"
         "1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen API-Schlüssel.\n"
-        "2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“"
-        " \u2013 kein „Trading (Read)“.\n"
+        "2. Wähle die Berechtigungen „Guthaben“, „Transaktion“, „Earn (Read)“ und"
+        " „Trading (Read)“.\n"
         "3. Kopiere den API-Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal"
         " an.\n\n"
         "Die Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\n"
+        "Der Bitpanda Price Tracker nutzt denselben API-Schlüssel.\n"
         "Bitpanda-API-Schlüssel gelten bis zu dem Datum, das du beim Erstellen wählst,"
         " höchstens ein Jahr; danach fragt Home Assistant nach einem neuen."
     )
@@ -1365,53 +1367,52 @@ def _language(name: str) -> str:
 
 
 def test_the_missing_permissions_error_marks_each_permission():
-    """The error names the key's three permissions as Bitpanda's key page
+    """The error names the key's four permissions as Bitpanda's key page
     does in each language, each followed by the mark the code fills in --
-    ✓ or ✗, never a word -- and asks for a new key with all three. In the
+    ✓ or ✗, never a word -- and asks for a new key with all four. In the
     approved English and German wording."""
     assert sorted(_PERMISSION_LABELS) == _LANGUAGES
     for name in _FILES:
         error = _load(name)["config"]["error"]["missing_scopes"]
-        *required, trade = _PERMISSION_LABELS[_language(name)]
+        labels = _PERMISSION_LABELS[_language(name)]
         assert _placeholders(error) == set(REQUIRED_SCOPES), name
-        for label, scope in zip(required, REQUIRED_SCOPES):
+        assert len(labels) == len(REQUIRED_SCOPES), name
+        for label, scope in zip(labels, REQUIRED_SCOPES, strict=True):
             assert f"{label} {{{scope}}}" in error, name
-        assert trade not in error, name
     assert _load("strings.json")["config"]["error"]["missing_scopes"] == (
         'Permissions of this API key: "Balances" {balance}, "Transaction" {transaction},'
-        ' "Earn (Read)" {earn}. Permissions cannot be added to an existing API key. Create a new'
-        " one with all three."
+        ' "Earn (Read)" {earn}, "Trade (Read)" {trading}. Permissions cannot be added to an'
+        " existing API key. Create a new one with all four."
     )
     assert _load("translations/de.json")["config"]["error"]["missing_scopes"] == (
         "Berechtigungen dieses API-Schlüssels: „Guthaben“ {balance}, „Transaktion“"
-        " {transaction}, „Earn (Read)“ {earn}. Einem bestehenden API-Schlüssel lassen sich"
-        " keine Berechtigungen hinzufügen. Erstelle einen neuen mit allen dreien."
+        " {transaction}, „Earn (Read)“ {earn}, „Trading (Read)“ {trading}. Einem bestehenden"
+        " API-Schlüssel lassen sich keine Berechtigungen hinzufügen. Erstelle einen neuen mit"
+        " allen vieren."
     )
 
 
 def test_the_rejected_key_error_names_the_likely_causes_and_the_permissions():
     """Bitpanda answers a wrong, deleted or expired key and a key with none of
-    the three permissions alike: every probe of the setup fails. The error
-    names these causes and the three permissions as Bitpanda's key page does
-    in each language -- never the trading one --, and asks to check the key or
-    create a new one with all three. In the approved English and German
-    wording."""
+    the four permissions alike: every probe of the setup fails. The error
+    names these causes and the four permissions as Bitpanda's key page does
+    in each language, and asks to check the key or create a new one with all
+    four. In the approved English and German wording."""
     for name in _FILES:
         error = _load(name)["config"]["error"]["invalid_auth"]
-        *required, trade = _PERMISSION_LABELS[_language(name)]
-        assert all(label in error for label in required), name
-        assert trade not in error and _placeholders(error) == set(), name
+        assert all(label in error for label in _PERMISSION_LABELS[_language(name)]), name
+        assert _placeholders(error) == set(), name
     assert _load("strings.json")["config"]["error"]["invalid_auth"] == (
         "Bitpanda rejected this API key. It may be copied incompletely, deleted in your"
         " Bitpanda account or expired, or it has none of the permissions \"Balances\","
-        " \"Transaction\" and \"Earn (Read)\". Check the API key, or create a new one with all"
-        " three."
+        " \"Transaction\", \"Earn (Read)\" and \"Trade (Read)\". Check the API key, or create a"
+        " new one with all four."
     )
     assert _load("translations/de.json")["config"]["error"]["invalid_auth"] == (
         "Bitpanda hat diesen API-Schlüssel abgelehnt. Vielleicht ist er unvollständig"
         " kopiert, in deinem Bitpanda-Konto gelöscht oder abgelaufen, oder er hat keine der"
-        " Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“. Prüfe den API-Schlüssel"
-        " oder erstelle einen neuen mit allen dreien."
+        " Berechtigungen „Guthaben“, „Transaktion“, „Earn (Read)“ und „Trading (Read)“. Prüfe"
+        " den API-Schlüssel oder erstelle einen neuen mit allen vieren."
     )
 
 
@@ -2503,8 +2504,8 @@ _SAME_ACCOUNT = {
     "fr": (
         "La nouvelle clé API doit appartenir au même compte Bitpanda.",
         "Une nouvelle clé API doit appartenir au même compte Bitpanda.",
-        " Pour un autre compte, ouvrez le menu ⋮ de l'entrée « Bitpanda Portfolio » sur la page de "
-        "l'intégration Bitpanda, choisissez « Supprimer » puis configurez à nouveau le Portfolio.",
+        " Pour un autre compte, ouvrez le menu ⋮ de l'entrée «\u00a0Bitpanda Portfolio\u00a0» sur la page de "
+        "l'intégration Bitpanda, choisissez «\u00a0Supprimer\u00a0» puis configurez à nouveau le Portfolio.",
     ),
     "it": (
         "La nuova chiave API deve appartenere allo stesso account Bitpanda.",
@@ -2527,18 +2528,38 @@ _SAME_ACCOUNT = {
 }
 
 
+def test_reconfigure_says_the_price_tracker_uses_the_same_key():
+    """Reconfigure says, after what it changes, that the Bitpanda Price
+    Tracker uses the same API key -- ending the first paragraph; the
+    same-account sentence follows in a paragraph of its own. In the approved
+    English and German wording."""
+    for name in _FILES:
+        description = _load(name)["config"]["step"]["reconfigure"]["description"]
+        uses = _load(name)["config"]["step"]["portfolio"]["description"].split("\n\n")[-1]
+        assert f". {uses.split(chr(10))[1]}\n\n" in description, name
+    assert _load("strings.json")["config"]["step"]["reconfigure"]["description"].startswith(
+        "Replace the stored API key, change the currency, or both. The Bitpanda Price Tracker"
+        " uses the same API key.\n\nA new API key must belong to the same Bitpanda account."
+    )
+    assert _load("translations/de.json")["config"]["step"]["reconfigure"]["description"].startswith(
+        "Ersetze den gespeicherten API-Schlüssel, ändere die Währung oder beides. Der Bitpanda"
+        " Price Tracker nutzt denselben API-Schlüssel.\n\nEin neuer API-Schlüssel muss zum selben"
+        " Bitpanda-Konto gehören."
+    )
+
+
 def test_the_key_dialogs_say_a_new_key_must_be_of_the_same_account():
     """Both dialogs that take a new key -- the new-key dialog
-    (reauth_confirm), at the end of its first paragraph, and Reconfigure, at
-    the end of its description -- say that the key must belong to the same
+    (reauth_confirm), at the end of its second paragraph, and Reconfigure, in
+    a paragraph of its own that ends its description -- say that the key must belong to the same
     Bitpanda account, and how to switch to another one: delete the Portfolio
     and set it up again."""
     assert sorted(_SAME_ACCOUNT) == _LANGUAGES
     for language, (reauth, reconfigure, another) in _SAME_ACCOUNT.items():
         step = _load(f"translations/{language}.json")["config"]["step"]
-        first_paragraph = step["reauth_confirm"]["description"].split("\n\n")[0]
-        assert first_paragraph.endswith(f" {reauth}{another}"), language
-        assert step["reconfigure"]["description"].endswith(f" {reconfigure}{another}"), language
+        kept = step["reauth_confirm"]["description"].split("\n\n")[1]
+        assert kept.endswith(f" {reauth}{another}"), language
+        assert step["reconfigure"]["description"].endswith(f"\n\n{reconfigure}{another}"), language
 
 
 def test_the_setups_end_with_the_way_to_the_cards():
@@ -2607,3 +2628,13 @@ def test_no_text_carries_the_emoji_variation_selector():
     for name in _FILES:
         path = _DIR / name
         assert "\ufe0f" not in path.read_text(encoding="utf-8"), name
+
+
+def test_french_keeps_its_no_break_spaces():
+    """French typography, as everywhere in fr.json: a
+    no-break space (U+00A0) inside « » and before a colon or a semicolon, so
+    that no line starts with » or a colon. A plain space there slips in
+    easily when a text is edited."""
+    text = (_DIR / "translations/fr.json").read_text(encoding="utf-8")
+    for plain in ("« ", " »", " :", " ;"):
+        assert plain not in text, repr(plain)

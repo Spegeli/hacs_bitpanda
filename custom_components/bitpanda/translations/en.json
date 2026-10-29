@@ -11,7 +11,7 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "The Bitpanda Portfolio shows your Bitpanda account in Home Assistant: its total value, your returns, and a wallet for every asset you hold. The integration creates the wallets itself and removes them when you no longer hold an asset – you do not need to add or delete any.\n\nFor this, the integration needs an API key. To create one:\n\n1. Open [{api_key_url}]({api_key_url}) and create a new API key.\n2. Select only the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\".\n3. Copy the API key and paste it below. Bitpanda shows it only once.\n\nThe integration only reads with it: it cannot trade or move money.\nBitpanda API keys are valid until the date you choose when creating them, one year at most; after that, Home Assistant asks for a new one.\nYou can replace the API key at any time: open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page and choose \"Reconfigure\".",
+        "description": "The Bitpanda Portfolio shows your Bitpanda account in Home Assistant: its total value, your returns, and a wallet for every asset you hold. The integration creates the wallets itself and removes them when you no longer hold an asset – you do not need to add or delete any.\n\nFor this, the integration needs an API key. To create one:\n\n1. Open [{api_key_url}]({api_key_url}) and create a new API key.\n2. Select the permissions \"Balances\", \"Transaction\", \"Earn (Read)\" and \"Trade (Read)\".\n3. Copy the API key and paste it below. Bitpanda shows it only once.\n\nThe integration only reads with it: it cannot trade or move money.\nThe Bitpanda Price Tracker uses the same API key.\nBitpanda API keys are valid until the date you choose when creating them, one year at most; after that, Home Assistant asks for a new one.\nYou can replace the API key at any time: open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page and choose \"Reconfigure\".",
         "data": {
           "api_key": "API key"
         }
@@ -87,20 +87,20 @@
       },
       "reauth_confirm": {
         "title": "New Bitpanda API key needed",
-        "description": "Bitpanda rejected the stored API key. It may have expired, or it predates the permissions this version needs. Your sensors are kept. The new API key must belong to the same Bitpanda account. For another account, open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page, choose \"Delete\" and set up the Portfolio again.\n\nTo create a new API key:\n\n1. Open [{api_key_url}]({api_key_url}) and create a new API key.\n2. Select only the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\".\n3. Copy the API key and paste it below. Bitpanda shows it only once.\n\nThe integration only reads with it: it cannot trade or move money.\nBitpanda API keys are valid until the date you choose when creating them, one year at most; after that, Home Assistant asks for a new one.",
+        "description": "Bitpanda rejected the stored API key. It may have expired, or it lacks a permission this version needs: since October 2026, Bitpanda gives prices only to an API key with \"Trade (Read)\".\n\nYour sensors are kept. The new API key must belong to the same Bitpanda account. For another account, open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page, choose \"Delete\" and set up the Portfolio again.\n\nTo create a new API key:\n\n1. Open [{api_key_url}]({api_key_url}) and create a new API key.\n2. Select the permissions \"Balances\", \"Transaction\", \"Earn (Read)\" and \"Trade (Read)\".\n3. Copy the API key and paste it below. Bitpanda shows it only once.\n\nThe integration only reads with it: it cannot trade or move money.\nThe Bitpanda Price Tracker uses the same API key.\nBitpanda API keys are valid until the date you choose when creating them, one year at most; after that, Home Assistant asks for a new one.",
         "data": {
           "api_key": "API key"
         }
       },
       "reconfigure": {
         "title": "Reconfigure Bitpanda Portfolio",
-        "description": "Replace the stored API key, change the currency, or both. A new API key must belong to the same Bitpanda account. For another account, open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page, choose \"Delete\" and set up the Portfolio again.",
+        "description": "Replace the stored API key, change the currency, or both. The Bitpanda Price Tracker uses the same API key.\n\nA new API key must belong to the same Bitpanda account. For another account, open the ⋮ menu of the \"Bitpanda Portfolio\" entry on the Bitpanda integration page, choose \"Delete\" and set up the Portfolio again.",
         "data": {
           "api_key": "New API key",
           "currency": "Currency"
         },
         "data_description": {
-          "api_key": "Leave empty to keep the current API key.\nA new API key from [{api_key_url}]({api_key_url}) needs the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\" – not \"Trade (Read)\".\nThe integration only reads with it: it cannot trade or move money.",
+          "api_key": "Leave empty to keep the current API key.\nA new API key from [{api_key_url}]({api_key_url}) needs the permissions \"Balances\", \"Transaction\", \"Earn (Read)\" and \"Trade (Read)\".\nThe integration only reads with it: it cannot trade or move money.",
           "currency": "Changing the currency deletes all Portfolio sensors including their history; you confirm this in the next step."
         }
       },
@@ -116,8 +116,8 @@
       }
     },
     "error": {
-      "invalid_auth": "Bitpanda rejected this API key. It may be copied incompletely, deleted in your Bitpanda account or expired, or it has none of the permissions \"Balances\", \"Transaction\" and \"Earn (Read)\". Check the API key, or create a new one with all three.",
-      "missing_scopes": "Permissions of this API key: \"Balances\" {balance}, \"Transaction\" {transaction}, \"Earn (Read)\" {earn}. Permissions cannot be added to an existing API key. Create a new one with all three.",
+      "invalid_auth": "Bitpanda rejected this API key. It may be copied incompletely, deleted in your Bitpanda account or expired, or it has none of the permissions \"Balances\", \"Transaction\", \"Earn (Read)\" and \"Trade (Read)\". Check the API key, or create a new one with all four.",
+      "missing_scopes": "Permissions of this API key: \"Balances\" {balance}, \"Transaction\" {transaction}, \"Earn (Read)\" {earn}, \"Trade (Read)\" {trading}. Permissions cannot be added to an existing API key. Create a new one with all four.",
       "rate_limited": "Too many requests. Wait a moment and try again.",
       "cannot_connect": "Could not reach Bitpanda. Try again later.",
       "unknown": "Unexpected error"

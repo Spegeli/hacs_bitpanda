@@ -137,13 +137,21 @@ def _object(body: dict[str, Any], path: str) -> dict[str, Any]:
     return data
 
 
+# Bitcoin's asset ID, whose ticker probes Trade (Read).
+_BITCOIN = "b86c034b-efe3-11eb-b56f-0691764446a7"
+
 # One cheap, read-only endpoint per required scope, used only to probe which
-# scopes a key carries during setup. `/portfolio` needs no params; the other
-# two accept `page_size` and 1 is the smallest page the API allows.
+# scopes a key carries during setup. `/portfolio` needs no params; /operations
+# and /earn/configs accept `page_size`, and 1 is the smallest page the API
+# allows. Trade (Read) is probed with Bitcoin's ticker, the very request the
+# integration needs it for: /assets, which needed it too on 2026-10-28,
+# answered every key -- a made-up one and none as well -- at times on
+# 2026-10-29, and proves nothing about a key.
 _SCOPE_PROBES: dict[str, tuple[str, dict[str, Any] | None]] = {
     "balance": ("/portfolio", None),
     "transaction": ("/operations", {"page_size": 1}),
     "earn": ("/earn/configs", {"page_size": 1}),
+    "trading": (f"/tickers/{_BITCOIN}", None),
 }
 
 

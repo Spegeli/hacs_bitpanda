@@ -11,7 +11,7 @@
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Bitpanda Portfolio pokazuje Twoje konto Bitpanda w Home Assistant: wartość całkowitą, Twoje stopy zwrotu i osobny portfel dla każdego aktywa, które posiadasz. Integracja sama tworzy portfele i usuwa je, gdy przestajesz posiadać dane aktywo – nie musisz niczego dodawać ani usuwać.\n\nDo tego integracja potrzebuje klucza API. Jak go utworzyć:\n\n1. Otwórz [{api_key_url}]({api_key_url}) i utwórz nowy klucz API.\n2. Wybierz tylko uprawnienia „Salda”, „Transakcja” i „Earn (Odczytaj)” – bez uprawnienia „Trade (Odczytaj)”.\n3. Skopiuj klucz API i wklej go poniżej. Bitpanda pokazuje go tylko raz.\n\nIntegracja używa klucza API tylko do odczytu: nie może handlować ani przenosić pieniędzy.\nKlucze API Bitpanda są ważne do daty wybranej przy ich tworzeniu, najwyżej przez rok; potem Home Assistant poprosi o nowy.\nKlucz API możesz w każdej chwili wymienić: otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio” i wybierz „Rekonfiguracja”.",
+        "description": "Bitpanda Portfolio pokazuje Twoje konto Bitpanda w Home Assistant: wartość całkowitą, Twoje stopy zwrotu i osobny portfel dla każdego aktywa, które posiadasz. Integracja sama tworzy portfele i usuwa je, gdy przestajesz posiadać dane aktywo – nie musisz niczego dodawać ani usuwać.\n\nDo tego integracja potrzebuje klucza API. Jak go utworzyć:\n\n1. Otwórz [{api_key_url}]({api_key_url}) i utwórz nowy klucz API.\n2. Wybierz uprawnienia „Salda”, „Transakcja”, „Earn (Odczytaj)” i „Trade (Odczytaj)”.\n3. Skopiuj klucz API i wklej go poniżej. Bitpanda pokazuje go tylko raz.\n\nIntegracja używa klucza API tylko do odczytu: nie może handlować ani przenosić pieniędzy.\nBitpanda Price Tracker używa tego samego klucza API.\nKlucze API Bitpanda są ważne do daty wybranej przy ich tworzeniu, najwyżej przez rok; potem Home Assistant poprosi o nowy.\nKlucz API możesz w każdej chwili wymienić: otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio” i wybierz „Rekonfiguracja”.",
         "data": {
           "api_key": "Klucz API"
         }
@@ -87,20 +87,20 @@
       },
       "reauth_confirm": {
         "title": "Potrzebny nowy klucz API platformy Bitpanda",
-        "description": "Bitpanda odrzuciła zapisany klucz API. Mógł wygasnąć albo powstać przed wprowadzeniem uprawnień, których wymaga ta wersja. Twoje sensory zostaną zachowane. Nowy klucz API musi należeć do tego samego konta Bitpanda. Aby użyć innego konta, otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio”, wybierz „Usuń” i skonfiguruj Portfolio od nowa.\n\nJak utworzyć nowy klucz API:\n\n1. Otwórz [{api_key_url}]({api_key_url}) i utwórz nowy klucz API.\n2. Wybierz tylko uprawnienia „Salda”, „Transakcja” i „Earn (Odczytaj)” – bez uprawnienia „Trade (Odczytaj)”.\n3. Skopiuj klucz API i wklej go poniżej. Bitpanda pokazuje go tylko raz.\n\nIntegracja używa klucza API tylko do odczytu: nie może handlować ani przenosić pieniędzy.\nKlucze API Bitpanda są ważne do daty wybranej przy ich tworzeniu, najwyżej przez rok; potem Home Assistant poprosi o nowy.",
+        "description": "Bitpanda odrzuciła zapisany klucz API. Mógł wygasnąć albo może mu brakować uprawnienia, którego wymaga ta wersja: od października 2026 Bitpanda udostępnia ceny tylko kluczom API z uprawnieniem „Trade (Odczytaj)”.\n\nTwoje sensory zostaną zachowane. Nowy klucz API musi należeć do tego samego konta Bitpanda. Aby użyć innego konta, otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio”, wybierz „Usuń” i skonfiguruj Portfolio od nowa.\n\nJak utworzyć nowy klucz API:\n\n1. Otwórz [{api_key_url}]({api_key_url}) i utwórz nowy klucz API.\n2. Wybierz uprawnienia „Salda”, „Transakcja”, „Earn (Odczytaj)” i „Trade (Odczytaj)”.\n3. Skopiuj klucz API i wklej go poniżej. Bitpanda pokazuje go tylko raz.\n\nIntegracja używa klucza API tylko do odczytu: nie może handlować ani przenosić pieniędzy.\nBitpanda Price Tracker używa tego samego klucza API.\nKlucze API Bitpanda są ważne do daty wybranej przy ich tworzeniu, najwyżej przez rok; potem Home Assistant poprosi o nowy.",
         "data": {
           "api_key": "Klucz API"
         }
       },
       "reconfigure": {
         "title": "Rekonfiguracja usługi Bitpanda Portfolio",
-        "description": "Zastąp zapisany klucz API, zmień walutę albo jedno i drugie. Nowy klucz API musi należeć do tego samego konta Bitpanda. Aby użyć innego konta, otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio”, wybierz „Usuń” i skonfiguruj Portfolio od nowa.",
+        "description": "Zastąp zapisany klucz API, zmień walutę albo jedno i drugie. Bitpanda Price Tracker używa tego samego klucza API.\n\nNowy klucz API musi należeć do tego samego konta Bitpanda. Aby użyć innego konta, otwórz na stronie integracji Bitpanda menu ⋮ przy wpisie „Bitpanda Portfolio”, wybierz „Usuń” i skonfiguruj Portfolio od nowa.",
         "data": {
           "api_key": "Nowy klucz API",
           "currency": "Waluta"
         },
         "data_description": {
-          "api_key": "Pozostaw pole puste, aby zachować obecny klucz API.\nNowy klucz API ze strony [{api_key_url}]({api_key_url}) potrzebuje uprawnień „Salda”, „Transakcja” i „Earn (Odczytaj)” – bez uprawnienia „Trade (Odczytaj)”.\nIntegracja używa klucza API tylko do odczytu: nie może handlować ani przenosić pieniędzy.",
+          "api_key": "Pozostaw pole puste, aby zachować obecny klucz API.\nNowy klucz API ze strony [{api_key_url}]({api_key_url}) potrzebuje uprawnień „Salda”, „Transakcja”, „Earn (Odczytaj)” i „Trade (Odczytaj)”.\nIntegracja używa klucza API tylko do odczytu: nie może handlować ani przenosić pieniędzy.",
           "currency": "Zmiana waluty usuwa wszystkie sensory Portfolio wraz z ich historią; potwierdzisz to w następnym kroku."
         }
       },
@@ -116,8 +116,8 @@
       }
     },
     "error": {
-      "invalid_auth": "Bitpanda odrzuciła ten klucz API. Być może został skopiowany niekompletnie, usunięty z Twojego konta Bitpanda lub wygasł albo nie ma żadnego z uprawnień „Salda”, „Transakcja” i „Earn (Odczytaj)”. Sprawdź klucz API lub utwórz nowy ze wszystkimi trzema uprawnieniami.",
-      "missing_scopes": "Uprawnienia tego klucza API: „Salda” {balance}, „Transakcja” {transaction}, „Earn (Odczytaj)” {earn}. Do istniejącego klucza API nie można dodać uprawnień. Utwórz nowy klucz API ze wszystkimi trzema uprawnieniami.",
+      "invalid_auth": "Bitpanda odrzuciła ten klucz API. Być może został skopiowany niekompletnie, usunięty z Twojego konta Bitpanda lub wygasł albo nie ma żadnego z uprawnień „Salda”, „Transakcja”, „Earn (Odczytaj)” i „Trade (Odczytaj)”. Sprawdź klucz API lub utwórz nowy ze wszystkimi czterema uprawnieniami.",
+      "missing_scopes": "Uprawnienia tego klucza API: „Salda” {balance}, „Transakcja” {transaction}, „Earn (Odczytaj)” {earn}, „Trade (Odczytaj)” {trading}. Do istniejącego klucza API nie można dodać uprawnień. Utwórz nowy klucz API ze wszystkimi czterema uprawnieniami.",
       "rate_limited": "Zbyt wiele żądań. Poczekaj chwilę i spróbuj ponownie.",
       "cannot_connect": "Nie można połączyć się z platformą Bitpanda. Spróbuj ponownie później.",
       "unknown": "Nieoczekiwany błąd"

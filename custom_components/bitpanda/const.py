@@ -58,6 +58,15 @@ TROUBLESHOOTING_URL = "https://github.com/Spegeli/hacs_bitpanda#-troubleshooting
 # link for the Home Assistant app (where reloading does not load them).
 CARDS_URL = "https://github.com/Spegeli/hacs_bitpanda#-dashboard-cards"
 
+# The README's section on setting up the Portfolio, whose API key the Price
+# Tracker uses: the "Learn more" of the repair issue below.
+SETUP_PORTFOLIO_URL = "https://github.com/Spegeli/hacs_bitpanda#set-up-the-portfolio"
+
+# The repair issue of a Price Tracker without a Portfolio to lend it its API
+# key: it shows no prices until one is set up. Its translation key is its id.
+ISSUE_PORTFOLIO_REQUIRED = "portfolio_required"
+PRICE_TRACKER_ISSUES = (ISSUE_PORTFOLIO_REQUIRED,)
+
 # The integration's version, as its manifest states it: every device shows it
 # ("Version …"). Read once, when Home Assistant imports the integration -- in
 # its import executor, so no event loop waits for the file.

@@ -988,6 +988,10 @@
     "portfolio_exists": {
       "title": "Migracja integracji Bitpanda zablokowana: usługa Bitpanda Portfolio jest już skonfigurowana",
       "description": "Wpisu Bitpanda „{entry}” sprzed migracji nie można zmigrować: stałby się drugą usługą Bitpanda Portfolio obok „{portfolio}”, a można skonfigurować tylko jedną. Nic w nim nie zostało zmienione. Usuń jeden z dwóch wpisów na stronie integracji Bitpanda (⋮ → „Usuń”). Jeśli zachowasz „{entry}”, uruchom następnie ponownie Home Assistant, aby go zmigrować."
+    },
+    "portfolio_required": {
+      "title": "Bitpanda Price Tracker: skonfiguruj Bitpanda Portfolio",
+      "description": "Od października 2026 Bitpanda udostępnia ceny tylko z kluczem API. Price Tracker używa klucza API usługi Bitpanda Portfolio, więc bez niego nie pokazuje cen.\n\n**Jak to naprawić:** skonfiguruj Bitpanda Portfolio – „Dodaj usługę” na stronie integracji Bitpanda. Klucz API musi mieć te cztery uprawnienia:\n\n- „Salda”\n- „Transakcja”\n- „Earn (Odczytaj)”\n- „Trade (Odczytaj)”\n\nTwoje śledzenia cen pozostają bez zmian i znów pokażą ceny, gdy Portfolio zostanie skonfigurowane."
     }
   },
   "services": {

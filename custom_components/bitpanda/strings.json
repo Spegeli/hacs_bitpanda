@@ -988,6 +988,10 @@
     "portfolio_exists": {
       "title": "Bitpanda upgrade blocked: a Bitpanda Portfolio is already set up",
       "description": "The Bitpanda entry \"{entry}\" from before the upgrade cannot be upgraded: it would become a second Bitpanda Portfolio beside \"{portfolio}\", and only one can be set up. It has been left unchanged. Delete one of the two entries on the Bitpanda integration page (⋮ → \"Delete\"). If you keep \"{entry}\", restart Home Assistant afterwards to upgrade it."
+    },
+    "portfolio_required": {
+      "title": "Bitpanda Price Tracker: set up Bitpanda Portfolio",
+      "description": "Since October 2026, Bitpanda gives prices only with an API key. The Price Tracker uses the API key of Bitpanda Portfolio, so it shows no prices without one.\n\n**To fix this:** set up Bitpanda Portfolio – \"Add service\" on the Bitpanda integration page. Its API key needs these four permissions:\n\n- \"Balances\"\n- \"Transaction\"\n- \"Earn (Read)\"\n- \"Trade (Read)\"\n\nYour price trackers stay as they are and show prices again once the Portfolio is set up."
     }
   },
   "services": {

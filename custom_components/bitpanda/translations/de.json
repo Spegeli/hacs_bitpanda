@@ -988,6 +988,10 @@
     "portfolio_exists": {
       "title": "Bitpanda-Umstieg blockiert: Ein Bitpanda Portfolio ist bereits eingerichtet",
       "description": "Der Bitpanda-Eintrag „{entry}“ aus der Zeit vor dem Umstieg kann nicht umgestellt werden: Er würde neben „{portfolio}“ zu einem zweiten Bitpanda Portfolio, und es kann nur eines eingerichtet sein. An ihm wurde nichts geändert. Lösche einen der beiden Einträge auf der Bitpanda-Integrationsseite (⋮ → „Löschen“). Behältst du „{entry}“, starte Home Assistant danach neu, damit er umgestellt wird."
+    },
+    "portfolio_required": {
+      "title": "Bitpanda Price Tracker: Bitpanda Portfolio einrichten",
+      "description": "Seit Oktober 2026 gibt Bitpanda Preise nur noch mit einem API-Schlüssel heraus. Der Price Tracker nutzt den API-Schlüssel von Bitpanda Portfolio und zeigt ohne ihn keine Preise.\n\n**So behebst du es:** Richte Bitpanda Portfolio ein – „Dienst hinzufügen“ auf der Bitpanda-Integrationsseite. Der API-Schlüssel braucht diese vier Berechtigungen:\n\n- „Guthaben“\n- „Transaktion“\n- „Earn (Read)“\n- „Trading (Read)“\n\nDeine Preis-Tracker bleiben, wie sie sind, und zeigen wieder Preise, sobald das Portfolio eingerichtet ist."
     }
   },
   "services": {

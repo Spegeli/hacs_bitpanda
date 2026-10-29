@@ -988,6 +988,10 @@
     "portfolio_exists": {
       "title": "Migration de Bitpanda bloquée : un Bitpanda Portfolio est déjà configuré",
       "description": "L'entrée Bitpanda « {entry} » d'avant la migration ne peut pas être migrée : elle deviendrait un second Bitpanda Portfolio à côté de « {portfolio} », et un seul peut être configuré. Elle n'a pas été modifiée. Supprimez l'une des deux entrées sur la page de l'intégration Bitpanda (⋮ → « Supprimer »). Si vous conservez « {entry} », redémarrez ensuite Home Assistant pour la migrer."
+    },
+    "portfolio_required": {
+      "title": "Bitpanda Price Tracker : configurer Bitpanda Portfolio",
+      "description": "Depuis octobre 2026, Bitpanda ne fournit les prix qu'avec une clé API. Le Price Tracker utilise la clé API de Bitpanda Portfolio et n'affiche donc aucun prix sans elle.\n\n**Pour y remédier :** configurez Bitpanda Portfolio – « Ajouter un service » sur la page de l'intégration Bitpanda. Sa clé API doit disposer de ces quatre autorisations :\n\n- « Soldes »\n- « Transactions »\n- « Earn (Lecture) »\n- « Trader (Lecture) »\n\nVos suivis de prix restent tels quels et affichent de nouveau des prix dès que le Portfolio est configuré."
     }
   },
   "services": {

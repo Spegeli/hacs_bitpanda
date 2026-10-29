@@ -1,6 +1,7 @@
 """The Bitpanda integration."""
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Coroutine
 from contextlib import suppress
 import logging
@@ -9,7 +10,12 @@ from typing import Any, cast
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry, ConfigEntryState
+from homeassistant.config_entries import (
+    SIGNAL_CONFIG_ENTRY_CHANGED,
+    ConfigEntry,
+    ConfigEntryChange,
+    ConfigEntryState,
+)
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import (
@@ -17,8 +23,13 @@ from homeassistant.exceptions import (
     HomeAssistantError,
     ServiceValidationError,
 )
-from homeassistant.helpers import config_validation as cv, device_registry as dr
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    issue_registry as ir,
+)
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -38,7 +49,9 @@ from .const import (
     CONF_LEGACY_ADOPT,
     DOMAIN,
     ENTRY_TYPE_PRICE_TRACKER,
+    ISSUE_PORTFOLIO_REQUIRED,
     REFRESH_MIN_COOLDOWN,
+    SETUP_PORTFOLIO_URL,
     SUBENTRY_TYPE_PRICE_GROUP,
     SUBENTRY_TYPE_WALLET_GROUP,
     entry_type,
@@ -75,10 +88,12 @@ from .portfolio_coordinator import (
 )
 from .price_coordinator import (
     EcbCoordinator,
+    KeyState,
     PriceTrackerConfigEntry,
     PriceTrackerRuntime,
     TickerCoordinator,
 )
+from .tolerance import Rejected
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -312,20 +327,86 @@ async def _async_start_price_tracker(
         client_for=lambda key: BitpandaApiClient(key, session),
         key_source=lambda: keys.portfolio_api_key(hass),
         on_rejected=lambda key: keys.async_request_portfolio_reauth(hass, key),
-        on_key_state=lambda state: None,
+        on_key_state=lambda state: _async_report_key_state(hass, state),
         tracked=tracked,
+    )
+
+    # The round that follows the Portfolio's entry (below), while one runs.
+    following: asyncio.Task[None] | None = None
+    # Whether the entry changed again while that round ran.
+    changed_since = False
+
+    def _key_mismatch() -> bool:
+        return (keys.portfolio_api_key(hass) is None) != (tickers.key_state == "missing")
+
+    async def _async_follow() -> None:
+        nonlocal changed_since
+        while True:
+            changed_since = False
+            await tickers.async_refresh()
+            # A change during the round may have come after it read the
+            # key: one more round then, with the key as it is now.
+            if not changed_since and not _key_mismatch():
+                return
+
+    @callback
+    def _entry_changed(change: ConfigEntryChange, changed: ConfigEntry) -> None:
+        # The Portfolio's entry came, went or changed -- its data, its state:
+        # a round follows at once when the key there no longer matches the
+        # last round's, or after a refusal. Home Assistant drops a removed
+        # entry from its entries before it says so. Not through the
+        # coordinator's debounced request: Home Assistant 2025.5 drops one
+        # asked for during a refresh under way, whose key may be the old.
+        nonlocal following, changed_since
+        if changed.domain != DOMAIN or changed.entry_id == entry.entry_id:
+            return
+        if following is not None and not following.done():
+            changed_since = True
+            return
+        if tickers.key_state == "rejected" or _key_mismatch():
+            following = entry.async_create_task(hass, _async_follow(), "bitpanda follows the Portfolio")
+
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, SIGNAL_CONFIG_ENTRY_CHANGED, _entry_changed)
     )
     ecb = (
         EcbCoordinator(hass, entry, session)
         if entry.options.get(CONF_EXTRA_CURRENCIES)
         else None
     )
-    await _async_first_refresh(tickers)
+    try:
+        await _async_first_refresh(tickers)
+    except ConfigEntryNotReady:
+        # Rejected for its key -- none there, or one Bitpanda refused: the
+        # Price Tracker sets up all the same, its prices unavailable, and
+        # polls on once its sensors listen. Decided by the coordinator's own
+        # last exception: the reason raised again carries no cause.
+        if not isinstance(tickers.last_exception, Rejected):
+            raise
     if ecb is not None:
         # Not a first refresh: without rates the EUR sensors still work and
         # the other currencies say why they have no value.
         await ecb.async_refresh()
     return PriceTrackerRuntime(tickers=tickers, ecb=ecb)
+
+
+@callback
+def _async_report_key_state(hass: HomeAssistant, state: KeyState) -> None:
+    """The Price Tracker's repair issue, after each of its rounds: while no
+    Portfolio lends it a key, it shows no prices and says so."""
+    if state == "missing":
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            ISSUE_PORTFOLIO_REQUIRED,
+            is_fixable=False,
+            is_persistent=False,
+            learn_more_url=SETUP_PORTFOLIO_URL,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=ISSUE_PORTFOLIO_REQUIRED,
+        )
+    else:
+        ir.async_delete_issue(hass, DOMAIN, ISSUE_PORTFOLIO_REQUIRED)
 
 
 async def _async_first_refresh(coordinator: DataUpdateCoordinator[Any]) -> None:
@@ -534,8 +615,12 @@ def _async_register_refresh_service(hass: HomeAssistant) -> None:
 
 async def async_unload_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> bool:
     """Unload an entry. `bitpanda.refresh` stays: it belongs to the
-    integration (async_setup), not to an entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    integration (async_setup), not to an entry. A Price Tracker's repair
+    issue goes with it; its next setup raises it again if still due."""
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded and entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER:
+        ir.async_delete_issue(hass, DOMAIN, ISSUE_PORTFOLIO_REQUIRED)
+    return unloaded
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> None:
@@ -554,6 +639,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) ->
     if entry_type(entry) != ENTRY_TYPE_PRICE_TRACKER:
         migration.async_delete_not_migrated_issue(hass)
         await async_remove_portfolio_store(hass, entry.entry_id)
+    else:
+        ir.async_delete_issue(hass, DOMAIN, ISSUE_PORTFOLIO_REQUIRED)
     migration.async_update_blocker_issues(hass, entry.entry_id)
     if not any(
         other.entry_id != entry.entry_id

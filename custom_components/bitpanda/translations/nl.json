@@ -988,6 +988,10 @@
     "portfolio_exists": {
       "title": "Bitpanda-overstap geblokkeerd: er is al een Bitpanda Portfolio ingesteld",
       "description": "De Bitpanda-invoer \"{entry}\" van vóór de overstap kan niet worden omgezet: die zou naast \"{portfolio}\" een tweede Bitpanda Portfolio worden, en er kan er maar één worden ingesteld. Er is niets aan gewijzigd. Verwijder een van beide op de integratiepagina van Bitpanda (⋮ → \"Verwijderen\"): \"{entry}\" of \"{portfolio}\". Houd je \"{entry}\", herstart Home Assistant daarna om die om te zetten."
+    },
+    "portfolio_required": {
+      "title": "Bitpanda Price Tracker: Bitpanda Portfolio instellen",
+      "description": "Sinds oktober 2026 geeft Bitpanda prijzen alleen nog met een API-sleutel. De Price Tracker gebruikt de API-sleutel van Bitpanda Portfolio en toont zonder die API-sleutel geen prijzen.\n\n**Zo los je het op:** stel Bitpanda Portfolio in – \"Dienst toevoegen\" op de integratiepagina van Bitpanda. De API-sleutel heeft deze vier rechten nodig:\n\n- \"Saldi\"\n- \"Transactie\"\n- \"Earn (Lezen)\"\n- \"Traden (Lezen)\"\n\nJe prijstrackers blijven zoals ze zijn en tonen weer prijzen zodra het Portfolio is ingesteld."
     }
   },
   "services": {

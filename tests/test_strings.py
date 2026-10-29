@@ -15,7 +15,11 @@ from custom_components.bitpanda.assets import (
     ASSET_CATEGORY_FILTERS,
     CATEGORY_OTHER,
 )
-from custom_components.bitpanda.const import API_ERROR_KINDS, REQUIRED_SCOPES
+from custom_components.bitpanda.const import (
+    API_ERROR_KINDS,
+    PRICE_TRACKER_ISSUES,
+    REQUIRED_SCOPES,
+)
 from custom_components.bitpanda.announcements import PORTFOLIO_EVENT_TYPES
 from custom_components.bitpanda.ecb import EcbError, EcbRates
 from custom_components.bitpanda.portfolio_coordinator import _update_failed
@@ -42,7 +46,7 @@ from custom_components.bitpanda.portfolio_sensor import (
 from custom_components.bitpanda.price_coordinator import _ecb_failed
 from custom_components.bitpanda.price_sensor import PriceSensor
 
-from tests.conftest import ANNOUNCEMENT_FIELDS
+from tests.conftest import ANNOUNCEMENT_FIELDS, assert_issue_texts_render
 
 _DIR = Path(__file__).parent.parent / "custom_components" / "bitpanda"
 # Every language file under translations/, found the way the integration
@@ -179,47 +183,50 @@ def test_no_language_is_an_untranslated_copy_of_english():
 # "Add dashboard"
 # (ui.panel.config.lovelace.dashboards.picker.add_dashboard), "Settings"
 # (panel.config), "Dashboards" (ui.panel.config.dashboard.dashboards.main)
-# and the Overview's sidebar label (panel.home).
+# and the Overview's sidebar label (panel.home). And "Add service" at the top
+# of the integration page of a service integration
+# (ui.panel.config.integrations.integration_page.add_service), read from the
+# frontends of 2025.5.0 and 2026.10.1 alike ("es", not "es-419").
 _MENU_LABELS = {
     "de": {
-        "reconfigure": "Neu konfigurieren", "configure": "Konfigurieren", "submit": "OK",
+        "add_service": "Dienst hinzufügen", "reconfigure": "Neu konfigurieren", "configure": "Konfigurieren", "submit": "OK",
         "delete": "Löschen", "edit_dashboard": "Dashboard bearbeiten",
         "add_card": "Karte hinzufügen", "by_card": "Nach Karte", "add_dashboard": "Dashboard hinzufügen",
         "settings": "Einstellungen", "dashboards": "Dashboards", "overview": "Übersicht",
     },
     "en": {
-        "reconfigure": "Reconfigure", "configure": "Configure", "submit": "Submit",
+        "add_service": "Add service", "reconfigure": "Reconfigure", "configure": "Configure", "submit": "Submit",
         "delete": "Delete", "edit_dashboard": "Edit dashboard", "add_card": "Add card", "by_card": "By card",
         "add_dashboard": "Add dashboard", "settings": "Settings", "dashboards": "Dashboards",
         "overview": "Overview",
     },
     "es": {
-        "reconfigure": "Reconfigurar", "configure": "Configurar", "submit": "Enviar",
+        "add_service": "Añadir servicio", "reconfigure": "Reconfigurar", "configure": "Configurar", "submit": "Enviar",
         "delete": "Eliminar", "edit_dashboard": "Editar panel de control",
         "add_card": "Añadir tarjeta", "by_card": "Por tarjeta", "add_dashboard": "Añadir panel de control",
         "settings": "Configuración", "dashboards": "Paneles de control",
         "overview": "Vista general",
     },
     "fr": {
-        "reconfigure": "Reconfigurer", "configure": "Configurer", "submit": "Valider",
+        "add_service": "Ajouter un service", "reconfigure": "Reconfigurer", "configure": "Configurer", "submit": "Valider",
         "delete": "Supprimer", "edit_dashboard": "Modifier le tableau de bord",
         "add_card": "Ajouter une carte", "by_card": "Par carte", "add_dashboard": "Ajouter un tableau de bord",
         "settings": "Paramètres", "dashboards": "Tableaux de bord", "overview": "Vue d’ensemble",
     },
     "it": {
-        "reconfigure": "Riconfigura", "configure": "Configura", "submit": "Invia",
+        "add_service": "Aggiungi servizio", "reconfigure": "Riconfigura", "configure": "Configura", "submit": "Invia",
         "delete": "Elimina", "edit_dashboard": "Modifica la plancia", "add_card": "Aggiungi scheda", "by_card": "Per scheda",
         "add_dashboard": "Aggiungi plancia", "settings": "Impostazioni", "dashboards": "Plance",
         "overview": "Panoramica",
     },
     "nl": {
-        "reconfigure": "Herconfigureer", "configure": "Configureren", "submit": "Verzenden",
+        "add_service": "Dienst toevoegen", "reconfigure": "Herconfigureer", "configure": "Configureren", "submit": "Verzenden",
         "delete": "Verwijderen", "edit_dashboard": "Dashboard bewerken",
         "add_card": "Kaart toevoegen", "by_card": "Per kaart", "add_dashboard": "Dashboard toevoegen",
         "settings": "Instellingen", "dashboards": "Dashboards", "overview": "Thuis",
     },
     "pl": {
-        "reconfigure": "Rekonfiguracja", "configure": "Konfiguruj", "submit": "Zatwierdź",
+        "add_service": "Dodaj usługę", "reconfigure": "Rekonfiguracja", "configure": "Konfiguruj", "submit": "Zatwierdź",
         "delete": "Usuń", "edit_dashboard": "Edytuj panel", "add_card": "Dodaj kartę", "by_card": "Według karty",
         "add_dashboard": "Dodaj panel", "settings": "Ustawienia", "dashboards": "Panele",
         "overview": "Przegląd",
@@ -228,6 +235,9 @@ _MENU_LABELS = {
 
 # The texts that send the user to one of those controls, by the control.
 _LABEL_REFERENCES = {
+    "add_service": [
+        ("issues", "portfolio_required", "description"),
+    ],
     "reconfigure": [
         ("config", "step", "portfolio", "description"),
         ("config", "step", "currency", "sections", "currency", "data_description", "currency"),
@@ -319,6 +329,7 @@ _LOCATED_TEXTS = {
     ("config", "step", "reauth_confirm", "description"): "⋮",
     ("config", "step", "reconfigure", "description"): "⋮",
     ("config", "create_entry", "price_tracker"): "",
+    ("issues", "portfolio_required", "description"): "",
 }
 # Shown right on the Price Tracker's entry, after its ⋮ -> "Reconfigure": it
 # sends the user to "Configure" (⚙) on "the same entry".
@@ -1607,11 +1618,55 @@ def test_no_exception_text_takes_an_english_message():
 
 def test_every_issue_text_is_one_the_code_raises():
     """strings.json holds no repair-issue text the code never raises: the
-    upgrade's reports and what blocks the upgrade. Each module's own tests
-    render its issues in every language."""
+    upgrade's reports, what blocks the upgrade, and the Price Tracker's
+    missing Portfolio. Each module's own tests render its issues in every
+    language."""
     assert set(_load("strings.json")["issues"]) == {
         *migration.UPGRADE_ISSUES,
         *migration.BLOCKER_ISSUES,
+        *PRICE_TRACKER_ISSUES,
+    }
+
+
+def test_the_portfolio_required_issue_says_why_and_what_to_do():
+    """A Price Tracker without a Portfolio: why it shows no prices, what to
+    set up -- with the four permissions as Bitpanda's key page names them in
+    each language -- and that its price trackers stay. In the approved
+    English and German wording; German calls the tracked assets by the
+    integration's own word, „Preis-Tracker“. Short paragraphs, the way to
+    fix it in bold, and the permissions as a list of their own in every
+    language: the repair dialog shows one block of text otherwise."""
+    assert_issue_texts_render({"portfolio_required": None})
+    for name in _FILES:
+        description = _load(name)["issues"]["portfolio_required"]["description"]
+        labels = _PERMISSION_LABELS[_language(name)]
+        assert "\n\n" + "\n".join(f"- {label}" for label in labels) + "\n\n" in description, name
+        assert description.count("\n\n") == 3 and description.count("**") == 2, name
+    english = _load("strings.json")["issues"]["portfolio_required"]
+    assert english == {
+        "title": "Bitpanda Price Tracker: set up Bitpanda Portfolio",
+        "description": (
+            "Since October 2026, Bitpanda gives prices only with an API key. The Price Tracker"
+            " uses the API key of Bitpanda Portfolio, so it shows no prices without one.\n\n"
+            '**To fix this:** set up Bitpanda Portfolio \u2013 "Add service" on the Bitpanda'
+            " integration page. Its API key needs these four permissions:\n\n"
+            '- "Balances"\n- "Transaction"\n- "Earn (Read)"\n- "Trade (Read)"\n\n'
+            "Your price trackers stay as they are and show prices again once the Portfolio is"
+            " set up."
+        ),
+    }
+    assert _load("translations/de.json")["issues"]["portfolio_required"] == {
+        "title": "Bitpanda Price Tracker: Bitpanda Portfolio einrichten",
+        "description": (
+            "Seit Oktober 2026 gibt Bitpanda Preise nur noch mit einem API-Schlüssel heraus. Der"
+            " Price Tracker nutzt den API-Schlüssel von Bitpanda Portfolio und zeigt ohne ihn keine"
+            " Preise.\n\n"
+            "**So behebst du es:** Richte Bitpanda Portfolio ein \u2013 „Dienst hinzufügen“ auf der"
+            " Bitpanda-Integrationsseite. Der API-Schlüssel braucht diese vier Berechtigungen:\n\n"
+            "- „Guthaben“\n- „Transaktion“\n- „Earn (Read)“\n- „Trading (Read)“\n\n"
+            "Deine Preis-Tracker bleiben, wie sie sind, und zeigen wieder Preise, sobald das"
+            " Portfolio eingerichtet ist."
+        ),
     }
 
 

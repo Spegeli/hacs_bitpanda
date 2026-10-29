@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
-from . import BitpandaConfigEntry
+from . import BitpandaConfigEntry, keys
 from .assets import slim_asset
 from .const import (
     CONF_ASSETS,
@@ -178,7 +178,7 @@ def _price_groups(entry: ConfigEntry) -> list[dict[str, Any]]:
 
 
 def _price_tracker(
-    entry: ConfigEntry, runtime: PriceTrackerRuntime | None
+    hass: HomeAssistant, entry: ConfigEntry, runtime: PriceTrackerRuntime | None
 ) -> dict[str, Any]:
     out: dict[str, Any] = {
         "service": "price_tracker",
@@ -188,6 +188,14 @@ def _price_tracker(
             "extra_currencies": list(entry.options.get(CONF_EXTRA_CURRENCIES, [])),
         },
         "currencies": tracked_currencies(entry),
+        # Whether it has the Portfolio's key -- never the key: as its last
+        # round found it, refused included; else whether a Portfolio lends
+        # one.
+        "portfolio_key": (
+            runtime.tickers.key_state
+            if runtime is not None
+            else "missing" if keys.portfolio_api_key(hass) is None else "present"
+        ),
     }
     if runtime is None:
         return out
@@ -221,5 +229,5 @@ async def async_get_config_entry_diagnostics(
     runtime = entry.runtime_data if entry.state is ConfigEntryState.LOADED else None
     # The entry's type names its service, and so its runtime data.
     if entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER:
-        return _price_tracker(entry, cast(PriceTrackerRuntime | None, runtime))
+        return _price_tracker(hass, entry, cast(PriceTrackerRuntime | None, runtime))
     return _portfolio(hass, entry, cast(PortfolioRuntime | None, runtime))

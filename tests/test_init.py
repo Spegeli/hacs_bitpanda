@@ -40,6 +40,7 @@ from custom_components.bitpanda import (
     sensor,
 )
 from custom_components.bitpanda.api import (
+    BitpandaApiClient,
     BitpandaApiError,
     BitpandaAuthError,
     BitpandaRateLimitError,
@@ -48,6 +49,8 @@ from custom_components.bitpanda.assets import ASSET_CATEGORIES, slim_asset
 from custom_components.bitpanda.const import (
     API_KEY_URL,
     DOMAIN,
+    ISSUE_PORTFOLIO_REQUIRED,
+    SETUP_PORTFOLIO_URL,
     FIRST_LOAD_RETRY_INTERVAL,
     INTEGRATION_VERSION,
     PORTFOLIO_UPDATE_INTERVAL,
@@ -56,6 +59,7 @@ from custom_components.bitpanda.const import (
     UNKNOWN_ASSET_RETRY,
 )
 from custom_components.bitpanda.devices import find_entry_device
+from custom_components.bitpanda.diagnostics import async_get_config_entry_diagnostics
 from custom_components.bitpanda.ecb import EcbError, EcbRates
 from custom_components.bitpanda.groups import async_add_asset_to_group
 from custom_components.bitpanda.portfolio_store import async_get_portfolio_store
@@ -136,6 +140,14 @@ def _portfolio_entry(
     )
     entry.add_to_hass(hass)
     return entry
+
+
+def _portfolio_entry_unadded() -> MockConfigEntry:
+    """A Portfolio entry for hass.config_entries.async_add, which sets it up."""
+    return MockConfigEntry(
+        domain=DOMAIN, version=3, unique_id="portfolio", title="Bitpanda Portfolio",
+        data={"entry_type": "portfolio", "api_key": "key", "currency": "EUR", "currency_id": _EUR_ID},
+    )
 
 
 def _price_entry(
@@ -1331,6 +1343,360 @@ async def test_the_translated_not_ready_is_raised_from_none():
     )
     assert excinfo.value.__cause__ is None
     assert excinfo.value.__suppress_context__
+
+
+def _portfolio_issue(hass):
+    """The repair issue of a Price Tracker without a Portfolio, or None."""
+    return ir.async_get(hass).async_get_issue(DOMAIN, ISSUE_PORTFOLIO_REQUIRED)
+
+
+_REFUSED_TICKER = BitpandaAuthError(
+    "Unauthorized for /tickers", kind="http_status", path="/tickers", status=401
+)
+_REFUSED_LOOKUP = BitpandaAuthError(
+    "Unauthorized for /assets", kind="http_status", path="/assets", status=401
+)
+
+
+async def _next_tracker_round(hass) -> None:
+    """The Price Tracker's next round, a minute on."""
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=61))
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+
+async def _past_the_refresh_cooldown(hass) -> None:
+    """A refresh asked for within 10 seconds of the last one waits for Home
+    Assistant's cooldown (async_request_refresh): let it pass."""
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=11))
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+
+@pytest.mark.no_portfolio_key
+@_FIRST_REFRESH
+async def test_a_price_tracker_without_a_portfolio_sets_up_with_its_sensors(
+    hass, price_api, first_refresh
+):
+    """A Price Tracker from before 2.1.1 with no Portfolio beside it: its
+    sensors, devices and groups stay -- it sets up, asks Bitpanda nothing
+    and says what it needs. Its rounds go on, and once a Portfolio lends a
+    key, the prices come."""
+    ticker, _ = price_api
+    entry = _price_entry(hass, [], price_group("crypto", BTC))
+    with _home_assistant_first_refresh(first_refresh):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.LOADED
+    assert hass.states.get("sensor.bitpanda_bitcoin_btc_price_tracker_eur").state == "unavailable"
+    assert _portfolio_issue(hass) is not None
+    assert ticker.call_count == 0
+    _portfolio_entry(hass)
+    await _next_tracker_round(hass)
+    assert _value(hass, "sensor.bitpanda_bitcoin_btc_price_tracker_eur") == 100.0
+    assert _portfolio_issue(hass) is None
+
+
+@_FIRST_REFRESH
+async def test_a_price_tracker_with_a_refused_key_at_setup_stays_loaded(
+    hass, price_api, first_refresh, lent_portfolio_key, caplog
+):
+    """The key it borrows lacks Trade (Read): one request per round, each
+    asking for a new key, one warning -- and no setup retry."""
+    ticker, _ = price_api
+    ticker.side_effect = _REFUSED_TICKER
+    entry = _price_entry(hass, [], price_group("crypto", BTC), price_group("metal", GOLD))
+    with _home_assistant_first_refresh(first_refresh), caplog.at_level(
+        logging.WARNING, logger="custom_components.bitpanda"
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        assert entry.state is ConfigEntryState.LOADED
+        assert ticker.call_count == 1
+        await _next_tracker_round(hass)
+    assert ticker.call_count == 2
+    assert lent_portfolio_key.reauth_requests == 2
+    assert hass.states.get("sensor.bitpanda_bitcoin_btc_price_tracker_eur").state == "unavailable"
+    assert _portfolio_issue(hass) is None
+    assert caplog.text.count("Bitpanda refused the API key of Bitpanda Portfolio") == 1
+
+
+async def test_a_three_permission_key_at_the_start_opens_one_reauth_for_both(
+    hass, portfolio_api, price_api, caplog
+):
+    """The update's restart with a key made as 2.1.0 told: the Portfolio's
+    lookups and the Price Tracker's tickers are refused. Both services are
+    set up, the user gets one dialog, and each refusal is told once in the
+    log, however many rounds follow."""
+    ticker, _ = price_api
+    ticker.side_effect = _REFUSED_TICKER
+    portfolio = _portfolio_entry(hass)
+    tracker = _price_entry(hass, [], price_group("crypto", BTC))
+    with patch(f"{_CLIENT}async_get_assets", AsyncMock(side_effect=_REFUSED_LOOKUP)), caplog.at_level(
+        logging.WARNING, logger="custom_components.bitpanda"
+    ):
+        await _setup(hass, tracker)
+        await hass.async_block_till_done()
+        assert (portfolio.state, tracker.state) == (ConfigEntryState.LOADED, ConfigEntryState.LOADED)
+        assert len(_reauth_flows(hass)) == 1
+        for _ in range(3):
+            await _next_tracker_round(hass)
+    assert len(_reauth_flows(hass)) == 1
+    assert caplog.text.count('it needs the permission "Trade (Read)"') == 1
+    assert caplog.text.count("No prices: Bitpanda refused the API key of Bitpanda Portfolio") == 1
+
+
+@_FIRST_REFRESH
+async def test_a_rejected_portfolio_at_the_start_and_the_price_tracker_open_one_reauth(
+    hass, portfolio_api, price_api, first_refresh
+):
+    """Home Assistant starts with the Portfolio's key expired: its setup
+    fails and asks for a new key; the Price Tracker, refused the same key,
+    is set up beside it and joins that one dialog."""
+    ticker, _ = price_api
+    ticker.side_effect = _REFUSED_TICKER
+    portfolio_api.side_effect = BitpandaAuthError("Unauthorized for /portfolio")
+    portfolio = _portfolio_entry(hass)
+    tracker = _price_entry(hass, [], price_group("crypto", BTC))
+    with _home_assistant_first_refresh(first_refresh):
+        await _setup(hass, tracker)
+        await hass.async_block_till_done()
+    assert portfolio.state is ConfigEntryState.SETUP_ERROR
+    assert tracker.state is ConfigEntryState.LOADED
+    assert len(_reauth_flows(hass)) == 1
+
+
+@pytest.mark.real_ticker
+async def test_change_key_and_currency_leaves_the_price_tracker_running(hass, portfolio_api):
+    """Reconfigure changes the Portfolio's key and currency: the Portfolio
+    is purged and reloaded, the Price Tracker is not -- it keeps its runtime
+    and its sensors, and its next round asks with the new key."""
+    sent: list = []
+
+    async def ticker(client, asset_id):
+        sent.append(client._headers.get("x-api-key"))
+        return {"price": "100.00000000"}
+
+    portfolio = _portfolio_entry(hass)
+    tracker = _price_entry(hass, [], price_group("crypto", BTC))
+    with patch.object(BitpandaApiClient, "async_get_ticker", autospec=True, side_effect=ticker):
+        await _setup(hass, tracker)
+        runtime = tracker.runtime_data
+        result = await portfolio.start_reconfigure_flow(hass)
+        with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=[])), patch(
+            f"{_CLIENT}async_get_currencies", AsyncMock(return_value=load_fixture("currencies.json"))
+        ), patch(
+            "custom_components.bitpanda.config_flow.async_purge_portfolio", AsyncMock(return_value=True)
+        ):
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"api_key": "new-key", "currency": "usd"}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"next_step_id": "change_key_and_currency"}
+            )
+            await hass.async_block_till_done()
+        assert portfolio.data["api_key"] == "new-key"
+        sent.clear()
+        await _next_tracker_round(hass)
+    assert tracker.runtime_data is runtime
+    assert tracker.state is ConfigEntryState.LOADED
+    assert _value(hass, "sensor.bitpanda_bitcoin_btc_price_tracker_eur") == 100.0
+    assert sent and set(sent) == {"new-key"}
+
+
+@pytest.mark.no_portfolio_key
+async def test_the_price_tracker_follows_the_portfolio_going_and_coming(
+    hass, portfolio_api, price_api
+):
+    """The Portfolio deleted: the Price Tracker says at once what it needs
+    and shows no prices; set up again: the issue goes and the prices come
+    back at once -- the Price Tracker itself is never reloaded."""
+    tracker = _price_entry(hass, [], price_group("crypto", BTC))
+    portfolio = _portfolio_entry(hass)
+    await _setup(hass, tracker)
+    runtime = tracker.runtime_data
+    assert _value(hass, "sensor.bitpanda_bitcoin_btc_price_tracker_eur") == 100.0
+    await hass.config_entries.async_remove(portfolio.entry_id)
+    await hass.async_block_till_done()
+    assert _portfolio_issue(hass) is not None
+    assert hass.states.get("sensor.bitpanda_bitcoin_btc_price_tracker_eur").state == "unavailable"
+    again = MockConfigEntry(
+        domain=DOMAIN, version=3, unique_id="portfolio", title="Bitpanda Portfolio",
+        data=dict(portfolio.data), options=dict(portfolio.options),
+    )
+    await hass.config_entries.async_add(again)
+    await _past_the_refresh_cooldown(hass)
+    assert _portfolio_issue(hass) is None
+    assert _value(hass, "sensor.bitpanda_bitcoin_btc_price_tracker_eur") == 100.0
+    assert tracker.runtime_data is runtime
+
+
+@pytest.mark.no_portfolio_key
+async def test_a_portfolio_starting_deletes_the_issue(hass, portfolio_api, price_api):
+    """A Price Tracker without assets has no rounds of its own: the
+    Portfolio's setup still clears its issue."""
+    tracker = _price_entry(hass, [])
+    await _setup(hass, tracker)
+    assert _portfolio_issue(hass) is not None
+    await hass.config_entries.async_add(_portfolio_entry_unadded())
+    await hass.async_block_till_done()
+    assert _portfolio_issue(hass) is None
+
+
+@pytest.mark.no_portfolio_key
+async def test_a_portfolio_removed_right_after_its_setup_brings_the_issue_back(
+    hass, portfolio_api, price_api
+):
+    """Set up, then deleted before the Price Tracker's next round: the issue
+    is back at once."""
+    tracker = _price_entry(hass, [], price_group("crypto", BTC))
+    await _setup(hass, tracker)
+    portfolio = _portfolio_entry_unadded()
+    await hass.config_entries.async_add(portfolio)
+    await hass.async_block_till_done()
+    assert _portfolio_issue(hass) is None
+    await hass.config_entries.async_remove(portfolio.entry_id)
+    await _past_the_refresh_cooldown(hass)
+    assert _portfolio_issue(hass) is not None
+
+
+async def _later(hass, seconds) -> None:
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=seconds))
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+
+@pytest.mark.no_portfolio_key
+async def test_a_new_key_brings_the_prices_back_at_once(hass, portfolio_api, price_api):
+    """Refused, then a new key stored on the Portfolio: the prices come back
+    without waiting for the Price Tracker's next round."""
+    ticker, _ = price_api
+    portfolio = _portfolio_entry(hass)
+    tracker = _price_entry(hass, [], price_group("crypto", BTC))
+    await _setup(hass, tracker)
+    ticker.side_effect = _REFUSED_TICKER
+    await _later(hass, 61)
+    assert tracker.runtime_data.tickers.key_state == "rejected"
+    ticker.side_effect = None
+    hass.config_entries.async_update_entry(portfolio, data={**portfolio.data, "api_key": "new-key"})
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert _value(hass, "sensor.bitpanda_bitcoin_btc_price_tracker_eur") == 100.0
+
+
+@pytest.mark.no_portfolio_key
+async def test_the_portfolio_deleted_during_a_round_still_brings_the_issue(hass, portfolio_api, price_api):
+    """The Portfolio deleted while a round its unload asked for still waits
+    for Bitpanda's answer, with the old key: once that round has ended, the
+    Price Tracker finds the key gone and says so -- not only at its next
+    scheduled round. Home Assistant 2025.5's debouncer drops a refresh asked
+    for during one under way."""
+    ticker, _ = price_api
+    portfolio = _portfolio_entry(hass)
+    tracker = _price_entry(hass, [], price_group("crypto", BTC))
+    await _setup(hass, tracker)
+    ticker.side_effect = _REFUSED_TICKER
+    await _later(hass, 61)
+    assert tracker.runtime_data.tickers.key_state == "rejected"
+    gate = asyncio.Event()
+
+    async def slow_refusal(*args, **kwargs):
+        await gate.wait()
+        raise _REFUSED_TICKER
+
+    ticker.side_effect = slow_refusal
+    await hass.config_entries.async_remove(portfolio.entry_id)
+    await asyncio.sleep(0)
+    gate.set()
+    await hass.async_block_till_done(wait_background_tasks=True)
+    await _later(hass, 11)
+    assert tracker.runtime_data.tickers.key_state == "missing"
+    assert _portfolio_issue(hass) is not None
+
+
+@pytest.mark.no_portfolio_key
+async def test_a_new_key_stored_during_a_refused_round_is_used_at_once(hass, portfolio_api, price_api):
+    """A new key stored while a round with the old one still waits for
+    Bitpanda's refusal: one more round follows at once, with the new key --
+    not only the next scheduled one."""
+    ticker, _ = price_api
+    portfolio = _portfolio_entry(hass)
+    tracker = _price_entry(hass, [], price_group("crypto", BTC))
+    await _setup(hass, tracker)
+    ticker.side_effect = _REFUSED_TICKER
+    await _later(hass, 61)
+    assert tracker.runtime_data.tickers.key_state == "rejected"
+    gate = asyncio.Event()
+
+    async def slow_refusal(*args, **kwargs):
+        await gate.wait()
+        raise _REFUSED_TICKER
+
+    ticker.side_effect = slow_refusal
+    # A change of the Portfolio's entry starts a round after the refusal;
+    # it waits for Bitpanda with the old key.
+    hass.config_entries.async_update_entry(portfolio, title="Bitpanda Portfolio ")
+    await asyncio.sleep(0)
+    ticker.side_effect = None
+    hass.config_entries.async_update_entry(portfolio, data={**portfolio.data, "api_key": "new-key"})
+    gate.set()
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert _value(hass, "sensor.bitpanda_bitcoin_btc_price_tracker_eur") == 100.0
+
+
+async def test_a_restart_with_a_working_key_asks_no_extra_round(hass, portfolio_api, price_api):
+    """The Price Tracker follows the Portfolio's entry only when its key
+    comes or goes, or after a refusal: the Portfolio's setup beside it costs
+    no extra round."""
+    ticker, _ = price_api
+    tracker = _price_entry(hass, [], price_group("crypto", BTC))
+    _portfolio_entry(hass)
+    await _setup(hass, tracker)
+    await _past_the_refresh_cooldown(hass)
+    # The Portfolio's wallet prices ask the same ticker, for its holdings.
+    assert [call.args for call in ticker.call_args_list].count((BTC["id"],)) == 1
+
+
+@pytest.mark.no_portfolio_key
+async def test_the_issue_says_what_it_needs(hass, price_api):
+    tracker = _price_entry(hass, [], price_group("crypto", BTC))
+    await _setup(hass, tracker)
+    issue = _portfolio_issue(hass)
+    assert (issue.is_fixable, issue.is_persistent, issue.severity) == (
+        False, False, ir.IssueSeverity.WARNING
+    )
+    assert issue.learn_more_url == SETUP_PORTFOLIO_URL
+    assert issue.translation_key == ISSUE_PORTFOLIO_REQUIRED
+
+
+@pytest.mark.no_portfolio_key
+async def test_unloading_or_removing_the_price_tracker_deletes_the_issue(hass, price_api):
+    tracker = _price_entry(hass, [], price_group("crypto", BTC))
+    await _setup(hass, tracker)
+    assert _portfolio_issue(hass) is not None
+    assert await hass.config_entries.async_unload(tracker.entry_id)
+    assert _portfolio_issue(hass) is None
+    assert await hass.config_entries.async_setup(tracker.entry_id)
+    await hass.async_block_till_done()
+    assert _portfolio_issue(hass) is not None
+    await hass.config_entries.async_remove(tracker.entry_id)
+    await hass.async_block_till_done()
+    assert _portfolio_issue(hass) is None
+
+
+async def test_the_key_appears_nowhere(hass, portfolio_api, price_api, caplog):
+    """Both services send the Portfolio's key: it never shows in the log,
+    in either diagnostics or in either runtime's repr."""
+    key = "key-to-be-found-nowhere-8d1f"
+    ticker, _ = price_api
+    portfolio = _portfolio_entry(hass, api_key=key)
+    tracker = _price_entry(hass, [], price_group("crypto", BTC))
+    with caplog.at_level(logging.DEBUG):
+        await _setup(hass, tracker)
+        ticker.side_effect = _REFUSED_TICKER
+        await _next_tracker_round(hass)
+        diagnostics = [
+            await async_get_config_entry_diagnostics(hass, entry) for entry in (portfolio, tracker)
+        ]
+    assert key not in caplog.text
+    assert all(key not in str(found) for found in diagnostics)
+    assert key not in repr(portfolio.runtime_data) + repr(tracker.runtime_data)
 
 
 @_FIRST_REFRESH

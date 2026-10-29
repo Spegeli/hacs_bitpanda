@@ -1,7 +1,8 @@
 """Config flow for the Bitpanda integration.
 
-One integration, two services, one config entry each: Bitpanda Portfolio
-(needs an API key) and Bitpanda Price Tracker (no key). Each entry carries
+One integration, two services, one config entry each: Bitpanda Portfolio,
+which holds the API key, and Bitpanda Price Tracker, which uses it -- set up
+after the Portfolio (keys.py). Each entry carries
 its service as its unique_id, so neither can exist twice -- not even when two
 setup dialogs race each other.
 """
@@ -32,7 +33,8 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 
-from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
+from . import keys
+from .api import BitpandaApiClient, BitpandaApiError, BitpandaAuthError, BitpandaRateLimitError
 from .asset_flow import PriceTrackerSubentryFlow
 from .const import (
     API_KEY_URL,
@@ -109,6 +111,8 @@ def _form_error(step: str, err: Exception) -> str:
     connection, or -- logged by type only (_log_unexpected) -- unknown."""
     if isinstance(err, BitpandaRateLimitError):
         return "rate_limited"
+    if isinstance(err, BitpandaAuthError):
+        return "invalid_auth"
     if isinstance(err, BitpandaApiError):
         return "cannot_connect"
     _log_unexpected(step, err)
@@ -286,9 +290,12 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
         return {}, {}
 
-    async def _async_currency_ids(self) -> dict[str, str]:
-        """Symbol -> Bitpanda currency id. /currencies is public: no key sent."""
-        client = BitpandaApiClient(None, async_get_clientsession(self.hass))
+    async def _async_currency_ids(self, api_key: str) -> dict[str, str]:
+        """Symbol -> Bitpanda currency id. /currencies still answers without
+        a key, but gets the one at hand: Bitpanda closed /tickers to keyless
+        requests on 2026-10-28 without notice -- /assets too, and since
+        2026-10-29 at times."""
+        client = BitpandaApiClient(api_key, async_get_clientsession(self.hass))
         return {
             currency["symbol"]: currency["id"]
             for currency in await client.async_get_currencies()
@@ -317,7 +324,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 errors, placeholders = await self._async_validate_key(api_key)
                 if not errors:
-                    self._currency_ids = await self._async_currency_ids()
+                    self._currency_ids = await self._async_currency_ids(api_key)
                     if not self._currency_ids:
                         errors = {"base": "cannot_connect"}
             except Exception as err:  # noqa: BLE001 - a form error, never a traceback
@@ -440,6 +447,15 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         await self.async_set_unique_id(ENTRY_TYPE_PRICE_TRACKER)
         self._abort_if_unique_id_configured()
+        # It asks Bitpanda with the Portfolio's key: no Portfolio, no prices.
+        # While a date version's entry waits for its upgrade, the upgrade
+        # sets the Price Tracker up itself, with the legacy prices' history.
+        # The upgrade's import (async_step_import) is never refused.
+        portfolio = keys.portfolio_entry(self.hass)
+        if portfolio is None:
+            return self.async_abort(reason="portfolio_required")
+        if portfolio.version == 1:
+            return self.async_abort(reason="upgrade_pending")
         if user_input is not None:
             # Its closing text: how to add assets, then where the card is.
             return self.async_create_entry(
@@ -482,7 +498,7 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             subentries=price_group_subentries(import_data.get(IMPORT_ASSETS, []), titles),
         )
 
-    # --- Reauth (Portfolio only: the Price Tracker has no key) -------------------
+    # --- Reauth (Portfolio only: it holds the key both services use) -------------
 
     def _async_replace_key(
         self, entry: ConfigEntry, api_key: str, reason: str
@@ -572,6 +588,11 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         deletes every Portfolio sensor with its history.
         """
         entry = self._get_reconfigure_entry()
+        if entry.version == 1:
+            # The Portfolio does not exist yet: the upgrade waits for a new
+            # key, which Home Assistant's own dialog asks for, or for its
+            # next start.
+            return self.async_abort(reason="upgrade_pending")
         if entry_type(entry) != ENTRY_TYPE_PORTFOLIO:
             return self.async_abort(reason="no_reconfigure")
         stored = entry.data[CONF_CURRENCY]
@@ -590,7 +611,9 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors, extra = await self._async_validate_key(api_key)
                     placeholders.update(extra)
                 if not errors and currency != stored:
-                    self._currency_ids = await self._async_currency_ids()
+                    self._currency_ids = await self._async_currency_ids(
+                        api_key or entry.data[CONF_API_KEY]
+                    )
                     if currency not in self._currency_ids:
                         errors = {"base": "cannot_connect"}
             except Exception as err:  # noqa: BLE001 - a form error, never a traceback

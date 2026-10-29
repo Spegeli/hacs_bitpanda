@@ -7,11 +7,14 @@ import logging
 from typing import Any
 
 import pytest
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.bitpanda.tolerance import TolerantCoordinator, TolerantEntity
+from custom_components.bitpanda.const import DOMAIN
+from custom_components.bitpanda.tolerance import Rejected, TolerantCoordinator, TolerantEntity
 
 from tests.conftest import async_settle
 
@@ -368,6 +371,72 @@ async def test_a_key_rejected_after_a_success_is_left_to_home_assistant(
         record.levelno for record in caplog.records
         if record.getMessage().startswith("Authentication failed while fetching probe data")
     ] == [logging.ERROR]
+
+
+def _own_rejection_records(caplog) -> list[str]:
+    """The tolerance's own warnings about a refresh rejected for its key
+    (Rejected): the coordinator's name, then the reason."""
+    return [
+        record.getMessage() for record in caplog.records
+        if record.levelno == logging.WARNING and record.getMessage().startswith("probe: no ")
+    ]
+
+
+async def test_a_rejected_refresh_is_confirmed_at_once(hass, freezer):
+    """A refresh rejected for its key -- none there, or one Bitpanda refused
+    -- will not succeed by itself: the sensors are unavailable at once."""
+    probe = _Probe(hass, 1, Rejected("no key"))
+    seen = _listen(probe)
+    await _run(probe, freezer)
+    assert probe.data_available is False
+    assert seen == [True, False]
+
+
+async def test_a_rejected_first_refresh_is_warned_about_once(hass, caplog):
+    """Home Assistant logs no failure of a first refresh: the tolerance warns
+    about the rejection itself, once."""
+    entry = MockConfigEntry(domain=DOMAIN)
+    entry.add_to_hass(hass)
+    entry.mock_state(hass, ConfigEntryState.SETUP_IN_PROGRESS)
+    probe = _Probe(hass, Rejected("no key"))
+    probe.config_entry = entry
+    with caplog.at_level(logging.WARNING), pytest.raises(ConfigEntryNotReady):
+        await probe.async_config_entry_first_refresh()
+    assert _own_rejection_records(caplog) == ["probe: no key"]
+
+
+async def test_a_rejection_after_a_success_is_logged_once(hass, freezer, caplog):
+    """Right after a success Home Assistant logs the failure itself, at
+    ERROR: the tolerance adds nothing, then or at the next rejection."""
+    probe = _Probe(hass, 1, Rejected("no key"), Rejected("no key"))
+    with caplog.at_level(logging.WARNING):
+        await _run(probe, freezer)
+    assert _own_rejection_records(caplog) == []
+    assert [
+        record.levelno for record in caplog.records
+        if record.getMessage() == "Error fetching probe data: no key"
+    ] == [logging.ERROR]
+
+
+async def test_a_rejection_streak_is_warned_about_once(hass, freezer, caplog):
+    """After a failure Home Assistant logs nothing: the tolerance warns once
+    for the whole streak."""
+    probe = _Probe(hass, 1, _down(), Rejected("no key"), Rejected("no key"), Rejected("no key"))
+    with caplog.at_level(logging.WARNING):
+        await _run(probe, freezer)
+    assert _own_rejection_records(caplog) == ["probe: no key"]
+
+
+async def test_a_changed_reason_is_warned_about_again(hass, freezer, caplog):
+    """A key refused, then none at all (the Portfolio deleted): each reason
+    is told once."""
+    probe = _Probe(
+        hass, 1, _down(), Rejected("no key accepted"), Rejected("no key at all"),
+        Rejected("no key at all"),
+    )
+    with caplog.at_level(logging.WARNING):
+        await _run(probe, freezer)
+    assert _own_rejection_records(caplog) == ["probe: no key accepted", "probe: no key at all"]
 
 
 async def test_a_refresh_begins_only_once_the_one_under_way_has_ended(hass, freezer):

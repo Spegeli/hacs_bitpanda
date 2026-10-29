@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import ANY, AsyncMock, patch
 
 from homeassistant import data_entry_flow
+from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.config_entries import ConfigSubentryData, UnknownEntry
 from homeassistant.util import dt as dt_util
 import pytest
@@ -15,12 +16,13 @@ from pytest_homeassistant_custom_component.common import (
 )
 from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client
 
-from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
+from custom_components.bitpanda import keys
+from custom_components.bitpanda.api import BitpandaApiError, BitpandaAuthError, BitpandaRateLimitError
 from custom_components.bitpanda.assets import asset_label, slim_asset
 from custom_components.bitpanda.const import API_BASE_URL, DOMAIN
 from custom_components.bitpanda.naming import asset_display_label
 
-from tests.conftest import load_fixture, price_group
+from tests.conftest import LENT_KEY, load_fixture, price_group
 
 _LIST = "custom_components.bitpanda.asset_flow.BitpandaApiClient.async_list_assets"
 _STORE = "bitpanda_asset_catalogue"
@@ -205,12 +207,60 @@ async def test_a_listing_of_the_wrong_shape_says_cannot_connect(hass):
     assert result["errors"]["base"] == "cannot_connect"
 
 
-async def test_the_catalogue_is_fetched_without_a_key(hass):
+async def test_the_listing_sends_the_portfolios_key(hass):
+    """Since 2026-10-28 Bitpanda lists its catalogue only to a key with Trade
+    (Read): the dialog asks with the Portfolio's."""
     entry = _entry(hass)
     with patch("custom_components.bitpanda.asset_flow.BitpandaApiClient") as client_cls:
         client_cls.return_value.async_list_assets = AsyncMock(return_value=_metals())
         await _pick_category(hass, entry)
-    client_cls.assert_called_once_with(None, ANY)
+    client_cls.assert_called_once_with(LENT_KEY, ANY)
+
+
+@pytest.mark.no_portfolio_key
+async def test_add_price_tracker_needs_a_portfolio(hass):
+    """Without a Portfolio to lend its key, the dialog says to set one up
+    before it asks anything."""
+    entry = _entry(hass)
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, "price_group"), context={"source": "user"}
+    )
+    assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "portfolio_required")
+
+
+async def test_a_portfolio_gone_before_the_listing_aborts(hass):
+    """The Portfolio deleted while the dialog is open, after its own check:
+    no key for the listing, the same answer."""
+    entry = _entry(hass)
+    result = await _start(hass, entry)
+    with patch.object(keys, "portfolio_api_key", side_effect=[LENT_KEY, None]):
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {"category": "metal"}
+        )
+    assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "portfolio_required")
+
+
+async def test_a_refused_key_shows_its_own_error_and_asks_for_a_new_one(hass, lent_portfolio_key):
+    """Bitpanda refuses the Portfolio's key for the listing: the dialog says
+    the key lacks Trade (Read) and the Portfolio is asked for a new one.
+    With a working key the same dialog goes on to add the asset."""
+    entry = _entry(hass)
+    refused = BitpandaAuthError("Unauthorized for /assets", kind="http_status", path="/assets", status=401)
+    with patch(_LIST, AsyncMock(side_effect=refused)):
+        result = await _pick_category(hass, entry)
+    assert result["errors"]["base"] == "key_rejected"
+    assert lent_portfolio_key.reauth_requests == 1
+    result = await hass.config_entries.subentries.async_configure(result["flow_id"], {})
+    assert result["step_id"] == "user"
+    with patch(_LIST, AsyncMock(return_value=_metals())):
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {"category": "metal"}
+        )
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {"asset": GOLD["id"]}
+        )
+    # Its group is new: the dialog creates it.
+    assert result["type"] == _FLOW.CREATE_ENTRY
 
 
 @pytest.mark.parametrize(

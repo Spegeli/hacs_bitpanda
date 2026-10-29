@@ -1,9 +1,12 @@
 """Coordinators of the Portfolio service.
 
-Every request here carries the API key, except the asset lookups, which the
-AssetDirectory makes keyless, and the wallets' ticker prices (WalletPrices),
-read keyless too. Every 401 of a keyed request raises ConfigEntryAuthFailed,
-which Home Assistant turns into the reauth dialog.
+Every request here carries the API key -- the asset lookups (AssetDirectory)
+and the wallets' ticker prices (WalletPrices) too: since 2026-10-28 Bitpanda
+answers the prices only for a key with Trade (Read) -- the lookups too on
+2026-10-28, and since 2026-10-29 at times. A 401 of the figures raises
+ConfigEntryAuthFailed, which Home Assistant turns into the reauth dialog; a
+refused lookup or price asks for the same dialog (keys.py) and leaves the
+figures running.
 """
 from __future__ import annotations
 
@@ -128,10 +131,10 @@ _TICKER_HOLD = timedelta(minutes=15)
 
 
 class WalletPrices:
-    """Each wallet asset's price from Bitpanda's public ticker, in a round of
+    """Each wallet asset's price from Bitpanda's price ticker, in a round of
     its own after every successful portfolio refresh (async_request_round):
-    keyless, one request per asset after the other, each with the ticker's
-    timeout. Each asset's listeners hear of its price as soon as it arrives;
+    with the Portfolio's key, one request per asset after the other, each
+    with the ticker's timeout. Each asset's listeners hear of its price as soon as it arrives;
     the Portfolio's figures never wait for a round.
 
     /tickers answers in EUR. A Portfolio in another currency converts with
@@ -149,6 +152,13 @@ class WalletPrices:
     assets asks nothing. A wallet without a price for more than _TICKER_HOLD
     -- since its last one, or since it was first asked -- is warned about
     once, and its return logged once at INFO.
+
+    A 401 as the round's first answer -- a request without any answer
+    before it tells nothing -- means the key lacks Trade (Read): it does not
+    become valid by itself, so the round ends, every held price goes at once
+    and its listeners are told, `on_rejected` asks for a new key, and no
+    wallet is warned about for it. A 401 after an answer is that asset's
+    failure.
     """
 
     def __init__(
@@ -157,9 +167,11 @@ class WalletPrices:
         client: BitpandaApiClient,
         currency: str,
         ecb: EcbCoordinator | None,
+        on_rejected: Callable[[], None],
     ) -> None:
         self._hass = hass
         self._client = client
+        self._on_rejected = on_rejected
         self._currency = currency
         self._ecb = ecb
         # Asset id -> its last ticker price, and when it was read.
@@ -255,11 +267,22 @@ class WalletPrices:
 
     async def _async_ask(self, asset_ids: list[str], rate: float | None) -> None:
         unanswered = 0
+        # Whether Bitpanda answered a request of this round.
+        answered = False
         for asset_id in asset_ids:
             try:
                 ticker = await self._client.async_get_ticker(asset_id)
+            except BitpandaAuthError as err:
+                _LOGGER.debug("No ticker price for %s: %s", asset_id, err.kind)
+                if not answered:
+                    self._refuse()
+                    return
+                unanswered = 0
+                continue
             except BitpandaApiError as err:
                 _LOGGER.debug("No ticker price for %s: %s", asset_id, err.kind)
+                if err.kind not in (ERROR_TIMEOUT, ERROR_CONNECTION):
+                    answered = True
                 if isinstance(err, BitpandaRateLimitError) or err.kind == ERROR_RATE_LIMITED:
                     break
                 if err.kind in (ERROR_TIMEOUT, ERROR_CONNECTION):
@@ -277,6 +300,7 @@ class WalletPrices:
                     break
                 continue
             unanswered = 0
+            answered = True
             price = convert_price(ticker.get("price"), rate)
             if price is None or price <= 0:
                 _LOGGER.debug("No usable ticker price for %s", asset_id)
@@ -288,6 +312,19 @@ class WalletPrices:
                 _LOGGER.info("Bitpanda's price ticker gives a price for asset %s again", asset_id)
             for update in list(self._listeners.get(asset_id, ())):
                 update()
+
+    def _refuse(self) -> None:
+        """The key was refused: every held price goes, its listeners hear of
+        it, and a new key is asked for. No wallet is warned about for it --
+        the dialog says why --: each one's 15 minutes without a price start
+        again from here."""
+        dropped = list(self._prices)
+        self._prices.clear()
+        self._asked_since.clear()
+        for asset_id in dropped:
+            for update in list(self._listeners.get(asset_id, ())):
+                update()
+        self._on_rejected()
 
     def _warn_about_the_unpriced(self, asset_ids: list[str]) -> None:
         """Warn, once, about each of `asset_ids` without a price for more than
@@ -872,8 +909,8 @@ class PortfolioRuntime:
     # wallets' ticker prices (WalletPrices); None in EUR.
     ecb: EcbCoordinator | None = None
     # The wallets' ticker prices, read in a round after each portfolio
-    # refresh.
-    prices: WalletPrices | None = None
+    # refresh; its client holds the key, hence no repr either.
+    prices: WalletPrices | None = field(default=None, repr=False)
     # Set once setup has set up the entry's platforms, failed or not: the
     # announcements wait for it, so that none reaches the bus before the
     # event entities exist (announcements.py).

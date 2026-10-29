@@ -58,6 +58,15 @@ TROUBLESHOOTING_URL = "https://github.com/Spegeli/hacs_bitpanda#-troubleshooting
 # link for the Home Assistant app (where reloading does not load them).
 CARDS_URL = "https://github.com/Spegeli/hacs_bitpanda#-dashboard-cards"
 
+# The README's section on setting up the Portfolio, whose API key the Price
+# Tracker uses: the "Learn more" of the repair issue below.
+SETUP_PORTFOLIO_URL = "https://github.com/Spegeli/hacs_bitpanda#set-up-the-portfolio"
+
+# The repair issue of a Price Tracker without a Portfolio to lend it its API
+# key: it shows no prices until one is set up. Its translation key is its id.
+ISSUE_PORTFOLIO_REQUIRED = "portfolio_required"
+PRICE_TRACKER_ISSUES = (ISSUE_PORTFOLIO_REQUIRED,)
+
 # The integration's version, as its manifest states it: every device shows it
 # ("Version …"). Read once, when Home Assistant imports the integration -- in
 # its import executor, so no event loop waits for the file.
@@ -65,12 +74,14 @@ INTEGRATION_VERSION: str = json.loads(
     (Path(__file__).parent / "manifest.json").read_text(encoding="utf-8")
 )["version"]
 
-# Measured 2026-09-24 with one key per scope: /portfolio needs Balances,
-# /operations Transaction, /earn/configs Earn (Read) -- the names on Bitpanda's
-# English key page. Trade (Read) unlocks nothing the integration calls, so it
-# is not required. The texts name each scope as the key page does in their
-# language; the missing-permissions error takes one placeholder per scope.
-REQUIRED_SCOPES: tuple[str, ...] = ("balance", "transaction", "earn")
+# Measured with one key per scope: /portfolio needs Balances, /operations
+# Transaction, /earn/configs Earn (Read) (2026-09-24), and since 2026-10-28
+# /tickers needs Trade (Read) -- /assets did too on 2026-10-28, and since
+# 2026-10-29 at times. These are the names on Bitpanda's English key page.
+# Both services use the Portfolio's key, so it needs all four. The texts
+# name each scope as the key page does in their language; the
+# missing-permissions error takes one placeholder per scope.
+REQUIRED_SCOPES: tuple[str, ...] = ("balance", "transaction", "earn", "trading")
 
 # Stable and used in nearly every response. Verified 2026-09-24.
 EUR_CURRENCY_ID = "b88b8466-efe3-11eb-b56f-0691764446a7"

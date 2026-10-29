@@ -86,7 +86,7 @@ class _EarnClient:
 
 
 class _TickerClient:
-    """Bitpanda's public ticker: a price per asset id, or the error to
+    """Bitpanda's price ticker: a price per asset id, or the error to
     raise for it; `asked` lists the ids asked for, in order."""
 
     def __init__(self, prices=None, errors=None):
@@ -146,14 +146,14 @@ async def test_the_portfolio_refresh_asks_no_ticker(hass):
 
 
 async def test_no_price_before_the_first_round(hass):
-    assert WalletPrices(hass, _TickerClient({VSN: "0.03727184"}), "EUR", None).price_of(VSN) is None
+    assert WalletPrices(hass, _TickerClient({VSN: "0.03727184"}), "EUR", None, _unexpected_refusal).price_of(VSN) is None
 
 
 async def test_a_round_publishes_each_price_as_it_arrives(hass):
     """Each wallet hears of its price once its own request answered, before
     the next asset is asked."""
     tickers = _TickerClient({VSN: "0.03727184", _BTC: "60000.00000000"})
-    prices = WalletPrices(hass, tickers, "EUR", None)
+    prices = WalletPrices(hass, tickers, "EUR", None, _unexpected_refusal)
     seen = []
     for asset_id in (VSN, _BTC):
         prices.async_listen(
@@ -175,7 +175,7 @@ async def test_a_round_asked_for_during_one_follows_it(hass):
             return {"asset_id": asset_id, "price": "1.00000000"}
 
     tickers = _Held()
-    prices = WalletPrices(hass, tickers, "EUR", None)
+    prices = WalletPrices(hass, tickers, "EUR", None, _unexpected_refusal)
     prices.async_request_round([VSN])
     await async_settle()
     prices.async_request_round([VSN, _BTC])
@@ -191,7 +191,7 @@ async def test_a_price_is_kept_for_15_minutes_then_dropped(hass, freezer):
     """A failed request keeps the last ticker price while it is at most 15
     minutes old; then the wallet has none."""
     tickers = _TickerClient({VSN: "0.03727184"})
-    prices = WalletPrices(hass, tickers, "EUR", None)
+    prices = WalletPrices(hass, tickers, "EUR", None, _unexpected_refusal)
     await prices.async_round([VSN])
     tickers.errors[VSN] = _failure("timeout")
     freezer.tick(timedelta(minutes=14))
@@ -206,7 +206,7 @@ async def test_a_price_missing_for_15_minutes_is_warned_about_once(hass, freezer
     its last price, or since it was first asked -- shows none: one warning,
     then quiet until the price is back, which is logged once at INFO."""
     tickers = _TickerClient({VSN: "0.03727184", _BTC: "60000.00000000"})
-    prices = WalletPrices(hass, tickers, "EUR", None)
+    prices = WalletPrices(hass, tickers, "EUR", None, _unexpected_refusal)
     await prices.async_round([VSN, _BTC])
     tickers.errors[VSN] = _failure("http_status")
     with caplog.at_level(logging.INFO, logger="custom_components.bitpanda"):
@@ -230,7 +230,7 @@ async def test_a_price_missing_for_15_minutes_is_warned_about_once(hass, freezer
 
 async def test_a_wallet_never_priced_is_warned_about_after_15_minutes(hass, freezer, caplog):
     tickers = _TickerClient(errors={VSN: _failure("http_status")})
-    prices = WalletPrices(hass, tickers, "EUR", None)
+    prices = WalletPrices(hass, tickers, "EUR", None, _unexpected_refusal)
     with caplog.at_level(logging.WARNING, logger="custom_components.bitpanda"):
         await prices.async_round([VSN])
         freezer.tick(timedelta(minutes=14))
@@ -242,7 +242,7 @@ async def test_a_wallet_never_priced_is_warned_about_after_15_minutes(hass, free
 
 
 async def test_a_portfolio_in_another_currency_converts_with_the_ecb_rate(hass):
-    prices = WalletPrices(hass, _TickerClient({VSN: "0.03727184"}), "CHF", _Ecb({"CHF": 0.93}))
+    prices = WalletPrices(hass, _TickerClient({VSN: "0.03727184"}), "CHF", _Ecb({"CHF": 0.93}), _unexpected_refusal)
     await prices.async_round([VSN])
     assert prices.price_of(VSN) == round(0.03727184 * 0.93, 8)
 
@@ -252,7 +252,7 @@ async def test_without_a_rate_there_is_no_ticker_price(hass, ecb):
     """Never an EUR price shown as CHF: no rate, no ticker price -- and no
     request at all."""
     tickers = _TickerClient({VSN: "0.03727184"})
-    prices = WalletPrices(hass, tickers, "CHF", ecb)
+    prices = WalletPrices(hass, tickers, "CHF", ecb, _unexpected_refusal)
     await prices.async_round([VSN])
     assert prices.price_of(VSN) is None
     assert tickers.asked == []
@@ -263,7 +263,7 @@ async def test_a_failing_ticker_leaves_only_that_asset_without_a_price(hass):
         {_BTC: "60000.00000000", "x": "not a number"},
         {VSN: BitpandaApiError("404", kind="http_status", path=f"/tickers/{VSN}")},
     )
-    prices = WalletPrices(hass, tickers, "EUR", None)
+    prices = WalletPrices(hass, tickers, "EUR", None, _unexpected_refusal)
     await prices.async_round([VSN, "x", _BTC])
     assert tickers.asked == [VSN, "x", _BTC]
     assert [prices.price_of(asset_id) for asset_id in (VSN, "x", _BTC)] == [None, None, 60000.0]
@@ -271,6 +271,75 @@ async def test_a_failing_ticker_leaves_only_that_asset_without_a_price(hass):
 
 def _failure(kind):
     return BitpandaApiError(kind, kind=kind, path="/tickers")
+
+
+def _refused():
+    return BitpandaAuthError("Unauthorized for /tickers", kind="http_status", path="/tickers", status=401)
+
+
+def _unexpected_refusal():
+    raise AssertionError("the key was refused")
+
+
+async def test_a_refused_key_ends_the_round_and_asks_for_a_new_one(hass):
+    """The round's first answer is a 401: the key lacks Trade (Read), and
+    every further request would be refused too. Nothing more is asked, and a
+    new key is asked for -- once."""
+    refusals = []
+    tickers = _TickerClient({VSN: "1.00000000", _BTC: "2.00000000"}, errors={VSN: _refused(), _BTC: _refused()})
+    prices = WalletPrices(hass, tickers, "EUR", None, lambda: refusals.append(True))
+    await prices.async_round([VSN, _BTC])
+    assert tickers.asked == [VSN]
+    assert refusals == [True]
+
+
+async def test_a_timeout_then_a_401_is_still_the_key(hass):
+    """A request without any answer tells nothing about the key: the first
+    answer that came is the 401."""
+    refusals = []
+    tickers = _TickerClient({VSN: "1.00000000", _BTC: "2.00000000"}, errors={VSN: _failure("timeout"), _BTC: _refused()})
+    prices = WalletPrices(hass, tickers, "EUR", None, lambda: refusals.append(True))
+    await prices.async_round([VSN, _BTC])
+    assert tickers.asked == [VSN, _BTC]
+    assert refusals == [True]
+
+
+async def test_a_401_after_an_answer_is_that_wallets_failure(hass):
+    """After Bitpanda answered -- an error status included --, a 401 is that
+    one wallet's failure: the round goes on and asks for no new key."""
+    refusals = []
+    tickers = _TickerClient(
+        {VSN: "1.00000000", _BTC: "2.00000000", "third": "3.00000000"},
+        errors={VSN: _failure("http_status"), _BTC: _refused()},
+    )
+    prices = WalletPrices(hass, tickers, "EUR", None, lambda: refusals.append(True))
+    await prices.async_round([VSN, _BTC, "third"])
+    assert tickers.asked == [VSN, _BTC, "third"]
+    assert refusals == []
+    assert prices.price_of("third") == 3.0
+
+
+async def test_a_refused_key_drops_the_held_wallet_prices(hass, freezer, caplog):
+    """A refused key does not become valid by itself: the held prices go at
+    once, their wallets are told, and the 15-minute warning, which blames
+    the ticker, never comes for it."""
+    refusals = []
+    tickers = _TickerClient({VSN: "0.03727184"})
+    prices = WalletPrices(hass, tickers, "EUR", None, lambda: refusals.append(True))
+    await prices.async_round([VSN])
+    told = []
+    prices.async_listen(VSN, lambda: told.append(prices.price_of(VSN)))
+    tickers.errors[VSN] = _refused()
+    freezer.tick(timedelta(seconds=61))
+    await prices.async_round([VSN])
+    assert prices.price_of(VSN) is None
+    assert told == [None]
+    with caplog.at_level(logging.WARNING, logger="custom_components.bitpanda"):
+        for _ in range(4):
+            freezer.tick(timedelta(minutes=5, seconds=1))
+            await prices.async_round([VSN])
+    assert "15 minutes" not in caplog.text
+    assert len(refusals) == 5
 
 
 @pytest.mark.parametrize(
@@ -291,7 +360,7 @@ def _failure(kind):
 )
 async def test_a_429_or_two_unanswered_requests_end_the_round(hass, errors, asked):
     tickers = _TickerClient({key: "1.00000000" for key in "abcd"}, errors)
-    prices = WalletPrices(hass, tickers, "EUR", None)
+    prices = WalletPrices(hass, tickers, "EUR", None, _unexpected_refusal)
     await prices.async_round(["a", "b", "c", "d"])
     assert tickers.asked == asked
     priced = {key for key in "abcd" if prices.price_of(key) is not None}
@@ -303,7 +372,7 @@ async def test_a_round_within_a_minute_of_the_last_reuses_its_prices(hass, freez
     less than a minute after the last that read the same assets asks
     nothing; one with a new asset reads them all."""
     tickers = _TickerClient({VSN: "0.03727184", _BTC: "60000.00000000"})
-    prices = WalletPrices(hass, tickers, "EUR", None)
+    prices = WalletPrices(hass, tickers, "EUR", None, _unexpected_refusal)
     await prices.async_round([VSN])
     freezer.tick(timedelta(seconds=59))
     await prices.async_round([VSN])

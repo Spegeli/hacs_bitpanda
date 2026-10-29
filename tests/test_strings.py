@@ -15,7 +15,11 @@ from custom_components.bitpanda.assets import (
     ASSET_CATEGORY_FILTERS,
     CATEGORY_OTHER,
 )
-from custom_components.bitpanda.const import API_ERROR_KINDS, REQUIRED_SCOPES
+from custom_components.bitpanda.const import (
+    API_ERROR_KINDS,
+    PRICE_TRACKER_ISSUES,
+    REQUIRED_SCOPES,
+)
 from custom_components.bitpanda.announcements import PORTFOLIO_EVENT_TYPES
 from custom_components.bitpanda.ecb import EcbError, EcbRates
 from custom_components.bitpanda.portfolio_coordinator import _update_failed
@@ -42,7 +46,7 @@ from custom_components.bitpanda.portfolio_sensor import (
 from custom_components.bitpanda.price_coordinator import _ecb_failed
 from custom_components.bitpanda.price_sensor import PriceSensor
 
-from tests.conftest import ANNOUNCEMENT_FIELDS
+from tests.conftest import ANNOUNCEMENT_FIELDS, assert_issue_texts_render
 
 _DIR = Path(__file__).parent.parent / "custom_components" / "bitpanda"
 # Every language file under translations/, found the way the integration
@@ -179,47 +183,52 @@ def test_no_language_is_an_untranslated_copy_of_english():
 # "Add dashboard"
 # (ui.panel.config.lovelace.dashboards.picker.add_dashboard), "Settings"
 # (panel.config), "Dashboards" (ui.panel.config.dashboard.dashboards.main)
-# and the Overview's sidebar label (panel.home).
+# and the Overview's sidebar label (panel.home). And, read from the frontends
+# of 2025.5.0 and 2026.10.1 alike ("es", not "es-419"): "Add service" at the
+# top of the integration page of a service integration
+# (ui.panel.config.integrations.integration_page.add_service), and the way to
+# a new integration, "Devices & services" (ui.panel.config.dashboard.devices
+# .main) and "Add integration" (ui.panel.config.integrations.add_integration).
 _MENU_LABELS = {
     "de": {
-        "reconfigure": "Neu konfigurieren", "configure": "Konfigurieren", "submit": "OK",
+        "devices_services": "Geräte & Dienste", "add_integration": "Integration hinzufügen", "add_service": "Dienst hinzufügen", "reconfigure": "Neu konfigurieren", "configure": "Konfigurieren", "submit": "OK",
         "delete": "Löschen", "edit_dashboard": "Dashboard bearbeiten",
         "add_card": "Karte hinzufügen", "by_card": "Nach Karte", "add_dashboard": "Dashboard hinzufügen",
         "settings": "Einstellungen", "dashboards": "Dashboards", "overview": "Übersicht",
     },
     "en": {
-        "reconfigure": "Reconfigure", "configure": "Configure", "submit": "Submit",
+        "devices_services": "Devices & services", "add_integration": "Add integration", "add_service": "Add service", "reconfigure": "Reconfigure", "configure": "Configure", "submit": "Submit",
         "delete": "Delete", "edit_dashboard": "Edit dashboard", "add_card": "Add card", "by_card": "By card",
         "add_dashboard": "Add dashboard", "settings": "Settings", "dashboards": "Dashboards",
         "overview": "Overview",
     },
     "es": {
-        "reconfigure": "Reconfigurar", "configure": "Configurar", "submit": "Enviar",
+        "devices_services": "Dispositivos y servicios", "add_integration": "Añadir integración", "add_service": "Añadir servicio", "reconfigure": "Reconfigurar", "configure": "Configurar", "submit": "Enviar",
         "delete": "Eliminar", "edit_dashboard": "Editar panel de control",
         "add_card": "Añadir tarjeta", "by_card": "Por tarjeta", "add_dashboard": "Añadir panel de control",
         "settings": "Configuración", "dashboards": "Paneles de control",
         "overview": "Vista general",
     },
     "fr": {
-        "reconfigure": "Reconfigurer", "configure": "Configurer", "submit": "Valider",
+        "devices_services": "Appareils et services", "add_integration": "Ajouter une intégration", "add_service": "Ajouter un service", "reconfigure": "Reconfigurer", "configure": "Configurer", "submit": "Valider",
         "delete": "Supprimer", "edit_dashboard": "Modifier le tableau de bord",
         "add_card": "Ajouter une carte", "by_card": "Par carte", "add_dashboard": "Ajouter un tableau de bord",
         "settings": "Paramètres", "dashboards": "Tableaux de bord", "overview": "Vue d’ensemble",
     },
     "it": {
-        "reconfigure": "Riconfigura", "configure": "Configura", "submit": "Invia",
+        "devices_services": "Dispositivi e servizi", "add_integration": "Aggiungi integrazione", "add_service": "Aggiungi servizio", "reconfigure": "Riconfigura", "configure": "Configura", "submit": "Invia",
         "delete": "Elimina", "edit_dashboard": "Modifica la plancia", "add_card": "Aggiungi scheda", "by_card": "Per scheda",
         "add_dashboard": "Aggiungi plancia", "settings": "Impostazioni", "dashboards": "Plance",
         "overview": "Panoramica",
     },
     "nl": {
-        "reconfigure": "Herconfigureer", "configure": "Configureren", "submit": "Verzenden",
+        "devices_services": "Apparaten en diensten", "add_integration": "Integratie toevoegen", "add_service": "Dienst toevoegen", "reconfigure": "Herconfigureer", "configure": "Configureren", "submit": "Verzenden",
         "delete": "Verwijderen", "edit_dashboard": "Dashboard bewerken",
         "add_card": "Kaart toevoegen", "by_card": "Per kaart", "add_dashboard": "Dashboard toevoegen",
         "settings": "Instellingen", "dashboards": "Dashboards", "overview": "Thuis",
     },
     "pl": {
-        "reconfigure": "Rekonfiguracja", "configure": "Konfiguruj", "submit": "Zatwierdź",
+        "devices_services": "Urządzenia oraz usługi", "add_integration": "Dodaj integrację", "add_service": "Dodaj usługę", "reconfigure": "Rekonfiguracja", "configure": "Konfiguruj", "submit": "Zatwierdź",
         "delete": "Usuń", "edit_dashboard": "Edytuj panel", "add_card": "Dodaj kartę", "by_card": "Według karty",
         "add_dashboard": "Dodaj panel", "settings": "Ustawienia", "dashboards": "Panele",
         "overview": "Przegląd",
@@ -228,6 +237,12 @@ _MENU_LABELS = {
 
 # The texts that send the user to one of those controls, by the control.
 _LABEL_REFERENCES = {
+    "add_service": [
+        ("issues", "portfolio_required", "description"),
+        ("config_subentries", "price_group", "abort", "portfolio_required"),
+    ],
+    "devices_services": [("config", "abort", "portfolio_required")],
+    "add_integration": [("config", "abort", "portfolio_required")],
     "reconfigure": [
         ("config", "step", "portfolio", "description"),
         ("config", "step", "currency", "sections", "currency", "data_description", "currency"),
@@ -257,6 +272,8 @@ _LABEL_REFERENCES = {
         )
     },
 }
+# The menu's abort sends the user to "Add integration" by way of "Settings".
+_LABEL_REFERENCES["settings"] = [*_LABEL_REFERENCES["settings"], ("config", "abort", "portfolio_required")]
 
 
 def _quoted(label: str) -> re.Pattern:
@@ -319,6 +336,7 @@ _LOCATED_TEXTS = {
     ("config", "step", "reauth_confirm", "description"): "⋮",
     ("config", "step", "reconfigure", "description"): "⋮",
     ("config", "create_entry", "price_tracker"): "",
+    ("issues", "portfolio_required", "description"): "",
 }
 # Shown right on the Price Tracker's entry, after its ⋮ -> "Reconfigure": it
 # sends the user to "Configure" (⚙) on "the same entry".
@@ -940,8 +958,9 @@ def test_the_sensors_disabled_hint_says_how_to_enable_them():
 
 
 def test_the_setup_menu_says_what_each_service_is_for():
-    """The setup menu names each service with nothing but whether it needs an
-    API key. The text above it says what each one is for, as a list of its
+    """The setup menu names each service with nothing but its API key: the
+    Portfolio needs one, the Price Tracker uses the Portfolio's. The text
+    above it says what each one is for, as a list of its
     own after a blank line with each service's name in bold -- which Home
     Assistant 2025.5 renders as 2026.9 does, unlike descriptions under each
     menu item. In the approved English and German wording."""
@@ -965,11 +984,11 @@ def test_the_setup_menu_says_what_each_service_is_for():
             "Which service do you want to set up? Each one can be added once.\n\n"
             "- **Bitpanda Portfolio**: your account \u2013 everything you hold at Bitpanda.\n"
             "- **Bitpanda Price Tracker**: live prices of the assets you choose \u2013 whether"
-            " you hold them or not."
+            " you hold them or not. It uses the Portfolio's API key: set up the Portfolio first."
         ),
         "menu_options": {
             "portfolio": "Bitpanda Portfolio (API key required)",
-            "price_tracker": "Bitpanda Price Tracker (no API key required)",
+            "price_tracker": "Bitpanda Price Tracker (uses the Portfolio's API key)",
         },
     }
     assert _load("translations/de.json")["config"]["step"]["user"] == {
@@ -978,11 +997,12 @@ def test_the_setup_menu_says_what_each_service_is_for():
             "Welchen Dienst möchtest du einrichten? Jeder lässt sich einmal hinzufügen.\n\n"
             "- **Bitpanda Portfolio**: dein Konto \u2013 alles, was du bei Bitpanda hältst.\n"
             "- **Bitpanda Price Tracker**: Live-Preise der Assets, die du auswählst \u2013 auch"
-            " ohne sie zu besitzen."
+            " ohne sie zu besitzen. Er nutzt den API-Schlüssel des Portfolios: Richte zuerst das"
+            " Portfolio ein."
         ),
         "menu_options": {
             "portfolio": "Bitpanda Portfolio (API-Schlüssel benötigt)",
-            "price_tracker": "Bitpanda Price Tracker (kein API-Schlüssel benötigt)",
+            "price_tracker": "Bitpanda Price Tracker (nutzt den API-Schlüssel des Portfolios)",
         },
     }
 
@@ -1003,13 +1023,10 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
         assert "\n" not in shows + needs, name
         open_page, permissions, paste = guide.split("\n")
         assert open_page.startswith("1. ") and "[{api_key_url}]({api_key_url})" in open_page, name
-        chosen, left_out = permissions.split(" \u2013 ")
-        assert chosen.startswith("2. "), name
-        *required, trade = _PERMISSION_LABELS[_language(name)]
-        assert all(label in chosen for label in required) and trade in left_out, name
-        assert trade not in chosen, name
+        assert permissions.startswith("2. ") and " \u2013 " not in permissions, name
+        assert all(label in permissions for label in _PERMISSION_LABELS[_language(name)]), name
         assert paste.startswith("3. "), name
-        assert len(key.split("\n")) == 3, name
+        assert len(key.split("\n")) == 4, name
     assert _load("strings.json")["config"]["step"]["portfolio"] == {
         "title": "Bitpanda Portfolio",
         "description": (
@@ -1019,10 +1036,11 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
             " \u2013 you do not need to add or delete any.\n\n"
             "For this, the integration needs an API key. To create one:\n\n"
             "1. Open [{api_key_url}]({api_key_url}) and create a new API key.\n"
-            '2. Select only the permissions "Balances", "Transaction" and "Earn (Read)"'
-            ' \u2013 not "Trade (Read)".\n'
+            '2. Select the permissions "Balances", "Transaction", "Earn (Read)" and'
+            ' "Trade (Read)".\n'
             "3. Copy the API key and paste it below. Bitpanda shows it only once.\n\n"
             "The integration only reads with it: it cannot trade or move money.\n"
+            "The Bitpanda Price Tracker uses the same API key.\n"
             "Bitpanda API keys are valid until the date you choose when creating them, one year at"
             " most; after that, Home Assistant asks for a new one.\n"
             'You can replace the API key at any time: open the ⋮ menu of the "Bitpanda Portfolio"'
@@ -1039,11 +1057,12 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
             " du ein Asset nicht mehr besitzt \u2013 hinzufügen oder löschen musst du nichts.\n\n"
             "Dafür braucht die Integration einen API-Schlüssel. So erstellst du ihn:\n\n"
             "1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen API-Schlüssel.\n"
-            "2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“"
-            " \u2013 kein „Trading (Read)“.\n"
+            "2. Wähle die Berechtigungen „Guthaben“, „Transaktion“, „Earn (Read)“ und"
+            " „Trading (Read)“.\n"
             "3. Kopiere den API-Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal"
             " an.\n\n"
             "Die Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\n"
+            "Der Bitpanda Price Tracker nutzt denselben API-Schlüssel.\n"
             "Bitpanda-API-Schlüssel gelten bis zu dem Datum, das du beim Erstellen wählst,"
             " höchstens ein Jahr; danach fragt Home Assistant nach einem neuen.\n"
             "Ersetzen kannst du den API-Schlüssel jederzeit: Öffne auf der"
@@ -1056,10 +1075,9 @@ def test_the_portfolio_setup_walks_through_creating_the_key():
 
 def test_the_reconfigure_key_help_has_a_line_per_sentence():
     """Under Reconfigure's key field: that an empty field keeps the key; on
-    a line of its own what a new key needs -- with the trading permission
-    set off by a dash, as in the setup's guide; and on a third, as in the
-    setup, that the integration only reads with it. In the approved English
-    and German wording."""
+    a line of its own what a new key needs -- the four permissions, as in
+    the setup's guide; and on a third, as in the setup, that the integration
+    only reads with it. In the approved English and German wording."""
     help_texts = {
         name: _load(name)["config"]["step"]["reconfigure"]["data_description"]["api_key"]
         for name in _FILES
@@ -1069,27 +1087,26 @@ def test_the_reconfigure_key_help_has_a_line_per_sentence():
         setup_key = _load(name)["config"]["step"]["portfolio"]["description"].split("\n\n")[-1]
         assert reads == setup_key.split("\n")[0], name
         assert "[{api_key_url}]({api_key_url})" in new_key, name
-        chosen, left_out = new_key.split(" \u2013 ")
-        *required, trade = _PERMISSION_LABELS[_language(name)]
-        assert all(label in chosen for label in required) and trade in left_out, name
-        assert trade not in keep + chosen, name
+        assert " \u2013 " not in new_key, name
+        assert all(label in new_key for label in _PERMISSION_LABELS[_language(name)]), name
     assert help_texts["strings.json"] == (
         "Leave empty to keep the current API key.\n"
         'A new API key from [{api_key_url}]({api_key_url}) needs the permissions "Balances",'
-        ' "Transaction" and "Earn (Read)" \u2013 not "Trade (Read)".\n'
+        ' "Transaction", "Earn (Read)" and "Trade (Read)".\n'
         "The integration only reads with it: it cannot trade or move money."
     )
     assert help_texts["translations/de.json"] == (
         "Lass das Feld leer, um den aktuellen API-Schlüssel zu behalten.\n"
         "Ein neuer API-Schlüssel von [{api_key_url}]({api_key_url}) braucht die Berechtigungen"
-        " „Guthaben“, „Transaktion“ und „Earn (Read)“ \u2013 kein „Trading (Read)“.\n"
+        " „Guthaben“, „Transaktion“, „Earn (Read)“ und „Trading (Read)“.\n"
         "Die Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht."
     )
 
 
 def test_the_reauth_dialog_walks_through_creating_the_key_as_the_setup_does():
-    """The new-key dialog says what happened, why, that the sensors are kept
-    and that the key must be of the same account; then, as the Portfolio's
+    """The new-key dialog says what happened and why; in a paragraph of its
+    own that the sensors are kept and that the key must be of the same
+    account; then, as the Portfolio's
     setup does, it walks through creating the
     key -- the same numbered steps -- and says that the integration only
     reads with it and how long a key is valid. Its field has no help text:
@@ -1098,40 +1115,45 @@ def test_the_reauth_dialog_walks_through_creating_the_key_as_the_setup_does():
         steps = _load(name)["config"]["step"]
         reauth = steps["reauth_confirm"]
         assert set(reauth) == {"title", "description", "data"}, name
-        happened, lead, guide, key = reauth["description"].split("\n\n")
-        assert "\n" not in happened + lead and "{api_key_url}" not in happened, name
+        happened, kept, lead, guide, key = reauth["description"].split("\n\n")
+        assert "\n" not in happened + kept + lead, name
+        assert "{api_key_url}" not in happened + kept, name
         _, _, setup_guide, setup_key = steps["portfolio"]["description"].split("\n\n")
         assert guide == setup_guide, name
-        assert key.split("\n") == setup_key.split("\n")[:2], name
+        assert key.split("\n") == setup_key.split("\n")[:3], name
     assert _load("strings.json")["config"]["step"]["reauth_confirm"]["description"] == (
-        "Bitpanda rejected the stored API key. It may have expired, or it predates the"
-        " permissions this version needs. Your sensors are kept. The new API key must belong"
+        "Bitpanda rejected the stored API key. It may have expired, or it lacks a permission"
+        " this version needs: since October 2026, Bitpanda gives prices only to an API key with"
+        ' "Trade (Read)".\n\nYour sensors are kept. The new API key must belong'
         " to the same Bitpanda account. For another account, open the \u22ee menu of the"
         ' "Bitpanda Portfolio" entry on the Bitpanda integration page, choose "Delete" and set'
         " up the Portfolio again.\n\n"
         "To create a new API key:\n\n"
         "1. Open [{api_key_url}]({api_key_url}) and create a new API key.\n"
-        '2. Select only the permissions "Balances", "Transaction" and "Earn (Read)"'
-        ' \u2013 not "Trade (Read)".\n'
+        '2. Select the permissions "Balances", "Transaction", "Earn (Read)" and'
+        ' "Trade (Read)".\n'
         "3. Copy the API key and paste it below. Bitpanda shows it only once.\n\n"
         "The integration only reads with it: it cannot trade or move money.\n"
+        "The Bitpanda Price Tracker uses the same API key.\n"
         "Bitpanda API keys are valid until the date you choose when creating them, one year at"
         " most; after that, Home Assistant asks for a new one."
     )
     assert _load("translations/de.json")["config"]["step"]["reauth_confirm"]["description"] == (
         "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt. Er ist vielleicht abgelaufen,"
-        " oder er stammt aus der Zeit vor den Berechtigungen, die diese Version braucht. Deine"
+        " oder ihm fehlt eine Berechtigung, die diese Version braucht: Seit Oktober 2026 gibt"
+        " Bitpanda Preise nur noch für einen API-Schlüssel mit „Trading (Read)“ heraus.\n\nDeine"
         " Sensoren bleiben erhalten. Der neue API-Schlüssel muss zum selben Bitpanda-Konto"
         " gehören. Für ein anderes Konto öffne auf der Bitpanda-Integrationsseite das Menü"
         " \u22ee beim Eintrag „Bitpanda Portfolio“, wähle „Löschen“ und richte das Portfolio"
         " danach neu ein.\n\n"
         "So erstellst du einen neuen API-Schlüssel:\n\n"
         "1. Öffne [{api_key_url}]({api_key_url}) und erstelle einen neuen API-Schlüssel.\n"
-        "2. Wähle nur die Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“"
-        " \u2013 kein „Trading (Read)“.\n"
+        "2. Wähle die Berechtigungen „Guthaben“, „Transaktion“, „Earn (Read)“ und"
+        " „Trading (Read)“.\n"
         "3. Kopiere den API-Schlüssel und füge ihn unten ein. Bitpanda zeigt ihn nur einmal"
         " an.\n\n"
         "Die Integration liest damit nur: Handeln oder Geld bewegen kann sie nicht.\n"
+        "Der Bitpanda Price Tracker nutzt denselben API-Schlüssel.\n"
         "Bitpanda-API-Schlüssel gelten bis zu dem Datum, das du beim Erstellen wählst,"
         " höchstens ein Jahr; danach fragt Home Assistant nach einem neuen."
     )
@@ -1149,6 +1171,22 @@ _SWITCH_WORDS = {
     "nl": ("overstap", "update"),
     "pl": ("migracj", "aktualizac"),
 }
+
+
+def test_the_waiting_upgrades_texts_call_the_switch_by_its_own_word():
+    """What the user sees while the upgrade waits for a new key -- why its
+    setup failed, why a device stays, why the menu and Reconfigure wait --
+    names the switch by its own word, never an update's."""
+    for language, (switch, update) in _SWITCH_WORDS.items():
+        strings = _load(f"translations/{language}.json")
+        for text in (
+            strings["exceptions"]["upgrade_key_needed"]["message"],
+            strings["exceptions"]["upgrade_device_not_removable"]["message"],
+            strings["config"]["abort"]["upgrade_pending"],
+        ):
+            assert switch in text.lower(), (language, text)
+            if update is not None:
+                assert update not in text.lower(), (language, text)
 
 
 def test_the_upgrade_issues_call_the_switch_by_its_own_word():
@@ -1365,53 +1403,52 @@ def _language(name: str) -> str:
 
 
 def test_the_missing_permissions_error_marks_each_permission():
-    """The error names the key's three permissions as Bitpanda's key page
+    """The error names the key's four permissions as Bitpanda's key page
     does in each language, each followed by the mark the code fills in --
-    ✓ or ✗, never a word -- and asks for a new key with all three. In the
+    ✓ or ✗, never a word -- and asks for a new key with all four. In the
     approved English and German wording."""
     assert sorted(_PERMISSION_LABELS) == _LANGUAGES
     for name in _FILES:
         error = _load(name)["config"]["error"]["missing_scopes"]
-        *required, trade = _PERMISSION_LABELS[_language(name)]
+        labels = _PERMISSION_LABELS[_language(name)]
         assert _placeholders(error) == set(REQUIRED_SCOPES), name
-        for label, scope in zip(required, REQUIRED_SCOPES):
+        assert len(labels) == len(REQUIRED_SCOPES), name
+        for label, scope in zip(labels, REQUIRED_SCOPES, strict=True):
             assert f"{label} {{{scope}}}" in error, name
-        assert trade not in error, name
     assert _load("strings.json")["config"]["error"]["missing_scopes"] == (
         'Permissions of this API key: "Balances" {balance}, "Transaction" {transaction},'
-        ' "Earn (Read)" {earn}. Permissions cannot be added to an existing API key. Create a new'
-        " one with all three."
+        ' "Earn (Read)" {earn}, "Trade (Read)" {trading}. Permissions cannot be added to an'
+        " existing API key. Create a new one with all four."
     )
     assert _load("translations/de.json")["config"]["error"]["missing_scopes"] == (
         "Berechtigungen dieses API-Schlüssels: „Guthaben“ {balance}, „Transaktion“"
-        " {transaction}, „Earn (Read)“ {earn}. Einem bestehenden API-Schlüssel lassen sich"
-        " keine Berechtigungen hinzufügen. Erstelle einen neuen mit allen dreien."
+        " {transaction}, „Earn (Read)“ {earn}, „Trading (Read)“ {trading}. Einem bestehenden"
+        " API-Schlüssel lassen sich keine Berechtigungen hinzufügen. Erstelle einen neuen mit"
+        " allen vieren."
     )
 
 
 def test_the_rejected_key_error_names_the_likely_causes_and_the_permissions():
     """Bitpanda answers a wrong, deleted or expired key and a key with none of
-    the three permissions alike: every probe of the setup fails. The error
-    names these causes and the three permissions as Bitpanda's key page does
-    in each language -- never the trading one --, and asks to check the key or
-    create a new one with all three. In the approved English and German
-    wording."""
+    the four permissions alike: every probe of the setup fails. The error
+    names these causes and the four permissions as Bitpanda's key page does
+    in each language, and asks to check the key or create a new one with all
+    four. In the approved English and German wording."""
     for name in _FILES:
         error = _load(name)["config"]["error"]["invalid_auth"]
-        *required, trade = _PERMISSION_LABELS[_language(name)]
-        assert all(label in error for label in required), name
-        assert trade not in error and _placeholders(error) == set(), name
+        assert all(label in error for label in _PERMISSION_LABELS[_language(name)]), name
+        assert _placeholders(error) == set(), name
     assert _load("strings.json")["config"]["error"]["invalid_auth"] == (
         "Bitpanda rejected this API key. It may be copied incompletely, deleted in your"
         " Bitpanda account or expired, or it has none of the permissions \"Balances\","
-        " \"Transaction\" and \"Earn (Read)\". Check the API key, or create a new one with all"
-        " three."
+        " \"Transaction\", \"Earn (Read)\" and \"Trade (Read)\". Check the API key, or create a"
+        " new one with all four."
     )
     assert _load("translations/de.json")["config"]["error"]["invalid_auth"] == (
         "Bitpanda hat diesen API-Schlüssel abgelehnt. Vielleicht ist er unvollständig"
         " kopiert, in deinem Bitpanda-Konto gelöscht oder abgelaufen, oder er hat keine der"
-        " Berechtigungen „Guthaben“, „Transaktion“ und „Earn (Read)“. Prüfe den API-Schlüssel"
-        " oder erstelle einen neuen mit allen dreien."
+        " Berechtigungen „Guthaben“, „Transaktion“, „Earn (Read)“ und „Trading (Read)“. Prüfe"
+        " den API-Schlüssel oder erstelle einen neuen mit allen vieren."
     )
 
 
@@ -1606,11 +1643,92 @@ def test_no_exception_text_takes_an_english_message():
 
 def test_every_issue_text_is_one_the_code_raises():
     """strings.json holds no repair-issue text the code never raises: the
-    upgrade's reports and what blocks the upgrade. Each module's own tests
-    render its issues in every language."""
+    upgrade's reports, what blocks the upgrade, and the Price Tracker's
+    missing Portfolio. Each module's own tests render its issues in every
+    language."""
     assert set(_load("strings.json")["issues"]) == {
         *migration.UPGRADE_ISSUES,
         *migration.BLOCKER_ISSUES,
+        *PRICE_TRACKER_ISSUES,
+    }
+
+
+def test_the_menus_portfolio_required_names_the_way_to_the_portfolios_setup():
+    """Choosing the Price Tracker while Bitpanda has no entry at all -- no
+    integration page exists then -- says to set up the Portfolio first, by
+    the way to it as three numbered steps: "Add integration", the search,
+    then the menu's own Portfolio option, quoted as the same file labels
+    it."""
+    for name in _FILES:
+        strings = _load(name)
+        abort = strings["config"]["abort"]["portfolio_required"]
+        assert _quoted(strings["config"]["step"]["user"]["menu_options"]["portfolio"]).search(abort), name
+        _, steps = abort.split("\n\n")
+        assert [line[:3] for line in steps.split("\n")] == ["1. ", "2. ", "3. "], name
+    assert _load("translations/de.json")["config"]["abort"]["portfolio_required"] == (
+        "Der Bitpanda Price Tracker nutzt den API-Schlüssel von Bitpanda Portfolio. Richte"
+        " zuerst Bitpanda Portfolio ein:\n\n"
+        "1. Wähle unter „Einstellungen“ → „Geräte & Dienste“ „Integration hinzufügen“.\n"
+        "2. Suche nach Bitpanda.\n"
+        "3. Wähle „Bitpanda Portfolio (API-Schlüssel benötigt)“."
+    )
+
+
+def test_a_refused_key_in_add_price_tracker_names_the_permission_and_the_dialog():
+    """"Add price tracker" refused for the key: the permission it needs, as
+    Bitpanda's key page names it, and where to enter a new key -- the
+    new-key dialog by its own title in the same file."""
+    for name in _FILES:
+        strings = _load(name)
+        error = strings["config_subentries"]["price_group"]["error"]["key_rejected"]
+        assert _PERMISSION_LABELS[_language(name)][-1] in error, name
+        assert _quoted(strings["config"]["step"]["reauth_confirm"]["title"]).search(error), name
+    assert _load("translations/de.json")["config_subentries"]["price_group"]["error"]["key_rejected"] == (
+        "Bitpanda hat den API-Schlüssel von Bitpanda Portfolio für Preise abgelehnt: Er braucht"
+        " die Berechtigung „Trading (Read)“. Gib bei Bitpanda Portfolio unter „Neuer"
+        " Bitpanda-API-Schlüssel nötig“ einen neuen API-Schlüssel ein."
+    )
+
+
+def test_the_portfolio_required_issue_says_why_and_what_to_do():
+    """A Price Tracker without a Portfolio: why it shows no prices, what to
+    set up -- with the four permissions as Bitpanda's key page names them in
+    each language -- and that its price trackers stay. In the approved
+    English and German wording; German calls the tracked assets by the
+    integration's own word, „Preis-Tracker“. Short paragraphs, the way to
+    fix it in bold, and the permissions as a list of their own in every
+    language: the repair dialog shows one block of text otherwise."""
+    assert_issue_texts_render({"portfolio_required": None})
+    for name in _FILES:
+        description = _load(name)["issues"]["portfolio_required"]["description"]
+        labels = _PERMISSION_LABELS[_language(name)]
+        assert "\n\n" + "\n".join(f"- {label}" for label in labels) + "\n\n" in description, name
+        assert description.count("\n\n") == 3 and description.count("**") == 2, name
+    english = _load("strings.json")["issues"]["portfolio_required"]
+    assert english == {
+        "title": "Bitpanda Price Tracker: set up Bitpanda Portfolio",
+        "description": (
+            "Since October 2026, Bitpanda gives prices only with an API key. The Price Tracker"
+            " uses the API key of Bitpanda Portfolio, so it shows no prices without one.\n\n"
+            '**To fix this:** set up Bitpanda Portfolio \u2013 "Add service" on the Bitpanda'
+            " integration page. Its API key needs these four permissions:\n\n"
+            '- "Balances"\n- "Transaction"\n- "Earn (Read)"\n- "Trade (Read)"\n\n'
+            "Your price trackers stay as they are and show prices again once the Portfolio is"
+            " set up."
+        ),
+    }
+    assert _load("translations/de.json")["issues"]["portfolio_required"] == {
+        "title": "Bitpanda Price Tracker: Bitpanda Portfolio einrichten",
+        "description": (
+            "Seit Oktober 2026 gibt Bitpanda Preise nur noch mit einem API-Schlüssel heraus. Der"
+            " Price Tracker nutzt den API-Schlüssel von Bitpanda Portfolio und zeigt ohne ihn keine"
+            " Preise.\n\n"
+            "**So behebst du es:** Richte Bitpanda Portfolio ein \u2013 „Dienst hinzufügen“ auf der"
+            " Bitpanda-Integrationsseite. Der API-Schlüssel braucht diese vier Berechtigungen:\n\n"
+            "- „Guthaben“\n- „Transaktion“\n- „Earn (Read)“\n- „Trading (Read)“\n\n"
+            "Deine Preis-Tracker bleiben, wie sie sind, und zeigen wieder Preise, sobald das"
+            " Portfolio eingerichtet ist."
+        ),
     }
 
 
@@ -1675,7 +1793,7 @@ def test_the_price_group_flow_has_its_strings():
     assert set(strings["config_subentries"]) == {"price_group", "wallet_group"}
     group = strings["config_subentries"]["price_group"]
     assert set(group["step"]) == {"user", "asset", "security"}
-    assert set(group["abort"]) == {"already_configured", "asset_added"}
+    assert set(group["abort"]) == {"already_configured", "asset_added", "portfolio_required"}
     assert "{asset}" in group["abort"]["asset_added"]
     assert "{group}" in group["abort"]["asset_added"]
     assert set(group["create_entry"]) == {"default"}
@@ -2503,8 +2621,8 @@ _SAME_ACCOUNT = {
     "fr": (
         "La nouvelle clé API doit appartenir au même compte Bitpanda.",
         "Une nouvelle clé API doit appartenir au même compte Bitpanda.",
-        " Pour un autre compte, ouvrez le menu ⋮ de l'entrée « Bitpanda Portfolio » sur la page de "
-        "l'intégration Bitpanda, choisissez « Supprimer » puis configurez à nouveau le Portfolio.",
+        " Pour un autre compte, ouvrez le menu ⋮ de l'entrée «\u00a0Bitpanda Portfolio\u00a0» sur la page de "
+        "l'intégration Bitpanda, choisissez «\u00a0Supprimer\u00a0» puis configurez à nouveau le Portfolio.",
     ),
     "it": (
         "La nuova chiave API deve appartenere allo stesso account Bitpanda.",
@@ -2527,67 +2645,109 @@ _SAME_ACCOUNT = {
 }
 
 
+def test_reconfigure_says_the_price_tracker_uses_the_same_key():
+    """Reconfigure says, after what it changes, that the Bitpanda Price
+    Tracker uses the same API key -- ending the first paragraph; the
+    same-account sentence follows in a paragraph of its own. In the approved
+    English and German wording."""
+    for name in _FILES:
+        description = _load(name)["config"]["step"]["reconfigure"]["description"]
+        uses = _load(name)["config"]["step"]["portfolio"]["description"].split("\n\n")[-1]
+        assert f". {uses.split(chr(10))[1]}\n\n" in description, name
+    assert _load("strings.json")["config"]["step"]["reconfigure"]["description"].startswith(
+        "Replace the stored API key, change the currency, or both. The Bitpanda Price Tracker"
+        " uses the same API key.\n\nA new API key must belong to the same Bitpanda account."
+    )
+    assert _load("translations/de.json")["config"]["step"]["reconfigure"]["description"].startswith(
+        "Ersetze den gespeicherten API-Schlüssel, ändere die Währung oder beides. Der Bitpanda"
+        " Price Tracker nutzt denselben API-Schlüssel.\n\nEin neuer API-Schlüssel muss zum selben"
+        " Bitpanda-Konto gehören."
+    )
+
+
 def test_the_key_dialogs_say_a_new_key_must_be_of_the_same_account():
     """Both dialogs that take a new key -- the new-key dialog
-    (reauth_confirm), at the end of its first paragraph, and Reconfigure, at
-    the end of its description -- say that the key must belong to the same
+    (reauth_confirm), at the end of its second paragraph, and Reconfigure, in
+    a paragraph of its own that ends its description -- say that the key must belong to the same
     Bitpanda account, and how to switch to another one: delete the Portfolio
     and set it up again."""
     assert sorted(_SAME_ACCOUNT) == _LANGUAGES
     for language, (reauth, reconfigure, another) in _SAME_ACCOUNT.items():
         step = _load(f"translations/{language}.json")["config"]["step"]
-        first_paragraph = step["reauth_confirm"]["description"].split("\n\n")[0]
-        assert first_paragraph.endswith(f" {reauth}{another}"), language
-        assert step["reconfigure"]["description"].endswith(f" {reconfigure}{another}"), language
+        kept = step["reauth_confirm"]["description"].split("\n\n")[1]
+        assert kept.endswith(f" {reauth}{another}"), language
+        assert step["reconfigure"]["description"].endswith(f"\n\n{reconfigure}{another}"), language
 
 
 def test_the_setups_end_with_the_way_to_the_cards():
-    """Both setups end by saying where the Bitpanda cards are and how to put
-    one on a dashboard; the Price Tracker's first how to add assets. The
-    English and German wording, word for word."""
-    way = {
+    """Both setups end by saying how to put a Bitpanda card on a dashboard,
+    as numbered steps -- the Price Tracker's first step adds its assets --
+    then, each in a paragraph of its own, what to do when no Bitpanda card is
+    listed and that the new Overview takes no cards. The English and German
+    wording, word for word."""
+    rest = {
         "en": (
-            'open the dashboard, select "Edit dashboard" (✏ at the top right; on a phone in the ⋮ '
-            'menu), then "Add card" and the "By card" tab, and search for "Bitpanda". If no '
-            'Bitpanda card is listed, reload the page twice; in the Home Assistant app, '
-            '[reset its frontend cache]({cards_url}) instead.\n\nThe new "Overview", the default of '
-            'new installations since Home Assistant 2026.2, takes no cards: first create a dashboard under "Settings" → '
-            '"Dashboards" → "Add dashboard".'
+            "If no Bitpanda card is listed, reload the page twice; in the Home Assistant app,"
+            " [reset its frontend cache]({cards_url}) instead.\n\n"
+            'The new "Overview", the default of new installations since Home Assistant 2026.2,'
+            ' takes no cards: first create a dashboard under "Settings" → "Dashboards" →'
+            ' "Add dashboard".'
         ),
         "de": (
-            "Öffne das Dashboard, wähle „Dashboard bearbeiten“ (✏ oben rechts, auf dem Handy im "
-            "⋮-Menü), dann „Karte hinzufügen“ und den Reiter „Nach Karte“, und suche nach "
-            "„Bitpanda“. Erscheint keine Bitpanda-Karte, lade die Seite zweimal neu; in der "
-            "Home-Assistant-App [setze stattdessen ihren Frontend-Cache zurück]({cards_url}).\n\n"
-            "Die neue „Übersicht“, seit Home Assistant 2026.2 der Standard neuer Installationen, nimmt keine Karten auf: Lege zuerst unter "
-            "„Einstellungen“ → „Dashboards“ → „Dashboard hinzufügen“ ein eigenes Dashboard an."
+            "Erscheint keine Bitpanda-Karte, lade die Seite zweimal neu; in der Home-Assistant-App"
+            " [setze stattdessen ihren Frontend-Cache zurück]({cards_url}).\n\n"
+            "Die neue „Übersicht“, seit Home Assistant 2026.2 der Standard neuer Installationen,"
+            " nimmt keine Karten auf: Lege zuerst unter „Einstellungen“ → „Dashboards“ →"
+            " „Dashboard hinzufügen“ ein eigenes Dashboard an."
         ),
+    }
+    open_dashboard = {
+        "en": 'Open a dashboard and select "Edit dashboard" (✏ at the top right; on a phone in the ⋮ menu).',
+        "de": "Öffne ein Dashboard und wähle „Dashboard bearbeiten“ (✏ oben rechts, auf dem Handy im ⋮-Menü).",
+    }
+    add_card = {
+        "en": 'Select "Add card" and the "By card" tab, search for "Bitpanda" and choose the "{card}" card.',
+        "de": "Wähle „Karte hinzufügen“ und den Reiter „Nach Karte“, suche nach „Bitpanda“ und wähle die"
+        " Karte „{card}“.",
     }
     expected = {
         "en": {
-            "portfolio": 'To see your portfolio on a dashboard, add the "Bitpanda Portfolio" card: '
-            + way["en"],
-            "price_tracker": 'Add the assets you want to track with "Add price tracker" on the '
-            '"Bitpanda Price Tracker" entry of the Bitpanda integration page. Then add the '
-            '"Bitpanda Price Tracker" card to a dashboard: ' + way["en"],
+            "portfolio": "To see your portfolio on a dashboard:\n\n"
+            f"1. {open_dashboard['en']}\n"
+            f"2. {add_card['en'].format(card='Bitpanda Portfolio')}\n\n" + rest["en"],
+            "price_tracker": "Next steps:\n\n"
+            '1. Add the assets you want to track with "Add price tracker" on the "Bitpanda Price'
+            ' Tracker" entry of the Bitpanda integration page.\n'
+            f"2. {open_dashboard['en']}\n"
+            f"3. {add_card['en'].format(card='Bitpanda Price Tracker')}\n\n" + rest["en"],
         },
         "de": {
-            "portfolio": "Um dein Portfolio auf einem Dashboard zu sehen, füge ihm die Karte "
-            "„Bitpanda Portfolio“ hinzu: " + way["de"],
-            "price_tracker": "Füge die gewünschten Assets mit „Preis-Tracker hinzufügen“ beim "
-            "Eintrag „Bitpanda Price Tracker“ auf der Bitpanda-Integrationsseite hinzu. Füge "
-            "danach einem Dashboard die Karte „Bitpanda Price Tracker“ hinzu: " + way["de"],
+            "portfolio": "So bringst du dein Portfolio auf ein Dashboard:\n\n"
+            f"1. {open_dashboard['de']}\n"
+            f"2. {add_card['de'].format(card='Bitpanda Portfolio')}\n\n" + rest["de"],
+            "price_tracker": "So geht es weiter:\n\n"
+            "1. Füge die gewünschten Assets mit „Preis-Tracker hinzufügen“ beim Eintrag „Bitpanda"
+            " Price Tracker“ auf der Bitpanda-Integrationsseite hinzu.\n"
+            f"2. {open_dashboard['de']}\n"
+            f"3. {add_card['de'].format(card='Bitpanda Price Tracker')}\n\n" + rest["de"],
         },
     }
     for language, texts in expected.items():
         assert _load(f"translations/{language}.json")["config"]["create_entry"] == texts, language
     assert _load("strings.json")["config"]["create_entry"] == expected["en"]
-    # Every language: both texts, each naming its card.
+    # Every language: both texts, each naming its card; a lead, the steps,
+    # then the two paragraphs on a missing card and on the Overview.
     for language in _LANGUAGES:
         endings = _load(f"translations/{language}.json")["config"]["create_entry"]
         assert set(endings) == {"portfolio", "price_tracker"}, language
         assert "Bitpanda Portfolio" in endings["portfolio"], language
         assert endings["price_tracker"].count("Bitpanda Price Tracker") == 2, language
+        for key, count in (("portfolio", 2), ("price_tracker", 3)):
+            lead, steps, missing, overview = endings[key].split("\n\n")
+            assert lead.endswith(":") and "\n" not in lead, (language, key)
+            numbers = [line[:3] for line in steps.split("\n")]
+            assert numbers == [f"{n}. " for n in range(1, count + 1)], (language, key)
+            assert "({cards_url})" in missing, (language, key)
 
 
 def test_the_closing_texts_send_the_app_to_the_readmes_card_section():
@@ -2607,3 +2767,13 @@ def test_no_text_carries_the_emoji_variation_selector():
     for name in _FILES:
         path = _DIR / name
         assert "\ufe0f" not in path.read_text(encoding="utf-8"), name
+
+
+def test_french_keeps_its_no_break_spaces():
+    """French typography, as everywhere in fr.json: a
+    no-break space (U+00A0) inside « » and before a colon or a semicolon, so
+    that no line starts with » or a colon. A plain space there slips in
+    easily when a text is edited."""
+    text = (_DIR / "translations/fr.json").read_text(encoding="utf-8")
+    for plain in ("« ", " »", " :", " ;"):
+        assert plain not in text, repr(plain)

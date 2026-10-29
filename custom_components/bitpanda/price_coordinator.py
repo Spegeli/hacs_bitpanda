@@ -1,18 +1,21 @@
-"""Coordinators of the Price Tracker service. Nothing here uses an API key."""
+"""Coordinators of the Price Tracker service. The tickers are asked with the
+Portfolio's API key, borrowed at each round (keys.py); the ECB rates need
+none."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 import logging
 import math
-from typing import Any
+from typing import Any, Literal
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
+from .api import BitpandaApiClient, BitpandaApiError, BitpandaAuthError, BitpandaRateLimitError
 from .const import (
     DOMAIN,
     ECB_FIRST_LOAD_RETRY_INTERVAL,
@@ -26,9 +29,13 @@ from .const import (
 from .ecb import EcbError, EcbRates, async_fetch_ecb_rates
 from .portfolio_model import DECIMALS
 from .streaks import FailureStreak
-from .tolerance import TolerantCoordinator
+from .tolerance import Rejected, TolerantCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+# Whether the Price Tracker has the Portfolio's key: there, missing (no
+# Portfolio), or refused by Bitpanda.
+type KeyState = Literal["present", "missing", "rejected"]
 
 # Each 429 in a row doubles the interval, up to this factor; the first
 # success returns to the regular interval.
@@ -92,7 +99,18 @@ def convert_price(price: Any, rate: float | None) -> float | None:
 
 
 class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
-    """EUR prices of the tracked assets, one keyless /tickers request each.
+    """EUR prices of the tracked assets, one /tickers request each, with the
+    Portfolio's API key: `key_source` gives it at each round, `client_for`
+    builds that round's client, so a new key needs no reload.
+
+    Without a key -- no Portfolio -- a round asks nothing; a 401 as the
+    round's first answer -- a request without any answer before it tells
+    nothing -- means Bitpanda refused the key, and `on_rejected` asks the
+    Portfolio for a new one with the key the round sent. Either round fails
+    as Rejected: the prices go at once, the carried ones included -- none
+    from before the rejection comes back after it --, and the next round
+    comes at the regular pace. A 401 after an answer is that asset's
+    failure. `on_key_state` hears every round's key state (key_state).
 
     The update fails as a whole when no request brings a fresh price, or on
     a 429, which also stops the round and backs off -- warned about once
@@ -140,13 +158,17 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
         self,
         hass: HomeAssistant,
         entry: PriceTrackerConfigEntry,
-        client: BitpandaApiClient,
+        client_for: Callable[[str], BitpandaApiClient],
+        key_source: Callable[[], str | None],
+        on_rejected: Callable[[str], None],
+        on_key_state: Callable[[KeyState], None],
         tracked: dict[str, str],
     ) -> None:
-        # Every 60 seconds, however many assets are tracked: Bitpanda limits
-        # requests per API key, and these carry none. One request per asset
-        # follows the other, and the next round starts a minute after the
-        # last one ended; a 429 slows the rounds down (the backoff).
+        # Every 60 seconds, however many assets are tracked. Bitpanda limits
+        # requests per API key, and these carry the Portfolio's; 40 tickers
+        # in a row drew no 429 when measured. One request per asset follows
+        # the other, and the next round starts a minute after the last one
+        # ended; a 429 slows the rounds down (the backoff).
         self._base_interval = PRICE_UPDATE_INTERVAL_BASE
         super().__init__(
             hass,
@@ -156,7 +178,11 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
             regular_interval=self._base_interval,
             config_entry=entry,
         )
-        self._client = client
+        self._client_for = client_for
+        self._key_source = key_source
+        self._on_rejected = on_rejected
+        self._on_key_state = on_key_state
+        self._key_state: KeyState = "missing" if key_source() is None else "present"
         self._tracked = dict(tracked)
         # Asset -> its rounds in a row without a fresh price.
         self._streaks: dict[str, FailureStreak] = {}
@@ -173,6 +199,12 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
         self._backoff = 1
 
     @property
+    def key_state(self) -> KeyState:
+        """The latest round's key state -- before the first, whether there
+        is a key: diagnostics report it."""
+        return self._key_state
+
+    @property
     def failing_assets(self) -> frozenset[str]:
         """The assets without a fresh price in the latest round -- carried
         over, confirmed or without a last price alike. The real outcome,
@@ -181,7 +213,24 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
         return frozenset(self._streaks)
 
     async def _async_fetch(self, requested_at: datetime) -> dict[str, float]:
+        key = self._key_source()
+        self._key_state = "missing" if key is None else "present"
+        try:
+            if key is None:
+                self._reject(requested_at)
+                raise Rejected(translation_domain=DOMAIN, translation_key="prices_no_key")
+            return await self._async_ask(self._client_for(key), key, requested_at)
+        finally:
+            # Inside the round, so that every one tells its key state.
+            self._on_key_state(self._key_state)
+
+    async def _async_ask(
+        self, client: BitpandaApiClient, key: str, requested_at: datetime
+    ) -> dict[str, float]:
         prices: dict[str, float] = {}
+        # Whether Bitpanda answered a request of this round: a 401 before
+        # any answer is the key's, one after it the asset's.
+        answered = False
         # Requests in a row that got no answer at all.
         unanswered = 0
         # A first round, before any data, never stops for requests without an
@@ -199,7 +248,17 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
             self._mark_count += 1
             self._marks[asset_id] = self._mark_count
             try:
-                ticker = await self._client.async_get_ticker(asset_id)
+                ticker = await client.async_get_ticker(asset_id)
+            except BitpandaAuthError:
+                if not answered:
+                    self._key_state = "rejected"
+                    self._on_rejected(key)
+                    self._reject(requested_at)
+                    raise Rejected(
+                        translation_domain=DOMAIN, translation_key="prices_key_rejected"
+                    ) from None
+                unanswered = 0
+                continue
             except BitpandaRateLimitError:
                 if self._backoff == 1:
                     _LOGGER.warning(
@@ -213,6 +272,8 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
                     translation_domain=DOMAIN, translation_key="prices_rate_limited"
                 ) from None
             except BitpandaApiError as err:
+                if err.kind not in _UNANSWERED:
+                    answered = True
                 unanswered = unanswered + 1 if err.kind in _UNANSWERED else 0
                 if not first_round and not prices and unanswered >= _UNANSWERED_IN_A_ROW:
                     # Bitpanda is out of reach, and every further request
@@ -221,6 +282,7 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
                     break
                 continue
             unanswered = 0
+            answered = True
             price = convert_price(ticker.get("price"), None)
             if price is not None:
                 prices[asset_id] = price
@@ -241,6 +303,18 @@ class TickerCoordinator(TolerantCoordinator[dict[str, float]]):
                 self._base_interval,
             )
         return self._tolerate_failed_assets(prices, requested_at)
+
+    def _reject(self, requested_at: datetime) -> None:
+        """A round rejected for its key: it counts for every asset, drops the
+        prices it carried -- the key is no outage that passes, and none of
+        them may come back after it -- and ends a backoff: such a round
+        asks one request at the most."""
+        self._count_for_every_asset(requested_at)
+        if self.data:
+            self.data = {}
+        if self._backoff != 1:
+            self._backoff = 1
+            self.update_interval = self._base_interval
 
     def _count_for_every_asset(self, requested_at: datetime) -> None:
         """Add a round that fails as a whole to every asset's streak,

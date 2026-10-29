@@ -3,15 +3,15 @@
     "step": {
       "user": {
         "title": "Bitpanda",
-        "description": "Welke dienst wil je instellen? Elke dienst kan maar één keer worden toegevoegd.\n\n- **Bitpanda Portfolio**: je account – alles wat je bij Bitpanda bezit.\n- **Bitpanda Price Tracker**: actuele prijzen van de assets die je kiest – ook zonder ze te bezitten.",
+        "description": "Welke dienst wil je instellen? Elke dienst kan maar één keer worden toegevoegd.\n\n- **Bitpanda Portfolio**: je account – alles wat je bij Bitpanda bezit.\n- **Bitpanda Price Tracker**: actuele prijzen van de assets die je kiest – ook zonder ze te bezitten. Hij gebruikt de API-sleutel van het Portfolio: stel eerst het Portfolio in.",
         "menu_options": {
           "portfolio": "Bitpanda Portfolio (API-sleutel nodig)",
-          "price_tracker": "Bitpanda Price Tracker (geen API-sleutel nodig)"
+          "price_tracker": "Bitpanda Price Tracker (gebruikt de API-sleutel van het Portfolio)"
         }
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "De Bitpanda Portfolio toont je Bitpanda-account in Home Assistant: de totale waarde, je rendementen en een wallet voor elke asset die je bezit. De integratie maakt de wallets zelf aan en verwijdert ze weer als je een asset niet meer bezit – toevoegen of verwijderen hoef je niets.\n\nDaarvoor heeft de integratie een API-sleutel nodig. Zo maak je er een aan:\n\n1. Open [{api_key_url}]({api_key_url}) en maak een nieuwe API-sleutel aan.\n2. Kies alleen de rechten \"Saldi\", \"Transactie\" en \"Earn (Lezen)\" – niet \"Traden (Lezen)\".\n3. Kopieer de API-sleutel en plak hem hieronder. Bitpanda toont hem maar één keer.\n\nDe integratie leest er alleen mee: handelen of geld verplaatsen kan ze niet.\nBitpanda-API-sleutels zijn geldig tot de datum die je bij het aanmaken kiest, hoogstens een jaar; daarna vraagt Home Assistant om een nieuwe.\nJe kunt de API-sleutel op elk moment vervangen: open op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies \"Herconfigureer\".",
+        "description": "De Bitpanda Portfolio toont je Bitpanda-account in Home Assistant: de totale waarde, je rendementen en een wallet voor elke asset die je bezit. De integratie maakt de wallets zelf aan en verwijdert ze weer als je een asset niet meer bezit – toevoegen of verwijderen hoef je niets.\n\nDaarvoor heeft de integratie een API-sleutel nodig. Zo maak je er een aan:\n\n1. Open [{api_key_url}]({api_key_url}) en maak een nieuwe API-sleutel aan.\n2. Kies de rechten \"Saldi\", \"Transactie\", \"Earn (Lezen)\" en \"Traden (Lezen)\".\n3. Kopieer de API-sleutel en plak hem hieronder. Bitpanda toont hem maar één keer.\n\nDe integratie leest er alleen mee: handelen of geld verplaatsen kan ze niet.\nDe Bitpanda Price Tracker gebruikt dezelfde API-sleutel.\nBitpanda-API-sleutels zijn geldig tot de datum die je bij het aanmaken kiest, hoogstens een jaar; daarna vraagt Home Assistant om een nieuwe.\nJe kunt de API-sleutel op elk moment vervangen: open op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\" en kies \"Herconfigureer\".",
         "data": {
           "api_key": "API-sleutel"
         }
@@ -87,20 +87,20 @@
       },
       "reauth_confirm": {
         "title": "Nieuwe Bitpanda API-sleutel nodig",
-        "description": "Bitpanda heeft de opgeslagen API-sleutel geweigerd. Misschien is hij verlopen, of hij dateert van vóór de rechten die deze versie nodig heeft. Je sensoren blijven behouden. De nieuwe API-sleutel moet bij hetzelfde Bitpanda-account horen. Voor een ander account open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\", kies je \"Verwijderen\" en stel je het Portfolio daarna opnieuw in.\n\nZo maak je een nieuwe API-sleutel aan:\n\n1. Open [{api_key_url}]({api_key_url}) en maak een nieuwe API-sleutel aan.\n2. Kies alleen de rechten \"Saldi\", \"Transactie\" en \"Earn (Lezen)\" – niet \"Traden (Lezen)\".\n3. Kopieer de API-sleutel en plak hem hieronder. Bitpanda toont hem maar één keer.\n\nDe integratie leest er alleen mee: handelen of geld verplaatsen kan ze niet.\nBitpanda-API-sleutels zijn geldig tot de datum die je bij het aanmaken kiest, hoogstens een jaar; daarna vraagt Home Assistant om een nieuwe.",
+        "description": "Bitpanda heeft de opgeslagen API-sleutel geweigerd. Misschien is hij verlopen, of mist hij een recht dat deze versie nodig heeft: sinds oktober 2026 geeft Bitpanda prijzen alleen nog aan een API-sleutel met \"Traden (Lezen)\".\n\nJe sensoren blijven behouden. De nieuwe API-sleutel moet bij hetzelfde Bitpanda-account horen. Voor een ander account open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\", kies je \"Verwijderen\" en stel je het Portfolio daarna opnieuw in.\n\nZo maak je een nieuwe API-sleutel aan:\n\n1. Open [{api_key_url}]({api_key_url}) en maak een nieuwe API-sleutel aan.\n2. Kies de rechten \"Saldi\", \"Transactie\", \"Earn (Lezen)\" en \"Traden (Lezen)\".\n3. Kopieer de API-sleutel en plak hem hieronder. Bitpanda toont hem maar één keer.\n\nDe integratie leest er alleen mee: handelen of geld verplaatsen kan ze niet.\nDe Bitpanda Price Tracker gebruikt dezelfde API-sleutel.\nBitpanda-API-sleutels zijn geldig tot de datum die je bij het aanmaken kiest, hoogstens een jaar; daarna vraagt Home Assistant om een nieuwe.",
         "data": {
           "api_key": "API-sleutel"
         }
       },
       "reconfigure": {
         "title": "Bitpanda Portfolio herconfigureren",
-        "description": "Vervang de opgeslagen API-sleutel, wijzig de valuta, of allebei. Een nieuwe API-sleutel moet bij hetzelfde Bitpanda-account horen. Voor een ander account open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\", kies je \"Verwijderen\" en stel je het Portfolio daarna opnieuw in.",
+        "description": "Vervang de opgeslagen API-sleutel, wijzig de valuta, of allebei. De Bitpanda Price Tracker gebruikt dezelfde API-sleutel.\n\nEen nieuwe API-sleutel moet bij hetzelfde Bitpanda-account horen. Voor een ander account open je op de integratiepagina van Bitpanda het menu ⋮ bij de invoer \"Bitpanda Portfolio\", kies je \"Verwijderen\" en stel je het Portfolio daarna opnieuw in.",
         "data": {
           "api_key": "Nieuwe API-sleutel",
           "currency": "Valuta"
         },
         "data_description": {
-          "api_key": "Laat het veld leeg om de huidige API-sleutel te behouden.\nEen nieuwe API-sleutel van [{api_key_url}]({api_key_url}) heeft de rechten \"Saldi\", \"Transactie\" en \"Earn (Lezen)\" nodig – niet \"Traden (Lezen)\".\nDe integratie leest er alleen mee: handelen of geld verplaatsen kan ze niet.",
+          "api_key": "Laat het veld leeg om de huidige API-sleutel te behouden.\nEen nieuwe API-sleutel van [{api_key_url}]({api_key_url}) heeft de rechten \"Saldi\", \"Transactie\", \"Earn (Lezen)\" en \"Traden (Lezen)\" nodig.\nDe integratie leest er alleen mee: handelen of geld verplaatsen kan ze niet.",
           "currency": "Als je de valuta wijzigt, worden alle Portfolio-sensoren met hun geschiedenis verwijderd; dat bevestig je in de volgende stap."
         }
       },
@@ -116,8 +116,8 @@
       }
     },
     "error": {
-      "invalid_auth": "Bitpanda heeft deze API-sleutel geweigerd. Misschien is hij onvolledig gekopieerd, in je Bitpanda-account verwijderd of verlopen, of heeft hij geen van de rechten \"Saldi\", \"Transactie\" en \"Earn (Lezen)\". Controleer de API-sleutel of maak een nieuwe aan met alle drie.",
-      "missing_scopes": "Rechten van deze API-sleutel: \"Saldi\" {balance}, \"Transactie\" {transaction}, \"Earn (Lezen)\" {earn}. Aan een bestaande API-sleutel kunnen geen rechten worden toegevoegd. Maak een nieuwe aan met alle drie.",
+      "invalid_auth": "Bitpanda heeft deze API-sleutel geweigerd. Misschien is hij onvolledig gekopieerd, in je Bitpanda-account verwijderd of verlopen, of heeft hij geen van de rechten \"Saldi\", \"Transactie\", \"Earn (Lezen)\" en \"Traden (Lezen)\". Controleer de API-sleutel of maak een nieuwe aan met alle vier.",
+      "missing_scopes": "Rechten van deze API-sleutel: \"Saldi\" {balance}, \"Transactie\" {transaction}, \"Earn (Lezen)\" {earn}, \"Traden (Lezen)\" {trading}. Aan een bestaande API-sleutel kunnen geen rechten worden toegevoegd. Maak een nieuwe aan met alle vier.",
       "rate_limited": "Te veel verzoeken. Wacht even en probeer het opnieuw.",
       "cannot_connect": "Bitpanda is niet bereikbaar. Probeer het later opnieuw.",
       "unknown": "Onverwachte fout"
@@ -132,11 +132,13 @@
       "no_changes": "Er is niets gewijzigd.",
       "no_reconfigure": "Bij de Bitpanda Price Tracker valt momenteel niets te herconfigureren. Wijzig de extra valuta en de taal van groepstitels via \"Configureren\" (⚙) bij dezelfde invoer.",
       "unload_failed": "Het Portfolio kon niet worden gestopt, dus de valuta is niet gewijzigd en er is niets verwijderd. Herstart Home Assistant en probeer het opnieuw.",
-      "setup_cancelled": "Het Portfolio is niet ingesteld en er is niets verwijderd."
+      "setup_cancelled": "Het Portfolio is niet ingesteld en er is niets verwijderd.",
+      "portfolio_required": "De Bitpanda Price Tracker gebruikt de API-sleutel van Bitpanda Portfolio. Stel eerst Bitpanda Portfolio in:\n\n1. Ga naar \"Instellingen\" → \"Apparaten en diensten\" en kies \"Integratie toevoegen\".\n2. Zoek naar Bitpanda.\n3. Kies \"Bitpanda Portfolio (API-sleutel nodig)\".",
+      "upgrade_pending": "De Bitpanda-overstap is nog niet klaar: hij stelt de Bitpanda Price Tracker zelf in, en de instellingen van het Portfolio kun je wijzigen zodra hij klaar is. Vraagt Home Assistant om een nieuwe API-sleutel, voer die dan daar in; al het andere wat de overstap nodig heeft, toont Home Assistant als reparatie."
     },
     "create_entry": {
-      "portfolio": "Om je portfolio op een dashboard te zien, voeg je de kaart \"Bitpanda Portfolio\" toe: open het dashboard, kies \"Dashboard bewerken\" (✏ rechtsboven; op een telefoon in het ⋮-menu), dan \"Kaart toevoegen\" en het tabblad \"Per kaart\", en zoek naar \"Bitpanda\". Staat er geen Bitpanda-kaart bij, laad de pagina dan twee keer opnieuw; reset in de Home Assistant-app in plaats daarvan [de frontend-cache]({cards_url}).\n\nHet nieuwe dashboard \"Thuis\", sinds Home Assistant 2026.2 de standaard van nieuwe installaties, neemt geen kaarten op: maak eerst een dashboard aan onder \"Instellingen\" → \"Dashboards\" → \"Dashboard toevoegen\".",
-      "price_tracker": "Voeg de assets die je wilt volgen toe met \"Prijstracker toevoegen\" bij de invoer \"Bitpanda Price Tracker\" op de integratiepagina van Bitpanda. Voeg daarna de kaart \"Bitpanda Price Tracker\" toe aan een dashboard: open het dashboard, kies \"Dashboard bewerken\" (✏ rechtsboven; op een telefoon in het ⋮-menu), dan \"Kaart toevoegen\" en het tabblad \"Per kaart\", en zoek naar \"Bitpanda\". Staat er geen Bitpanda-kaart bij, laad de pagina dan twee keer opnieuw; reset in de Home Assistant-app in plaats daarvan [de frontend-cache]({cards_url}).\n\nHet nieuwe dashboard \"Thuis\", sinds Home Assistant 2026.2 de standaard van nieuwe installaties, neemt geen kaarten op: maak eerst een dashboard aan onder \"Instellingen\" → \"Dashboards\" → \"Dashboard toevoegen\"."
+      "portfolio": "Zo zet je je portfolio op een dashboard:\n\n1. Open een dashboard en kies \"Dashboard bewerken\" (✏ rechtsboven; op een telefoon in het ⋮-menu).\n2. Kies \"Kaart toevoegen\" en het tabblad \"Per kaart\", zoek naar \"Bitpanda\" en kies de kaart \"Bitpanda Portfolio\".\n\nStaat er geen Bitpanda-kaart bij, laad de pagina dan twee keer opnieuw; reset in de Home Assistant-app in plaats daarvan [de frontend-cache]({cards_url}).\n\nHet nieuwe dashboard \"Thuis\", sinds Home Assistant 2026.2 de standaard van nieuwe installaties, neemt geen kaarten op: maak eerst een dashboard aan onder \"Instellingen\" → \"Dashboards\" → \"Dashboard toevoegen\".",
+      "price_tracker": "Zo ga je verder:\n\n1. Voeg de assets die je wilt volgen toe met \"Prijstracker toevoegen\" bij de invoer \"Bitpanda Price Tracker\" op de integratiepagina van Bitpanda.\n2. Open een dashboard en kies \"Dashboard bewerken\" (✏ rechtsboven; op een telefoon in het ⋮-menu).\n3. Kies \"Kaart toevoegen\" en het tabblad \"Per kaart\", zoek naar \"Bitpanda\" en kies de kaart \"Bitpanda Price Tracker\".\n\nStaat er geen Bitpanda-kaart bij, laad de pagina dan twee keer opnieuw; reset in de Home Assistant-app in plaats daarvan [de frontend-cache]({cards_url}).\n\nHet nieuwe dashboard \"Thuis\", sinds Home Assistant 2026.2 de standaard van nieuwe installaties, neemt geen kaarten op: maak eerst een dashboard aan onder \"Instellingen\" → \"Dashboards\" → \"Dashboard toevoegen\"."
     }
   },
   "options": {
@@ -234,11 +236,13 @@
         "no_assets_available": "Alle assets van dit type worden al gevolgd.",
         "unknown_asset": "Kies een asset uit de lijst.",
         "rate_limited": "Te veel verzoeken. Wacht even en probeer het opnieuw.",
-        "cannot_connect": "Bitpanda is niet bereikbaar. Probeer het later opnieuw."
+        "cannot_connect": "Bitpanda is niet bereikbaar. Probeer het later opnieuw.",
+        "key_rejected": "Bitpanda heeft de API-sleutel van Bitpanda Portfolio voor prijzen geweigerd: die heeft het recht \"Traden (Lezen)\" nodig. Voer bij Bitpanda Portfolio een nieuwe API-sleutel in onder \"Nieuwe Bitpanda API-sleutel nodig\"."
       },
       "abort": {
         "already_configured": "Deze asset wordt al gevolgd.",
-        "asset_added": "{asset} wordt nu gevolgd in de groep {group}."
+        "asset_added": "{asset} wordt nu gevolgd in de groep {group}.",
+        "portfolio_required": "De Bitpanda Price Tracker gebruikt de API-sleutel van Bitpanda Portfolio. Stel eerst Bitpanda Portfolio in: \"Dienst toevoegen\" op de integratiepagina van Bitpanda."
       },
       "create_entry": {
         "default": "{asset} wordt nu gevolgd in de groep {group}."
@@ -895,6 +899,12 @@
     "no_prices": {
       "message": "Er konden geen prijzen bij Bitpanda worden opgehaald."
     },
+    "prices_no_key": {
+      "message": "Geen prijzen: de Bitpanda Price Tracker gebruikt de API-sleutel van Bitpanda Portfolio, dat niet is ingesteld."
+    },
+    "prices_key_rejected": {
+      "message": "Geen prijzen: Bitpanda heeft de API-sleutel van Bitpanda Portfolio geweigerd."
+    },
     "ecb_rates_failed": {
       "message": "Kan de wisselkoersen van de ECB niet ophalen."
     },
@@ -948,6 +958,15 @@
     },
     "refresh_unknown_entry": {
       "message": "De gekozen dienst is geen geladen Bitpanda-dienst."
+    },
+    "price_tracker_no_key": {
+      "message": "De Bitpanda Price Tracker gebruikt de API-sleutel van Bitpanda Portfolio: stel eerst Bitpanda Portfolio in."
+    },
+    "upgrade_key_needed": {
+      "message": "Bitpanda heeft de opgeslagen API-sleutel geweigerd, dus wacht de overstap op een nieuwe API-sleutel."
+    },
+    "upgrade_device_not_removable": {
+      "message": "Dit apparaat is nog nodig voor de Bitpanda-overstap, die nog niet klaar is. Heeft Bitpanda de opgeslagen API-sleutel geweigerd, voer dan een nieuwe in wanneer Home Assistant erom vraagt; de overstap wordt daarna vanzelf afgerond."
     }
   },
   "issues": {
@@ -982,6 +1001,10 @@
     "portfolio_exists": {
       "title": "Bitpanda-overstap geblokkeerd: er is al een Bitpanda Portfolio ingesteld",
       "description": "De Bitpanda-invoer \"{entry}\" van vóór de overstap kan niet worden omgezet: die zou naast \"{portfolio}\" een tweede Bitpanda Portfolio worden, en er kan er maar één worden ingesteld. Er is niets aan gewijzigd. Verwijder een van beide op de integratiepagina van Bitpanda (⋮ → \"Verwijderen\"): \"{entry}\" of \"{portfolio}\". Houd je \"{entry}\", herstart Home Assistant daarna om die om te zetten."
+    },
+    "portfolio_required": {
+      "title": "Bitpanda Price Tracker: Bitpanda Portfolio instellen",
+      "description": "Sinds oktober 2026 geeft Bitpanda prijzen alleen nog met een API-sleutel. De Price Tracker gebruikt de API-sleutel van Bitpanda Portfolio en toont zonder die API-sleutel geen prijzen.\n\n**Zo los je het op:** stel Bitpanda Portfolio in – \"Dienst toevoegen\" op de integratiepagina van Bitpanda. De API-sleutel heeft deze vier rechten nodig:\n\n- \"Saldi\"\n- \"Transactie\"\n- \"Earn (Lezen)\"\n- \"Traden (Lezen)\"\n\nJe prijstrackers blijven zoals ze zijn en tonen weer prijzen zodra het Portfolio is ingesteld."
     }
   },
   "services": {

@@ -3,15 +3,15 @@
     "step": {
       "user": {
         "title": "Bitpanda",
-        "description": "¿Qué servicio quieres configurar? Cada uno solo se puede añadir una vez.\n\n- **Bitpanda Portfolio**: tu cuenta – todo lo que tienes en Bitpanda.\n- **Bitpanda Price Tracker**: precios en directo de los activos que elijas – aunque no los tengas.",
+        "description": "¿Qué servicio quieres configurar? Cada uno solo se puede añadir una vez.\n\n- **Bitpanda Portfolio**: tu cuenta – todo lo que tienes en Bitpanda.\n- **Bitpanda Price Tracker**: precios en directo de los activos que elijas – aunque no los tengas. Usa la clave API del Portfolio: configura primero el Portfolio.",
         "menu_options": {
           "portfolio": "Bitpanda Portfolio (requiere una clave API)",
-          "price_tracker": "Bitpanda Price Tracker (no requiere una clave API)"
+          "price_tracker": "Bitpanda Price Tracker (usa la clave API del Portfolio)"
         }
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "El Bitpanda Portfolio muestra tu cuenta de Bitpanda en Home Assistant: el valor total, tus rendimientos y un wallet por cada activo que tienes. La integración crea los wallets por sí sola y los retira cuando dejas de tener un activo – no tienes que añadir ni eliminar nada.\n\nPara ello, la integración necesita una clave API. Así puedes crearla:\n\n1. Abre [{api_key_url}]({api_key_url}) y crea una clave API nueva.\n2. Selecciona solo los permisos \"Créditos\", \"Transacción\" y \"Earn (Lectura)\" – no \"Trading (Lectura)\".\n3. Copia la clave API y pégala abajo. Bitpanda solo la muestra una vez.\n\nCon la clave API, la integración solo lee: no puede operar ni mover dinero.\nLas claves API de Bitpanda son válidas hasta la fecha que eliges al crearlas, como máximo un año; después, Home Assistant pide una nueva.\nPuedes sustituir la clave API en cualquier momento: abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda y elige \"Reconfigurar\".",
+        "description": "El Bitpanda Portfolio muestra tu cuenta de Bitpanda en Home Assistant: el valor total, tus rendimientos y un wallet por cada activo que tienes. La integración crea los wallets por sí sola y los retira cuando dejas de tener un activo – no tienes que añadir ni eliminar nada.\n\nPara ello, la integración necesita una clave API. Así puedes crearla:\n\n1. Abre [{api_key_url}]({api_key_url}) y crea una clave API nueva.\n2. Selecciona los permisos \"Créditos\", \"Transacción\", \"Earn (Lectura)\" y \"Trading (Lectura)\".\n3. Copia la clave API y pégala abajo. Bitpanda solo la muestra una vez.\n\nCon la clave API, la integración solo lee: no puede operar ni mover dinero.\nEl Bitpanda Price Tracker usa la misma clave API.\nLas claves API de Bitpanda son válidas hasta la fecha que eliges al crearlas, como máximo un año; después, Home Assistant pide una nueva.\nPuedes sustituir la clave API en cualquier momento: abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda y elige \"Reconfigurar\".",
         "data": {
           "api_key": "Clave API"
         }
@@ -87,20 +87,20 @@
       },
       "reauth_confirm": {
         "title": "Se necesita una nueva clave API de Bitpanda",
-        "description": "Bitpanda ha rechazado la clave API guardada. Puede que haya caducado o que sea anterior a los permisos que necesita esta versión. Tus sensores se conservan. La nueva clave API debe pertenecer a la misma cuenta de Bitpanda. Para otra cuenta, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda, elige \"Eliminar\" y vuelve a configurar el Portfolio.\n\nAsí puedes crear una clave API nueva:\n\n1. Abre [{api_key_url}]({api_key_url}) y crea una clave API nueva.\n2. Selecciona solo los permisos \"Créditos\", \"Transacción\" y \"Earn (Lectura)\" – no \"Trading (Lectura)\".\n3. Copia la clave API y pégala abajo. Bitpanda solo la muestra una vez.\n\nCon la clave API, la integración solo lee: no puede operar ni mover dinero.\nLas claves API de Bitpanda son válidas hasta la fecha que eliges al crearlas, como máximo un año; después, Home Assistant pide una nueva.",
+        "description": "Bitpanda ha rechazado la clave API guardada. Puede que haya caducado o que le falte un permiso que necesita esta versión: desde octubre de 2026, Bitpanda solo da precios a una clave API con \"Trading (Lectura)\".\n\nTus sensores se conservan. La nueva clave API debe pertenecer a la misma cuenta de Bitpanda. Para otra cuenta, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda, elige \"Eliminar\" y vuelve a configurar el Portfolio.\n\nAsí puedes crear una clave API nueva:\n\n1. Abre [{api_key_url}]({api_key_url}) y crea una clave API nueva.\n2. Selecciona los permisos \"Créditos\", \"Transacción\", \"Earn (Lectura)\" y \"Trading (Lectura)\".\n3. Copia la clave API y pégala abajo. Bitpanda solo la muestra una vez.\n\nCon la clave API, la integración solo lee: no puede operar ni mover dinero.\nEl Bitpanda Price Tracker usa la misma clave API.\nLas claves API de Bitpanda son válidas hasta la fecha que eliges al crearlas, como máximo un año; después, Home Assistant pide una nueva.",
         "data": {
           "api_key": "Clave API"
         }
       },
       "reconfigure": {
         "title": "Reconfigurar Bitpanda Portfolio",
-        "description": "Sustituye la clave API guardada, cambia la moneda o ambas cosas. Una nueva clave API debe pertenecer a la misma cuenta de Bitpanda. Para otra cuenta, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda, elige \"Eliminar\" y vuelve a configurar el Portfolio.",
+        "description": "Sustituye la clave API guardada, cambia la moneda o ambas cosas. El Bitpanda Price Tracker usa la misma clave API.\n\nUna nueva clave API debe pertenecer a la misma cuenta de Bitpanda. Para otra cuenta, abre el menú ⋮ de la entrada \"Bitpanda Portfolio\" en la página de la integración Bitpanda, elige \"Eliminar\" y vuelve a configurar el Portfolio.",
         "data": {
           "api_key": "Nueva clave API",
           "currency": "Moneda"
         },
         "data_description": {
-          "api_key": "Deja el campo vacío para conservar la clave API actual.\nUna clave API nueva de [{api_key_url}]({api_key_url}) necesita los permisos \"Créditos\", \"Transacción\" y \"Earn (Lectura)\" – no \"Trading (Lectura)\".\nCon la clave API, la integración solo lee: no puede operar ni mover dinero.",
+          "api_key": "Deja el campo vacío para conservar la clave API actual.\nUna clave API nueva de [{api_key_url}]({api_key_url}) necesita los permisos \"Créditos\", \"Transacción\", \"Earn (Lectura)\" y \"Trading (Lectura)\".\nCon la clave API, la integración solo lee: no puede operar ni mover dinero.",
           "currency": "Cambiar la moneda elimina todos los sensores del Portfolio, incluido su historial; lo confirmarás en el siguiente paso."
         }
       },
@@ -116,8 +116,8 @@
       }
     },
     "error": {
-      "invalid_auth": "Bitpanda ha rechazado esta clave API. Puede que se haya copiado incompleta, que se haya eliminado de tu cuenta de Bitpanda o que haya caducado, o que no tenga ninguno de los permisos \"Créditos\", \"Transacción\" y \"Earn (Lectura)\". Comprueba la clave API o crea una nueva con los tres.",
-      "missing_scopes": "Permisos de esta clave API: \"Créditos\" {balance}, \"Transacción\" {transaction}, \"Earn (Lectura)\" {earn}. A una clave API existente no se le pueden añadir permisos. Crea una nueva con los tres.",
+      "invalid_auth": "Bitpanda ha rechazado esta clave API. Puede que se haya copiado incompleta, que se haya eliminado de tu cuenta de Bitpanda o que haya caducado, o que no tenga ninguno de los permisos \"Créditos\", \"Transacción\", \"Earn (Lectura)\" y \"Trading (Lectura)\". Comprueba la clave API o crea una nueva con los cuatro.",
+      "missing_scopes": "Permisos de esta clave API: \"Créditos\" {balance}, \"Transacción\" {transaction}, \"Earn (Lectura)\" {earn}, \"Trading (Lectura)\" {trading}. A una clave API existente no se le pueden añadir permisos. Crea una nueva con los cuatro.",
       "rate_limited": "Demasiadas solicitudes. Espera un momento y vuelve a intentarlo.",
       "cannot_connect": "No se ha podido conectar con Bitpanda. Inténtalo de nuevo más tarde.",
       "unknown": "Error inesperado"
@@ -132,11 +132,13 @@
       "no_changes": "No se ha cambiado nada.",
       "no_reconfigure": "El Bitpanda Price Tracker por ahora no tiene nada que reconfigurar. Cambia sus monedas adicionales y el idioma de los títulos de grupo con \"Configurar\" (⚙) en la misma entrada.",
       "unload_failed": "No se ha podido detener el Portfolio, así que no se ha cambiado la moneda ni se ha eliminado nada. Reinicia Home Assistant e inténtalo de nuevo.",
-      "setup_cancelled": "El Portfolio no se ha configurado y no se ha eliminado nada."
+      "setup_cancelled": "El Portfolio no se ha configurado y no se ha eliminado nada.",
+      "portfolio_required": "El Bitpanda Price Tracker usa la clave API de Bitpanda Portfolio. Configura primero Bitpanda Portfolio:\n\n1. En \"Configuración\" → \"Dispositivos y servicios\", elige \"Añadir integración\".\n2. Busca Bitpanda.\n3. Elige \"Bitpanda Portfolio (requiere una clave API)\".",
+      "upgrade_pending": "La migración de Bitpanda aún no ha terminado: configura por sí sola el Bitpanda Price Tracker, y los ajustes del Portfolio se podrán cambiar cuando termine. Si Home Assistant pide una nueva clave API, introdúcela allí; todo lo demás que necesite la migración, Home Assistant lo muestra como reparación."
     },
     "create_entry": {
-      "portfolio": "Para ver tu cartera en un panel, añade la tarjeta \"Bitpanda Portfolio\": abre el panel, selecciona \"Editar panel de control\" (✏ arriba a la derecha; en el móvil en el menú ⋮), luego \"Añadir tarjeta\" y la pestaña \"Por tarjeta\", y busca \"Bitpanda\". Si no aparece ninguna tarjeta de Bitpanda, recarga la página dos veces; en la app de Home Assistant, [restablece en su lugar la caché del frontend]({cards_url}).\n\nLa nueva \"Vista general\", la predeterminada en las instalaciones nuevas desde Home Assistant 2026.2, no admite tarjetas: crea primero un panel en \"Configuración\" → \"Paneles de control\" → \"Añadir panel de control\".",
-      "price_tracker": "Añade los activos que quieras seguir con \"Añadir seguimiento de precio\" en la entrada \"Bitpanda Price Tracker\" de la página de la integración Bitpanda. Después añade la tarjeta \"Bitpanda Price Tracker\" a un panel: abre el panel, selecciona \"Editar panel de control\" (✏ arriba a la derecha; en el móvil en el menú ⋮), luego \"Añadir tarjeta\" y la pestaña \"Por tarjeta\", y busca \"Bitpanda\". Si no aparece ninguna tarjeta de Bitpanda, recarga la página dos veces; en la app de Home Assistant, [restablece en su lugar la caché del frontend]({cards_url}).\n\nLa nueva \"Vista general\", la predeterminada en las instalaciones nuevas desde Home Assistant 2026.2, no admite tarjetas: crea primero un panel en \"Configuración\" → \"Paneles de control\" → \"Añadir panel de control\"."
+      "portfolio": "Para ver tu cartera en un panel:\n\n1. Abre un panel y selecciona \"Editar panel de control\" (✏ arriba a la derecha; en el móvil en el menú ⋮).\n2. Selecciona \"Añadir tarjeta\" y la pestaña \"Por tarjeta\", busca \"Bitpanda\" y elige la tarjeta \"Bitpanda Portfolio\".\n\nSi no aparece ninguna tarjeta de Bitpanda, recarga la página dos veces; en la app de Home Assistant, [restablece en su lugar la caché del frontend]({cards_url}).\n\nLa nueva \"Vista general\", la predeterminada en las instalaciones nuevas desde Home Assistant 2026.2, no admite tarjetas: crea primero un panel en \"Configuración\" → \"Paneles de control\" → \"Añadir panel de control\".",
+      "price_tracker": "Próximos pasos:\n\n1. Añade los activos que quieras seguir con \"Añadir seguimiento de precio\" en la entrada \"Bitpanda Price Tracker\" de la página de la integración Bitpanda.\n2. Abre un panel y selecciona \"Editar panel de control\" (✏ arriba a la derecha; en el móvil en el menú ⋮).\n3. Selecciona \"Añadir tarjeta\" y la pestaña \"Por tarjeta\", busca \"Bitpanda\" y elige la tarjeta \"Bitpanda Price Tracker\".\n\nSi no aparece ninguna tarjeta de Bitpanda, recarga la página dos veces; en la app de Home Assistant, [restablece en su lugar la caché del frontend]({cards_url}).\n\nLa nueva \"Vista general\", la predeterminada en las instalaciones nuevas desde Home Assistant 2026.2, no admite tarjetas: crea primero un panel en \"Configuración\" → \"Paneles de control\" → \"Añadir panel de control\"."
     }
   },
   "options": {
@@ -234,11 +236,13 @@
         "no_assets_available": "Todos los activos de este tipo ya se están siguiendo.",
         "unknown_asset": "Elige un activo de la lista.",
         "rate_limited": "Demasiadas solicitudes. Espera un momento y vuelve a intentarlo.",
-        "cannot_connect": "No se ha podido conectar con Bitpanda. Inténtalo de nuevo más tarde."
+        "cannot_connect": "No se ha podido conectar con Bitpanda. Inténtalo de nuevo más tarde.",
+        "key_rejected": "Bitpanda ha rechazado la clave API de Bitpanda Portfolio para los precios: necesita el permiso \"Trading (Lectura)\". Introduce una clave API nueva en \"Se necesita una nueva clave API de Bitpanda\" de Bitpanda Portfolio."
       },
       "abort": {
         "already_configured": "Este activo ya se está siguiendo.",
-        "asset_added": "Ahora se hace seguimiento de {asset} en el grupo {group}."
+        "asset_added": "Ahora se hace seguimiento de {asset} en el grupo {group}.",
+        "portfolio_required": "El Bitpanda Price Tracker usa la clave API de Bitpanda Portfolio. Configura primero Bitpanda Portfolio: \"Añadir servicio\" en la página de la integración Bitpanda."
       },
       "create_entry": {
         "default": "Ahora se hace seguimiento de {asset} en el grupo {group}."
@@ -895,6 +899,12 @@
     "no_prices": {
       "message": "No se ha podido obtener ningún precio de Bitpanda."
     },
+    "prices_no_key": {
+      "message": "Sin precios: el Bitpanda Price Tracker usa la clave API de Bitpanda Portfolio, que no está configurado."
+    },
+    "prices_key_rejected": {
+      "message": "Sin precios: Bitpanda ha rechazado la clave API de Bitpanda Portfolio."
+    },
     "ecb_rates_failed": {
       "message": "No se han podido obtener los tipos de cambio del BCE."
     },
@@ -948,6 +958,15 @@
     },
     "refresh_unknown_entry": {
       "message": "El servicio elegido no es un servicio de Bitpanda cargado."
+    },
+    "price_tracker_no_key": {
+      "message": "El Bitpanda Price Tracker usa la clave API de Bitpanda Portfolio: configura primero Bitpanda Portfolio."
+    },
+    "upgrade_key_needed": {
+      "message": "Bitpanda ha rechazado la clave API guardada, así que la migración espera una nueva clave API."
+    },
+    "upgrade_device_not_removable": {
+      "message": "La migración de Bitpanda, que aún no ha terminado, todavía necesita este dispositivo. Si Bitpanda ha rechazado la clave API guardada, introduce una nueva cuando Home Assistant la pida; la migración terminará por sí sola."
     }
   },
   "issues": {
@@ -982,6 +1001,10 @@
     "portfolio_exists": {
       "title": "Migración de Bitpanda bloqueada: ya hay un Bitpanda Portfolio configurado",
       "description": "La entrada de Bitpanda \"{entry}\" de antes de la migración no se puede migrar: se convertiría en un segundo Bitpanda Portfolio junto a \"{portfolio}\", y solo se puede configurar uno. No se ha modificado nada en ella. Elimina una de las dos entradas en la página de la integración Bitpanda (⋮ → \"Eliminar\"). Si conservas \"{entry}\", reinicia después Home Assistant para migrarla."
+    },
+    "portfolio_required": {
+      "title": "Bitpanda Price Tracker: configura Bitpanda Portfolio",
+      "description": "Desde octubre de 2026, Bitpanda solo da precios con una clave API. El Price Tracker usa la clave API de Bitpanda Portfolio y sin ella no muestra precios.\n\n**Cómo solucionarlo:** configura Bitpanda Portfolio – \"Añadir servicio\" en la página de la integración Bitpanda. La clave API necesita estos cuatro permisos:\n\n- \"Créditos\"\n- \"Transacción\"\n- \"Earn (Lectura)\"\n- \"Trading (Lectura)\"\n\nTus seguimientos de precio siguen como están y vuelven a mostrar precios en cuanto el Portfolio esté configurado."
     }
   },
   "services": {

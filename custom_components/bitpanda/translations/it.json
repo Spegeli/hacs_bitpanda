@@ -3,15 +3,15 @@
     "step": {
       "user": {
         "title": "Bitpanda",
-        "description": "Quale servizio vuoi configurare? Ognuno può essere aggiunto una sola volta.\n\n- **Bitpanda Portfolio**: il tuo conto – tutto ciò che possiedi su Bitpanda.\n- **Bitpanda Price Tracker**: prezzi in tempo reale degli asset che scegli – anche senza possederli.",
+        "description": "Quale servizio vuoi configurare? Ognuno può essere aggiunto una sola volta.\n\n- **Bitpanda Portfolio**: il tuo conto – tutto ciò che possiedi su Bitpanda.\n- **Bitpanda Price Tracker**: prezzi in tempo reale degli asset che scegli – anche senza possederli. Usa la chiave API del Portfolio: configura prima il Portfolio.",
         "menu_options": {
           "portfolio": "Bitpanda Portfolio (richiede una chiave API)",
-          "price_tracker": "Bitpanda Price Tracker (non richiede una chiave API)"
+          "price_tracker": "Bitpanda Price Tracker (usa la chiave API del Portfolio)"
         }
       },
       "portfolio": {
         "title": "Bitpanda Portfolio",
-        "description": "Il Bitpanda Portfolio mostra il tuo conto Bitpanda in Home Assistant: il valore totale, i tuoi rendimenti e un wallet per ogni asset che possiedi. L'integrazione crea da sé i wallet e li rimuove quando non possiedi più un asset – non devi aggiungere né eliminare nulla.\n\nPer questo l'integrazione ha bisogno di una chiave API. Ecco come crearla:\n\n1. Apri [{api_key_url}]({api_key_url}) e crea una nuova chiave API.\n2. Seleziona solo le autorizzazioni \"Saldi\", \"Transazione\" e \"Earn (Lettura)\" – non \"Trading (Lettura)\".\n3. Copia la chiave API e incollala qui sotto. Bitpanda la mostra una sola volta.\n\nCon la chiave API l'integrazione legge soltanto: non può fare trading né spostare denaro.\nLe chiavi API Bitpanda valgono fino alla data scelta alla creazione, al massimo un anno; dopo, Home Assistant ne chiede una nuova.\nPuoi sostituire la chiave API in qualsiasi momento: apri il menu ⋮ della voce \"Bitpanda Portfolio\" nella pagina dell'integrazione Bitpanda e scegli \"Riconfigura\".",
+        "description": "Il Bitpanda Portfolio mostra il tuo conto Bitpanda in Home Assistant: il valore totale, i tuoi rendimenti e un wallet per ogni asset che possiedi. L'integrazione crea da sé i wallet e li rimuove quando non possiedi più un asset – non devi aggiungere né eliminare nulla.\n\nPer questo l'integrazione ha bisogno di una chiave API. Ecco come crearla:\n\n1. Apri [{api_key_url}]({api_key_url}) e crea una nuova chiave API.\n2. Seleziona le autorizzazioni \"Saldi\", \"Transazione\", \"Earn (Lettura)\" e \"Trading (Lettura)\".\n3. Copia la chiave API e incollala qui sotto. Bitpanda la mostra una sola volta.\n\nCon la chiave API l'integrazione legge soltanto: non può fare trading né spostare denaro.\nIl Bitpanda Price Tracker usa la stessa chiave API.\nLe chiavi API Bitpanda valgono fino alla data scelta alla creazione, al massimo un anno; dopo, Home Assistant ne chiede una nuova.\nPuoi sostituire la chiave API in qualsiasi momento: apri il menu ⋮ della voce \"Bitpanda Portfolio\" nella pagina dell'integrazione Bitpanda e scegli \"Riconfigura\".",
         "data": {
           "api_key": "Chiave API"
         }
@@ -87,20 +87,20 @@
       },
       "reauth_confirm": {
         "title": "Serve una nuova chiave API di Bitpanda",
-        "description": "Bitpanda ha rifiutato la chiave API salvata. Potrebbe essere scaduta oppure risalire a prima delle autorizzazioni richieste da questa versione. I tuoi sensori vengono mantenuti. La nuova chiave API deve appartenere allo stesso account Bitpanda. Per un altro account apri il menu ⋮ della voce \"Bitpanda Portfolio\" nella pagina dell'integrazione Bitpanda, scegli \"Elimina\" e configura di nuovo il Portfolio.\n\nEcco come creare una nuova chiave API:\n\n1. Apri [{api_key_url}]({api_key_url}) e crea una nuova chiave API.\n2. Seleziona solo le autorizzazioni \"Saldi\", \"Transazione\" e \"Earn (Lettura)\" – non \"Trading (Lettura)\".\n3. Copia la chiave API e incollala qui sotto. Bitpanda la mostra una sola volta.\n\nCon la chiave API l'integrazione legge soltanto: non può fare trading né spostare denaro.\nLe chiavi API Bitpanda valgono fino alla data scelta alla creazione, al massimo un anno; dopo, Home Assistant ne chiede una nuova.",
+        "description": "Bitpanda ha rifiutato la chiave API salvata. Potrebbe essere scaduta oppure non avere un'autorizzazione richiesta da questa versione: da ottobre 2026 Bitpanda fornisce i prezzi solo a una chiave API con \"Trading (Lettura)\".\n\nI tuoi sensori vengono mantenuti. La nuova chiave API deve appartenere allo stesso account Bitpanda. Per un altro account apri il menu ⋮ della voce \"Bitpanda Portfolio\" nella pagina dell'integrazione Bitpanda, scegli \"Elimina\" e configura di nuovo il Portfolio.\n\nEcco come creare una nuova chiave API:\n\n1. Apri [{api_key_url}]({api_key_url}) e crea una nuova chiave API.\n2. Seleziona le autorizzazioni \"Saldi\", \"Transazione\", \"Earn (Lettura)\" e \"Trading (Lettura)\".\n3. Copia la chiave API e incollala qui sotto. Bitpanda la mostra una sola volta.\n\nCon la chiave API l'integrazione legge soltanto: non può fare trading né spostare denaro.\nIl Bitpanda Price Tracker usa la stessa chiave API.\nLe chiavi API Bitpanda valgono fino alla data scelta alla creazione, al massimo un anno; dopo, Home Assistant ne chiede una nuova.",
         "data": {
           "api_key": "Chiave API"
         }
       },
       "reconfigure": {
         "title": "Riconfigura Bitpanda Portfolio",
-        "description": "Sostituisci la chiave API salvata, cambia la valuta o entrambe le cose. Una nuova chiave API deve appartenere allo stesso account Bitpanda. Per un altro account apri il menu ⋮ della voce \"Bitpanda Portfolio\" nella pagina dell'integrazione Bitpanda, scegli \"Elimina\" e configura di nuovo il Portfolio.",
+        "description": "Sostituisci la chiave API salvata, cambia la valuta o entrambe le cose. Il Bitpanda Price Tracker usa la stessa chiave API.\n\nUna nuova chiave API deve appartenere allo stesso account Bitpanda. Per un altro account apri il menu ⋮ della voce \"Bitpanda Portfolio\" nella pagina dell'integrazione Bitpanda, scegli \"Elimina\" e configura di nuovo il Portfolio.",
         "data": {
           "api_key": "Nuova chiave API",
           "currency": "Valuta"
         },
         "data_description": {
-          "api_key": "Lascia il campo vuoto per mantenere la chiave API attuale.\nUna nuova chiave API da [{api_key_url}]({api_key_url}) deve avere le autorizzazioni \"Saldi\", \"Transazione\" e \"Earn (Lettura)\" – non \"Trading (Lettura)\".\nCon la chiave API l'integrazione legge soltanto: non può fare trading né spostare denaro.",
+          "api_key": "Lascia il campo vuoto per mantenere la chiave API attuale.\nUna nuova chiave API da [{api_key_url}]({api_key_url}) deve avere le autorizzazioni \"Saldi\", \"Transazione\", \"Earn (Lettura)\" e \"Trading (Lettura)\".\nCon la chiave API l'integrazione legge soltanto: non può fare trading né spostare denaro.",
           "currency": "Cambiare la valuta elimina tutti i sensori del Portfolio, cronologia inclusa; lo confermerai nel passaggio successivo."
         }
       },
@@ -116,8 +116,8 @@
       }
     },
     "error": {
-      "invalid_auth": "Bitpanda ha rifiutato questa chiave API. Forse è stata copiata in modo incompleto, eliminata dal tuo conto Bitpanda o è scaduta, oppure non ha nessuna delle autorizzazioni \"Saldi\", \"Transazione\" e \"Earn (Lettura)\". Verifica la chiave API o creane una nuova con tutte e tre.",
-      "missing_scopes": "Autorizzazioni di questa chiave API: \"Saldi\" {balance}, \"Transazione\" {transaction}, \"Earn (Lettura)\" {earn}. Non è possibile aggiungere autorizzazioni a una chiave API esistente. Creane una nuova con tutte e tre.",
+      "invalid_auth": "Bitpanda ha rifiutato questa chiave API. Forse è stata copiata in modo incompleto, eliminata dal tuo conto Bitpanda o è scaduta, oppure non ha nessuna delle autorizzazioni \"Saldi\", \"Transazione\", \"Earn (Lettura)\" e \"Trading (Lettura)\". Verifica la chiave API o creane una nuova con tutte e quattro.",
+      "missing_scopes": "Autorizzazioni di questa chiave API: \"Saldi\" {balance}, \"Transazione\" {transaction}, \"Earn (Lettura)\" {earn}, \"Trading (Lettura)\" {trading}. Non è possibile aggiungere autorizzazioni a una chiave API esistente. Creane una nuova con tutte e quattro.",
       "rate_limited": "Troppe richieste. Attendi un momento e riprova.",
       "cannot_connect": "Impossibile raggiungere Bitpanda. Riprova più tardi.",
       "unknown": "Errore imprevisto"
@@ -132,11 +132,13 @@
       "no_changes": "Non è stato modificato nulla.",
       "no_reconfigure": "Il Bitpanda Price Tracker per ora non ha nulla da riconfigurare. Modifica le valute aggiuntive e la lingua dei titoli dei gruppi con \"Configura\" (⚙) sulla stessa voce.",
       "unload_failed": "Non è stato possibile arrestare il Portfolio, quindi la valuta non è stata cambiata e non è stato eliminato nulla. Riavvia Home Assistant e riprova.",
-      "setup_cancelled": "Il Portfolio non è stato configurato e non è stato eliminato nulla."
+      "setup_cancelled": "Il Portfolio non è stato configurato e non è stato eliminato nulla.",
+      "portfolio_required": "Il Bitpanda Price Tracker usa la chiave API di Bitpanda Portfolio. Configura prima Bitpanda Portfolio:\n\n1. In \"Impostazioni\" → \"Dispositivi e servizi\", scegli \"Aggiungi integrazione\".\n2. Cerca Bitpanda.\n3. Scegli \"Bitpanda Portfolio (richiede una chiave API)\".",
+      "upgrade_pending": "La migrazione di Bitpanda non è ancora terminata: configura da sola il Bitpanda Price Tracker, e le impostazioni del Portfolio si potranno modificare una volta conclusa. Se Home Assistant chiede una nuova chiave API, inseriscila lì; tutto il resto di cui la migrazione ha bisogno, Home Assistant lo mostra come riparazione."
     },
     "create_entry": {
-      "portfolio": "Per vedere il tuo portafoglio in una plancia, aggiungi la scheda \"Bitpanda Portfolio\": apri la plancia, seleziona \"Modifica la plancia\" (✏ in alto a destra; sul telefono nel menu ⋮), poi \"Aggiungi scheda\" e \"Per scheda\", e cerca \"Bitpanda\". Se non compare nessuna scheda Bitpanda, ricarica la pagina due volte; nell'app Home Assistant [reimposta invece la cache del frontend]({cards_url}).\n\nLa nuova \"Panoramica\", predefinita nelle nuove installazioni da Home Assistant 2026.2, non accetta schede: crea prima una plancia in \"Impostazioni\" → \"Plance\" → \"Aggiungi plancia\".",
-      "price_tracker": "Aggiungi gli asset da monitorare con \"Aggiungi monitoraggio prezzo\" sulla voce \"Bitpanda Price Tracker\" nella pagina dell'integrazione Bitpanda. Poi aggiungi la scheda \"Bitpanda Price Tracker\" a una plancia: apri la plancia, seleziona \"Modifica la plancia\" (✏ in alto a destra; sul telefono nel menu ⋮), poi \"Aggiungi scheda\" e \"Per scheda\", e cerca \"Bitpanda\". Se non compare nessuna scheda Bitpanda, ricarica la pagina due volte; nell'app Home Assistant [reimposta invece la cache del frontend]({cards_url}).\n\nLa nuova \"Panoramica\", predefinita nelle nuove installazioni da Home Assistant 2026.2, non accetta schede: crea prima una plancia in \"Impostazioni\" → \"Plance\" → \"Aggiungi plancia\"."
+      "portfolio": "Per vedere il tuo portafoglio in una plancia:\n\n1. Apri una plancia e seleziona \"Modifica la plancia\" (✏ in alto a destra; sul telefono nel menu ⋮).\n2. Seleziona \"Aggiungi scheda\" e \"Per scheda\", cerca \"Bitpanda\" e scegli la scheda \"Bitpanda Portfolio\".\n\nSe non compare nessuna scheda Bitpanda, ricarica la pagina due volte; nell'app Home Assistant [reimposta invece la cache del frontend]({cards_url}).\n\nLa nuova \"Panoramica\", predefinita nelle nuove installazioni da Home Assistant 2026.2, non accetta schede: crea prima una plancia in \"Impostazioni\" → \"Plance\" → \"Aggiungi plancia\".",
+      "price_tracker": "Prossimi passi:\n\n1. Aggiungi gli asset da monitorare con \"Aggiungi monitoraggio prezzo\" sulla voce \"Bitpanda Price Tracker\" nella pagina dell'integrazione Bitpanda.\n2. Apri una plancia e seleziona \"Modifica la plancia\" (✏ in alto a destra; sul telefono nel menu ⋮).\n3. Seleziona \"Aggiungi scheda\" e \"Per scheda\", cerca \"Bitpanda\" e scegli la scheda \"Bitpanda Price Tracker\".\n\nSe non compare nessuna scheda Bitpanda, ricarica la pagina due volte; nell'app Home Assistant [reimposta invece la cache del frontend]({cards_url}).\n\nLa nuova \"Panoramica\", predefinita nelle nuove installazioni da Home Assistant 2026.2, non accetta schede: crea prima una plancia in \"Impostazioni\" → \"Plance\" → \"Aggiungi plancia\"."
     }
   },
   "options": {
@@ -234,11 +236,13 @@
         "no_assets_available": "Tutti gli asset di questo tipo sono già monitorati.",
         "unknown_asset": "Scegli un asset dall'elenco.",
         "rate_limited": "Troppe richieste. Attendi un momento e riprova.",
-        "cannot_connect": "Impossibile raggiungere Bitpanda. Riprova più tardi."
+        "cannot_connect": "Impossibile raggiungere Bitpanda. Riprova più tardi.",
+        "key_rejected": "Bitpanda ha rifiutato la chiave API di Bitpanda Portfolio per i prezzi: serve l'autorizzazione \"Trading (Lettura)\". Inserisci una nuova chiave API in \"Serve una nuova chiave API di Bitpanda\" di Bitpanda Portfolio."
       },
       "abort": {
         "already_configured": "Questo asset è già monitorato.",
-        "asset_added": "{asset} è ora monitorato nel gruppo {group}."
+        "asset_added": "{asset} è ora monitorato nel gruppo {group}.",
+        "portfolio_required": "Il Bitpanda Price Tracker usa la chiave API di Bitpanda Portfolio. Configura prima Bitpanda Portfolio: \"Aggiungi servizio\" nella pagina dell'integrazione Bitpanda."
       },
       "create_entry": {
         "default": "{asset} è ora monitorato nel gruppo {group}."
@@ -895,6 +899,12 @@
     "no_prices": {
       "message": "Non è stato possibile recuperare alcun prezzo da Bitpanda."
     },
+    "prices_no_key": {
+      "message": "Nessun prezzo: il Bitpanda Price Tracker usa la chiave API di Bitpanda Portfolio, che non è configurato."
+    },
+    "prices_key_rejected": {
+      "message": "Nessun prezzo: Bitpanda ha rifiutato la chiave API di Bitpanda Portfolio."
+    },
     "ecb_rates_failed": {
       "message": "Impossibile recuperare i tassi di cambio della BCE."
     },
@@ -948,6 +958,15 @@
     },
     "refresh_unknown_entry": {
       "message": "Il servizio scelto non è un servizio Bitpanda caricato."
+    },
+    "price_tracker_no_key": {
+      "message": "Il Bitpanda Price Tracker usa la chiave API di Bitpanda Portfolio: configura prima Bitpanda Portfolio."
+    },
+    "upgrade_key_needed": {
+      "message": "Bitpanda ha rifiutato la chiave API salvata, quindi la migrazione attende una nuova chiave API."
+    },
+    "upgrade_device_not_removable": {
+      "message": "Questo dispositivo serve ancora alla migrazione di Bitpanda, che non è ancora terminata. Se Bitpanda ha rifiutato la chiave API salvata, inseriscine una nuova quando Home Assistant la chiede; la migrazione si concluderà da sola."
     }
   },
   "issues": {
@@ -982,6 +1001,10 @@
     "portfolio_exists": {
       "title": "Migrazione di Bitpanda bloccata: è già configurato un Bitpanda Portfolio",
       "description": "La voce Bitpanda \"{entry}\" precedente alla migrazione non può essere migrata: diventerebbe un secondo Bitpanda Portfolio accanto a \"{portfolio}\", e se ne può configurare uno solo. Non è stata modificata. Elimina una delle due voci nella pagina dell'integrazione Bitpanda (⋮ → \"Elimina\"). Se tieni \"{entry}\", riavvia poi Home Assistant per migrarla."
+    },
+    "portfolio_required": {
+      "title": "Bitpanda Price Tracker: configura Bitpanda Portfolio",
+      "description": "Da ottobre 2026 Bitpanda fornisce i prezzi solo con una chiave API. Il Price Tracker usa la chiave API di Bitpanda Portfolio e senza di essa non mostra prezzi.\n\n**Come risolvere:** configura Bitpanda Portfolio – \"Aggiungi servizio\" nella pagina dell'integrazione Bitpanda. La chiave API richiede queste quattro autorizzazioni:\n\n- \"Saldi\"\n- \"Transazione\"\n- \"Earn (Lettura)\"\n- \"Trading (Lettura)\"\n\nI tuoi monitoraggi prezzo restano come sono e mostrano di nuovo i prezzi non appena il Portfolio è configurato."
     }
   },
   "services": {

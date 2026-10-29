@@ -426,3 +426,12 @@ def test_the_release_badge_opens_the_release_it_shows():
     )
     assert link == "https://github.com/Spegeli/hacs_bitpanda/releases/latest"
     assert "include_prereleases" not in badge
+
+
+def test_the_portfolio_issue_links_the_readmes_setup_section():
+    """The Price Tracker's repair issue "set up Bitpanda Portfolio" links the
+    README's section on it: its heading gives the anchor."""
+    from custom_components.bitpanda.const import SETUP_PORTFOLIO_URL
+
+    assert "\n### Set up the Portfolio\n" in _README
+    assert SETUP_PORTFOLIO_URL == "https://github.com/Spegeli/hacs_bitpanda#set-up-the-portfolio"

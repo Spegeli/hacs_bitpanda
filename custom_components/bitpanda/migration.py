@@ -46,7 +46,7 @@ from homeassistant.helpers import (
 )
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
+from .api import BitpandaApiClient, BitpandaApiError, BitpandaAuthError, BitpandaRateLimitError
 from .assets import legacy_candidates, pick_legacy, slim_asset
 from .const import (
     API_KEY_URL,
@@ -243,11 +243,15 @@ def _legacy_symbols(hass: HomeAssistant, entry: ConfigEntry) -> list[str]:
 async def async_plan(hass: HomeAssistant, entry: ConfigEntry) -> MigrationPlan:
     """Resolve every legacy identifier. Changes nothing; API errors propagate.
 
-    Public endpoints only, called without a key: the legacy key plays no
-    part. An empty answer is the only meaning of "not in the catalogue" --
-    a timeout or a 5xx says nothing about a symbol, so it aborts instead.
+    Asked with the stored legacy key: Bitpanda named an asset only to a key
+    with Trade (Read) on 2026-10-28, and since 2026-10-29 at times, and a
+    legacy key carries the old site's Trading permission, which opens
+    /assets. A key Bitpanda refuses raises BitpandaAuthError: the upgrade
+    then waits for a new key (async_migrate_entry). An empty answer is the
+    only meaning of "not in the catalogue" -- a timeout or a 5xx says
+    nothing about a symbol, so it aborts instead.
     """
-    client = BitpandaApiClient(None, async_get_clientsession(hass))
+    client = BitpandaApiClient(entry.data.get(CONF_API_KEY), async_get_clientsession(hass))
     # Every released version 1 stored a currency. Only here, reading what
     # another release wrote, does a missing one fall back to EUR rather
     # than block the upgrade.
@@ -717,9 +721,9 @@ def _log_text(
         )
     paragraphs += [note.log for note in notes]
     paragraphs.append(
-        'Bitpanda needs a new API key with the permissions "Balances", "Transaction" and '
-        f'"Earn (Read)". Create it at {API_KEY_URL} '
-        "and enter it when Home Assistant asks for it."
+        'If Bitpanda refuses the API key, Home Assistant asks for a new one with the '
+        'permissions "Balances", "Transaction", "Earn (Read)" and "Trade (Read)": create it at '
+        f"{API_KEY_URL}."
     )
     return "\n\n".join(paragraphs)
 
@@ -991,6 +995,19 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.info("Migrating the Bitpanda config entry to version 3")
     try:
         plan = await async_plan(hass, entry)
+    except BitpandaAuthError:
+        # Nothing changed, the entry stays at version 1, and the migration
+        # succeeds all the same: Home Assistant then sets the entry up, whose
+        # setup asks for a new key (async_setup_entry) -- on every supported
+        # release the one way to the reauth dialog, which a migration's own
+        # ConfigEntryAuthFailed never opens. Storing the key reloads the
+        # entry, and the upgrade runs again with it.
+        _LOGGER.warning(
+            "Bitpanda refused the stored API key, so the upgrade of the Bitpanda "
+            "config entry waits for a new one: enter it when Home Assistant asks "
+            "for it. Nothing has been changed."
+        )
+        return True
     except BitpandaRateLimitError:
         _LOGGER.error(
             "Cannot migrate the Bitpanda config entry: rate limited by the "

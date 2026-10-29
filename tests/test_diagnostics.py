@@ -2,6 +2,7 @@
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
+import pytest
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentryData
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -17,7 +18,7 @@ from custom_components.bitpanda.portfolio_model import (
     PortfolioReturns,
 )
 
-from tests.conftest import price_group, wallet_group
+from tests.conftest import LENT_KEY, price_group, wallet_group
 
 _SECRET = "totally-secret-diagnostics-key"
 
@@ -48,9 +49,10 @@ class _Tickers(_Coordinator):
     """The ticker coordinator: also the assets without a fresh price now,
     carried over or not. Asked for every 60 seconds."""
 
-    def __init__(self, data=None, failing=()):
+    def __init__(self, data=None, failing=(), key_state="present"):
         super().__init__(data, interval=timedelta(seconds=60))
         self.failing_assets = frozenset(failing)
+        self.key_state = key_state
 
 
 _NOW = datetime(2026, 10, 14, 12, 0, tzinfo=UTC)
@@ -298,6 +300,7 @@ async def test_price_tracker_diagnostics_list_the_groups(hass):
         ],
         "config": {"language": "en", "extra_currencies": ["USD"]},
         "currencies": ["EUR", "USD"],
+        "portfolio_key": "present",
         "tickers": {"last_update_success": True, "priced_assets": 1, "failed_assets": 0,
                     "update_interval_seconds": 60.0},
         "ecb": {"last_update_success": True, "rate_date": "2026-09-24"},
@@ -349,4 +352,26 @@ async def test_price_tracker_that_is_not_loaded_reports_its_config_only(hass):
         "groups": [{"category": "metal", "title": "Precious metals", "assets": [_GOLD]}],
         "config": {"language": "en", "extra_currencies": []},
         "currencies": ["EUR"],
+        "portfolio_key": "present",
     }
+
+
+@pytest.mark.parametrize("state", ["present", "missing", "rejected"])
+async def test_the_price_tracker_reports_the_portfolio_keys_state(hass, state):
+    """Whether the Price Tracker has the Portfolio's key -- never the key or
+    anything made from it."""
+    entry = _price_entry(hass, extra=[], ecb=None)
+    entry.runtime_data.tickers = _Tickers({"uuid-btc": 1.0}, key_state=state)
+    result = await async_get_config_entry_diagnostics(hass, entry)
+    assert result["portfolio_key"] == state
+    assert LENT_KEY not in str(result)
+
+
+@pytest.mark.no_portfolio_key
+async def test_a_price_tracker_not_loaded_without_a_portfolio_reports_the_key_missing(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=3, data={"entry_type": "price_tracker"},
+        options={"extra_currencies": []},
+    )
+    entry.add_to_hass(hass)
+    assert (await async_get_config_entry_diagnostics(hass, entry))["portfolio_key"] == "missing"

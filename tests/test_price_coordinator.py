@@ -1,4 +1,5 @@
-"""Tests for the keyless ticker coordinator and the ECB coordinator."""
+"""Tests for the ticker coordinator, which asks with the Portfolio's key,
+and the ECB coordinator."""
 import asyncio
 from contextlib import contextmanager
 from datetime import timedelta
@@ -13,6 +14,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp
 from custom_components.bitpanda.api import (
     BitpandaApiClient,
     BitpandaApiError,
+    BitpandaAuthError,
     BitpandaRateLimitError,
 )
 from custom_components.bitpanda.const import API_BASE_URL
@@ -22,6 +24,7 @@ from custom_components.bitpanda.price_coordinator import (
     TickerCoordinator,
     convert_price,
 )
+from custom_components.bitpanda.tolerance import Rejected
 
 from tests.conftest import async_settle
 
@@ -40,7 +43,7 @@ def test_every_tracked_asset_is_asked_for_every_minute_however_many_are_tracked(
     with caplog.at_level(logging.WARNING):
         for count in (0, 1, 30, 31, 1000):
             tracked = {f"asset-{number}": f"Asset {number}" for number in range(count)}
-            coordinator = TickerCoordinator(None, None, _Client(), tracked)
+            coordinator = _ticker_coordinator(None, _Client(), tracked)
             assert coordinator.update_interval == timedelta(seconds=60), count
     assert caplog.text == ""
 
@@ -84,11 +87,13 @@ class _Client:
     answer at all, "http_status" is an HTTP 503 --, and one in `failing` with
     an HTTP 404. `calls` records the requests in order."""
 
-    def __init__(self, prices=None, failing=(), rate_limited=False, errors=None):
+    def __init__(self, prices=None, failing=(), rate_limited=False, errors=None, refused=()):
         self.prices = prices or {}
         self.failing = set(failing)
         self.rate_limited = rate_limited
         self.errors = dict(errors or {})
+        # The assets whose request Bitpanda answers 401.
+        self.refused = set(refused)
         self.calls: list[str] = []
 
     async def async_get_ticker(self, asset_id):
@@ -96,6 +101,10 @@ class _Client:
         path = f"/tickers/{asset_id}"
         if self.rate_limited:
             raise BitpandaRateLimitError(f"Rate limited on {path}")
+        if asset_id in self.refused:
+            raise BitpandaAuthError(
+                f"Unauthorized for {path}", kind="http_status", path=path, status=401
+            )
         if asset_id in self.errors:
             kind = self.errors[asset_id]
             raise BitpandaApiError(
@@ -109,8 +118,42 @@ class _Client:
         return {"price": self.prices.get(asset_id, "n/a")}
 
 
-def _coordinator(client, tracked=None) -> TickerCoordinator:
-    return TickerCoordinator(None, None, client, _TRACKED if tracked is None else tracked)
+class _Lender:
+    """The Portfolio's key as the coordinator borrows it each round: `key`
+    (None without a Portfolio); the keys it built a client with, the keys it
+    reported refused, and the key state of each round."""
+
+    def __init__(self, client, key="portfolio-key"):
+        self.client = client
+        self.key = key
+        self.built: list[str] = []
+        self.refused: list[str] = []
+        self.states: list[str] = []
+
+    def client_for(self, key):
+        self.built.append(key)
+        return self.client
+
+    def key_source(self):
+        return self.key
+
+    def on_rejected(self, key):
+        self.refused.append(key)
+
+    def on_key_state(self, state):
+        self.states.append(state)
+
+
+def _ticker_coordinator(hass, client, tracked, lender=None) -> TickerCoordinator:
+    lender = lender or _Lender(client)
+    return TickerCoordinator(
+        hass, None, lender.client_for, lender.key_source, lender.on_rejected,
+        lender.on_key_state, tracked,
+    )
+
+
+def _coordinator(client, tracked=None, lender=None) -> TickerCoordinator:
+    return _ticker_coordinator(None, client, _TRACKED if tracked is None else tracked, lender)
 
 
 async def _round(coordinator) -> dict:
@@ -146,6 +189,152 @@ def _lines(caplog, level: int, text: str) -> list[str]:
         and record.levelno == level
         and text in record.getMessage()
     ]
+
+
+async def test_each_round_sends_the_portfolios_key():
+    """Each round builds its client with the key the Portfolio holds then."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
+    lender = _Lender(client, key="k1")
+    coordinator = _coordinator(client, lender=lender)
+    await _round(coordinator)
+    lender.key = "k2"
+    await _round(coordinator)
+    assert lender.built == ["k1", "k2"]
+
+
+async def test_key_state_before_the_first_round():
+    assert _coordinator(_Client(), lender=_Lender(_Client(), key=None)).key_state == "missing"
+    assert _coordinator(_Client()).key_state == "present"
+
+
+async def test_without_a_portfolio_a_round_asks_nothing():
+    """No Portfolio, no key: the round asks Bitpanda nothing, which would
+    refuse a keyless request anyway, and fails as rejected."""
+    client = _Client({BTC: "1.00000000"})
+    lender = _Lender(client, key=None)
+    coordinator = _coordinator(client, lender=lender)
+    with pytest.raises(Rejected) as excinfo:
+        await _round(coordinator)
+    assert excinfo.value.translation_key == "prices_no_key"
+    assert client.calls == [] and lender.built == []
+    assert coordinator.key_state == "missing"
+    assert lender.states == ["missing"]
+
+
+async def test_the_price_tracker_follows_the_key_going_and_coming(freezer):
+    """The Portfolio deleted, then set up again: the prices go at once and
+    come back with the key -- each round reports its key state."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
+    lender = _Lender(client)
+    coordinator = _coordinator(client, lender=lender)
+    await _round(coordinator)
+    lender.key = None
+    freezer.tick(_PACE)
+    with pytest.raises(Rejected):
+        await _round(coordinator)
+    assert coordinator.data == {}
+    lender.key = "portfolio-key"
+    assert await _next_round(coordinator, freezer) == {BTC: 1.0, SOL: 2.0}
+    assert lender.states == ["present", "missing", "present"]
+
+
+async def test_a_refused_key_stops_the_round_at_the_first_answer():
+    """The round's first answer is a 401: the key lacks Trade (Read), and
+    every further request would be refused too. Nothing more is asked, and
+    the Portfolio is asked for a new key -- for the key this round sent."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"}, refused={BTC, SOL})
+    lender = _Lender(client)
+    coordinator = _coordinator(client, lender=lender)
+    with pytest.raises(Rejected) as excinfo:
+        await _round(coordinator)
+    assert excinfo.value.translation_key == "prices_key_rejected"
+    assert client.calls == [BTC]
+    assert coordinator.key_state == "rejected"
+    assert lender.refused == ["portfolio-key"]
+    assert lender.states == ["rejected"]
+
+
+async def test_a_timeout_then_a_401_is_still_the_key():
+    """A request without any answer tells nothing about the key: the round's
+    first answer is the 401."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"}, errors={BTC: "timeout"}, refused={SOL})
+    lender = _Lender(client)
+    with pytest.raises(Rejected):
+        await _round(_coordinator(client, lender=lender))
+    assert client.calls == [BTC, SOL]
+    assert lender.refused == ["portfolio-key"]
+
+
+async def test_a_401_after_an_answer_is_one_assets_failure():
+    """After Bitpanda answered, a 401 is that asset's failure, as any other:
+    the round goes on and asks for no new key."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"}, refused={SOL})
+    lender = _Lender(client)
+    coordinator = _coordinator(client, lender=lender)
+    assert await _round(coordinator) == {BTC: 1.0}
+    assert lender.refused == []
+    assert coordinator.key_state == "present"
+
+
+async def test_no_price_from_before_a_rejection_returns(freezer):
+    """A rejected round drops the prices it carried: after it, an asset
+    whose request fails has no price -- none from before the rejection."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
+    lender = _Lender(client)
+    coordinator = _coordinator(client, lender=lender)
+    await _round(coordinator)
+    client.refused = {BTC, SOL}
+    freezer.tick(_PACE)
+    with pytest.raises(Rejected):
+        await _round(coordinator)
+    assert coordinator.data == {}
+    client.refused = set()
+    client.failing = {SOL}
+    assert await _next_round(coordinator, freezer) == {BTC: 1.0}
+
+
+async def test_a_rejected_round_returns_to_the_base_interval(freezer):
+    """A 429 slowed the rounds down; a rejected round asks at most one
+    request, so the next one comes at the regular pace."""
+    client = _Client({BTC: "1.00000000"}, rate_limited=True)
+    lender = _Lender(client)
+    coordinator = _coordinator(client, lender=lender)
+    with pytest.raises(UpdateFailed):
+        await _round(coordinator)
+    assert coordinator.update_interval == 2 * _PACE
+    lender.key = None
+    with pytest.raises(Rejected):
+        await _next_round(coordinator, freezer, 2 * _PACE)
+    assert coordinator.update_interval == _PACE
+
+
+async def test_a_new_portfolio_key_reaches_the_next_round(freezer):
+    """Bitpanda refuses the key; the user enters a new one in the Portfolio:
+    the Price Tracker's next round asks with it, unreloaded, and its prices
+    are back."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"}, refused={BTC, SOL})
+    lender = _Lender(client, key="old-key")
+    coordinator = _coordinator(client, lender=lender)
+    with pytest.raises(Rejected):
+        await _round(coordinator)
+    lender.key = "new-key"
+    client.refused = set()
+    assert await _next_round(coordinator, freezer) == {BTC: 1.0, SOL: 2.0}
+    assert lender.built == ["old-key", "new-key"]
+    assert lender.refused == ["old-key"]
+
+
+async def test_every_round_reports_its_key_state(freezer):
+    """A round that fails for another reason still had the key."""
+    client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
+    lender = _Lender(client)
+    coordinator = _coordinator(client, lender=lender)
+    await _round(coordinator)
+    client.failing = {BTC, SOL}
+    freezer.tick(_PACE)
+    with pytest.raises(UpdateFailed):
+        await _round(coordinator)
+    assert lender.states == ["present", "present"]
 
 
 async def test_tickers_return_eur_prices():
@@ -789,7 +978,7 @@ async def test_a_whole_failure_that_confirms_a_carried_price_leaves_it_out_at_on
     warning comes with the next round that returns data, Bitcoin still
     failing."""
     client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
-    coordinator = TickerCoordinator(hass, None, client, _TRACKED)
+    coordinator = _ticker_coordinator(hass, client, _TRACKED)
     with _listening(coordinator) as seen:
         await coordinator.async_refresh()
         client.failing = {BTC}
@@ -822,7 +1011,7 @@ async def test_a_rate_limit_that_confirms_a_carried_price_leaves_it_out_at_once(
     minutes from the first -- while the whole update's is not confirmed:
     Bitcoin leaves the data at once, and the listeners are told."""
     client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
-    coordinator = TickerCoordinator(hass, None, client, _TRACKED)
+    coordinator = _ticker_coordinator(hass, client, _TRACKED)
     with _listening(coordinator) as seen:
         await coordinator.async_refresh()
         client.failing = {BTC}
@@ -842,7 +1031,7 @@ async def test_rate_limited_rounds_end_the_tolerance_after_about_seven_minutes(
     429s at +1 and +3 minutes keep the prices available, the one at +7
     ends the tolerance -- warned about once, not again at +15."""
     client = _Client({BTC: "1.00000000", SOL: "2.00000000"})
-    coordinator = TickerCoordinator(hass, None, client, _TRACKED)
+    coordinator = _ticker_coordinator(hass, client, _TRACKED)
     await coordinator.async_refresh()
     start = dt_util.utcnow()
     client.rate_limited = True

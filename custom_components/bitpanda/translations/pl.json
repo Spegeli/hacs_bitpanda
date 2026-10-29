@@ -895,6 +895,12 @@
     "no_prices": {
       "message": "Nie można pobrać żadnych cen z platformy Bitpanda."
     },
+    "prices_no_key": {
+      "message": "Brak cen: Bitpanda Price Tracker używa klucza API usługi Bitpanda Portfolio, która nie jest skonfigurowana."
+    },
+    "prices_key_rejected": {
+      "message": "Brak cen: Bitpanda odrzuciła klucz API usługi Bitpanda Portfolio."
+    },
     "ecb_rates_failed": {
       "message": "Nie można pobrać kursów walut EBC."
     },

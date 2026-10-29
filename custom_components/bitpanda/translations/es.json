@@ -895,6 +895,12 @@
     "no_prices": {
       "message": "No se ha podido obtener ningún precio de Bitpanda."
     },
+    "prices_no_key": {
+      "message": "Sin precios: el Bitpanda Price Tracker usa la clave API de Bitpanda Portfolio, que no está configurado."
+    },
+    "prices_key_rejected": {
+      "message": "Sin precios: Bitpanda ha rechazado la clave API de Bitpanda Portfolio."
+    },
     "ecb_rates_failed": {
       "message": "No se han podido obtener los tipos de cambio del BCE."
     },

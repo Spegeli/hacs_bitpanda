@@ -18,13 +18,29 @@ from typing import Any, Generic, TypeVar, final
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+    UpdateFailed,
+)
 from homeassistant.util import dt as dt_util
 
 from .streaks import FailureStreak
 
 _DataT = TypeVar("_DataT")
 _CoordinatorT = TypeVar("_CoordinatorT", bound="TolerantCoordinator[Any]")
+
+# The warning about a key Home Assistant's reauth dialog asks a new one for.
+_KEY_REJECTED = "the API key was rejected; its sensors are unavailable until a new key is entered"
+
+
+class Rejected(UpdateFailed):
+    """A refresh that cannot succeed until the API key changes: the key it
+    borrows is missing, or Bitpanda refused it. It confirms the failure at
+    once, as a rejected key (ConfigEntryAuthFailed) does, but Home Assistant
+    starts no reauth for it: the service that borrows the key asks the
+    Portfolio for a new one (keys.py). Its message is the reason, for the
+    log."""
 
 
 @dataclass
@@ -54,10 +70,12 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
     FAILURE_TOLERANCE failed refreshes in a row, the last asked for
     (FAILURE_TOLERANCE - 1) `regular_interval`s after the first at the
     least (streaks.CLOCK_GRACE aside), confirm the failure. A rejected API
-    key confirms it at once: the key does not become valid again by itself.
-    Home Assistant logs a rejected key only when the outcome it holds as it
-    catches the rejection is a success -- the refresh before succeeded,
-    unless refreshes overlap; otherwise it is warned about here, once.
+    key confirms it at once -- the key does not become valid again by
+    itself --, and so does a refresh Rejected for its borrowed key. Home
+    Assistant logs either only when the outcome it holds as it catches it is
+    a success -- the refresh before succeeded, unless refreshes overlap --
+    and never at the first refresh; otherwise it is warned about here, once
+    per reason until a refresh succeeds.
     From then on they are unavailable until a refresh succeeds. Without
     data -- a failed first refresh -- there is nothing to show, and they
     are unavailable too. data_available says which applies; TolerantEntity
@@ -111,9 +129,12 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
         # _async_update_data, taken back by _async_refresh_finished, which
         # Home Assistant calls in the same task.
         self._refreshes: dict[asyncio.Task[Any] | None, _Refresh[_DataT]] = {}
-        # Whether a rejected key has been logged since the last success: by
-        # Home Assistant, rejected right after it, or here.
-        self._rejection_logged = False
+        # What was told about a rejection since the last success -- by Home
+        # Assistant, rejected right after it, or here: its reason.
+        self._rejection_told: str | None = None
+        # Whether the refresh under way is the first, which Home Assistant
+        # runs without logging its failure.
+        self._first_refresh = False
         # One fetch at a time (see the class docstring).
         self._fetch_lock = asyncio.Lock()
 
@@ -123,6 +144,15 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
         or there is data from an earlier one and the failure is not
         confirmed yet."""
         return self.last_update_success or (self.data is not None and not self._confirmed)
+
+    async def async_config_entry_first_refresh(self) -> None:
+        """Home Assistant's first refresh, noted as the first: it logs none
+        of its failures, so a rejection then is warned about here."""
+        self._first_refresh = True
+        try:
+            await super().async_config_entry_first_refresh()
+        finally:
+            self._first_refresh = False
 
     @final
     async def _async_update_data(self) -> _DataT:
@@ -154,11 +184,11 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
         self._refreshes[asyncio.current_task()] = refresh
         try:
             return await self._async_fetch(requested_at)
-        except ConfigEntryAuthFailed:
+        except (ConfigEntryAuthFailed, Rejected):
             # The outcome Home Assistant's own except block reads next --
             # nothing runs in between -- to decide whether it logs the
-            # rejection.
-            refresh.succeeded_at_rejection = self.last_update_success
+            # rejection; it never logs the first refresh's.
+            refresh.succeeded_at_rejection = self.last_update_success and not self._first_refresh
             raise
 
     async def _async_fetch(self, requested_at: datetime) -> _DataT:
@@ -201,21 +231,19 @@ class TolerantCoordinator(DataUpdateCoordinator[_DataT]):
         if self.last_update_success:
             self._streak = FailureStreak()
             self._confirmed = False
-            self._rejection_logged = False
+            self._rejection_told = None
             return
         self._streak.add(refresh.requested_at)
         tell = self.data is not refresh.data_before
-        rejected = isinstance(self.last_exception, ConfigEntryAuthFailed)
-        if rejected and not self._rejection_logged:
-            self._rejection_logged = True
-            # Home Assistant logs a rejected key only when the outcome it
-            # held as it caught the rejection was a success.
+        failure = self.last_exception
+        rejected = isinstance(failure, (ConfigEntryAuthFailed, Rejected))
+        reason = str(failure) if isinstance(failure, Rejected) else _KEY_REJECTED
+        if rejected and self._rejection_told != reason:
+            self._rejection_told = reason
+            # Home Assistant logs a rejection only when the outcome it held
+            # as it caught it was a success, and never at the first refresh.
             if not refresh.succeeded_at_rejection:
-                self.logger.warning(
-                    "%s: the API key was rejected; its sensors are unavailable "
-                    "until a new key is entered",
-                    self.name,
-                )
+                self.logger.warning("%s: %s", self.name, reason)
         if not self._confirmed and (
             rejected or self._streak.confirmed(self._regular_interval)
         ):

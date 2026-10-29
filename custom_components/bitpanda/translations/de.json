@@ -895,6 +895,12 @@
     "no_prices": {
       "message": "Von Bitpanda konnten keine Preise abgerufen werden."
     },
+    "prices_no_key": {
+      "message": "Keine Preise: Der Bitpanda Price Tracker nutzt den API-Schlüssel von Bitpanda Portfolio, das nicht eingerichtet ist."
+    },
+    "prices_key_rejected": {
+      "message": "Keine Preise: Bitpanda hat den API-Schlüssel von Bitpanda Portfolio abgelehnt."
+    },
     "ecb_rates_failed": {
       "message": "Die Wechselkurse der EZB konnten nicht abgerufen werden."
     },

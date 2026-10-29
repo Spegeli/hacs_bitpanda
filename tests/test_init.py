@@ -1427,6 +1427,27 @@ async def test_reauth_with_a_new_key_reloads_the_portfolio_once(hass, portfolio_
     assert portfolio_api.call_count == calls + 1
 
 
+async def test_a_refused_key_requests_the_portfolios_reauth_once(hass, portfolio_api, price_api):
+    """The Price Tracker asks with the Portfolio's key; Bitpanda refuses it at
+    every round. Each refusal asks the Portfolio for a new key, and the user
+    gets the one dialog already open -- not one per round."""
+    ticker, _ = price_api
+    portfolio = _portfolio_entry(hass)
+    tracker = _price_entry(hass, [], price_group("crypto", BTC))
+    await _setup(hass, tracker)
+    assert portfolio.state is ConfigEntryState.LOADED
+    assert tracker.state is ConfigEntryState.LOADED
+    ticker.side_effect = BitpandaAuthError(
+        "Unauthorized for /tickers", kind="http_status", path="/tickers", status=401
+    )
+    await portfolio.start_reauth_flow(hass)
+    for _ in range(2):
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=61))
+        await hass.async_block_till_done(wait_background_tasks=True)
+    assert hass.states.get("sensor.bitpanda_bitcoin_btc_price_tracker_eur").state == "unavailable"
+    assert len(_reauth_flows(hass)) == 1
+
+
 async def test_price_tracker_setup_creates_one_sensor_per_asset_and_currency(hass, price_api):
     entry = _price_entry(hass, ["USD"], price_group("crypto", BTC))
     await _setup(hass, entry)

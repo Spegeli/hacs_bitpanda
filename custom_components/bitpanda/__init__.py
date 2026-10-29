@@ -303,7 +303,18 @@ async def _async_start_price_tracker(
         asset_id: asset_display_label(record)
         for asset_id, record in tracked_assets(entry).items()
     }
-    tickers = TickerCoordinator(hass, entry, BitpandaApiClient(None, session), tracked)
+    # The Portfolio's key, borrowed at each round: a new one reaches the
+    # Price Tracker without a reload, and a refusal asks the Portfolio for
+    # a new key.
+    tickers = TickerCoordinator(
+        hass,
+        entry,
+        client_for=lambda key: BitpandaApiClient(key, session),
+        key_source=lambda: keys.portfolio_api_key(hass),
+        on_rejected=lambda key: keys.async_request_portfolio_reauth(hass, key),
+        on_key_state=lambda state: None,
+        tracked=tracked,
+    )
     ecb = (
         EcbCoordinator(hass, entry, session)
         if entry.options.get(CONF_EXTRA_CURRENCIES)

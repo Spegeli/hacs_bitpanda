@@ -895,6 +895,12 @@
     "no_prices": {
       "message": "Er konden geen prijzen bij Bitpanda worden opgehaald."
     },
+    "prices_no_key": {
+      "message": "Geen prijzen: de Bitpanda Price Tracker gebruikt de API-sleutel van Bitpanda Portfolio, dat niet is ingesteld."
+    },
+    "prices_key_rejected": {
+      "message": "Geen prijzen: Bitpanda heeft de API-sleutel van Bitpanda Portfolio geweigerd."
+    },
     "ecb_rates_failed": {
       "message": "Kan de wisselkoersen van de ECB niet ophalen."
     },

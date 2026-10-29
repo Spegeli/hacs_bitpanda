@@ -895,6 +895,12 @@
     "no_prices": {
       "message": "No prices could be fetched from Bitpanda."
     },
+    "prices_no_key": {
+      "message": "No prices: the Bitpanda Price Tracker uses the API key of Bitpanda Portfolio, which is not set up."
+    },
+    "prices_key_rejected": {
+      "message": "No prices: Bitpanda refused the API key of Bitpanda Portfolio."
+    },
     "ecb_rates_failed": {
       "message": "Could not fetch the ECB exchange rates."
     },

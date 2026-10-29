@@ -3,10 +3,10 @@
     "step": {
       "user": {
         "title": "Bitpanda",
-        "description": "Which service do you want to set up? Each one can be added once.\n\n- **Bitpanda Portfolio**: your account – everything you hold at Bitpanda.\n- **Bitpanda Price Tracker**: live prices of the assets you choose – whether you hold them or not.",
+        "description": "Which service do you want to set up? Each one can be added once.\n\n- **Bitpanda Portfolio**: your account – everything you hold at Bitpanda.\n- **Bitpanda Price Tracker**: live prices of the assets you choose – whether you hold them or not. It uses the Portfolio's API key: set up the Portfolio first.",
         "menu_options": {
           "portfolio": "Bitpanda Portfolio (API key required)",
-          "price_tracker": "Bitpanda Price Tracker (no API key required)"
+          "price_tracker": "Bitpanda Price Tracker (uses the Portfolio's API key)"
         }
       },
       "portfolio": {
@@ -132,7 +132,8 @@
       "no_changes": "Nothing was changed.",
       "no_reconfigure": "There is currently nothing to reconfigure for the Bitpanda Price Tracker. Change its additional currencies and the language of group titles with \"Configure\" (⚙) on the same entry.",
       "unload_failed": "The Portfolio could not be stopped, so the currency was not changed and nothing was deleted. Restart Home Assistant and try again.",
-      "setup_cancelled": "The Portfolio was not set up, and nothing was deleted."
+      "setup_cancelled": "The Portfolio was not set up, and nothing was deleted.",
+      "portfolio_required": "The Bitpanda Price Tracker uses the API key of Bitpanda Portfolio. Set up Bitpanda Portfolio first:\n\n1. In \"Settings\" → \"Devices & services\", choose \"Add integration\".\n2. Search for Bitpanda.\n3. Choose \"Bitpanda Portfolio (API key required)\"."
     },
     "create_entry": {
       "portfolio": "To see your portfolio on a dashboard, add the \"Bitpanda Portfolio\" card: open the dashboard, select \"Edit dashboard\" (✏ at the top right; on a phone in the ⋮ menu), then \"Add card\" and the \"By card\" tab, and search for \"Bitpanda\". If no Bitpanda card is listed, reload the page twice; in the Home Assistant app, [reset its frontend cache]({cards_url}) instead.\n\nThe new \"Overview\", the default of new installations since Home Assistant 2026.2, takes no cards: first create a dashboard under \"Settings\" → \"Dashboards\" → \"Add dashboard\".",
@@ -234,11 +235,13 @@
         "no_assets_available": "Every asset of this type is already tracked.",
         "unknown_asset": "Pick an asset from the list.",
         "rate_limited": "Too many requests. Wait a moment and try again.",
-        "cannot_connect": "Could not reach Bitpanda. Try again later."
+        "cannot_connect": "Could not reach Bitpanda. Try again later.",
+        "key_rejected": "Bitpanda refused the API key of Bitpanda Portfolio for prices: it needs the permission \"Trade (Read)\". Enter a new API key in Bitpanda Portfolio's \"New Bitpanda API key needed\"."
       },
       "abort": {
         "already_configured": "This asset is already tracked.",
-        "asset_added": "{asset} is now tracked in the group {group}."
+        "asset_added": "{asset} is now tracked in the group {group}.",
+        "portfolio_required": "The Bitpanda Price Tracker uses the API key of Bitpanda Portfolio. Set up Bitpanda Portfolio first: \"Add service\" on the Bitpanda integration page."
       },
       "create_entry": {
         "default": "{asset} is now tracked in the group {group}."
@@ -954,6 +957,9 @@
     },
     "refresh_unknown_entry": {
       "message": "The chosen service is not a loaded Bitpanda service."
+    },
+    "price_tracker_no_key": {
+      "message": "The Bitpanda Price Tracker uses the API key of Bitpanda Portfolio: set up Bitpanda Portfolio first."
     }
   },
   "issues": {

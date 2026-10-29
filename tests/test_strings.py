@@ -183,50 +183,52 @@ def test_no_language_is_an_untranslated_copy_of_english():
 # "Add dashboard"
 # (ui.panel.config.lovelace.dashboards.picker.add_dashboard), "Settings"
 # (panel.config), "Dashboards" (ui.panel.config.dashboard.dashboards.main)
-# and the Overview's sidebar label (panel.home). And "Add service" at the top
-# of the integration page of a service integration
-# (ui.panel.config.integrations.integration_page.add_service), read from the
-# frontends of 2025.5.0 and 2026.10.1 alike ("es", not "es-419").
+# and the Overview's sidebar label (panel.home). And, read from the frontends
+# of 2025.5.0 and 2026.10.1 alike ("es", not "es-419"): "Add service" at the
+# top of the integration page of a service integration
+# (ui.panel.config.integrations.integration_page.add_service), and the way to
+# a new integration, "Devices & services" (ui.panel.config.dashboard.devices
+# .main) and "Add integration" (ui.panel.config.integrations.add_integration).
 _MENU_LABELS = {
     "de": {
-        "add_service": "Dienst hinzufügen", "reconfigure": "Neu konfigurieren", "configure": "Konfigurieren", "submit": "OK",
+        "devices_services": "Geräte & Dienste", "add_integration": "Integration hinzufügen", "add_service": "Dienst hinzufügen", "reconfigure": "Neu konfigurieren", "configure": "Konfigurieren", "submit": "OK",
         "delete": "Löschen", "edit_dashboard": "Dashboard bearbeiten",
         "add_card": "Karte hinzufügen", "by_card": "Nach Karte", "add_dashboard": "Dashboard hinzufügen",
         "settings": "Einstellungen", "dashboards": "Dashboards", "overview": "Übersicht",
     },
     "en": {
-        "add_service": "Add service", "reconfigure": "Reconfigure", "configure": "Configure", "submit": "Submit",
+        "devices_services": "Devices & services", "add_integration": "Add integration", "add_service": "Add service", "reconfigure": "Reconfigure", "configure": "Configure", "submit": "Submit",
         "delete": "Delete", "edit_dashboard": "Edit dashboard", "add_card": "Add card", "by_card": "By card",
         "add_dashboard": "Add dashboard", "settings": "Settings", "dashboards": "Dashboards",
         "overview": "Overview",
     },
     "es": {
-        "add_service": "Añadir servicio", "reconfigure": "Reconfigurar", "configure": "Configurar", "submit": "Enviar",
+        "devices_services": "Dispositivos y servicios", "add_integration": "Añadir integración", "add_service": "Añadir servicio", "reconfigure": "Reconfigurar", "configure": "Configurar", "submit": "Enviar",
         "delete": "Eliminar", "edit_dashboard": "Editar panel de control",
         "add_card": "Añadir tarjeta", "by_card": "Por tarjeta", "add_dashboard": "Añadir panel de control",
         "settings": "Configuración", "dashboards": "Paneles de control",
         "overview": "Vista general",
     },
     "fr": {
-        "add_service": "Ajouter un service", "reconfigure": "Reconfigurer", "configure": "Configurer", "submit": "Valider",
+        "devices_services": "Appareils et services", "add_integration": "Ajouter une intégration", "add_service": "Ajouter un service", "reconfigure": "Reconfigurer", "configure": "Configurer", "submit": "Valider",
         "delete": "Supprimer", "edit_dashboard": "Modifier le tableau de bord",
         "add_card": "Ajouter une carte", "by_card": "Par carte", "add_dashboard": "Ajouter un tableau de bord",
         "settings": "Paramètres", "dashboards": "Tableaux de bord", "overview": "Vue d’ensemble",
     },
     "it": {
-        "add_service": "Aggiungi servizio", "reconfigure": "Riconfigura", "configure": "Configura", "submit": "Invia",
+        "devices_services": "Dispositivi e servizi", "add_integration": "Aggiungi integrazione", "add_service": "Aggiungi servizio", "reconfigure": "Riconfigura", "configure": "Configura", "submit": "Invia",
         "delete": "Elimina", "edit_dashboard": "Modifica la plancia", "add_card": "Aggiungi scheda", "by_card": "Per scheda",
         "add_dashboard": "Aggiungi plancia", "settings": "Impostazioni", "dashboards": "Plance",
         "overview": "Panoramica",
     },
     "nl": {
-        "add_service": "Dienst toevoegen", "reconfigure": "Herconfigureer", "configure": "Configureren", "submit": "Verzenden",
+        "devices_services": "Apparaten en diensten", "add_integration": "Integratie toevoegen", "add_service": "Dienst toevoegen", "reconfigure": "Herconfigureer", "configure": "Configureren", "submit": "Verzenden",
         "delete": "Verwijderen", "edit_dashboard": "Dashboard bewerken",
         "add_card": "Kaart toevoegen", "by_card": "Per kaart", "add_dashboard": "Dashboard toevoegen",
         "settings": "Instellingen", "dashboards": "Dashboards", "overview": "Thuis",
     },
     "pl": {
-        "add_service": "Dodaj usługę", "reconfigure": "Rekonfiguracja", "configure": "Konfiguruj", "submit": "Zatwierdź",
+        "devices_services": "Urządzenia oraz usługi", "add_integration": "Dodaj integrację", "add_service": "Dodaj usługę", "reconfigure": "Rekonfiguracja", "configure": "Konfiguruj", "submit": "Zatwierdź",
         "delete": "Usuń", "edit_dashboard": "Edytuj panel", "add_card": "Dodaj kartę", "by_card": "Według karty",
         "add_dashboard": "Dodaj panel", "settings": "Ustawienia", "dashboards": "Panele",
         "overview": "Przegląd",
@@ -237,7 +239,10 @@ _MENU_LABELS = {
 _LABEL_REFERENCES = {
     "add_service": [
         ("issues", "portfolio_required", "description"),
+        ("config_subentries", "price_group", "abort", "portfolio_required"),
     ],
+    "devices_services": [("config", "abort", "portfolio_required")],
+    "add_integration": [("config", "abort", "portfolio_required")],
     "reconfigure": [
         ("config", "step", "portfolio", "description"),
         ("config", "step", "currency", "sections", "currency", "data_description", "currency"),
@@ -267,6 +272,8 @@ _LABEL_REFERENCES = {
         )
     },
 }
+# The menu's abort sends the user to "Add integration" by way of "Settings".
+_LABEL_REFERENCES["settings"] = [*_LABEL_REFERENCES["settings"], ("config", "abort", "portfolio_required")]
 
 
 def _quoted(label: str) -> re.Pattern:
@@ -951,8 +958,9 @@ def test_the_sensors_disabled_hint_says_how_to_enable_them():
 
 
 def test_the_setup_menu_says_what_each_service_is_for():
-    """The setup menu names each service with nothing but whether it needs an
-    API key. The text above it says what each one is for, as a list of its
+    """The setup menu names each service with nothing but its API key: the
+    Portfolio needs one, the Price Tracker uses the Portfolio's. The text
+    above it says what each one is for, as a list of its
     own after a blank line with each service's name in bold -- which Home
     Assistant 2025.5 renders as 2026.9 does, unlike descriptions under each
     menu item. In the approved English and German wording."""
@@ -976,11 +984,11 @@ def test_the_setup_menu_says_what_each_service_is_for():
             "Which service do you want to set up? Each one can be added once.\n\n"
             "- **Bitpanda Portfolio**: your account \u2013 everything you hold at Bitpanda.\n"
             "- **Bitpanda Price Tracker**: live prices of the assets you choose \u2013 whether"
-            " you hold them or not."
+            " you hold them or not. It uses the Portfolio's API key: set up the Portfolio first."
         ),
         "menu_options": {
             "portfolio": "Bitpanda Portfolio (API key required)",
-            "price_tracker": "Bitpanda Price Tracker (no API key required)",
+            "price_tracker": "Bitpanda Price Tracker (uses the Portfolio's API key)",
         },
     }
     assert _load("translations/de.json")["config"]["step"]["user"] == {
@@ -989,11 +997,12 @@ def test_the_setup_menu_says_what_each_service_is_for():
             "Welchen Dienst möchtest du einrichten? Jeder lässt sich einmal hinzufügen.\n\n"
             "- **Bitpanda Portfolio**: dein Konto \u2013 alles, was du bei Bitpanda hältst.\n"
             "- **Bitpanda Price Tracker**: Live-Preise der Assets, die du auswählst \u2013 auch"
-            " ohne sie zu besitzen."
+            " ohne sie zu besitzen. Er nutzt den API-Schlüssel des Portfolios: Richte zuerst das"
+            " Portfolio ein."
         ),
         "menu_options": {
             "portfolio": "Bitpanda Portfolio (API-Schlüssel benötigt)",
-            "price_tracker": "Bitpanda Price Tracker (kein API-Schlüssel benötigt)",
+            "price_tracker": "Bitpanda Price Tracker (nutzt den API-Schlüssel des Portfolios)",
         },
     }
 
@@ -1628,6 +1637,43 @@ def test_every_issue_text_is_one_the_code_raises():
     }
 
 
+def test_the_menus_portfolio_required_names_the_way_to_the_portfolios_setup():
+    """Choosing the Price Tracker while Bitpanda has no entry at all -- no
+    integration page exists then -- says to set up the Portfolio first, by
+    the way to it as three numbered steps: "Add integration", the search,
+    then the menu's own Portfolio option, quoted as the same file labels
+    it."""
+    for name in _FILES:
+        strings = _load(name)
+        abort = strings["config"]["abort"]["portfolio_required"]
+        assert _quoted(strings["config"]["step"]["user"]["menu_options"]["portfolio"]).search(abort), name
+        _, steps = abort.split("\n\n")
+        assert [line[:3] for line in steps.split("\n")] == ["1. ", "2. ", "3. "], name
+    assert _load("translations/de.json")["config"]["abort"]["portfolio_required"] == (
+        "Der Bitpanda Price Tracker nutzt den API-Schlüssel von Bitpanda Portfolio. Richte"
+        " zuerst Bitpanda Portfolio ein:\n\n"
+        "1. Wähle unter „Einstellungen“ → „Geräte & Dienste“ „Integration hinzufügen“.\n"
+        "2. Suche nach Bitpanda.\n"
+        "3. Wähle „Bitpanda Portfolio (API-Schlüssel benötigt)“."
+    )
+
+
+def test_a_refused_key_in_add_price_tracker_names_the_permission_and_the_dialog():
+    """"Add price tracker" refused for the key: the permission it needs, as
+    Bitpanda's key page names it, and where to enter a new key -- the
+    new-key dialog by its own title in the same file."""
+    for name in _FILES:
+        strings = _load(name)
+        error = strings["config_subentries"]["price_group"]["error"]["key_rejected"]
+        assert _PERMISSION_LABELS[_language(name)][-1] in error, name
+        assert _quoted(strings["config"]["step"]["reauth_confirm"]["title"]).search(error), name
+    assert _load("translations/de.json")["config_subentries"]["price_group"]["error"]["key_rejected"] == (
+        "Bitpanda hat den API-Schlüssel von Bitpanda Portfolio für Preise abgelehnt: Er braucht"
+        " die Berechtigung „Trading (Read)“. Gib bei Bitpanda Portfolio unter „Neuer"
+        " Bitpanda-API-Schlüssel nötig“ einen neuen API-Schlüssel ein."
+    )
+
+
 def test_the_portfolio_required_issue_says_why_and_what_to_do():
     """A Price Tracker without a Portfolio: why it shows no prices, what to
     set up -- with the four permissions as Bitpanda's key page names them in
@@ -1731,7 +1777,7 @@ def test_the_price_group_flow_has_its_strings():
     assert set(strings["config_subentries"]) == {"price_group", "wallet_group"}
     group = strings["config_subentries"]["price_group"]
     assert set(group["step"]) == {"user", "asset", "security"}
-    assert set(group["abort"]) == {"already_configured", "asset_added"}
+    assert set(group["abort"]) == {"already_configured", "asset_added", "portfolio_required"}
     assert "{asset}" in group["abort"]["asset_added"]
     assert "{group}" in group["abort"]["asset_added"]
     assert set(group["create_entry"]) == {"default"}

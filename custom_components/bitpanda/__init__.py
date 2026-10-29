@@ -575,6 +575,14 @@ def _async_register_refresh_service(hass: HomeAssistant) -> None:
                 raise ServiceValidationError(
                     translation_domain=DOMAIN, translation_key="nothing_to_refresh"
                 )
+        if keys.portfolio_api_key(hass) is None and any(
+            entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER for entry in entries
+        ):
+            # Before the cooldown too: the Price Tracker has no key to ask
+            # with until a Portfolio is set up.
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="price_tracker_no_key"
+            )
         now = monotonic()
         due: list[BitpandaConfigEntry] = []
         for entry in entries:

@@ -501,3 +501,44 @@ async def test_the_refresh_service_is_named_and_described_in_every_language(hass
     assert set(declared) == {
         "refresh", "get_portfolio", "get_portfolio_history", "get_staking_rewards",
     }
+
+
+@pytest.mark.no_portfolio_key
+async def test_refreshing_a_price_tracker_without_a_key_is_refused(hass):
+    """Without a Portfolio the Price Tracker has no key to ask with: the
+    action says so and refreshes nothing -- nor starts a cooldown, so a
+    refresh right after the Portfolio is set up runs."""
+    await _set_up_the_integration(hass)
+    tickers = _Coordinator(timedelta(seconds=60))
+    tracker = _loaded(hass, "price_tracker", PriceTrackerRuntime(tickers=tickers, ecb=None))
+    with pytest.raises(ServiceValidationError) as excinfo:
+        await _call(hass, config_entry_id=tracker.entry_id)
+    assert excinfo.value.translation_key == "price_tracker_no_key"
+    assert tickers.async_refresh.await_count == 0
+    MockConfigEntry(
+        domain=DOMAIN, version=3, unique_id="portfolio",
+        data={"entry_type": "portfolio", "api_key": "key", "currency": "EUR"},
+    ).add_to_hass(hass)
+    await _call(hass, config_entry_id=tracker.entry_id)
+    assert tickers.async_refresh.await_count == 1
+
+
+@pytest.mark.no_portfolio_key
+async def test_refreshing_everything_without_a_key_is_refused(hass):
+    """No Service named, the Price Tracker alone loaded, no Portfolio: the
+    same answer, not "nothing to refresh"."""
+    await _set_up_the_integration(hass)
+    _loaded(hass, "price_tracker", PriceTrackerRuntime(tickers=_Coordinator(timedelta(seconds=60)), ecb=None))
+    with pytest.raises(ServiceValidationError) as excinfo:
+        await _call(hass)
+    assert excinfo.value.translation_key == "price_tracker_no_key"
+
+
+async def test_refreshing_with_a_refused_key_reports_the_failure(hass):
+    """A refused key fails the Price Tracker's refresh as any failure does:
+    the action names the service."""
+    await _register(hass, timedelta(seconds=60), tickers_fail=True)
+    with pytest.raises(HomeAssistantError) as excinfo:
+        await _call(hass)
+    assert excinfo.value.translation_key == "refresh_failed"
+    assert excinfo.value.translation_placeholders == {"services": "Bitpanda Price Tracker"}

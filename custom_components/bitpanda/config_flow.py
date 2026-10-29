@@ -1,7 +1,8 @@
 """Config flow for the Bitpanda integration.
 
-One integration, two services, one config entry each: Bitpanda Portfolio
-(needs an API key) and Bitpanda Price Tracker (no key). Each entry carries
+One integration, two services, one config entry each: Bitpanda Portfolio,
+which holds the API key, and Bitpanda Price Tracker, which uses it -- set up
+after the Portfolio (keys.py). Each entry carries
 its service as its unique_id, so neither can exist twice -- not even when two
 setup dialogs race each other.
 """
@@ -32,6 +33,7 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 
+from . import keys
 from .api import BitpandaApiClient, BitpandaApiError, BitpandaAuthError, BitpandaRateLimitError
 from .asset_flow import PriceTrackerSubentryFlow
 from .const import (
@@ -445,6 +447,10 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         await self.async_set_unique_id(ENTRY_TYPE_PRICE_TRACKER)
         self._abort_if_unique_id_configured()
+        # It asks Bitpanda with the Portfolio's key: no Portfolio, no prices.
+        # The upgrade's import (async_step_import) is never refused.
+        if keys.portfolio_entry(self.hass) is None:
+            return self.async_abort(reason="portfolio_required")
         if user_input is not None:
             # Its closing text: how to add assets, then where the card is.
             return self.async_create_entry(

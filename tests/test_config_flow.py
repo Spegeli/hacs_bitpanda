@@ -37,8 +37,9 @@ def _no_entry_setup():
         yield
 
 
-def _portfolio_entry(**data) -> MockConfigEntry:
+def _portfolio_entry(disabled_by=None, **data) -> MockConfigEntry:
     return MockConfigEntry(
+        disabled_by=disabled_by,
         domain=DOMAIN,
         version=3,
         unique_id="portfolio",
@@ -599,6 +600,61 @@ async def test_a_second_price_tracker_aborts_even_from_an_open_dialog(hass):
     )
     assert result["type"] == _FLOW.ABORT
     assert result["reason"] == "already_configured"
+
+
+# --- The Price Tracker needs the Portfolio's key ------------------------------------------
+
+
+@pytest.mark.no_portfolio_key
+async def test_the_price_tracker_needs_a_portfolio_first(hass):
+    """Without a Portfolio the menu still offers both services, and choosing
+    the Price Tracker says to set up the Portfolio first: its API key is the
+    one the Price Tracker uses."""
+    result = await _start(hass)
+    assert result["menu_options"] == ["portfolio", "price_tracker"]
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "price_tracker"}
+    )
+    assert (result["type"], result["reason"]) == (_FLOW.ABORT, "portfolio_required")
+
+
+@pytest.mark.no_portfolio_key
+@pytest.mark.parametrize(
+    "state",
+    [
+        config_entries.ConfigEntryState.LOADED,
+        config_entries.ConfigEntryState.SETUP_ERROR,
+        config_entries.ConfigEntryState.SETUP_RETRY,
+        config_entries.ConfigEntryState.NOT_LOADED,
+    ],
+)
+@pytest.mark.parametrize("disabled", [False, True], ids=["enabled", "disabled"])
+async def test_with_a_portfolio_the_price_tracker_asks_for_no_key(hass, state, disabled):
+    """A Portfolio in any state -- a key to renew, disabled by the user --
+    lends its key: the Price Tracker sets up without asking for one."""
+    portfolio = _portfolio_entry(
+        disabled_by=config_entries.ConfigEntryDisabler.USER if disabled else None
+    )
+    portfolio.add_to_hass(hass)
+    portfolio.mock_state(hass, state)
+    result = await _start(hass)
+    assert result["menu_options"] == ["price_tracker"]
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "price_tracker"}
+    )
+    assert result["step_id"] == "price_tracker"
+    assert "api_key" not in {str(marker) for marker in result["data_schema"].schema}
+
+
+@pytest.mark.no_portfolio_key
+async def test_the_upgrades_import_is_never_refused(hass):
+    """The upgrade from a date version creates the Price Tracker itself,
+    with no Portfolio but the version 1 entry it upgrades."""
+    MockConfigEntry(domain=DOMAIN, version=1, data={"api_key": "legacy", "currency": "EUR"}).add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_IMPORT}, data={"assets": [_asset("BTC")]}
+    )
+    assert result["type"] == _FLOW.CREATE_ENTRY
 
 
 # --- Import (used by the version 1 migration) --------------------------------------

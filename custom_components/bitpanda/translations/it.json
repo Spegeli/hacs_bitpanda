@@ -3,10 +3,10 @@
     "step": {
       "user": {
         "title": "Bitpanda",
-        "description": "Quale servizio vuoi configurare? Ognuno può essere aggiunto una sola volta.\n\n- **Bitpanda Portfolio**: il tuo conto – tutto ciò che possiedi su Bitpanda.\n- **Bitpanda Price Tracker**: prezzi in tempo reale degli asset che scegli – anche senza possederli.",
+        "description": "Quale servizio vuoi configurare? Ognuno può essere aggiunto una sola volta.\n\n- **Bitpanda Portfolio**: il tuo conto – tutto ciò che possiedi su Bitpanda.\n- **Bitpanda Price Tracker**: prezzi in tempo reale degli asset che scegli – anche senza possederli. Usa la chiave API del Portfolio: configura prima il Portfolio.",
         "menu_options": {
           "portfolio": "Bitpanda Portfolio (richiede una chiave API)",
-          "price_tracker": "Bitpanda Price Tracker (non richiede una chiave API)"
+          "price_tracker": "Bitpanda Price Tracker (usa la chiave API del Portfolio)"
         }
       },
       "portfolio": {
@@ -132,7 +132,8 @@
       "no_changes": "Non è stato modificato nulla.",
       "no_reconfigure": "Il Bitpanda Price Tracker per ora non ha nulla da riconfigurare. Modifica le valute aggiuntive e la lingua dei titoli dei gruppi con \"Configura\" (⚙) sulla stessa voce.",
       "unload_failed": "Non è stato possibile arrestare il Portfolio, quindi la valuta non è stata cambiata e non è stato eliminato nulla. Riavvia Home Assistant e riprova.",
-      "setup_cancelled": "Il Portfolio non è stato configurato e non è stato eliminato nulla."
+      "setup_cancelled": "Il Portfolio non è stato configurato e non è stato eliminato nulla.",
+      "portfolio_required": "Il Bitpanda Price Tracker usa la chiave API di Bitpanda Portfolio. Configura prima Bitpanda Portfolio:\n\n1. In \"Impostazioni\" → \"Dispositivi e servizi\", scegli \"Aggiungi integrazione\".\n2. Cerca Bitpanda.\n3. Scegli \"Bitpanda Portfolio (richiede una chiave API)\"."
     },
     "create_entry": {
       "portfolio": "Per vedere il tuo portafoglio in una plancia, aggiungi la scheda \"Bitpanda Portfolio\": apri la plancia, seleziona \"Modifica la plancia\" (✏ in alto a destra; sul telefono nel menu ⋮), poi \"Aggiungi scheda\" e \"Per scheda\", e cerca \"Bitpanda\". Se non compare nessuna scheda Bitpanda, ricarica la pagina due volte; nell'app Home Assistant [reimposta invece la cache del frontend]({cards_url}).\n\nLa nuova \"Panoramica\", predefinita nelle nuove installazioni da Home Assistant 2026.2, non accetta schede: crea prima una plancia in \"Impostazioni\" → \"Plance\" → \"Aggiungi plancia\".",
@@ -234,11 +235,13 @@
         "no_assets_available": "Tutti gli asset di questo tipo sono già monitorati.",
         "unknown_asset": "Scegli un asset dall'elenco.",
         "rate_limited": "Troppe richieste. Attendi un momento e riprova.",
-        "cannot_connect": "Impossibile raggiungere Bitpanda. Riprova più tardi."
+        "cannot_connect": "Impossibile raggiungere Bitpanda. Riprova più tardi.",
+        "key_rejected": "Bitpanda ha rifiutato la chiave API di Bitpanda Portfolio per i prezzi: serve l'autorizzazione \"Trading (Lettura)\". Inserisci una nuova chiave API in \"Serve una nuova chiave API di Bitpanda\" di Bitpanda Portfolio."
       },
       "abort": {
         "already_configured": "Questo asset è già monitorato.",
-        "asset_added": "{asset} è ora monitorato nel gruppo {group}."
+        "asset_added": "{asset} è ora monitorato nel gruppo {group}.",
+        "portfolio_required": "Il Bitpanda Price Tracker usa la chiave API di Bitpanda Portfolio. Configura prima Bitpanda Portfolio: \"Aggiungi servizio\" nella pagina dell'integrazione Bitpanda."
       },
       "create_entry": {
         "default": "{asset} è ora monitorato nel gruppo {group}."
@@ -954,6 +957,9 @@
     },
     "refresh_unknown_entry": {
       "message": "Il servizio scelto non è un servizio Bitpanda caricato."
+    },
+    "price_tracker_no_key": {
+      "message": "Il Bitpanda Price Tracker usa la chiave API di Bitpanda Portfolio: configura prima Bitpanda Portfolio."
     }
   },
   "issues": {

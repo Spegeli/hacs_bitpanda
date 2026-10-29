@@ -3,10 +3,10 @@
     "step": {
       "user": {
         "title": "Bitpanda",
-        "description": "Welke dienst wil je instellen? Elke dienst kan maar één keer worden toegevoegd.\n\n- **Bitpanda Portfolio**: je account – alles wat je bij Bitpanda bezit.\n- **Bitpanda Price Tracker**: actuele prijzen van de assets die je kiest – ook zonder ze te bezitten.",
+        "description": "Welke dienst wil je instellen? Elke dienst kan maar één keer worden toegevoegd.\n\n- **Bitpanda Portfolio**: je account – alles wat je bij Bitpanda bezit.\n- **Bitpanda Price Tracker**: actuele prijzen van de assets die je kiest – ook zonder ze te bezitten. Hij gebruikt de API-sleutel van het Portfolio: stel eerst het Portfolio in.",
         "menu_options": {
           "portfolio": "Bitpanda Portfolio (API-sleutel nodig)",
-          "price_tracker": "Bitpanda Price Tracker (geen API-sleutel nodig)"
+          "price_tracker": "Bitpanda Price Tracker (gebruikt de API-sleutel van het Portfolio)"
         }
       },
       "portfolio": {
@@ -132,7 +132,8 @@
       "no_changes": "Er is niets gewijzigd.",
       "no_reconfigure": "Bij de Bitpanda Price Tracker valt momenteel niets te herconfigureren. Wijzig de extra valuta en de taal van groepstitels via \"Configureren\" (⚙) bij dezelfde invoer.",
       "unload_failed": "Het Portfolio kon niet worden gestopt, dus de valuta is niet gewijzigd en er is niets verwijderd. Herstart Home Assistant en probeer het opnieuw.",
-      "setup_cancelled": "Het Portfolio is niet ingesteld en er is niets verwijderd."
+      "setup_cancelled": "Het Portfolio is niet ingesteld en er is niets verwijderd.",
+      "portfolio_required": "De Bitpanda Price Tracker gebruikt de API-sleutel van Bitpanda Portfolio. Stel eerst Bitpanda Portfolio in:\n\n1. Ga naar \"Instellingen\" → \"Apparaten en diensten\" en kies \"Integratie toevoegen\".\n2. Zoek naar Bitpanda.\n3. Kies \"Bitpanda Portfolio (API-sleutel nodig)\"."
     },
     "create_entry": {
       "portfolio": "Om je portfolio op een dashboard te zien, voeg je de kaart \"Bitpanda Portfolio\" toe: open het dashboard, kies \"Dashboard bewerken\" (✏ rechtsboven; op een telefoon in het ⋮-menu), dan \"Kaart toevoegen\" en het tabblad \"Per kaart\", en zoek naar \"Bitpanda\". Staat er geen Bitpanda-kaart bij, laad de pagina dan twee keer opnieuw; reset in de Home Assistant-app in plaats daarvan [de frontend-cache]({cards_url}).\n\nHet nieuwe dashboard \"Thuis\", sinds Home Assistant 2026.2 de standaard van nieuwe installaties, neemt geen kaarten op: maak eerst een dashboard aan onder \"Instellingen\" → \"Dashboards\" → \"Dashboard toevoegen\".",
@@ -234,11 +235,13 @@
         "no_assets_available": "Alle assets van dit type worden al gevolgd.",
         "unknown_asset": "Kies een asset uit de lijst.",
         "rate_limited": "Te veel verzoeken. Wacht even en probeer het opnieuw.",
-        "cannot_connect": "Bitpanda is niet bereikbaar. Probeer het later opnieuw."
+        "cannot_connect": "Bitpanda is niet bereikbaar. Probeer het later opnieuw.",
+        "key_rejected": "Bitpanda heeft de API-sleutel van Bitpanda Portfolio voor prijzen geweigerd: die heeft het recht \"Traden (Lezen)\" nodig. Voer bij Bitpanda Portfolio een nieuwe API-sleutel in onder \"Nieuwe Bitpanda API-sleutel nodig\"."
       },
       "abort": {
         "already_configured": "Deze asset wordt al gevolgd.",
-        "asset_added": "{asset} wordt nu gevolgd in de groep {group}."
+        "asset_added": "{asset} wordt nu gevolgd in de groep {group}.",
+        "portfolio_required": "De Bitpanda Price Tracker gebruikt de API-sleutel van Bitpanda Portfolio. Stel eerst Bitpanda Portfolio in: \"Dienst toevoegen\" op de integratiepagina van Bitpanda."
       },
       "create_entry": {
         "default": "{asset} wordt nu gevolgd in de groep {group}."
@@ -954,6 +957,9 @@
     },
     "refresh_unknown_entry": {
       "message": "De gekozen dienst is geen geladen Bitpanda-dienst."
+    },
+    "price_tracker_no_key": {
+      "message": "De Bitpanda Price Tracker gebruikt de API-sleutel van Bitpanda Portfolio: stel eerst Bitpanda Portfolio in."
     }
   },
   "issues": {

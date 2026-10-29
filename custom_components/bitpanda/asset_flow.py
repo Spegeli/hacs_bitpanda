@@ -1,7 +1,9 @@
 """The "Add price tracker" config subentry flow of the Price Tracker.
 
 Category first, then one searchable pick from that category's catalogue --
-public data, fetched without a key and kept for an hour. The asset joins the
+fetched with the Portfolio's API key (Bitpanda listed it only to a key with
+Trade (Read) on 2026-10-28, and since 2026-10-29 at times) and kept for an
+hour. Without a Portfolio the dialog says to set one up. The asset joins the
 group of its asset type, which the flow creates when there is none yet.
 
 The pick shows under one of two step ids, each with texts of its own:
@@ -26,7 +28,8 @@ from homeassistant.helpers.selector import (
 )
 from homeassistant.util.hass_dict import HassKey
 
-from .api import BitpandaApiClient, BitpandaApiError, BitpandaRateLimitError
+from . import keys
+from .api import BitpandaApiClient, BitpandaApiError, BitpandaAuthError, BitpandaRateLimitError
 from .assets import (
     ASSET_CATEGORY_FILTERS,
     ISIN_CATEGORIES,
@@ -137,6 +140,8 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
         """Which kind of asset. The options are labelled via
         `selector.asset_category.options.<value>`. Coming back from the asset
         step, the category picked before is pre-selected."""
+        if keys.portfolio_api_key(self.hass) is None:
+            return self.async_abort(reason="portfolio_required")
         if user_input is not None:
             self._category = user_input["category"]
             return await self.async_step_asset()
@@ -196,9 +201,16 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
         kept = self._listings.get(category)
         if kept is not None:
             return kept, None
-        client = BitpandaApiClient(None, async_get_clientsession(self.hass))
+        key = keys.portfolio_api_key(self.hass)
+        if key is None:
+            # The Portfolio was deleted while the dialog was open.
+            return [], "portfolio_required"
+        client = BitpandaApiClient(key, async_get_clientsession(self.hass))
         try:
             listing = await async_category_listing(self.hass, client, category)
+        except BitpandaAuthError:
+            keys.async_request_portfolio_reauth(self.hass, key)
+            return [], "key_rejected"
         except BitpandaRateLimitError:
             return [], "rate_limited"
         except BitpandaApiError:
@@ -213,6 +225,8 @@ class PriceTrackerSubentryFlow(ConfigSubentryFlow):
             return await self.async_step_user()
 
         catalogue, error = await self._async_listing()
+        if error == "portfolio_required":
+            return self.async_abort(reason=error)
         if error is not None:
             return self._show_assets([], error)
         tracked = self._tracked_ids()

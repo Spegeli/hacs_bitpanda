@@ -3,10 +3,10 @@
     "step": {
       "user": {
         "title": "Bitpanda",
-        "description": "Którą usługę chcesz skonfigurować? Każdą można dodać tylko raz.\n\n- **Bitpanda Portfolio**: Twoje konto – wszystko, co masz na platformie Bitpanda.\n- **Bitpanda Price Tracker**: bieżące ceny wybranych przez Ciebie aktywów – nawet jeśli ich nie posiadasz.",
+        "description": "Którą usługę chcesz skonfigurować? Każdą można dodać tylko raz.\n\n- **Bitpanda Portfolio**: Twoje konto – wszystko, co masz na platformie Bitpanda.\n- **Bitpanda Price Tracker**: bieżące ceny wybranych przez Ciebie aktywów – nawet jeśli ich nie posiadasz. Używa klucza API usługi Portfolio: najpierw skonfiguruj Portfolio.",
         "menu_options": {
           "portfolio": "Bitpanda Portfolio (wymaga klucza API)",
-          "price_tracker": "Bitpanda Price Tracker (nie wymaga klucza API)"
+          "price_tracker": "Bitpanda Price Tracker (używa klucza API usługi Portfolio)"
         }
       },
       "portfolio": {
@@ -132,7 +132,8 @@
       "no_changes": "Nic nie zostało zmienione.",
       "no_reconfigure": "W usłudze Bitpanda Price Tracker nie ma obecnie nic do rekonfiguracji. Dodatkowe waluty i język tytułów grup zmienisz, klikając „Konfiguruj” (⚙) przy tym samym wpisie.",
       "unload_failed": "Nie udało się zatrzymać Portfolio, więc waluta nie została zmieniona i nic nie zostało usunięte. Uruchom ponownie Home Assistant i spróbuj jeszcze raz.",
-      "setup_cancelled": "Portfolio nie zostało skonfigurowane i nic nie zostało usunięte."
+      "setup_cancelled": "Portfolio nie zostało skonfigurowane i nic nie zostało usunięte.",
+      "portfolio_required": "Bitpanda Price Tracker używa klucza API usługi Bitpanda Portfolio. Najpierw skonfiguruj Bitpanda Portfolio:\n\n1. Otwórz „Ustawienia” → „Urządzenia oraz usługi” i wybierz „Dodaj integrację”.\n2. Wyszukaj Bitpanda.\n3. Wybierz „Bitpanda Portfolio (wymaga klucza API)”."
     },
     "create_entry": {
       "portfolio": "Aby zobaczyć swoje portfolio na panelu, dodaj kartę „Bitpanda Portfolio”: otwórz panel, wybierz „Edytuj panel” (✏ w prawym górnym rogu; na telefonie w menu ⋮), potem „Dodaj kartę” i zakładkę „Według karty”, a następnie wyszukaj „Bitpanda”. Jeśli nie ma żadnej karty Bitpanda, odśwież stronę dwukrotnie; w aplikacji Home Assistant [wyczyść zamiast tego pamięć podręczną frontendu]({cards_url}).\n\nNowy „Przegląd”, domyślny w nowych instalacjach od Home Assistant 2026.2, nie przyjmuje kart: najpierw utwórz panel: „Ustawienia” → „Panele” → „Dodaj panel”.",
@@ -234,11 +235,13 @@
         "no_assets_available": "Wszystkie aktywa tego rodzaju są już śledzone.",
         "unknown_asset": "Wybierz aktywo z listy.",
         "rate_limited": "Zbyt wiele żądań. Poczekaj chwilę i spróbuj ponownie.",
-        "cannot_connect": "Nie można połączyć się z platformą Bitpanda. Spróbuj ponownie później."
+        "cannot_connect": "Nie można połączyć się z platformą Bitpanda. Spróbuj ponownie później.",
+        "key_rejected": "Bitpanda odrzuciła klucz API usługi Bitpanda Portfolio dla cen: potrzebuje uprawnienia „Trade (Odczytaj)”. Wprowadź nowy klucz API w „Potrzebny nowy klucz API platformy Bitpanda” usługi Bitpanda Portfolio."
       },
       "abort": {
         "already_configured": "To aktywo jest już śledzone.",
-        "asset_added": "Aktywo {asset} jest teraz śledzone w grupie {group}."
+        "asset_added": "Aktywo {asset} jest teraz śledzone w grupie {group}.",
+        "portfolio_required": "Bitpanda Price Tracker używa klucza API usługi Bitpanda Portfolio. Najpierw skonfiguruj Bitpanda Portfolio: „Dodaj usługę” na stronie integracji Bitpanda."
       },
       "create_entry": {
         "default": "Aktywo {asset} jest teraz śledzone w grupie {group}."
@@ -954,6 +957,9 @@
     },
     "refresh_unknown_entry": {
       "message": "Wybrana usługa nie jest załadowaną usługą Bitpanda."
+    },
+    "price_tracker_no_key": {
+      "message": "Bitpanda Price Tracker używa klucza API usługi Bitpanda Portfolio: najpierw skonfiguruj Bitpanda Portfolio."
     }
   },
   "issues": {

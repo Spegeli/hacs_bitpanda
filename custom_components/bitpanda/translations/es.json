@@ -3,10 +3,10 @@
     "step": {
       "user": {
         "title": "Bitpanda",
-        "description": "¿Qué servicio quieres configurar? Cada uno solo se puede añadir una vez.\n\n- **Bitpanda Portfolio**: tu cuenta – todo lo que tienes en Bitpanda.\n- **Bitpanda Price Tracker**: precios en directo de los activos que elijas – aunque no los tengas.",
+        "description": "¿Qué servicio quieres configurar? Cada uno solo se puede añadir una vez.\n\n- **Bitpanda Portfolio**: tu cuenta – todo lo que tienes en Bitpanda.\n- **Bitpanda Price Tracker**: precios en directo de los activos que elijas – aunque no los tengas. Usa la clave API del Portfolio: configura primero el Portfolio.",
         "menu_options": {
           "portfolio": "Bitpanda Portfolio (requiere una clave API)",
-          "price_tracker": "Bitpanda Price Tracker (no requiere una clave API)"
+          "price_tracker": "Bitpanda Price Tracker (usa la clave API del Portfolio)"
         }
       },
       "portfolio": {
@@ -132,7 +132,8 @@
       "no_changes": "No se ha cambiado nada.",
       "no_reconfigure": "El Bitpanda Price Tracker por ahora no tiene nada que reconfigurar. Cambia sus monedas adicionales y el idioma de los títulos de grupo con \"Configurar\" (⚙) en la misma entrada.",
       "unload_failed": "No se ha podido detener el Portfolio, así que no se ha cambiado la moneda ni se ha eliminado nada. Reinicia Home Assistant e inténtalo de nuevo.",
-      "setup_cancelled": "El Portfolio no se ha configurado y no se ha eliminado nada."
+      "setup_cancelled": "El Portfolio no se ha configurado y no se ha eliminado nada.",
+      "portfolio_required": "El Bitpanda Price Tracker usa la clave API de Bitpanda Portfolio. Configura primero Bitpanda Portfolio:\n\n1. En \"Configuración\" → \"Dispositivos y servicios\", elige \"Añadir integración\".\n2. Busca Bitpanda.\n3. Elige \"Bitpanda Portfolio (requiere una clave API)\"."
     },
     "create_entry": {
       "portfolio": "Para ver tu cartera en un panel, añade la tarjeta \"Bitpanda Portfolio\": abre el panel, selecciona \"Editar panel de control\" (✏ arriba a la derecha; en el móvil en el menú ⋮), luego \"Añadir tarjeta\" y la pestaña \"Por tarjeta\", y busca \"Bitpanda\". Si no aparece ninguna tarjeta de Bitpanda, recarga la página dos veces; en la app de Home Assistant, [restablece en su lugar la caché del frontend]({cards_url}).\n\nLa nueva \"Vista general\", la predeterminada en las instalaciones nuevas desde Home Assistant 2026.2, no admite tarjetas: crea primero un panel en \"Configuración\" → \"Paneles de control\" → \"Añadir panel de control\".",
@@ -234,11 +235,13 @@
         "no_assets_available": "Todos los activos de este tipo ya se están siguiendo.",
         "unknown_asset": "Elige un activo de la lista.",
         "rate_limited": "Demasiadas solicitudes. Espera un momento y vuelve a intentarlo.",
-        "cannot_connect": "No se ha podido conectar con Bitpanda. Inténtalo de nuevo más tarde."
+        "cannot_connect": "No se ha podido conectar con Bitpanda. Inténtalo de nuevo más tarde.",
+        "key_rejected": "Bitpanda ha rechazado la clave API de Bitpanda Portfolio para los precios: necesita el permiso \"Trading (Lectura)\". Introduce una clave API nueva en \"Se necesita una nueva clave API de Bitpanda\" de Bitpanda Portfolio."
       },
       "abort": {
         "already_configured": "Este activo ya se está siguiendo.",
-        "asset_added": "Ahora se hace seguimiento de {asset} en el grupo {group}."
+        "asset_added": "Ahora se hace seguimiento de {asset} en el grupo {group}.",
+        "portfolio_required": "El Bitpanda Price Tracker usa la clave API de Bitpanda Portfolio. Configura primero Bitpanda Portfolio: \"Añadir servicio\" en la página de la integración Bitpanda."
       },
       "create_entry": {
         "default": "Ahora se hace seguimiento de {asset} en el grupo {group}."
@@ -954,6 +957,9 @@
     },
     "refresh_unknown_entry": {
       "message": "El servicio elegido no es un servicio de Bitpanda cargado."
+    },
+    "price_tracker_no_key": {
+      "message": "El Bitpanda Price Tracker usa la clave API de Bitpanda Portfolio: configura primero Bitpanda Portfolio."
     }
   },
   "issues": {

@@ -19,6 +19,7 @@ from homeassistant.config_entries import (
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
     ConfigEntryNotReady,
     HomeAssistantError,
     ServiceValidationError,
@@ -140,6 +141,13 @@ async def async_migrate_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -
 
 async def async_setup_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> bool:
     """Set up one of the two services."""
+    if entry.version == 1:
+        # Left at version 1 by a migration Bitpanda refused the legacy key
+        # for (migration.async_migrate_entry): before anything reads what a
+        # version 1 entry lacks, Home Assistant is told to ask for a new key.
+        raise ConfigEntryAuthFailed(
+            translation_domain=DOMAIN, translation_key="upgrade_key_needed"
+        )
     is_price_tracker = entry_type(entry) == ENTRY_TYPE_PRICE_TRACKER
     # In the entry's own language (language.py), which changing under
     # Configure reloads the entry to apply.
@@ -682,6 +690,10 @@ async def async_remove_config_entry_device(
     this integration's 2025.5.0 floor and in a 2026.9.3 test image. The
     message is in the entry's language (see _async_refusal).
     """
+    if config_entry.version == 1:
+        # An upgrade not finished: it rebuilds the wallets and prices from
+        # these devices' entities.
+        raise await _async_refusal(hass, config_entry, "upgrade_device_not_removable")
     identifiers = device_identifiers(device_entry)
     entry_id = config_entry.entry_id
     if entry_type(config_entry) == ENTRY_TYPE_PRICE_TRACKER:

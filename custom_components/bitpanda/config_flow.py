@@ -448,9 +448,14 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(ENTRY_TYPE_PRICE_TRACKER)
         self._abort_if_unique_id_configured()
         # It asks Bitpanda with the Portfolio's key: no Portfolio, no prices.
+        # While a date version's entry waits for its upgrade, the upgrade
+        # sets the Price Tracker up itself, with the legacy prices' history.
         # The upgrade's import (async_step_import) is never refused.
-        if keys.portfolio_entry(self.hass) is None:
+        portfolio = keys.portfolio_entry(self.hass)
+        if portfolio is None:
             return self.async_abort(reason="portfolio_required")
+        if portfolio.version == 1:
+            return self.async_abort(reason="upgrade_pending")
         if user_input is not None:
             # Its closing text: how to add assets, then where the card is.
             return self.async_create_entry(
@@ -583,6 +588,11 @@ class BitpandaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         deletes every Portfolio sensor with its history.
         """
         entry = self._get_reconfigure_entry()
+        if entry.version == 1:
+            # The Portfolio does not exist yet: the upgrade waits for a new
+            # key, which Home Assistant's own dialog asks for, or for its
+            # next start.
+            return self.async_abort(reason="upgrade_pending")
         if entry_type(entry) != ENTRY_TYPE_PORTFOLIO:
             return self.async_abort(reason="no_reconfigure")
         stored = entry.data[CONF_CURRENCY]

@@ -133,7 +133,8 @@
       "no_reconfigure": "Beim Bitpanda Price Tracker gibt es derzeit nichts neu zu konfigurieren. Zusätzliche Währungen und die Sprache der Gruppentitel änderst du mit „Konfigurieren“ (⚙) beim selben Eintrag.",
       "unload_failed": "Das Portfolio ließ sich nicht anhalten, daher wurde die Währung nicht geändert und nichts gelöscht. Starte Home Assistant neu und versuche es erneut.",
       "setup_cancelled": "Das Portfolio wurde nicht eingerichtet, und es wurde nichts gelöscht.",
-      "portfolio_required": "Der Bitpanda Price Tracker nutzt den API-Schlüssel von Bitpanda Portfolio. Richte zuerst Bitpanda Portfolio ein:\n\n1. Wähle unter „Einstellungen“ → „Geräte & Dienste“ „Integration hinzufügen“.\n2. Suche nach Bitpanda.\n3. Wähle „Bitpanda Portfolio (API-Schlüssel benötigt)“."
+      "portfolio_required": "Der Bitpanda Price Tracker nutzt den API-Schlüssel von Bitpanda Portfolio. Richte zuerst Bitpanda Portfolio ein:\n\n1. Wähle unter „Einstellungen“ → „Geräte & Dienste“ „Integration hinzufügen“.\n2. Suche nach Bitpanda.\n3. Wähle „Bitpanda Portfolio (API-Schlüssel benötigt)“.",
+      "upgrade_pending": "Der Bitpanda-Umstieg ist noch nicht abgeschlossen: Er richtet den Bitpanda Price Tracker selbst ein, und die Einstellungen des Portfolios lassen sich ändern, sobald er fertig ist. Fragt Home Assistant nach einem neuen API-Schlüssel, gib ihn dort ein; alles andere, was der Umstieg braucht, zeigt Home Assistant als Reparatur an."
     },
     "create_entry": {
       "portfolio": "Um dein Portfolio auf einem Dashboard zu sehen, füge ihm die Karte „Bitpanda Portfolio“ hinzu: Öffne das Dashboard, wähle „Dashboard bearbeiten“ (✏ oben rechts, auf dem Handy im ⋮-Menü), dann „Karte hinzufügen“ und den Reiter „Nach Karte“, und suche nach „Bitpanda“. Erscheint keine Bitpanda-Karte, lade die Seite zweimal neu; in der Home-Assistant-App [setze stattdessen ihren Frontend-Cache zurück]({cards_url}).\n\nDie neue „Übersicht“, seit Home Assistant 2026.2 der Standard neuer Installationen, nimmt keine Karten auf: Lege zuerst unter „Einstellungen“ → „Dashboards“ → „Dashboard hinzufügen“ ein eigenes Dashboard an.",
@@ -960,6 +961,12 @@
     },
     "price_tracker_no_key": {
       "message": "Der Bitpanda Price Tracker nutzt den API-Schlüssel von Bitpanda Portfolio: Richte zuerst Bitpanda Portfolio ein."
+    },
+    "upgrade_key_needed": {
+      "message": "Bitpanda hat den gespeicherten API-Schlüssel abgelehnt, deshalb wartet der Umstieg auf einen neuen."
+    },
+    "upgrade_device_not_removable": {
+      "message": "Dieses Gerät braucht der Bitpanda-Umstieg noch, der nicht abgeschlossen ist. Hat Bitpanda den gespeicherten API-Schlüssel abgelehnt, gib einen neuen ein, wenn Home Assistant danach fragt; der Umstieg wird dann von selbst abgeschlossen."
     }
   },
   "issues": {

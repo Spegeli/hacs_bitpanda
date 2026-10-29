@@ -133,7 +133,8 @@
       "no_reconfigure": "El Bitpanda Price Tracker por ahora no tiene nada que reconfigurar. Cambia sus monedas adicionales y el idioma de los títulos de grupo con \"Configurar\" (⚙) en la misma entrada.",
       "unload_failed": "No se ha podido detener el Portfolio, así que no se ha cambiado la moneda ni se ha eliminado nada. Reinicia Home Assistant e inténtalo de nuevo.",
       "setup_cancelled": "El Portfolio no se ha configurado y no se ha eliminado nada.",
-      "portfolio_required": "El Bitpanda Price Tracker usa la clave API de Bitpanda Portfolio. Configura primero Bitpanda Portfolio:\n\n1. En \"Configuración\" → \"Dispositivos y servicios\", elige \"Añadir integración\".\n2. Busca Bitpanda.\n3. Elige \"Bitpanda Portfolio (requiere una clave API)\"."
+      "portfolio_required": "El Bitpanda Price Tracker usa la clave API de Bitpanda Portfolio. Configura primero Bitpanda Portfolio:\n\n1. En \"Configuración\" → \"Dispositivos y servicios\", elige \"Añadir integración\".\n2. Busca Bitpanda.\n3. Elige \"Bitpanda Portfolio (requiere una clave API)\".",
+      "upgrade_pending": "La migración de Bitpanda aún no ha terminado: configura por sí sola el Bitpanda Price Tracker, y los ajustes del Portfolio se podrán cambiar cuando termine. Si Home Assistant pide una nueva clave API, introdúcela allí; todo lo demás que necesite la migración, Home Assistant lo muestra como reparación."
     },
     "create_entry": {
       "portfolio": "Para ver tu cartera en un panel, añade la tarjeta \"Bitpanda Portfolio\": abre el panel, selecciona \"Editar panel de control\" (✏ arriba a la derecha; en el móvil en el menú ⋮), luego \"Añadir tarjeta\" y la pestaña \"Por tarjeta\", y busca \"Bitpanda\". Si no aparece ninguna tarjeta de Bitpanda, recarga la página dos veces; en la app de Home Assistant, [restablece en su lugar la caché del frontend]({cards_url}).\n\nLa nueva \"Vista general\", la predeterminada en las instalaciones nuevas desde Home Assistant 2026.2, no admite tarjetas: crea primero un panel en \"Configuración\" → \"Paneles de control\" → \"Añadir panel de control\".",
@@ -960,6 +961,12 @@
     },
     "price_tracker_no_key": {
       "message": "El Bitpanda Price Tracker usa la clave API de Bitpanda Portfolio: configura primero Bitpanda Portfolio."
+    },
+    "upgrade_key_needed": {
+      "message": "Bitpanda ha rechazado la clave API guardada, así que la migración espera una nueva clave API."
+    },
+    "upgrade_device_not_removable": {
+      "message": "La migración de Bitpanda, que aún no ha terminado, todavía necesita este dispositivo. Si Bitpanda ha rechazado la clave API guardada, introduce una nueva cuando Home Assistant la pida; la migración terminará por sí sola."
     }
   },
   "issues": {

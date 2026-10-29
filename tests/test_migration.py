@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
-from homeassistant import data_entry_flow
+from homeassistant import config_entries, data_entry_flow
 from homeassistant.components.repairs import repairs_flow_manager
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import (
@@ -16,8 +16,13 @@ from homeassistant.helpers import (
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.bitpanda import migration
-from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
+from custom_components.bitpanda import keys, migration
+from custom_components.bitpanda.api import (
+    BitpandaApiClient,
+    BitpandaApiError,
+    BitpandaAuthError,
+    BitpandaRateLimitError,
+)
 from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.ecb import EcbRates
 from custom_components.bitpanda.migration import (
@@ -250,7 +255,10 @@ async def test_a_language_chosen_before_the_upgrade_is_kept(hass, legacy_api, no
     }
 
 
-async def test_public_lookups_never_carry_the_legacy_key(hass, no_setup):
+async def test_the_plan_sends_the_stored_key(hass, no_setup):
+    """Since 2026-10-28 Bitpanda names an asset only to a key with Trade
+    (Read). The legacy key carries the old site's Trading permission, which
+    opens /assets: the plan asks with it."""
     entry = _v1_entry(hass, assets=["BTC"])
     with patch("custom_components.bitpanda.migration.BitpandaApiClient") as client_cls:
         client_cls.return_value.async_get_currencies = AsyncMock(
@@ -258,7 +266,169 @@ async def test_public_lookups_never_carry_the_legacy_key(hass, no_setup):
         )
         client_cls.return_value.async_get_assets = AsyncMock(side_effect=_by_symbol)
         assert await async_migrate_entry(hass, entry)
-    client_cls.assert_called_once_with(None, ANY)
+    client_cls.assert_called_once_with("legacy-key", ANY)
+
+
+_REFUSED = BitpandaAuthError("Unauthorized for /assets", kind="http_status", path="/assets", status=401)
+
+
+def _reauth_flows(hass) -> list:
+    return [
+        flow for flow in hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+        if flow["context"]["source"] == config_entries.SOURCE_REAUTH
+    ]
+
+
+async def _set_up_waiting(hass, legacy_api):
+    """A version 1 entry whose legacy key Bitpanda refuses, set up as Home
+    Assistant's start does: the migration, then the setup. It holds a
+    wallet: an entry with nothing to look up asks /assets nothing, and its
+    upgrade runs through with any key."""
+    _, assets = legacy_api
+    assets.side_effect = _REFUSED
+    entry = _v1_entry(hass, wallets=["cryptocoin_BTC"])
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def test_a_refused_key_keeps_version_1_and_asks_for_a_new_key(hass, legacy_api, caplog):
+    """Bitpanda refuses the legacy key: the upgrade changes nothing and waits.
+    The entry stays at version 1, its setup fails saying why, and Home
+    Assistant asks for a new key -- on both supported releases the one way to
+    that dialog. Nothing is renamed, no upgrade issue, no Price Tracker."""
+    entry = _v1_entry(hass, wallets=["cryptocoin_BTC"])
+    device = _legacy_device(hass, entry, "wallets")
+    old = _legacy_entity(
+        hass, entry, f"{entry.entry_id}_wallet_cryptocoin_BTC", "bitpanda_wallets_btc_wallet", device
+    )
+    _, assets = legacy_api
+    assets.side_effect = _REFUSED
+    with caplog.at_level(logging.WARNING):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    assert entry.version == 1
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    assert entry.error_reason_translation_key == "upgrade_key_needed"
+    assert len(_reauth_flows(hass)) == 1
+    assert er.async_get(hass).async_get(old) is not None
+    assert _price_trackers(hass) == []
+    assert not _renamed(hass)
+    assert "legacy-key" not in caplog.text
+
+
+async def test_a_restart_while_the_upgrade_waits_asks_again(hass, legacy_api):
+    entry = await _set_up_waiting(hass, legacy_api)
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert (entry.version, entry.state) == (1, ConfigEntryState.SETUP_ERROR)
+    assert len(_reauth_flows(hass)) == 1
+    assert _price_trackers(hass) == []
+
+
+@pytest.mark.no_portfolio_key
+async def test_after_the_new_key_the_upgrade_runs_through(hass, legacy_api, price_api):
+    """The user enters a key with all four permissions in Home Assistant's
+    dialog: the entry reloads, and the upgrade runs with that key -- renames,
+    the Price Tracker, which asks with the same key, and version 3."""
+    entry = _v1_entry(hass, assets=["BTC"], wallets=["cryptocoin_BTC"])
+    device = _legacy_device(hass, entry, "wallets")
+    eid = entry.entry_id
+    _legacy_entity(hass, entry, f"{eid}_wallet_cryptocoin_BTC", "bitpanda_wallets_btc_wallet", device)
+    _, assets = legacy_api
+    assets.side_effect = _REFUSED
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    [flow] = _reauth_flows(hass)
+
+    assets.side_effect = _by_symbol_or_id
+    portfolio = [_position(BTC_ID, "50000.00"), {"currency_id": _EUR_ID, "balance": {"value": "10.00"}}]
+    # Patched on the class itself: the migration's own name for it is
+    # wrapped below, to see the key each client is built with.
+    _CLASS = "custom_components.bitpanda.api.BitpandaApiClient."
+    with patch.object(migration, "BitpandaApiClient", wraps=BitpandaApiClient) as planned, patch(
+        f"{_CLASS}async_missing_scopes", AsyncMock(return_value=[])
+    ), patch(f"{_CLASS}async_get_portfolio", AsyncMock(return_value=portfolio)), patch(
+        f"{_CLASS}async_get_portfolio_history", AsyncMock(return_value={"return_percentage": "1.5"})
+    ), patch(f"{_CLASS}async_get_earn_configs", AsyncMock(return_value=[])), patch(
+        f"{_CLASS}async_get_operations", AsyncMock(return_value=[])
+    ):
+        result = await hass.config_entries.flow.async_configure(flow["flow_id"], {"api_key": "new-key"})
+        await hass.async_block_till_done()
+    assert result["reason"] == "reauth_successful"
+    assert (entry.version, entry.state) == (3, ConfigEntryState.LOADED)
+    assert entry.data["api_key"] == "new-key"
+    assert [call.args[0] for call in planned.call_args_list] == ["new-key"]
+    assert keys.portfolio_api_key(hass) == "new-key"
+    [tracker] = _price_trackers(hass)
+    assert tracker.state is ConfigEntryState.LOADED
+    assert er.async_get(hass).async_get("sensor.bitpanda_bitcoin_btc_wallet_available") is not None
+    assert "sensor.bitpanda_wallets_btc_wallet" in (_renamed(hass) or "")
+
+
+@pytest.mark.parametrize("state", [ConfigEntryState.SETUP_ERROR, ConfigEntryState.MIGRATION_ERROR])
+async def test_reconfigure_waits_for_the_upgrade(hass, state):
+    """Reconfigure on a version 1 entry -- waiting for a key, or stopped by a
+    rate limit -- would change a Portfolio that does not exist yet: it says
+    the upgrade is not finished, stores and purges nothing."""
+    entry = _v1_entry(hass)
+    entry.mock_state(hass, state)
+    with patch("custom_components.bitpanda.config_flow.async_purge_portfolio", AsyncMock()) as purge:
+        result = await entry.start_reconfigure_flow(hass)
+    assert (result["type"], result["reason"]) == (data_entry_flow.FlowResultType.ABORT, "upgrade_pending")
+    assert entry.data == {"api_key": "legacy-key", "currency": "EUR"}
+    purge.assert_not_called()
+
+
+@pytest.mark.no_portfolio_key
+async def test_no_price_tracker_by_hand_while_the_upgrade_waits(hass):
+    """The upgrade sets up the Price Tracker itself, with the legacy prices'
+    history; one set up by hand meanwhile would leave that behind."""
+    _v1_entry(hass)
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    assert result["menu_options"] == ["price_tracker"]
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "price_tracker"}
+    )
+    assert (result["type"], result["reason"]) == (data_entry_flow.FlowResultType.ABORT, "upgrade_pending")
+
+
+@pytest.mark.parametrize(
+    ("language", "message"),
+    [
+        (None, "This device is still needed by the Bitpanda upgrade, which is not finished yet. If"
+               " Bitpanda refused the stored API key, enter a new one when Home Assistant asks for"
+               " it; the upgrade then finishes by itself."),
+        ("de", "Dieses Gerät braucht der Bitpanda-Umstieg noch, der nicht abgeschlossen ist. Hat"
+               " Bitpanda den gespeicherten API-Schlüssel abgelehnt, gib einen neuen ein, wenn Home"
+               " Assistant danach fragt; der Umstieg wird dann von selbst abgeschlossen."),
+    ],
+)
+@pytest.mark.parametrize("kind", ["wallets", "price_tracker"])
+async def test_a_version_1_entry_refuses_device_deletion(
+    hass, legacy_api, hass_ws_client, language, message, kind
+):
+    """While the upgrade waits, its devices are the ones it rebuilds from:
+    the device page refuses to delete them, in the entry's language --
+    English without one, or the one chosen under Configure meanwhile."""
+    entry = await _set_up_waiting(hass, legacy_api)
+    if language is not None:
+        hass.config_entries.async_update_entry(entry, options={**entry.options, "language": language})
+    device = dr.async_get(hass).async_get(_legacy_device(hass, entry, kind))
+    assert await async_setup_component(hass, "config", {})
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id(
+        {
+            "type": "config/device_registry/remove_config_entry",
+            "config_entry_id": entry.entry_id,
+            "device_id": device.id,
+        }
+    )
+    response = await client.receive_json()
+    assert not response["success"]
+    assert response["error"]["translation_key"] == "upgrade_device_not_removable"
+    assert response["error"]["message"] == message
+    assert dr.async_get(hass).async_get(device.id) is not None
 
 
 async def test_tracked_prices_become_the_price_tracker(hass, legacy_api, no_setup):
@@ -1442,9 +1612,9 @@ async def test_the_full_mapping_is_logged_once_in_english(
         "A Bitpanda Price Tracker was already set up, so the prices tracked before the "
         "upgrade were not moved into it. Add these assets there to keep tracking them: "
         "Bitcoin (BTC).\n\n"
-        'Bitpanda needs a new API key with the permissions "Balances", "Transaction" and '
-        '"Earn (Read)". Create it at https://app.bitpanda.com/my-account/apikey '
-        "and enter it when Home Assistant asks for it."
+        'If Bitpanda refuses the API key, Home Assistant asks for a new one with the '
+        'permissions "Balances", "Transaction", "Earn (Read)" and "Trade (Read)": create it at '
+        "https://app.bitpanda.com/my-account/apikey."
     )
     assert "legacy-key" not in caplog.text
 

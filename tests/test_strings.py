@@ -1173,6 +1173,22 @@ _SWITCH_WORDS = {
 }
 
 
+def test_the_waiting_upgrades_texts_call_the_switch_by_its_own_word():
+    """What the user sees while the upgrade waits for a new key -- why its
+    setup failed, why a device stays, why the menu and Reconfigure wait --
+    names the switch by its own word, never an update's."""
+    for language, (switch, update) in _SWITCH_WORDS.items():
+        strings = _load(f"translations/{language}.json")
+        for text in (
+            strings["exceptions"]["upgrade_key_needed"]["message"],
+            strings["exceptions"]["upgrade_device_not_removable"]["message"],
+            strings["config"]["abort"]["upgrade_pending"],
+        ):
+            assert switch in text.lower(), (language, text)
+            if update is not None:
+                assert update not in text.lower(), (language, text)
+
+
 def test_the_upgrade_issues_call_the_switch_by_its_own_word():
     """Every repair issue about the switch from a date version names it in
     its title, by the same word, and none calls it an update -- "update

@@ -1,6 +1,7 @@
 """Shared fixtures for Bitpanda integration tests."""
 import asyncio
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import timedelta
 from functools import partial
 import json
@@ -20,14 +21,18 @@ from homeassistant.config_entries import (
     ConfigSubentryFlowManager,
     OptionsFlowManager,
 )
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowManager, FlowResultType
 from homeassistant.helpers import device_registry as dr, issue_registry as ir
 from homeassistant.util import dt as dt_util
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 import yaml
 
+from custom_components.bitpanda import keys
 from custom_components.bitpanda.api import BitpandaApiError
 from custom_components.bitpanda.assets import slim_asset
+from custom_components.bitpanda.const import DOMAIN
 from custom_components.bitpanda.portfolio_coordinator import PortfolioRuntime
 from custom_components.bitpanda.portfolio_store import (
     KnownWallets,
@@ -70,6 +75,10 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "real_ticker: the test runs the real BitpandaApiClient.async_get_ticker"
     )
+    # A test that runs without a Portfolio to lend its key (lent_portfolio_key).
+    config.addinivalue_line(
+        "markers", "no_portfolio_key: no Portfolio lends its API key unless the test sets one up"
+    )
 
 _FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -105,6 +114,61 @@ def no_real_ticker(request):
         AsyncMock(side_effect=failure),
     ):
         yield
+
+
+# The API key a test without a Portfolio of its own borrows (lent_portfolio_key).
+LENT_KEY = "lent-portfolio-key"
+
+
+@dataclass
+class LentKey:
+    """The Portfolio a test borrows its key from, and how often a refused key
+    asked it for a new one."""
+
+    entry: MockConfigEntry
+    reauth_requests: int = 0
+
+
+@pytest.fixture(autouse=True)
+def lent_portfolio_key(request):
+    """Both services use the Portfolio's API key (keys.py). A test that sets
+    up a Price Tracker, a flow or an action without a Portfolio of its own
+    borrows one: an entry that lends LENT_KEY and is never added to Home
+    Assistant. A test with a Portfolio of its own gets that one's key, and its
+    reauth; a refusal of the lent key is counted on the lender instead. A test
+    marked `no_portfolio_key`, and test_keys.py, run without the lender."""
+    if request.node.path.name == "test_keys.py" or request.node.get_closest_marker(
+        "no_portfolio_key"
+    ):
+        yield None
+        return
+    lent = LentKey(
+        MockConfigEntry(
+            domain=DOMAIN,
+            version=3,
+            unique_id="portfolio",
+            data={"entry_type": "portfolio", "api_key": LENT_KEY, "currency": "EUR"},
+        )
+    )
+    real_entry = keys.portfolio_entry
+    real_reauth = keys.async_request_portfolio_reauth
+
+    def lending(hass: HomeAssistant | None):
+        if hass is None:
+            return lent.entry
+        return real_entry(hass) or lent.entry
+
+    @callback
+    def reauth(hass: HomeAssistant | None, refused_key: str) -> None:
+        if hass is None or real_entry(hass) is None:
+            lent.reauth_requests += 1
+            return
+        real_reauth(hass, refused_key)
+
+    with patch.object(keys, "portfolio_entry", lending), patch.object(
+        keys, "async_request_portfolio_reauth", reauth
+    ):
+        yield lent
 
 
 @pytest.fixture(autouse=True)

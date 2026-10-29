@@ -11,7 +11,12 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.bitpanda.api import BitpandaApiError, BitpandaRateLimitError
+from custom_components.bitpanda.api import (
+    BitpandaApiClient,
+    BitpandaApiError,
+    BitpandaAuthError,
+    BitpandaRateLimitError,
+)
 from custom_components.bitpanda.assets import slim_asset
 from custom_components.bitpanda.const import API_KEY_URL, CARDS_URL, DOMAIN, TROUBLESHOOTING_URL
 from custom_components.bitpanda.portfolio_store import take_new_key
@@ -195,6 +200,56 @@ async def test_portfolio_names_missing_scopes(hass):
         "balance": "✓", "transaction": "✗", "earn": "✗", "trading": "✓"
     }
     assert "missing_scopes" not in placeholders
+    await _finish_portfolio_setup(hass, result)
+
+
+def _listing_seen(seen: list):
+    """A currency listing that notes the key each request carried."""
+
+    async def listing(client):
+        seen.append(client._headers.get("x-api-key"))
+        return load_fixture("currencies.json")
+
+    return listing
+
+
+async def test_the_currency_list_carries_the_key(hass):
+    """The setup asks for the currencies with the key just entered, and
+    Reconfigure with the one entered or, left empty, the stored one: should
+    Bitpanda close /currencies to keyless requests too, as it did /tickers
+    and /assets, both still work."""
+    seen: list = []
+    result = await _portfolio_form(hass)
+    with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=[])), patch.object(
+        BitpandaApiClient, "async_get_currencies", autospec=True, side_effect=_listing_seen(seen)
+    ):
+        await hass.config_entries.flow.async_configure(result["flow_id"], {"api_key": "entered-key"})
+    assert seen == ["entered-key"]
+
+    entry = _portfolio_entry()
+    entry.add_to_hass(hass)
+    for user_input, key in (({"currency": "usd"}, "key"), ({"api_key": "new-key", "currency": "usd"}, "new-key")):
+        seen.clear()
+        result = await entry.start_reconfigure_flow(hass)
+        with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=[])), patch.object(
+            BitpandaApiClient, "async_get_currencies", autospec=True, side_effect=_listing_seen(seen)
+        ):
+            result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
+        assert result["step_id"] == "confirm_currency"
+        assert seen == [key]
+        hass.config_entries.flow.async_abort(result["flow_id"])
+
+
+async def test_a_refused_key_on_the_currency_list_is_invalid_auth(hass):
+    """Bitpanda refusing the key the currency list carried says the key is
+    wrong, not that Bitpanda is out of reach."""
+    refused = BitpandaAuthError("Unauthorized for /currencies", kind="http_status", path="/currencies", status=401)
+    result = await _portfolio_form(hass)
+    with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=[])), patch(
+        f"{_CLIENT}async_get_currencies", AsyncMock(side_effect=refused)
+    ):
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"api_key": "k"})
+    assert result["errors"]["base"] == "invalid_auth"
     await _finish_portfolio_setup(hass, result)
 
 

@@ -1571,12 +1571,56 @@ async def test_a_wallet_writes_its_price_when_it_arrives(hass, portfolio_api):
     assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_total").attributes["price"] == 2.1
 
 
-async def test_the_wallet_prices_are_read_without_the_key(hass, portfolio_api):
-    """The ticker is public: its requests never carry the Portfolio's key."""
+async def test_the_portfolio_sends_its_key_for_lookups_and_prices(hass, portfolio_api):
+    """Since 2026-10-28 Bitpanda gives asset names and prices only to a key
+    with Trade (Read): the Portfolio's lookups and wallet prices carry its
+    key."""
+    entry = _portfolio_entry(hass, api_key="portfolio-key")
+    await _setup(hass, entry)
+    runtime = entry.runtime_data
+    assert runtime.prices._client._headers == {"x-api-key": "portfolio-key"}
+    assert runtime.portfolio._directory._client._headers == {"x-api-key": "portfolio-key"}
+
+
+async def test_a_key_without_trade_read_keeps_the_portfolio_and_asks_for_a_new_one(
+    hass, portfolio_api, caplog
+):
+    """A key made as 2.1.0 told -- Balances, Transaction, Earn (Read): its
+    lookups and prices are refused. The Portfolio keeps its figures, its
+    wallets wait, and one dialog asks for a new key. After it, the wallets
+    come without a restart."""
+    refused = BitpandaAuthError("Unauthorized for /assets", kind="http_status", path="/assets", status=401)
+    entry = _portfolio_entry(hass)
+    with patch(f"{_CLIENT}async_get_assets", AsyncMock(side_effect=refused)), caplog.at_level(
+        logging.WARNING, logger="custom_components.bitpanda"
+    ):
+        await _setup(hass, entry)
+        assert entry.state is ConfigEntryState.LOADED
+        assert _value(hass, "sensor.bitpanda_portfolio_total") == 210.0
+        assert hass.states.get("sensor.bitpanda_vision_vsn_wallet_total") is None
+        [flow] = _reauth_flows(hass)
+    assert caplog.text.count("Trade (Read)") == 1
+    with patch(f"{_CLIENT}async_missing_scopes", AsyncMock(return_value=[])):
+        result = await hass.config_entries.flow.async_configure(
+            flow["flow_id"], {"api_key": "new-key"}
+        )
+        await hass.async_block_till_done()
+    assert result["reason"] == "reauth_successful"
+    assert _value(hass, "sensor.bitpanda_vision_vsn_wallet_total") == 200.0
+
+
+async def test_both_refusals_of_one_start_are_warned_about_once(hass, portfolio_api, caplog):
+    """The lookups and the wallet prices of one start both refused: one
+    warning, one dialog."""
     entry = _portfolio_entry(hass)
     await _setup(hass, entry)
-    client = entry.runtime_data.prices._client
-    assert client._headers == {}
+    runtime = entry.runtime_data
+    with caplog.at_level(logging.WARNING, logger="custom_components.bitpanda"):
+        runtime.portfolio._directory._on_rejected()
+        runtime.prices._on_rejected()
+        await hass.async_block_till_done()
+    assert caplog.text.count("Trade (Read)") == 1
+    assert len(_reauth_flows(hass)) == 1
 
 
 async def test_a_portfolio_outside_eur_reads_the_ecb_rates_every_six_hours(

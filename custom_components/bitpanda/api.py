@@ -137,6 +137,11 @@ def _object(body: dict[str, Any], path: str) -> dict[str, Any]:
     return data
 
 
+# The ticker of one asset. Bitpanda's OpenAPI file documents
+# /assets/{assetId}/ticker as its successor, which still refused every key on
+# 2026-10-28: the one place to change should it take over.
+_TICKER_PATH = "/tickers/{asset_id}"
+
 # Bitcoin's asset ID, whose ticker probes Trade (Read).
 _BITCOIN = "b86c034b-efe3-11eb-b56f-0691764446a7"
 
@@ -151,7 +156,7 @@ _SCOPE_PROBES: dict[str, tuple[str, dict[str, Any] | None]] = {
     "balance": ("/portfolio", None),
     "transaction": ("/operations", {"page_size": 1}),
     "earn": ("/earn/configs", {"page_size": 1}),
-    "trading": (f"/tickers/{_BITCOIN}", None),
+    "trading": (_TICKER_PATH.format(asset_id=_BITCOIN), None),
 }
 
 
@@ -162,12 +167,12 @@ class BitpandaApiClient:
     """
 
     def __init__(self, api_key: str | None, session: aiohttp.ClientSession) -> None:
-        """`api_key=None` builds a keyless client for the public endpoints.
-
-        /currencies, /assets and /tickers answer without a key. A keyless
-        client sends no x-api-key header at all, so public lookups never
-        carry the key and never count against its rate limit. The key lives
-        only inside the header dict -- no second copy on the instance.
+        """`api_key=None` builds a keyless client, which sends no x-api-key
+        header at all; only /currencies answers it for sure. Since
+        2026-10-28 /tickers needs a key with Trade (Read) -- /assets did too
+        on 2026-10-28, and since 2026-10-29 at times -- so every client the
+        integration builds carries the Portfolio's key (keys.py). The key
+        lives only inside the header dict -- no second copy on the instance.
         """
         self._session = session
         self._headers = {"x-api-key": api_key} if api_key else {}
@@ -388,7 +393,7 @@ class BitpandaApiClient:
         Always returns EUR. Every currency parameter that could plausibly exist
         was probed and is silently ignored, so none is sent.
         """
-        path = f"/tickers/{asset_id}"
+        path = _TICKER_PATH.format(asset_id=asset_id)
         body = await self._request(path, timeout=TICKER_TIMEOUT)
         return _object(body, path)
 

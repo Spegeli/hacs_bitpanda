@@ -1,4 +1,6 @@
-"""The client can run without a key for the public endpoints."""
+"""The client can run without a key -- it sends no x-api-key header then; only
+/currencies still answers such a request, and the integration builds every
+client with the Portfolio's key."""
 import asyncio
 
 from pytest_homeassistant_custom_component.test_util.aiohttp import mock_aiohttp_client

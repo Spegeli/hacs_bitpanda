@@ -24,7 +24,7 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util.hass_dict import HassKey
 
-from . import migration
+from . import keys, migration
 from .announcements import EarnAnnouncer, RewardAnnouncer
 from .api import BitpandaApiClient
 from .assets import AssetDirectory
@@ -171,19 +171,48 @@ async def async_setup_entry(hass: HomeAssistant, entry: BitpandaConfigEntry) -> 
     return True
 
 
+def _refusal_of_lookups_and_prices(hass: HomeAssistant, api_key: str) -> Callable[[], None]:
+    """What a refused asset lookup or wallet price does: a warning, once per
+    start -- only a new key, which reloads the entry, cures it -- and a new
+    key asked for. `api_key` is the key this start's clients send: a request
+    still under way with it after the user entered another asks for
+    nothing (keys.async_request_portfolio_reauth)."""
+    warned = False
+
+    @callback
+    def _rejected() -> None:
+        nonlocal warned
+        if not warned:
+            warned = True
+            _LOGGER.warning(
+                'Bitpanda refused the API key for asset names and prices: it needs the '
+                'permission "Trade (Read)". Enter a new API key when Home Assistant asks for it'
+            )
+        keys.async_request_portfolio_reauth(hass, api_key)
+
+    return _rejected
+
+
 async def _async_start_portfolio(
     hass: HomeAssistant, entry: PortfolioConfigEntry, group_titles: dict[str, str]
 ) -> PortfolioRuntime:
     session = async_get_clientsession(hass)
-    client = BitpandaApiClient(entry.data[CONF_API_KEY], session)
-    # Asset lookups are public: keyless, and the records outlive reloads.
+    api_key = entry.data[CONF_API_KEY]
+    client = BitpandaApiClient(api_key, session)
+    on_rejected = _refusal_of_lookups_and_prices(hass, api_key)
+    # The asset lookups and the wallets' prices carry the key too: since
+    # 2026-10-28 Bitpanda answers the prices only for a key with Trade (Read)
+    # -- the lookups too on 2026-10-28, and since 2026-10-29 at times. The
+    # records outlive reloads.
     directory = AssetDirectory(
-        BitpandaApiClient(None, session), hass.data.setdefault(_ASSET_DIRECTORY_KEY, {})
+        BitpandaApiClient(api_key, session),
+        hass.data.setdefault(_ASSET_DIRECTORY_KEY, {}),
+        on_rejected,
     )
     currency_id = entry.data[CONF_CURRENCY_ID]
-    # The wallets' prices come from the public ticker, keyless; a Portfolio
-    # in another currency converts them with the ECB rates, read before the
-    # first refresh and never blocking setup.
+    # A Portfolio in another currency converts the wallets' ticker prices
+    # with the ECB rates, read before the first refresh and never blocking
+    # setup.
     currency = entry.data[CONF_CURRENCY]
     # Named apart from the Price Tracker's, so that its log lines tell
     # which service they are about.
@@ -194,7 +223,7 @@ async def _async_start_portfolio(
     )
     if ecb is not None:
         await ecb.async_refresh()
-    prices = WalletPrices(hass, BitpandaApiClient(None, session), currency, ecb)
+    prices = WalletPrices(hass, BitpandaApiClient(api_key, session), currency, ecb, on_rejected)
     # Before the first refreshes: the wallets' reconcile reads the list, and
     # the rewards' first refresh may set the marks.
     store = await async_get_portfolio_store(hass, entry.entry_id)

@@ -8,14 +8,14 @@ here ever keys by symbol. `pick_legacy` serves only the version 1 migration;
 """
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import datetime
 import logging
 from typing import Any
 
 from homeassistant.util import dt as dt_util
 
-from .api import BitpandaApiClient, BitpandaApiError
+from .api import BitpandaApiClient, BitpandaApiError, BitpandaAuthError
 from .const import UNKNOWN_ASSET_RETRY
 
 _LOGGER = logging.getLogger(__name__)
@@ -107,24 +107,34 @@ class AssetDirectory:
 
     /portfolio names holdings by UUID only. Wallet devices need a name and a
     symbol, and only a record's group tells Cash Plus apart, so each held
-    asset is looked up once with a keyless /assets?id= request and kept in
-    `cache` -- a dict the caller keeps across reloads. A failed lookup --
-    a rate limit, a timeout, a connection or server error -- ends the pass:
-    the next lookup would most likely fail the same way, and with /assets
-    hanging, each would hold the refresh (the first one runs inside setup)
-    for the whole request timeout. The next refresh asks again, but for the
-    assets whose lookup failed last, the one that failed longest ago first:
-    an asset whose own lookup keeps failing never keeps the others waiting
-    longer than that, and assets that keep failing take turns. An asset the
-    catalogue does not know -- an empty answer, not a failure -- is asked
-    for again UNKNOWN_ASSET_RETRY later, not at every refresh, and the pass
-    goes on: once the catalogue lists it, its wallet comes without a
-    restart.
+    asset is looked up once with an /assets?id= request -- with the
+    Portfolio's key: Bitpanda named an asset only to a key with Trade (Read)
+    on 2026-10-28, and since 2026-10-29 at times -- and kept in `cache`, a
+    dict the caller keeps across reloads. A lookup refused as the pass's
+    first answer means the key lacks that permission: the pass ends and
+    `on_rejected` asks for a new key; a refusal after an answer is that
+    asset's failure. A failed lookup -- a rate limit, a timeout, a
+    connection or server error -- ends the pass: the next lookup would most
+    likely fail the same way, and with /assets hanging, each would hold the
+    refresh (the first one runs inside setup) for the whole request timeout.
+    The next refresh asks again, but for the assets whose lookup failed
+    last, the one that failed longest ago first: an asset whose own lookup
+    keeps failing never keeps the others waiting longer than that, and
+    assets that keep failing take turns. An asset the catalogue does not
+    know -- an empty answer, not a failure -- is asked for again
+    UNKNOWN_ASSET_RETRY later, not at every refresh, and the pass goes on:
+    once the catalogue lists it, its wallet comes without a restart.
     """
 
-    def __init__(self, client: BitpandaApiClient, cache: dict[str, dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        client: BitpandaApiClient,
+        cache: dict[str, dict[str, Any]],
+        on_rejected: Callable[[], None],
+    ) -> None:
         self._client = client
         self._cache = cache
+        self._on_rejected = on_rejected
         # Asset id -> when the catalogue last answered without it.
         self._unknown: dict[str, datetime] = {}
         # Asset id -> when its lookup last failed, as a running count of
@@ -155,9 +165,19 @@ class AssetDirectory:
         # Stable: the assets never failed keep the order given, ahead of the
         # rest.
         pending.sort(key=lambda asset_id: self._failed.get(asset_id, 0))
+        # Whether Bitpanda answered a lookup of this pass: a refusal before
+        # any answer is the key's, one after it the asset's.
+        answered = False
         for asset_id in pending:
             try:
                 found = await self._client.async_get_assets(asset_id=asset_id)
+            except BitpandaAuthError as err:
+                _LOGGER.debug("Could not look up asset %s: %s", asset_id, err)
+                self._failures += 1
+                self._failed[asset_id] = self._failures
+                if not answered:
+                    self._on_rejected()
+                return
             except BitpandaApiError as err:
                 # The rate limit (BitpandaRateLimitError) included. The
                 # message names a path and a cause, never request data.
@@ -167,6 +187,7 @@ class AssetDirectory:
                 self._failures += 1
                 self._failed[asset_id] = self._failures
                 return
+            answered = True
             self._failed.pop(asset_id, None)
             record = next((a for a in found if a.get("id") == asset_id), None)
             if record is None:
